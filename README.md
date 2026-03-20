@@ -25,17 +25,108 @@ Svelte DevTools plugin for [Vite DevTools](https://github.com/nicepkg/vite-devto
 ### Screenshots
 
 <details>
+<summary>Overview</summary>
+
+![Overview](docs/images/panel-overview.png)
+
+</details>
+
+<details>
+<summary>Components</summary>
+
+![Components](docs/images/panel-components.png)
+
+</details>
+
+<details>
+<summary>Routes</summary>
+
+![Routes](docs/images/panel-routes.png)
+
+</details>
+
+<details>
+<summary>Assets</summary>
+
+![Assets](docs/images/panel-assets.png)
+
+</details>
+
+<details>
+<summary>Render Profiler</summary>
+
+![Render Profiler](docs/images/panel-profiler.png)
+
+</details>
+
+<details>
 <summary>Reactive Graph</summary>
 
-![Reactive Graph](docs/images/reactive-graph-v3.png)
+![Reactive Graph](docs/images/panel-reactive.png)
+
+</details>
+
+<details>
+<summary>FPS Monitor</summary>
+
+![FPS Monitor](docs/images/panel-fps.png)
+
+</details>
+
+<details>
+<summary>Load Profiler</summary>
+
+![Load Profiler](docs/images/panel-loads.png)
+
+</details>
+
+<details>
+<summary>State Timeline</summary>
+
+![State Timeline](docs/images/panel-timeline.png)
+
+</details>
+
+<details>
+<summary>API Playground</summary>
+
+![API Playground](docs/images/panel-api.png)
+
+</details>
+
+<details>
+<summary>Errors & Warnings</summary>
+
+![Errors & Warnings](docs/images/panel-errors.png)
 
 </details>
 
 <details>
 <summary>Code Inspector</summary>
 
-![Syntax Highlighting](docs/images/inspect-syntax-highlight.png)
-![Source Mapping](docs/images/inspect-mapping.png)
+![Inspect](docs/images/panel-inspect.png)
+![Inspect Detail](docs/images/panel-inspect-detail.png)
+
+</details>
+
+<details>
+<summary>Module Graph</summary>
+
+![Module Graph](docs/images/panel-modules.png)
+
+</details>
+
+<details>
+<summary>OG Preview</summary>
+
+![OG Preview](docs/images/panel-og.png)
+
+</details>
+
+<details>
+<summary>Build Analysis</summary>
+
+![Build Analysis](docs/images/panel-build.png)
 
 </details>
 

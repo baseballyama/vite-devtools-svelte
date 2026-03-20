@@ -435,7 +435,7 @@
       case 'state': return '#3b82f6'
       case 'derived': return '#22c55e'
       case 'effect': return '#ef4444'
-      default: return '#737373'
+      default: return '#999'
     }
   }
 
@@ -599,10 +599,10 @@
             <text x="22" y="16" dominant-baseline="middle" fill="#e5e5e5" font-size="11" font-family="DM Mono, monospace">
               {node.name.length > 14 ? node.name.slice(0, 13) + '…' : node.name}
             </text>
-            <text x={NODE_W - 6} y="16" text-anchor="end" dominant-baseline="middle" fill="#737373" font-size="9" font-family="DM Sans, sans-serif" font-weight="600">
+            <text x={NODE_W - 6} y="16" text-anchor="end" dominant-baseline="middle" fill="#999" font-size="9" font-family="DM Sans, sans-serif" font-weight="600">
               {node.type}
             </text>
-            <text x="12" y="36" fill="#737373" font-size="9" font-family="DM Mono, monospace">
+            <text x="12" y="36" fill="#999" font-size="9" font-family="DM Mono, monospace">
               {shortFile(node.componentFile)}
             </text>
             {#if hasValue}

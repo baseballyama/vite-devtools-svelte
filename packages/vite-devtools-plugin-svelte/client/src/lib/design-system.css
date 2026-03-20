@@ -32,8 +32,8 @@
   /* --- Colors: Text --- */
   --color-text: #e5e5e5;
   --color-text-secondary: #a3a3a3;
-  --color-text-muted: #737373;
-  --color-text-faint: #525252;
+  --color-text-muted: #999;
+  --color-text-faint: #777;
   --color-text-accent: var(--color-accent-400);
 
   /* --- Colors: Border --- */
