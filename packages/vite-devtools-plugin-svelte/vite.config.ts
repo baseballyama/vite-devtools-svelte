@@ -1,0 +1,13 @@
+import { defineConfig } from 'vite-plus'
+
+export default defineConfig({
+  pack: {
+    entry: ['src/index.ts'],
+    format: ['esm'],
+    dts: true,
+    outDir: 'dist',
+    deps: {
+      neverBundle: ['vite', '@vitejs/devtools-kit'],
+    },
+  },
+})
