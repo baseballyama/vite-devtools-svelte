@@ -18,8 +18,8 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "vp test run",
+    "test:watch": "vp test"
   },
   "peerDependencies": {
     "vite": "^8.0.0"

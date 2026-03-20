@@ -2,3 +2,7 @@ packages:
   - 'packages/*'
   - 'packages/vite-devtools-plugin-svelte/client'
   - 'playground'
+
+overrides:
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vitest: npm:@voidzero-dev/vite-plus-test@latest

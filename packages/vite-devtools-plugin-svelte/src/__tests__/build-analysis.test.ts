@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vite-plus/test'
 import { svelteDevtools } from '../plugin.js'
 import fs from 'node:fs'
 import path from 'node:path'

@@ -4,10 +4,10 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "dev": "vite dev",
-    "dev:ui": "vite dev --ui",
-    "build": "vite build",
-    "preview": "vite preview"
+    "dev": "vp dev",
+    "dev:ui": "vp dev --ui",
+    "build": "vp build",
+    "preview": "vp preview"
   },
   "devDependencies": {
     "@sveltejs/adapter-auto": "^4.0.0",

@@ -9,8 +9,14 @@
     "dev": "pnpm -C playground dev",
     "dev:ui": "pnpm -C playground dev:ui"
   },
+  "devDependencies": {
+    "vite-plus": "latest"
+  },
   "packageManager": "pnpm@10.25.0",
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
+    "onlyBuiltDependencies": ["esbuild"],
+    "peerDependencyRules": {
+      "allowAny": ["vite", "vitest"]
+    }
   }
 }

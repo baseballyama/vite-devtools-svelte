@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vite-plus/test'
 import { svelteDevtools } from '../plugin.js'
 import { RUNTIME_MODULE_ID, RESOLVED_RUNTIME_ID, runtimeCode, WRAPPER_MODULE_ID, wrapperCode } from '../runtime.js'
 import type { Plugin } from 'vite'

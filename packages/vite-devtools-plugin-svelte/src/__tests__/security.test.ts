@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect } from 'vite-plus/test'
 import net from 'node:net'
 
 // Mirrors the logic in plugin.ts's validateExternalUrl and isPrivateIP for unit testing.
