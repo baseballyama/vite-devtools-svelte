@@ -1,0 +1,11 @@
+{
+  "name": "test-fixture",
+  "version": "1.0.0",
+  "dependencies": {
+    "svelte": "^5.0.0",
+    "@sveltejs/kit": "^2.0.0"
+  },
+  "devDependencies": {
+    "vite": "^8.0.0"
+  }
+}

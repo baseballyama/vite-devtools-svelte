@@ -1,0 +1,158 @@
+/*
+ * Design System — aligned with Vite DevTools visual language
+ * Neutral palette from Vite DevTools, accent color from Svelte brand
+ */
+
+/* ===== Fonts ===== */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@200;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+
+:root {
+  /* --- Colors: Svelte Accent --- */
+  --color-accent-50: #fff5f2;
+  --color-accent-100: #ffe6de;
+  --color-accent-200: #ffc8b8;
+  --color-accent-300: #ff9e82;
+  --color-accent-400: #ff6633;
+  --color-accent-500: #ff3e00;
+  --color-accent-600: #e03500;
+  --color-accent-700: #b72d00;
+  --color-accent-800: #8a2200;
+  --color-accent-900: #6b1a00;
+
+  /* --- Colors: Neutral (from Vite DevTools) --- */
+  --color-base: #111;
+  --color-surface: #191919;
+  --color-surface-secondary: #222;
+  --color-surface-active: rgba(136, 136, 136, 0.067);
+  --color-surface-hover: rgba(136, 136, 136, 0.05);
+  --color-surface-badge: rgba(136, 136, 136, 0.15);
+  --color-surface-code: rgba(136, 136, 136, 0.05);
+  --color-glass: rgba(17, 17, 17, 0.5);
+
+  /* --- Colors: Text --- */
+  --color-text: #e5e5e5;
+  --color-text-secondary: #a3a3a3;
+  --color-text-muted: #737373;
+  --color-text-faint: #525252;
+  --color-text-accent: var(--color-accent-400);
+
+  /* --- Colors: Border --- */
+  --color-border: rgba(136, 136, 136, 0.13);
+  --color-border-active: rgba(255, 62, 0, 0.25);
+  --color-border-input: rgba(136, 136, 136, 0.3);
+
+  /* --- Colors: Semantic --- */
+  --color-info: #3b82f6;
+  --color-info-bg: rgba(59, 130, 246, 0.15);
+  --color-success: #22c55e;
+  --color-success-bg: rgba(34, 197, 94, 0.15);
+  --color-warning: #eab308;
+  --color-warning-bg: rgba(234, 179, 8, 0.15);
+  --color-error: #ef4444;
+  --color-error-bg: rgba(239, 68, 68, 0.15);
+
+  /* --- Typography --- */
+  --font-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'DM Mono', 'Fira Code', monospace;
+
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-lg: 16px;
+  --text-xl: 18px;
+  --text-2xl: 20px;
+
+  /* --- Spacing (4px base) --- */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-1-5: 6px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* --- Border Radius --- */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-full: 9999px;
+
+  /* --- Opacity --- */
+  --opacity-fade: 0.55;
+  --opacity-mute: 0.25;
+
+  /* --- Scrollbar --- */
+  --scrollbar-size: 6px;
+  --scrollbar-radius: 1px;
+  --scrollbar-thumb: rgba(136, 136, 136, 0.27);
+  --scrollbar-thumb-hover: rgba(136, 136, 136, 0.33);
+
+  /* --- Transitions --- */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.2s ease;
+}
+
+/* ===== Reset & Base ===== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  color: var(--color-text);
+  background: var(--color-base);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ===== Scrollbar ===== */
+::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: var(--scrollbar-radius);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* ===== Utility Classes ===== */
+
+/* Text */
+.text-accent { color: var(--color-text-accent); }
+.text-secondary { color: var(--color-text-secondary); }
+.text-muted { color: var(--color-text-muted); }
+.text-faint { color: var(--color-text-faint); }
+.font-mono { font-family: var(--font-mono); }
+.font-medium { font-weight: 500; }
+.font-semibold { font-weight: 600; }
+
+/* Surfaces */
+.bg-base { background: var(--color-base); }
+.bg-surface { background: var(--color-surface); }
+.bg-surface-secondary { background: var(--color-surface-secondary); }
+.bg-active { background: var(--color-surface-active); }
+
+/* Borders */
+.border-base { border: 1px solid var(--color-border); }
+.border-active { border: 1px solid var(--color-border-active); }
+
+/* Layout */
+.flex-center { display: flex; align-items: center; justify-content: center; }
+.flex-between { display: flex; align-items: center; justify-content: space-between; }

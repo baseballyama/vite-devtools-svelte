@@ -1,0 +1,28 @@
+// Re-export all types from the server-side types module (single source of truth).
+// This avoids type duplication between server and client.
+export type {
+  RouteInfo,
+  ParamInfo,
+  RouteFile,
+  AssetInfo,
+  ProjectInfo,
+  ComponentRelation,
+  ComponentInstance,
+  RenderProfile,
+  ReactiveNode,
+  ReactiveEdge,
+  ReactiveGraph,
+  LoadProfile,
+  StateChange,
+  ApiEndpoint,
+  ApiResponse,
+  CompilerWarning,
+  RuntimeError,
+  InspectResult,
+  ModuleNode,
+  ModuleGraphData,
+  OGTag,
+  OGPreview,
+  BuildChunk,
+  BuildAnalysis,
+} from '../../../src/types.js'

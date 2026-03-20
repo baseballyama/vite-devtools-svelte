@@ -1,0 +1,28 @@
+:root {
+  --color-bg: #1a1a2e;
+  --color-text: #e0e0e0;
+  --color-primary: #ff3e00;
+  --color-secondary: #4fc08d;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  min-height: 100vh;
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}

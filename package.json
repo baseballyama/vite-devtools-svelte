@@ -1,0 +1,16 @@
+{
+  "name": "vite-devtools-plugin-svelte-monorepo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:client": "pnpm -C packages/vite-devtools-plugin-svelte/client build",
+    "build:plugin": "pnpm -C packages/vite-devtools-plugin-svelte build",
+    "build": "pnpm build:plugin && pnpm build:client",
+    "dev": "pnpm -C playground dev",
+    "dev:ui": "pnpm -C playground dev:ui"
+  },
+  "packageManager": "pnpm@10.25.0",
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  }
+}
