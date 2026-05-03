@@ -2,6 +2,7 @@ packages:
   - 'packages/*'
   - 'packages/vite-devtools-plugin-svelte/client'
   - 'playground'
+  - 'site'
 
 overrides:
   vite: npm:@voidzero-dev/vite-plus-core@latest
