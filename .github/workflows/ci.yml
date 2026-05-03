@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    name: Plugin tests + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.25.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build plugin
+        run: pnpm -C packages/vite-devtools-plugin-svelte build
+
+      - name: Run plugin tests
+        run: pnpm -C packages/vite-devtools-plugin-svelte test
+
+      - name: Build client UI
+        run: pnpm build:client
+
+  build-site:
+    name: Site build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.25.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Sanity build — ensures the public-facing site stays buildable
+      # on every PR, mirroring the production deploy workflow.
+      - name: Build site
+        working-directory: site
+        env:
+          NODE_ENV: production
+          BASE_PATH: /vite-devtool-plugin-svelte
+        run: pnpm build
+
+  build-playground:
+    name: Playground production build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.25.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build plugin (consumed by playground)
+        run: pnpm -C packages/vite-devtools-plugin-svelte build
+
+      # Asserts the dev-only virtual modules don't leak into a production
+      # bundle. If they ever do, this step fails — guarding against
+      # regressions of the resolveId/load dev-only gates.
+      - name: Build playground & assert no devtools runtime in output
+        working-directory: playground
+        env:
+          NODE_ENV: production
+        run: |
+          pnpm exec vite build
+          if grep -RIn --include='*.js' --include='*.html' 'svelte-devtools-runtime\|svelte-devtools:wrapped-client' .svelte-kit/output build 2>/dev/null; then
+            echo "::error::Devtools virtual modules leaked into production build"
+            exit 1
+          fi
