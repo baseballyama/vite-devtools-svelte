@@ -204,7 +204,3 @@ export const panels: Panel[] = [
     images: ['panel-assets.png'],
   },
 ]
-
-export function findPanel(slug: string): Panel | undefined {
-  return panels.find((p) => p.slug === slug)
-}

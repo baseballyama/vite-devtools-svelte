@@ -13,9 +13,7 @@
       await navigator.clipboard.writeText(code)
       copied = true
       setTimeout(() => (copied = false), 1500)
-    } catch {
-      // ignore
-    }
+    } catch {}
   }
 </script>
 

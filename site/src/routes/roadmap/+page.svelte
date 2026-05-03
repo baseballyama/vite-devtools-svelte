@@ -84,28 +84,6 @@
     font-weight: 600;
   }
 
-  .prose :global(code) {
-    background: var(--bg-elev-2);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 0.1em 0.4em;
-    font-size: 0.88em;
-  }
-
-  .prose :global(pre) {
-    background: var(--code-bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 1rem 1.1rem;
-    overflow-x: auto;
-  }
-
-  .prose :global(pre code) {
-    background: transparent;
-    border: 0;
-    padding: 0;
-  }
-
   .prose :global(blockquote) {
     border-left: 3px solid var(--brand);
     padding: 0.4rem 1rem;
