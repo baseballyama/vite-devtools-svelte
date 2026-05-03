@@ -264,7 +264,16 @@
             <div class="code-scroll source" bind:this={sourceScrollEl} onscroll={onSourceScroll}>
               {#each sourceLines as _, i}
                 {@const ln = i + 1}
-                <div class="code-line line-{ln}" class:highlighted={highlightedSourceLines.has(ln)} class:active-origin={highlightedSourceLines.has(ln) && activePanel === 'source'} onclick={() => handleSourceLineClick(ln)} role="button" tabindex="-1">
+                <div
+                  class="code-line line-{ln}"
+                  class:highlighted={highlightedSourceLines.has(ln)}
+                  class:active-origin={highlightedSourceLines.has(ln) && activePanel === 'source'}
+                  onclick={() => handleSourceLineClick(ln)}
+                  onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSourceLineClick(ln) } }}
+                  role="button"
+                  tabindex="-1"
+                  aria-label="Source line {ln}"
+                >
                   <span class="line-num">{ln}</span>
                   <span class="line-content">{@html highlightedSourceHtml[i]}</span>
                 </div>
@@ -289,7 +298,16 @@
             <div class="code-scroll compiled" bind:this={compiledScrollEl} onscroll={onCompiledScroll}>
               {#each compiledLines as _, i}
                 {@const ln = i + 1}
-                <div class="code-line line-{ln}" class:highlighted={highlightedCompiledLines.has(ln)} class:active-origin={highlightedCompiledLines.has(ln) && activePanel === 'compiled'} onclick={() => handleCompiledLineClick(ln)} role="button" tabindex="-1">
+                <div
+                  class="code-line line-{ln}"
+                  class:highlighted={highlightedCompiledLines.has(ln)}
+                  class:active-origin={highlightedCompiledLines.has(ln) && activePanel === 'compiled'}
+                  onclick={() => handleCompiledLineClick(ln)}
+                  onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleCompiledLineClick(ln) } }}
+                  role="button"
+                  tabindex="-1"
+                  aria-label="Compiled line {ln}"
+                >
                   <span class="line-num">{ln}</span>
                   <span class="line-content">{@html highlightedCompiledHtml[i]}</span>
                 </div>

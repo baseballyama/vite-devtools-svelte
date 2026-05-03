@@ -63,11 +63,22 @@
   {:else}
     <div class="timeline-layout">
       <div class="timeline-list">
-        {#each sorted as change, i}
-          <button
+        {#each sorted as change, i (change.id + ':' + change.timestamp)}
+          {@const toggle = () => selectedChange = selectedChange === change ? null : change}
+          {@const openInEditor = () => handleOpenReactive(change.componentFile, change.name)}
+          <div
             class="timeline-entry"
             class:selected={selectedChange === change}
-            onclick={() => selectedChange = selectedChange === change ? null : change}
+            role="button"
+            tabindex="0"
+            aria-pressed={selectedChange === change}
+            onclick={toggle}
+            onkeydown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                toggle()
+              }
+            }}
           >
             <div class="entry-header">
               <span class="entry-name">{change.name}</span>
@@ -76,9 +87,15 @@
               </Badge>
             </div>
             <div class="entry-meta">
-              <!-- svelte-ignore a11y_no_static_element_interactions -->
-              <!-- svelte-ignore a11y_no_static_element_interactions -->
-              <span class="entry-file-link" role="link" tabindex="-1" onclick={(e) => { e.stopPropagation(); handleOpenReactive(change.componentFile, change.name); }} onkeydown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); handleOpenReactive(change.componentFile, change.name); } }}>{componentName(change.componentFile)}</span>
+              <button
+                type="button"
+                class="entry-file-link"
+                onclick={(e) => { e.stopPropagation(); openInEditor() }}
+                onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.stopPropagation() }}
+                title="Open {change.componentFile} in editor"
+              >
+                {componentName(change.componentFile)}
+              </button>
               <span class="entry-time">{formatTime(change.timestamp)}</span>
             </div>
             <div class="entry-values">
@@ -86,7 +103,7 @@
               <span class="arrow">→</span>
               <span class="new-val">{formatValue(change.newValue)}</span>
             </div>
-          </button>
+          </div>
         {/each}
       </div>
 
