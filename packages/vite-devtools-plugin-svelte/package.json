@@ -28,7 +28,7 @@
     "@vitejs/devtools-kit": "^0.1.2"
   },
   "devDependencies": {
-    "@types/node": "^25.5.0",
+    "@types/node": "^25.6.0",
     "typescript": "^5.8.0",
     "vite-plus": "latest"
   },
