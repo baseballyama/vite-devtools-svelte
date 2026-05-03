@@ -1,12 +1,8 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
-
   const repo = 'baseballyama/vite-devtool-plugin-svelte'
   const file = 'playground/src/routes/+page.svelte'
 
-  // ctl=1 = click-to-load (avoids burning StackBlitz embed quota)
-  // terminal=dev = runs the `dev` npm script automatically
-  // theme=dark and view=editor for a consistent demo experience
+  // ctl=1 (click-to-load) avoids burning StackBlitz embed quota until the user opts in.
   const embedUrl = `https://stackblitz.com/github/${repo}?embed=1&ctl=1&file=${encodeURIComponent(
     file,
   )}&terminal=dev&theme=dark&view=editor`
@@ -14,22 +10,6 @@
   const openUrl = `https://stackblitz.com/github/${repo}?file=${encodeURIComponent(
     file,
   )}&terminal=dev`
-
-  let theme = $state<'dark' | 'light'>('dark')
-
-  onMount(() => {
-    const current = document.documentElement.dataset.theme
-    if (current === 'light') theme = 'light'
-    const obs = new MutationObserver(() => {
-      theme = (document.documentElement.dataset.theme as 'dark' | 'light') ?? 'dark'
-    })
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
-    return () => obs.disconnect()
-  })
-
-  let iframeSrc = $derived(
-    embedUrl.replace(/theme=(dark|light)/, `theme=${theme}`),
-  )
 </script>
 
 <svelte:head>
@@ -62,7 +42,7 @@
 
     <div class="frame">
       <iframe
-        src={iframeSrc}
+        src={embedUrl}
         title="vite-devtools-plugin-svelte playground in StackBlitz"
         loading="lazy"
         allow="clipboard-read; clipboard-write; cross-origin-isolated"
