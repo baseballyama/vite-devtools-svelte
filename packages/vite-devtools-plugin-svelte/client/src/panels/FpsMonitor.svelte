@@ -300,15 +300,15 @@
     stroke-dasharray: 4 3;
     vector-effect: non-scaling-stroke;
   }
-  .grid-line.target { stroke: rgba(34, 197, 94, 0.3); }
-  .grid-line.warn { stroke: rgba(239, 68, 68, 0.3); }
+  .grid-line.target { stroke: var(--color-success); opacity: 0.45; }
+  .grid-line.warn { stroke: var(--color-error); opacity: 0.45; }
 
   .record-region {
-    fill: rgba(239, 68, 68, 0.1);
+    fill: var(--color-error-bg);
   }
 
   .chart-area {
-    fill: rgba(99, 102, 241, 0.15);
+    fill: var(--color-info-bg);
   }
   .chart-line {
     fill: none;
@@ -339,11 +339,11 @@
   }
   .chart-label.target {
     top: calc(100% - 60 / 120 * 100%);
-    color: rgba(34, 197, 94, 0.7);
+    color: var(--color-success);
   }
   .chart-label.warn {
     top: calc(100% - 30 / 120 * 100%);
-    color: rgba(239, 68, 68, 0.7);
+    color: var(--color-error);
   }
 
   .record-stats {

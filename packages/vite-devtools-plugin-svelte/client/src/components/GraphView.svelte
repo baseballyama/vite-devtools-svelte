@@ -67,24 +67,54 @@
   function fitToView() {
     if (!containerEl || layout.width === 0) return
     const rect = containerEl.getBoundingClientRect()
+    if (rect.width === 0 || rect.height === 0) {
+      // Container hasn't laid out yet — try again on the next frame.
+      requestAnimationFrame(() => fitToView())
+      return
+    }
     const aspect = rect.width / rect.height
-    const graphW = Math.max(layout.width, 200)
-    const graphH = Math.max(layout.height, 100)
+    // Add breathing room around the graph so nodes don't kiss the edges.
+    const PAD = NODE_W * 0.5
+    const graphW = Math.max(layout.width, 200) + PAD * 2
+    const graphH = Math.max(layout.height, 100) + PAD * 2
     const graphAspect = graphW / graphH
 
+    let targetW: number
+    let targetH: number
     if (graphAspect > aspect) {
-      // Graph is wider — fit width
-      vbW = graphW
-      vbH = graphW / aspect
+      targetW = graphW
+      targetH = graphW / aspect
     } else {
-      // Graph is taller — fit height
-      vbH = graphH
-      vbW = graphH * aspect
+      targetH = graphH
+      targetW = graphH * aspect
     }
 
-    // Center the graph in the viewBox
-    vbX = (graphW - vbW) / 2
-    vbY = (graphH - vbH) / 2
+    // Don't zoom out so far that nodes become illegible. Cap the viewBox
+    // so the rendered scale never drops below ~70% of native — a NODE_W=160
+    // box stays at >= ~110px on screen, where the 11px label inside is
+    // still readable. If the graph is genuinely larger than that fits,
+    // the user gets scroll/pan instead of an unreadable thumbnail.
+    const MIN_NODE_SCREEN_W = 110
+    const maxVbW = (rect.width / MIN_NODE_SCREEN_W) * NODE_W
+    const maxVbH = (rect.height / MIN_NODE_SCREEN_W) * NODE_W
+    if (targetW > maxVbW) {
+      targetW = maxVbW
+      targetH = maxVbW / aspect
+    }
+    if (targetH > maxVbH) {
+      targetH = maxVbH
+      targetW = maxVbH * aspect
+    }
+
+    vbW = targetW
+    vbH = targetH
+
+    // Center the visible window over the graph's center, accounting for the
+    // padding we added so the graph isn't pinned to a corner.
+    const cx = (layout.width - PAD * 2) / 2 - PAD
+    const cy = (layout.height - PAD * 2) / 2 - PAD
+    vbX = cx + PAD - vbW / 2
+    vbY = cy + PAD - vbH / 2
     fitVbW = vbW
   }
 
@@ -596,21 +626,21 @@
               stroke-width={selectedNodeId === node.id ? 2.5 : 1.5}
             />
             <circle cx="12" cy="16" r="4" fill={nodeColor(node.type)} />
-            <text x="22" y="16" dominant-baseline="middle" fill="#e5e5e5" font-size="11" font-family="DM Mono, monospace">
+            <text x="22" y="16" dominant-baseline="middle" class="node-name" font-size="11" font-family="DM Mono, monospace">
               {node.name.length > 14 ? node.name.slice(0, 13) + '…' : node.name}
             </text>
-            <text x={NODE_W - 6} y="16" text-anchor="end" dominant-baseline="middle" fill="#999" font-size="9" font-family="DM Sans, sans-serif" font-weight="600">
+            <text x={NODE_W - 6} y="16" text-anchor="end" dominant-baseline="middle" class="node-type" font-size="9" font-family="DM Sans, sans-serif" font-weight="600">
               {node.type}
             </text>
-            <text x="12" y="36" fill="#999" font-size="9" font-family="DM Mono, monospace">
+            <text x="12" y="36" class="node-meta" font-size="9" font-family="DM Mono, monospace">
               {shortFile(node.componentFile)}
             </text>
             {#if hasValue}
-              <text x={NODE_W - 6} y="36" text-anchor="end" fill="#ff6633" font-size="10" font-family="DM Mono, monospace" font-weight="500">
+              <text x={NODE_W - 6} y="36" text-anchor="end" class="node-value" font-size="10" font-family="DM Mono, monospace" font-weight="500">
                 = {formatValue(node.value)}
               </text>
             {/if}
-            <line x1="6" y1="24" x2={NODE_W - 6} y2="24" stroke="#333" stroke-width="0.5" opacity="0.5" />
+            <line x1="6" y1="24" x2={NODE_W - 6} y2="24" class="node-divider" stroke-width="0.5" />
           </g>
         {/if}
       {/each}
@@ -674,17 +704,24 @@
 
   /* --- Component group boxes --- */
   .component-box {
-    fill: rgba(255, 255, 255, 0.02);
-    stroke: rgba(255, 255, 255, 0.08);
+    fill: var(--color-surface-active);
+    stroke: var(--color-border);
     stroke-width: 1;
     stroke-dasharray: 4 3;
   }
   .component-label {
-    fill: rgba(255, 160, 80, 0.7);
+    fill: var(--color-accent-400);
     font-size: 9px;
     font-family: var(--font-mono);
     font-weight: 600;
   }
+
+  /* --- Node text — themed via CSS vars so light mode flips automatically --- */
+  .node-name { fill: var(--color-text); }
+  .node-type { fill: var(--color-text-muted); }
+  .node-meta { fill: var(--color-text-faint); }
+  .node-value { fill: var(--color-accent-400); }
+  .node-divider { stroke: var(--color-border); opacity: 1; }
 
   /* --- Edges --- */
   .edge { fill: none; stroke-width: 2; opacity: 0.5; transition: opacity 0.3s; }

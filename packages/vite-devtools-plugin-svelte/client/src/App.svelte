@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { Component } from 'svelte'
   import './lib/design-system.css'
+  import { createThemeStore } from './lib/theme.svelte.js'
+  import ThemeToggle from './components/ThemeToggle.svelte'
   import Overview from './panels/Overview.svelte'
   import Components from './panels/Components.svelte'
   import Routes from './panels/Routes.svelte'
@@ -51,6 +53,7 @@
   const ActivePanel = $derived(
     (tabs.find((t) => t.id === activeTab) ?? tabs[0]).component,
   )
+  const theme = createThemeStore()
 </script>
 
 <div class="devtools">
@@ -62,17 +65,21 @@
       <span class="logo-text">Svelte</span>
     </div>
 
-    {#each tabs as tab}
-      <button
-        class="nav-item"
-        class:active={activeTab === tab.id}
-        onclick={() => (activeTab = tab.id)}
-        title={tab.label}
-      >
-        <span class="nav-icon {tab.icon}"></span>
-        <span class="nav-label">{tab.label}</span>
-      </button>
-    {/each}
+    <div class="nav-list">
+      {#each tabs as tab}
+        <button
+          class="nav-item"
+          class:active={activeTab === tab.id}
+          onclick={() => (activeTab = tab.id)}
+          title={tab.label}
+        >
+          <span class="nav-icon {tab.icon}"></span>
+          <span class="nav-label">{tab.label}</span>
+        </button>
+      {/each}
+    </div>
+
+    <ThemeToggle {theme} />
   </nav>
 
   <main class="content">
@@ -92,12 +99,19 @@
   .sidebar {
     display: flex;
     flex-direction: column;
-    gap: var(--space-1);
     padding: var(--space-2);
     background: var(--color-glass);
     border-right: 1px solid var(--color-border);
     backdrop-filter: blur(7px);
     width: 150px;
+    overflow-y: auto;
+  }
+
+  .nav-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    flex: 1;
   }
 
   .logo {
@@ -122,23 +136,23 @@
     background: none;
     border: none;
     border-radius: var(--radius-lg);
-    color: var(--color-text-muted);
+    /* Use --color-text-secondary instead of muted+0.55 opacity. The previous
+       0.55 * #999 effectively rendered at ~#555 luminance on dark — about
+       2.5:1 contrast on #111, well below the WCAG AA threshold. */
+    color: var(--color-text-secondary);
     cursor: pointer;
     font-family: var(--font-sans);
     font-size: var(--text-sm);
     text-align: left;
     transition: all var(--transition-fast);
-    opacity: var(--opacity-fade);
   }
 
   .nav-item:hover {
-    opacity: 1;
     color: var(--color-text);
     background: var(--color-surface-active);
   }
 
   .nav-item.active {
-    opacity: 1;
     color: var(--color-text-accent);
     background: var(--color-surface-active);
   }
@@ -147,11 +161,6 @@
     width: 18px;
     height: 18px;
     display: block;
-    opacity: 0.8;
-  }
-
-  .nav-item.active .nav-icon {
-    opacity: 1;
   }
 
   /* Icon backgrounds as inline SVG data URIs for simplicity */
