@@ -1,9 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vite-plus/test'
 import { svelteDevtools } from '../plugin.js'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 
-const FIXTURES_DIR = path.resolve(import.meta.dirname, 'fixtures')
+// Use an isolated tmp root per test run so this file does not race with
+// other test files that read from the shared FIXTURES_DIR (e.g. plugin.test.ts
+// asserting an empty build analysis). Vitest runs files in parallel by default.
+const FIXTURES_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'svelte-devtools-build-'))
 
 function setupWithRpc(root: string = FIXTURES_DIR) {
   const plugins = svelteDevtools()
