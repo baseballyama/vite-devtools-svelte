@@ -38,35 +38,43 @@ function __currentId() {
 const __pendingSignal = { ref: null, type: null };
 
 // --- Component Lifecycle ---
+//
+// Observer must not break the observed: every devtools side-effect below is
+// wrapped in try/catch so a bug or an out-of-shape runtime cannot tear down
+// the user's app. The original Svelte function is always called, and its
+// return value always returned, regardless of devtools failures.
 
 export function push() {
   const result = __svelte_original.push.apply(null, arguments);
-  const dt = __dt();
-  if (dt) {
-    const file = dt._pendingFile || 'Unknown';
-    dt._pendingFile = null;
-    const id = dt.register(file);
-    __idStack.push(id);
-    dt.startInit(id);
-    // Register cleanup via an effect that returns a teardown function.
-    // We use __svelte_original.user_effect (the REAL unwrapped version)
-    // to avoid triggering our own user_effect wrapper.
-    try {
-      __svelte_original.user_effect(() => {
-        return () => { dt.unmount(id); };
-      });
-    } catch {}
-  }
+  try {
+    const dt = __dt();
+    if (dt) {
+      const file = dt._pendingFile || 'Unknown';
+      dt._pendingFile = null;
+      const id = dt.register(file);
+      __idStack.push(id);
+      dt.startInit(id);
+      try {
+        __svelte_original.user_effect(() => {
+          return () => { try { dt.unmount(id); } catch {} };
+        });
+      } catch {}
+    }
+  } catch {}
   return result;
 }
 
 export function pop() {
-  const dt = __dt();
-  if (dt && __idStack.length > 0) {
-    const id = __idStack.pop();
-    dt.endInit(id);
-    dt.registered(id);
-  }
+  // Capture devtools errors but ALWAYS forward to the original pop so the
+  // Svelte component stack stays balanced.
+  try {
+    const dt = __dt();
+    if (dt && __idStack.length > 0) {
+      const id = __idStack.pop();
+      try { dt.endInit(id); } catch {}
+      try { dt.registered(id); } catch {}
+    }
+  } catch {}
   return __svelte_original.pop.apply(null, arguments);
 }
 
@@ -74,22 +82,28 @@ export function pop() {
 
 export function state() {
   const signal = __svelte_original.state.apply(null, arguments);
-  __pendingSignal.ref = signal;
-  __pendingSignal.type = 'state';
+  try {
+    __pendingSignal.ref = signal;
+    __pendingSignal.type = 'state';
+  } catch {}
   return signal;
 }
 
 export function derived() {
   const signal = __svelte_original.derived.apply(null, arguments);
-  __pendingSignal.ref = signal;
-  __pendingSignal.type = 'derived';
+  try {
+    __pendingSignal.ref = signal;
+    __pendingSignal.type = 'derived';
+  } catch {}
   return signal;
 }
 
 export function proxy() {
   const p = __svelte_original.proxy.apply(null, arguments);
-  __pendingSignal.ref = p;
-  __pendingSignal.type = 'proxy';
+  try {
+    __pendingSignal.ref = p;
+    __pendingSignal.type = 'proxy';
+  } catch {}
   return p;
 }
 
@@ -97,30 +111,34 @@ export function proxy() {
 
 export function tag(signal, name) {
   const result = __svelte_original.tag.apply(null, arguments);
-  const dt = __dt();
-  const cid = __currentId();
-  if (dt && cid !== null) {
-    const type = (__pendingSignal.ref === signal) ? __pendingSignal.type : 'state';
-    if (type === 'derived') {
-      dt.trackDerived(signal, name, cid);
-    } else {
-      dt.trackState(signal, name, cid);
+  try {
+    const dt = __dt();
+    const cid = __currentId();
+    if (dt && cid !== null) {
+      const type = (__pendingSignal.ref === signal) ? __pendingSignal.type : 'state';
+      if (type === 'derived') {
+        dt.trackDerived(signal, name, cid);
+      } else {
+        dt.trackState(signal, name, cid);
+      }
     }
-  }
-  __pendingSignal.ref = null;
-  __pendingSignal.type = null;
+    __pendingSignal.ref = null;
+    __pendingSignal.type = null;
+  } catch {}
   return result;
 }
 
 export function tag_proxy(proxy, name) {
   const result = __svelte_original.tag_proxy.apply(null, arguments);
-  const dt = __dt();
-  const cid = __currentId();
-  if (dt && cid !== null) {
-    dt.trackProxy(proxy, name, cid);
-  }
-  __pendingSignal.ref = null;
-  __pendingSignal.type = null;
+  try {
+    const dt = __dt();
+    const cid = __currentId();
+    if (dt && cid !== null) {
+      dt.trackProxy(proxy, name, cid);
+    }
+    __pendingSignal.ref = null;
+    __pendingSignal.type = null;
+  } catch {}
   return result;
 }
 
@@ -128,26 +146,30 @@ export function tag_proxy(proxy, name) {
 
 export function user_effect() {
   const result = __svelte_original.user_effect.apply(null, arguments);
-  const dt = __dt();
-  const cid = __currentId();
-  if (dt && cid !== null) {
-    dt._effectCounter = (dt._effectCounter || 0) + 1;
-    // Track the effect OBJECT (not the callback). The Svelte runtime
-    // populates result.deps with the signals this effect depends on,
-    // which is what getReactiveGraph() reads to build edges.
-    dt.trackEffect(result, 'effect_' + dt._effectCounter, cid);
-  }
+  try {
+    const dt = __dt();
+    const cid = __currentId();
+    if (dt && cid !== null) {
+      dt._effectCounter = (dt._effectCounter || 0) + 1;
+      // Track the effect OBJECT (not the callback). The Svelte runtime
+      // populates result.deps with the signals this effect depends on,
+      // which is what getReactiveGraph() reads to build edges.
+      dt.trackEffect(result, 'effect_' + dt._effectCounter, cid);
+    }
+  } catch {}
   return result;
 }
 
 export function user_pre_effect() {
   const result = __svelte_original.user_pre_effect.apply(null, arguments);
-  const dt = __dt();
-  const cid = __currentId();
-  if (dt && cid !== null) {
-    dt._effectCounter = (dt._effectCounter || 0) + 1;
-    dt.trackEffect(result, 'effect_pre_' + dt._effectCounter, cid);
-  }
+  try {
+    const dt = __dt();
+    const cid = __currentId();
+    if (dt && cid !== null) {
+      dt._effectCounter = (dt._effectCounter || 0) + 1;
+      dt.trackEffect(result, 'effect_pre_' + dt._effectCounter, cid);
+    }
+  } catch {}
   return result;
 }
 `

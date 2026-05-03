@@ -69,10 +69,14 @@
   }
 
   function parseMappings(mappings: string) {
+    // Build a line-level map only (column data is intentionally discarded;
+    // the UI highlights whole lines). Splitting once avoids O(n²) repeated
+    // splits inside the loop on large source maps.
     const c2s = new Map<number, Set<number>>(), s2c = new Map<number, Set<number>>()
     let sfi = 0, sl = 0, sc = 0, ni = 0
-    for (let gl = 0; gl < mappings.split(';').length; gl++) {
-      const line = mappings.split(';')[gl]; if (!line) continue; let gc = 0
+    const lines = mappings.split(';')
+    for (let gl = 0; gl < lines.length; gl++) {
+      const line = lines[gl]; if (!line) continue; let gc = 0
       for (const seg of line.split(',')) {
         const d = decodeVLQ(seg); if (!d.length) continue; gc += d[0]
         if (d.length >= 4) { sfi += d[1]; sl += d[2]; sc += d[3]; if (d.length >= 5) ni += d[4]

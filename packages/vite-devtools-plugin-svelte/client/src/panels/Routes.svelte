@@ -74,8 +74,8 @@
     <p class="status-text error">{error}</p>
   {:else}
     <div class="split-layout">
-      <ScrollList>
-        {#each filteredRoutes as route}
+      <ScrollList items={filteredRoutes} getKey={(r) => r.id}>
+        {#snippet item(route)}
           <ListItem selected={selectedRoute?.id === route.id} onclick={() => (selectedRoute = route)}>
             <span class="route-path">{route.path}</span>
             <div class="badges">
@@ -88,10 +88,10 @@
               {/each}
             </div>
           </ListItem>
-        {/each}
-        {#if filteredRoutes.length === 0}
+        {/snippet}
+        {#snippet empty()}
           <p class="empty">No routes found</p>
-        {/if}
+        {/snippet}
       </ScrollList>
 
       {#if selectedRoute}

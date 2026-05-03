@@ -28,7 +28,10 @@
 
   load()
 
-  let assetTypes = $derived(() => {
+  // Note: this is `$derived.by` (not `$derived`) because the value is a
+  // computed array, not a function. The previous `$derived(() => ...)` form
+  // produced a $state holding the function itself, which broke reactivity.
+  let assetTypes = $derived.by(() => {
     const types = new Set(assets.map(a => getCategory(a.type)))
     return ['all', ...Array.from(types).sort()]
   })
@@ -74,7 +77,7 @@
     </div>
     <div class="header-actions">
       <select class="filter-select" bind:value={filterType}>
-        {#each assetTypes() as type}
+        {#each assetTypes as type}
           <option value={type}>{type === 'all' ? 'All types' : type}</option>
         {/each}
       </select>
@@ -88,8 +91,8 @@
     <p class="status-text error">{error}</p>
   {:else}
     <div class="split-layout">
-      <ScrollList>
-        {#each filteredAssets as asset}
+      <ScrollList items={filteredAssets} getKey={(a) => a.path}>
+        {#snippet item(asset)}
           <ListItem selected={selectedAsset?.path === asset.path} onclick={() => (selectedAsset = asset)}>
             <div class="asset-info">
               <span class="asset-name">{asset.name}</span>
@@ -97,10 +100,10 @@
             </div>
             <span class="asset-size">{formatSize(asset.size)}</span>
           </ListItem>
-        {/each}
-        {#if filteredAssets.length === 0}
+        {/snippet}
+        {#snippet empty()}
           <p class="empty">No assets found</p>
-        {/if}
+        {/snippet}
       </ScrollList>
 
       {#if selectedAsset}
