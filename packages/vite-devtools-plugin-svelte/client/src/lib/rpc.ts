@@ -1,4 +1,4 @@
-import type { RouteInfo, AssetInfo, ProjectInfo, ComponentRelation, ComponentInstance, RenderProfile, LoadProfile, ReactiveGraph, StateChange, ApiEndpoint, ApiResponse, CompilerWarning, RuntimeError, InspectResult, ModuleGraphData, OGPreview, BuildAnalysis } from './types.js'
+import type { RouteInfo, AssetInfo, ProjectInfo, ComponentRelation, ComponentInstance, RenderProfile, LoadProfile, ReactiveGraph, StateChange, ApiEndpoint, ApiResponse, CompilerWarning, RuntimeError, InspectResult, ModuleGraphData, OGPreview, BuildAnalysis, FpsSample } from './types.js'
 
 interface RpcClient {
   call(method: string, ...args: unknown[]): Promise<unknown>
@@ -191,9 +191,9 @@ export async function getBuildAnalysis(): Promise<BuildAnalysis> {
 
 // FPS Monitoring
 
-export async function getFps(): Promise<{ timestamp: number; fps: number }[]> {
+export async function getFps(): Promise<FpsSample[]> {
   const client = await getClient()
-  return client.call('svelte-devtools:get-fps') as Promise<{ timestamp: number; fps: number }[]>
+  return client.call('svelte-devtools:get-fps') as Promise<FpsSample[]>
 }
 
 export async function clearFps(): Promise<void> {
