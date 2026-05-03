@@ -1,4 +1,6 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte'
+
   let {
     selected = false,
     onclick,
@@ -6,7 +8,7 @@
   }: {
     selected?: boolean
     onclick?: () => void
-    children: any
+    children: Snippet
   } = $props()
 </script>
 

@@ -1,7 +1,9 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte'
+
   type Variant = 'accent' | 'info' | 'success' | 'warning' | 'error' | 'neutral'
 
-  let { variant = 'neutral', children }: { variant?: Variant; children: any } = $props()
+  let { variant = 'neutral', children }: { variant?: Variant; children: Snippet } = $props()
 </script>
 
 <span class="badge {variant}">

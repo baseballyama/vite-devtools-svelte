@@ -1,5 +1,6 @@
 <script lang="ts">
-  let { width = '320px', children }: { width?: string; children: any } = $props()
+  import type { Snippet } from 'svelte'
+  let { width = '320px', children }: { width?: string; children: Snippet } = $props()
 </script>
 
 <aside class="detail-panel" style:width={width} style:min-width={width}>
