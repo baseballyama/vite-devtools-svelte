@@ -10,7 +10,7 @@
     "preview": "vp preview"
   },
   "devDependencies": {
-    "@sveltejs/adapter-auto": "^4.0.0",
+    "@sveltejs/adapter-auto": "^7.0.1",
     "@sveltejs/kit": "^2.59.0",
     "@sveltejs/vite-plugin-svelte": "^7.0.0",
     "@vitejs/devtools": "^0.1.18",
