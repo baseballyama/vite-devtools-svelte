@@ -5,18 +5,34 @@ interface RpcClient {
 }
 
 let rpcClient: RpcClient | null = null
+// Cache the in-flight client-resolution Promise so concurrent callers
+// (e.g. Promise.all of several RPC calls during initial mount) do not each
+// trigger a fresh DevTools Kit dynamic import. Without this, two callers can
+// both observe `rpcClient === null` and race the kit import twice.
+let clientPromise: Promise<RpcClient> | null = null
+
+function readDevtoolsToken(): string | null {
+  const meta = document.querySelector('meta[name="svelte-devtools-token"]')
+  return meta?.getAttribute('content') ?? null
+}
 
 function createHttpClient(): RpcClient {
-  // Determine the base URL: if we're in an iframe, use the parent origin
+  // Same-origin only — the dev iframe lives on the Vite server origin.
   const baseUrl = window.location.origin
+  const token = readDevtoolsToken()
   return {
     async call(method: string, ...args: unknown[]) {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['x-svelte-devtools-token'] = token
       const res = await fetch(`${baseUrl}/__svelte-devtools/rpc`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ method, args }),
       })
-      if (!res.ok) throw new Error(`RPC failed: ${res.statusText}`)
+      if (!res.ok) {
+        const body = await res.text().catch(() => '')
+        throw new Error(`RPC ${method} failed: ${res.status} ${res.statusText}${body ? ` — ${body}` : ''}`)
+      }
       return res.json()
     },
   }
@@ -24,25 +40,32 @@ function createHttpClient(): RpcClient {
 
 async function getClient(): Promise<RpcClient> {
   if (rpcClient) return rpcClient
+  if (clientPromise) return clientPromise
 
-  // Try DevTools Kit RPC first with a timeout
-  try {
-    const kitClient = await Promise.race([
-      (async () => {
-        const { getDevToolsRpcClient } = await import('@vitejs/devtools-kit/client')
-        return await getDevToolsRpcClient()
-      })(),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('timeout')), 2000)
-      ),
-    ])
-    rpcClient = kitClient
-    return kitClient
-  } catch {
-    // Fallback to HTTP RPC
-    rpcClient = createHttpClient()
-    return rpcClient
-  }
+  clientPromise = (async () => {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      const kitClient = await Promise.race([
+        (async () => {
+          const { getDevToolsRpcClient } = await import('@vitejs/devtools-kit/client')
+          return await getDevToolsRpcClient()
+        })(),
+        new Promise<never>((_, reject) => {
+          // 2s is the discovery timeout for DevTools Kit's WebSocket handshake.
+          // If the kit isn't reachable by then, fall back to HTTP RPC.
+          timer = setTimeout(() => reject(new Error('devtools-kit timeout')), 2000)
+        }),
+      ])
+      return kitClient
+    } catch {
+      return createHttpClient()
+    } finally {
+      if (timer) clearTimeout(timer)
+    }
+  })()
+
+  rpcClient = await clientPromise
+  return rpcClient
 }
 
 export async function getProject(): Promise<ProjectInfo> {

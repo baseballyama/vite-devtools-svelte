@@ -66,12 +66,28 @@
     return roots
   })
 
+  // Build a single reverse-index for "imported by" lookups so panel rendering
+  // is O(n) overall instead of O(n²) (was: relations.filter().includes() per row).
+  const importerIndex = $derived.by(() => {
+    const counts = new Map<string, number>()
+    const importerMap = new Map<string, ComponentRelation[]>()
+    for (const r of relations) {
+      for (const imp of r.imports) {
+        counts.set(imp, (counts.get(imp) ?? 0) + 1)
+        const list = importerMap.get(imp)
+        if (list) list.push(r)
+        else importerMap.set(imp, [r])
+      }
+    }
+    return { counts, importerMap }
+  })
+
   let importers = $derived(
-    selectedComponent ? relations.filter(r => r.imports.includes(selectedComponent!.file)) : []
+    selectedComponent ? (importerIndex.importerMap.get(selectedComponent.file) ?? []) : []
   )
 
   function getImporterCount(file: string): number {
-    return relations.filter(r => r.imports.includes(file)).length
+    return importerIndex.counts.get(file) ?? 0
   }
 
   async function handleOpenFile(filePath: string) {
@@ -99,8 +115,8 @@
     <p class="status-text error">{error}</p>
   {:else if viewMode === 'static'}
     <div class="split-layout">
-      <ScrollList>
-        {#each filteredRelations as comp}
+      <ScrollList items={filteredRelations} getKey={(c) => c.file}>
+        {#snippet item(comp)}
           <ListItem selected={selectedComponent?.file === comp.file} onclick={() => (selectedComponent = comp)}>
             <div class="comp-info">
               <span class="comp-name">{comp.name}</span>
@@ -115,10 +131,10 @@
               {/if}
             </div>
           </ListItem>
-        {/each}
-        {#if filteredRelations.length === 0}
+        {/snippet}
+        {#snippet empty()}
           <p class="empty">No components found</p>
-        {/if}
+        {/snippet}
       </ScrollList>
 
       {#if selectedComponent}
