@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import type { CompilerWarning, RuntimeError } from '../lib/types.js'
   import { getCompilerWarnings, getRuntimeErrors, clearErrors } from '../lib/rpc.js'
+  import { shortPath } from '../lib/format.js'
   import PanelContainer from '../components/PanelContainer.svelte'
   import Card from '../components/Card.svelte'
   import Badge from '../components/Badge.svelte'
@@ -11,12 +12,6 @@
   let errors = $state<RuntimeError[]>([])
   let activeTab = $state<'warnings' | 'errors'>('warnings')
   let pollTimer: ReturnType<typeof setInterval> | null = null
-
-  function shortFile(file: string): string {
-    if (!file) return ''
-    const parts = file.split('/')
-    return parts.slice(-2).join('/')
-  }
 
   function formatTime(ts: number): string {
     return new Date(ts).toLocaleTimeString()
@@ -68,7 +63,7 @@
             <div class="item-header">
               <Badge variant="warning">{warning.code}</Badge>
               {#if warning.file}
-                <span class="item-file">{shortFile(warning.file)}{warning.line ? `:${warning.line}` : ''}</span>
+                <span class="item-file">{shortPath(warning.file)}{warning.line ? `:${warning.line}` : ''}</span>
               {/if}
             </div>
             <p class="item-message">{warning.message}</p>
@@ -87,7 +82,7 @@
               <Badge variant="error">error</Badge>
               <span class="item-time">{formatTime(error.timestamp)}</span>
               {#if error.file}
-                <span class="item-file">{shortFile(error.file)}{error.line ? `:${error.line}` : ''}</span>
+                <span class="item-file">{shortPath(error.file)}{error.line ? `:${error.line}` : ''}</span>
               {/if}
             </div>
             <p class="item-message">{error.message}</p>

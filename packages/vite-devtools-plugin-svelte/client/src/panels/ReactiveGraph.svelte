@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import type { ReactiveNode, ReactiveGraph as ReactiveGraphType } from '../lib/types.js'
   import { getReactiveGraph, openReactiveInEditor } from '../lib/rpc.js'
+  import { componentName } from '../lib/format.js'
   import PanelContainer from '../components/PanelContainer.svelte'
   import Card from '../components/Card.svelte'
   import Badge from '../components/Badge.svelte'
@@ -119,7 +120,7 @@
           <div class="detail-row">
             <span class="detail-label">Component</span>
             <button class="detail-file-link" onclick={() => handleOpenReactive(selectedNode!.componentFile, selectedNode!.name, selectedNode!.type)}>
-              {selectedNode.componentFile.split('/').pop()?.replace('.svelte', '') || '?'} : {selectedNode.name}
+              {componentName(selectedNode.componentFile, '?')} : {selectedNode.name}
             </button>
           </div>
 

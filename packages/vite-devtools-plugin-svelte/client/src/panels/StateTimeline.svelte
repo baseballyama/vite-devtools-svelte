@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import type { StateChange } from '../lib/types.js'
   import { getStateTimeline, clearStateTimeline, openReactiveInEditor } from '../lib/rpc.js'
+  import { componentName } from '../lib/format.js'
   import PanelContainer from '../components/PanelContainer.svelte'
   import Card from '../components/Card.svelte'
   import Badge from '../components/Badge.svelte'
@@ -12,11 +13,6 @@
   let selectedChange = $state<StateChange | null>(null)
 
   const sorted = $derived([...changes].reverse())
-
-  function shortFile(file: string): string {
-    if (!file) return ''
-    return file.split('/').pop()?.replace('.svelte', '') || ''
-  }
 
   function formatValue(v: unknown): string {
     if (v === null) return 'null'
@@ -82,7 +78,7 @@
             <div class="entry-meta">
               <!-- svelte-ignore a11y_no_static_element_interactions -->
               <!-- svelte-ignore a11y_no_static_element_interactions -->
-              <span class="entry-file-link" role="link" tabindex="-1" onclick={(e) => { e.stopPropagation(); handleOpenReactive(change.componentFile, change.name); }} onkeydown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); handleOpenReactive(change.componentFile, change.name); } }}>{shortFile(change.componentFile)}</span>
+              <span class="entry-file-link" role="link" tabindex="-1" onclick={(e) => { e.stopPropagation(); handleOpenReactive(change.componentFile, change.name); }} onkeydown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); handleOpenReactive(change.componentFile, change.name); } }}>{componentName(change.componentFile)}</span>
               <span class="entry-time">{formatTime(change.timestamp)}</span>
             </div>
             <div class="entry-values">
@@ -99,7 +95,7 @@
           <Card title={selectedChange.name}>
             <div class="detail-row">
               <span class="detail-label">Component</span>
-              <button class="detail-file-link" onclick={() => handleOpenReactive(selectedChange!.componentFile, selectedChange!.name)}>{shortFile(selectedChange.componentFile)}</button>
+              <button class="detail-file-link" onclick={() => handleOpenReactive(selectedChange!.componentFile, selectedChange!.name)}>{componentName(selectedChange.componentFile)}</button>
             </div>
             <div class="detail-row">
               <span class="detail-label">Time</span>

@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import type { InspectResult } from '../lib/types.js'
   import { getSvelteFiles, inspectFile } from '../lib/rpc.js'
+  import { shortPath as sharedShortPath } from '../lib/format.js'
   import PanelContainer from '../components/PanelContainer.svelte'
   import Card from '../components/Card.svelte'
   import SearchInput from '../components/SearchInput.svelte'
@@ -89,7 +90,8 @@
     return { c2s, s2c }
   }
 
-  function shortPath(f: string) { return f.split('/').slice(-3).join('/') }
+  // Inspect deliberately shows three segments (more context for navigation).
+  const shortPath = (f: string) => sharedShortPath(f, 3)
 
   async function select(file: string) {
     selectedFile = file; loading = true
