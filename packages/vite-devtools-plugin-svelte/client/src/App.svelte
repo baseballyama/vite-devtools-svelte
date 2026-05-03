@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Component } from 'svelte'
   import './lib/design-system.css'
   import Overview from './panels/Overview.svelte'
   import Components from './panels/Components.svelte'
@@ -16,27 +17,40 @@
   import BuildAnalysis from './panels/BuildAnalysis.svelte'
   import FpsMonitor from './panels/FpsMonitor.svelte'
 
+  // Single source of truth for the panel registry: id, label, sidebar
+  // icon class, and the component to render. Adding a new panel only
+  // requires adding one entry — no separate `{:else if}` branch and
+  // no separate type-union to keep in sync.
+  type Tab = {
+    id: string
+    label: string
+    icon: string
+    component: Component
+  }
   const tabs = [
-    { id: 'overview', label: 'Overview', icon: 'i-overview' },
-    { id: 'components', label: 'Components', icon: 'i-components' },
-    { id: 'routes', label: 'Routes', icon: 'i-routes' },
-    { id: 'assets', label: 'Assets', icon: 'i-assets' },
-    { id: 'profiler', label: 'Profiler', icon: 'i-profiler' },
-    { id: 'reactive', label: 'Reactive', icon: 'i-reactive' },
-    { id: 'fps', label: 'FPS', icon: 'i-profiler' },
-    { id: 'loads', label: 'Loads', icon: 'i-loads' },
-    { id: 'timeline', label: 'Timeline', icon: 'i-timeline' },
-    { id: 'api', label: 'API', icon: 'i-api' },
-    { id: 'errors', label: 'Errors', icon: 'i-errors' },
-    { id: 'inspect', label: 'Inspect', icon: 'i-inspect' },
-    { id: 'modules', label: 'Modules', icon: 'i-modules' },
-    { id: 'og', label: 'OG', icon: 'i-og' },
-    { id: 'build', label: 'Build', icon: 'i-build' },
-  ] as const
+    { id: 'overview', label: 'Overview', icon: 'i-overview', component: Overview },
+    { id: 'components', label: 'Components', icon: 'i-components', component: Components },
+    { id: 'routes', label: 'Routes', icon: 'i-routes', component: Routes },
+    { id: 'assets', label: 'Assets', icon: 'i-assets', component: Assets },
+    { id: 'profiler', label: 'Profiler', icon: 'i-profiler', component: RenderProfiler },
+    { id: 'reactive', label: 'Reactive', icon: 'i-reactive', component: ReactiveGraph },
+    { id: 'fps', label: 'FPS', icon: 'i-profiler', component: FpsMonitor },
+    { id: 'loads', label: 'Loads', icon: 'i-loads', component: LoadProfiler },
+    { id: 'timeline', label: 'Timeline', icon: 'i-timeline', component: StateTimeline },
+    { id: 'api', label: 'API', icon: 'i-api', component: ApiPlayground },
+    { id: 'errors', label: 'Errors', icon: 'i-errors', component: ErrorDashboard },
+    { id: 'inspect', label: 'Inspect', icon: 'i-inspect', component: Inspect },
+    { id: 'modules', label: 'Modules', icon: 'i-modules', component: ModuleGraph },
+    { id: 'og', label: 'OG', icon: 'i-og', component: OGPreview },
+    { id: 'build', label: 'Build', icon: 'i-build', component: BuildAnalysis },
+  ] as const satisfies readonly Tab[]
 
   type TabId = (typeof tabs)[number]['id']
 
   let activeTab = $state<TabId>('overview')
+  const ActivePanel = $derived(
+    (tabs.find((t) => t.id === activeTab) ?? tabs[0]).component,
+  )
 </script>
 
 <div class="devtools">
@@ -62,37 +76,7 @@
   </nav>
 
   <main class="content">
-    {#if activeTab === 'overview'}
-      <Overview />
-    {:else if activeTab === 'components'}
-      <Components />
-    {:else if activeTab === 'routes'}
-      <Routes />
-    {:else if activeTab === 'assets'}
-      <Assets />
-    {:else if activeTab === 'profiler'}
-      <RenderProfiler />
-    {:else if activeTab === 'reactive'}
-      <ReactiveGraph />
-    {:else if activeTab === 'fps'}
-      <FpsMonitor />
-    {:else if activeTab === 'loads'}
-      <LoadProfiler />
-    {:else if activeTab === 'timeline'}
-      <StateTimeline />
-    {:else if activeTab === 'api'}
-      <ApiPlayground />
-    {:else if activeTab === 'errors'}
-      <ErrorDashboard />
-    {:else if activeTab === 'inspect'}
-      <Inspect />
-    {:else if activeTab === 'modules'}
-      <ModuleGraph />
-    {:else if activeTab === 'og'}
-      <OGPreview />
-    {:else if activeTab === 'build'}
-      <BuildAnalysis />
-    {/if}
+    <ActivePanel />
   </main>
 </div>
 
