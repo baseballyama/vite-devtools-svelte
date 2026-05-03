@@ -1,15 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { getFps, clearFps } from '../lib/rpc.js'
+  import type { FpsSample } from '../lib/types.js'
   import PanelContainer from '../components/PanelContainer.svelte'
   import Card from '../components/Card.svelte'
   import ActionButton from '../components/ActionButton.svelte'
   import Badge from '../components/Badge.svelte'
-
-  interface FpsSample {
-    timestamp: number
-    fps: number
-  }
 
   let samples = $state<FpsSample[]>([])
   let pollTimer: ReturnType<typeof setInterval> | null = null

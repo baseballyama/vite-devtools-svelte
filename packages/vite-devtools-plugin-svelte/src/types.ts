@@ -149,7 +149,7 @@ export interface InspectResult {
   source: string
   compiled: string
   file: string
-  /** Base64-encoded source map mappings string */
+  /** VLQ-encoded source map `mappings` string (per the Source Map v3 spec). */
   mappings?: string
   /** Source map sources array */
   sources?: string[]

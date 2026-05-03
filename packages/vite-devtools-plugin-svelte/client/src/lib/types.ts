@@ -25,4 +25,5 @@ export type {
   OGPreview,
   BuildChunk,
   BuildAnalysis,
+  FpsSample,
 } from '../../../src/types.js'
