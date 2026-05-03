@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import type { RenderProfile } from '../lib/types.js'
   import { getRenderProfiles, openInEditor } from '../lib/rpc.js'
+  import { shortPath } from '../lib/format.js'
   import PanelContainer from '../components/PanelContainer.svelte'
   import Card from '../components/Card.svelte'
   import ActionButton from '../components/ActionButton.svelte'
@@ -92,7 +93,7 @@
               <td class="name-col">
                 <button class="file-link" onclick={() => handleOpenFile(profile.file)}>
                   <span class="component-name">{profile.name}</span>
-                  <span class="file-path">{profile.file.split('/').slice(-2).join('/')}</span>
+                  <span class="file-path">{shortPath(profile.file)}</span>
                 </button>
               </td>
               <td class="num">{profile.initTime.toFixed(2)}ms</td>

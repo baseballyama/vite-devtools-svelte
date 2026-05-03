@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import type { ModuleGraphData, ModuleNode } from '../lib/types.js'
   import { getModuleGraph } from '../lib/rpc.js'
+  import { basename } from '../lib/format.js'
   import PanelContainer from '../components/PanelContainer.svelte'
   import Card from '../components/Card.svelte'
   import Badge from '../components/Badge.svelte'
@@ -90,7 +91,7 @@
 
       {#if selectedModule}
         <div class="detail-sidebar">
-          <Card title={selectedModule.id.split('/').pop() || ''}>
+          <Card title={basename(selectedModule.id)}>
             <div class="detail-row"><span class="detail-label">Path</span><code class="detail-val">{selectedModule.id}</code></div>
             <div class="detail-row"><span class="detail-label">Type</span><Badge variant={typeColor(selectedModule.type)}>{selectedModule.type}</Badge></div>
             {#if selectedModule.size}<div class="detail-row"><span class="detail-label">Size</span><span class="detail-val">{formatSize(selectedModule.size)}</span></div>{/if}
@@ -100,7 +101,7 @@
                 <span class="detail-label">Imports ({selectedModule.imports.length})</span>
                 <ul class="dep-list">
                   {#each selectedModule.imports as imp}
-                    <li><code>{imp.split('/').pop()}</code></li>
+                    <li><code>{basename(imp)}</code></li>
                   {/each}
                 </ul>
               </div>
@@ -111,7 +112,7 @@
                 <span class="detail-label">Imported By ({selectedModule.importedBy.length})</span>
                 <ul class="dep-list">
                   {#each selectedModule.importedBy as imp}
-                    <li><code>{imp.split('/').pop()}</code></li>
+                    <li><code>{basename(imp)}</code></li>
                   {/each}
                 </ul>
               </div>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { getComponentRelations, getLiveComponents, openInEditor } from '../lib/rpc.js'
   import type { ComponentRelation, ComponentInstance } from '../lib/types.js'
+  import { componentName, shortPath } from '../lib/format.js'
   import Badge from '../components/Badge.svelte'
   import ActionButton from '../components/ActionButton.svelte'
   import SearchInput from '../components/SearchInput.svelte'
@@ -148,7 +149,7 @@
             <div class="dep-list">
               {#each selectedComponent.imports as imp}
                 <button class="dep-item" onclick={() => handleOpenFile(imp)}>
-                  <span class="dep-name">{imp.split('/').pop()?.replace('.svelte', '')}</span>
+                  <span class="dep-name">{componentName(imp)}</span>
                   <span class="dep-path">{imp}</span>
                 </button>
               {/each}
@@ -193,7 +194,7 @@
     <button class="tree-item" onclick={() => handleOpenFile(node.file)}>
       <span class="tree-dot" class:has-children={node.children.length > 0}></span>
       <span class="tree-name">{node.name}</span>
-      <span class="tree-file">{node.file.split('/').slice(-2).join('/')}</span>
+      <span class="tree-file">{shortPath(node.file)}</span>
     </button>
     {#each node.children as child}
       {@render treeNode(child, depth + 1)}
