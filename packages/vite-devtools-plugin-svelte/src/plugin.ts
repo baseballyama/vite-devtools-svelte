@@ -3,6 +3,7 @@ import type { Plugin, ResolvedConfig, ViteDevServer } from 'vite'
 import path from 'node:path'
 import fs from 'node:fs'
 import net from 'node:net'
+import crypto from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { execFile } from 'node:child_process'
 import { analyzeRoutes } from './analyzers/routes.js'
@@ -84,6 +85,36 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
   let config: ResolvedConfig
   let server: ViteDevServer | undefined
   let root: string
+  // Per-process random token used by the HTTP fallback endpoint and asset
+  // middleware to authenticate requests. Embedded into the DevTools client
+  // HTML via a <meta> tag and required as `x-svelte-devtools-token`.
+  // Combined with strict same-origin checks, this prevents arbitrary web
+  // pages (and DNS-rebinding attacks against the dev server bound to
+  // 0.0.0.0) from invoking inspect-file / open-in-editor / send-api-request.
+  const devtoolsToken = crypto.randomUUID()
+
+  // Resolve a user-supplied file path strictly under the project root.
+  // Symlinks are followed via realpathSync so that symlinks inside the
+  // project cannot be used to escape the root sandbox.
+  // Throws if the resolved real path is outside the project root.
+  function resolveWithinRoot(input: string): string {
+    if (typeof input !== 'string' || input.length === 0) {
+      throw new Error('Invalid file path')
+    }
+    const realRoot = fs.realpathSync(root)
+    const candidate = path.isAbsolute(input) ? input : path.resolve(root, input)
+    let real: string
+    try {
+      real = fs.realpathSync(candidate)
+    } catch {
+      throw new Error('File not found')
+    }
+    if (real !== realRoot && !real.startsWith(realRoot + path.sep)) {
+      throw new Error('Forbidden: path outside project root')
+    }
+    return real
+  }
+
   let liveComponents: ComponentInstance[] = []
   let renderProfiles: RenderProfile[] = []
   let loadProfiles: LoadProfile[] = []
@@ -120,8 +151,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       'svelte-devtools:get-live-components': async () => liveComponents,
 
       'svelte-devtools:open-in-editor': async (filePath: string, line?: number) => {
-        const fp = String(filePath)
-        const resolved = path.isAbsolute(fp) ? fp : path.resolve(root, fp)
+        const resolved = resolveWithinRoot(String(filePath))
         if (line && Number(line) > 0) {
           execFile('code', ['--goto', `${resolved}:${Number(line)}`])
         } else {
@@ -130,8 +160,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       },
 
       'svelte-devtools:open-reactive-in-editor': async (filePath: string, name: string, type: string) => {
-        const fp = String(filePath)
-        const resolved = path.isAbsolute(fp) ? fp : path.resolve(root, fp)
+        const resolved = resolveWithinRoot(String(filePath))
         let line = 0
         try {
           const source = fs.readFileSync(resolved, 'utf-8')
@@ -257,7 +286,12 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
 
       'svelte-devtools:inspect-file': async (filePath: string) => {
         const fp = String(filePath)
-        const resolved = path.isAbsolute(fp) ? fp : path.resolve(root, fp)
+        let resolved: string
+        try {
+          resolved = resolveWithinRoot(fp)
+        } catch {
+          return { source: '', compiled: '', file: fp } as InspectResult
+        }
         let source = ''
         try { source = fs.readFileSync(resolved, 'utf-8') } catch { return { source: '', compiled: '', file: fp } as InspectResult }
         let compiled = ''
@@ -294,6 +328,14 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     name: 'vite-devtools-plugin-svelte',
     enforce: 'pre',
 
+    // Vite plugins may expose data through `api` for inter-plugin (and test)
+    // consumption. We surface the per-process auth token only — never the
+    // RPC handlers themselves — so the test suite can attach the token to
+    // mock requests without the production code needing a test-only flag.
+    api: {
+      getDevtoolsToken: () => devtoolsToken,
+    },
+
     configResolved(resolvedConfig) {
       config = resolvedConfig
       root = config.root
@@ -302,50 +344,101 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     configureServer(devServer) {
       server = devServer
 
-      // Listen for component data from the runtime
+      // Defensive caps on runtime-supplied data: even though the runtime
+      // already trims its own buffers, an out-of-spec or compromised runtime
+      // could hand us unbounded payloads and inflate dev-server memory.
+      const MAX_LIVE_COMPONENTS = 5000
+      const MAX_RENDER_PROFILES = 5000
+      const MAX_STATE_TIMELINE = 500
+      const MAX_REACTIVE_NODES = 5000
+      const MAX_REACTIVE_EDGES = 20000
+
       server.hot.on('svelte-devtools:components', (data: { components: ComponentInstance[] }) => {
-        liveComponents = data.components
+        const arr = Array.isArray(data?.components) ? data.components : []
+        liveComponents = arr.length > MAX_LIVE_COMPONENTS ? arr.slice(-MAX_LIVE_COMPONENTS) : arr
       })
 
-      // Listen for render profile data from the runtime
       server.hot.on('svelte-devtools:profiles', (data: { profiles: RenderProfile[] }) => {
-        renderProfiles = data.profiles
+        const arr = Array.isArray(data?.profiles) ? data.profiles : []
+        renderProfiles = arr.length > MAX_RENDER_PROFILES ? arr.slice(-MAX_RENDER_PROFILES) : arr
       })
 
-      // Listen for state timeline data from the runtime
       server.hot.on('svelte-devtools:state-timeline', (data: { changes: StateChange[] }) => {
-        stateTimeline = data.changes
-        for (const resolve of stateTimelineResolvers) resolve(data.changes)
+        const arr = Array.isArray(data?.changes) ? data.changes : []
+        stateTimeline = arr.length > MAX_STATE_TIMELINE ? arr.slice(-MAX_STATE_TIMELINE) : arr
+        // Snapshot then reset before resolving so concurrent requests that
+        // push during the resolve loop are not silently dropped.
+        const pending = stateTimelineResolvers
         stateTimelineResolvers = []
+        for (const resolve of pending) resolve(stateTimeline)
       })
 
-      // Listen for FPS samples from the runtime
       server.hot.on('svelte-devtools:fps', (data: FpsSample) => {
         fpsSamples.push(data)
         if (fpsSamples.length > 1200) fpsSamples = fpsSamples.slice(-1200)
       })
 
-      // Listen for runtime errors from the runtime
       server.hot.on('svelte-devtools:runtime-error', (data: RuntimeError) => {
         runtimeErrors.push(data)
         if (runtimeErrors.length > 200) runtimeErrors = runtimeErrors.slice(-200)
       })
 
-      // Listen for reactive graph data from the runtime
       server.hot.on('svelte-devtools:reactive-graph', (data: ReactiveGraph) => {
-        reactiveGraph = data
-        for (const resolve of reactiveGraphResolvers) {
-          resolve(data)
+        const nodes = Array.isArray(data?.nodes) ? data.nodes : []
+        const edges = Array.isArray(data?.edges) ? data.edges : []
+        reactiveGraph = {
+          nodes: nodes.length > MAX_REACTIVE_NODES ? nodes.slice(0, MAX_REACTIVE_NODES) : nodes,
+          edges: edges.length > MAX_REACTIVE_EDGES ? edges.slice(0, MAX_REACTIVE_EDGES) : edges,
         }
+        const pending = reactiveGraphResolvers
         reactiveGraphResolvers = []
+        for (const resolve of pending) resolve(reactiveGraph)
       })
 
-      // Serve the DevTools client UI
+      // Build the same-origin allow-list once. The dev server only serves
+      // its own origin, so any cross-origin request to our endpoints is
+      // rejected. This blocks both casual CSRF from arbitrary tabs and the
+      // DNS-rebinding scenario where the dev server is bound to 0.0.0.0.
+      const buildAllowedOrigins = (): Set<string> => {
+        const set = new Set<string>()
+        const serverCfg = server?.config?.server ?? config?.server
+        const port = serverCfg?.port ?? 5173
+        const proto = serverCfg?.https ? 'https' : 'http'
+        for (const host of ['localhost', '127.0.0.1', '[::1]']) {
+          set.add(`${proto}://${host}`)
+          set.add(`${proto}://${host}:${port}`)
+        }
+        return set
+      }
+
+      const isAuthorizedRequest = (req: { headers: Record<string, string | string[] | undefined> }): boolean => {
+        const allowed = buildAllowedOrigins()
+        const origin = req.headers.origin
+        const referer = req.headers.referer
+        const sourceOrigin = (() => {
+          if (typeof origin === 'string' && origin) return origin
+          if (typeof referer === 'string' && referer) {
+            try { return new URL(referer).origin } catch { return null }
+          }
+          return null
+        })()
+        // Same-origin browser requests sent by `fetch` from same-origin pages
+        // typically include Origin; tests / curl may omit both — we still
+        // require the explicit token header to compensate.
+        if (sourceOrigin !== null && !allowed.has(sourceOrigin)) return false
+        const tokenHeader = req.headers['x-svelte-devtools-token']
+        const token = Array.isArray(tokenHeader) ? tokenHeader[0] : tokenHeader
+        return token === devtoolsToken
+      }
+
+      // Serve the DevTools client UI. Inject the per-process token into
+      // index.html as a <meta> tag so the client can attach it to RPC calls.
       const clientDir = path.resolve(__dirname, 'client')
       server.middlewares.use('/.svelte-devtools', (req, res, next) => {
         const reqUrl = req.url || '/'
         const urlPath = reqUrl.split('?')[0]
-        const filePath = urlPath === '/' || urlPath === ''
+        const isIndex = urlPath === '/' || urlPath === '' || urlPath === '/index.html'
+        const filePath = isIndex
           ? path.join(clientDir, 'index.html')
           : path.join(clientDir, urlPath)
 
@@ -354,24 +447,58 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
           if (stat.isFile()) {
             const ext = path.extname(filePath).toLowerCase()
             res.setHeader('Content-Type', MIME_TYPES[ext] || 'application/octet-stream')
-            fs.createReadStream(filePath).pipe(res)
+            if (isIndex) {
+              const html = fs.readFileSync(filePath, 'utf-8')
+              const tokenMeta = `<meta name="svelte-devtools-token" content="${devtoolsToken}">`
+              const injected = html.includes('</head>')
+                ? html.replace('</head>', `  ${tokenMeta}\n</head>`)
+                : `${tokenMeta}\n${html}`
+              res.end(injected)
+            } else {
+              fs.createReadStream(filePath).pipe(res)
+            }
             return
           }
         } catch { /* file doesn't exist, fall through */ }
         next()
       })
 
-      // RPC fallback endpoint for when DevTools Kit RPC is not available
+      // RPC fallback endpoint for when DevTools Kit RPC is not available.
+      // Authorized via same-origin Origin/Referer + per-process token.
       server.middlewares.use('/__svelte-devtools/rpc', (req, res) => {
         if (req.method !== 'POST') {
           res.statusCode = 405
           res.end('Method not allowed')
           return
         }
+        if (!isAuthorizedRequest(req as any)) {
+          res.statusCode = 403
+          res.end('Forbidden')
+          return
+        }
+        // Reject content types other than JSON to keep CSRF surface small.
+        const ct = req.headers['content-type']
+        const ctStr = Array.isArray(ct) ? ct[0] : ct
+        if (!ctStr || !ctStr.includes('application/json')) {
+          res.statusCode = 415
+          res.end('Unsupported Media Type')
+          return
+        }
 
         let body = ''
-        req.on('data', (chunk: Buffer) => { body += chunk.toString() })
+        let aborted = false
+        const MAX_BODY = 1_000_000 // 1 MB cap to avoid trivial DoS via huge requests
+        req.on('data', (chunk: Buffer) => {
+          if (aborted) return
+          body += chunk.toString()
+          if (body.length > MAX_BODY) {
+            aborted = true
+            res.statusCode = 413
+            res.end('Payload Too Large')
+          }
+        })
         req.on('end', async () => {
+          if (aborted) return
           try {
             const { method, args } = JSON.parse(body)
             const handlers = getRpcHandlers()
@@ -387,8 +514,13 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
         })
       })
 
-      // Serve asset files for preview
+      // Serve asset files for preview. Authorized via same-origin policy.
       server.middlewares.use('/__svelte-devtools/asset', (req, res) => {
+        if (!isAuthorizedRequest(req as any)) {
+          res.statusCode = 403
+          res.end('Forbidden')
+          return
+        }
         const reqUrl = req.url || ''
         const queryStart = reqUrl.indexOf('?')
         const queryString = queryStart >= 0 ? reqUrl.slice(queryStart) : ''
@@ -431,13 +563,12 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       })
     },
 
-    // Virtual module resolution: runtime + svelte/internal/client wrapper
+    // Virtual module resolution: runtime + svelte/internal/client wrapper.
+    // dev only — never resolve our virtual modules during production build.
     resolveId(id, importer) {
+      if (config?.command !== 'serve') return undefined
       if (id === RUNTIME_MODULE_ID) return RESOLVED_RUNTIME_ID
-      // Intercept svelte/internal/client imports from user code (not from
-      // node_modules or our own wrapper module) and redirect to our wrapper.
       if (
-        config?.command === 'serve' &&
         componentTracking &&
         id === 'svelte/internal/client' &&
         importer &&
@@ -450,6 +581,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     },
 
     load(id) {
+      if (config?.command !== 'serve') return undefined
       if (id === RESOLVED_RUNTIME_ID) return runtimeCode
       if (id === WRAPPER_MODULE_ID) return wrapperCode
       return undefined

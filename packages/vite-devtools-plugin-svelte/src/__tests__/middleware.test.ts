@@ -11,10 +11,23 @@ const FIXTURES_DIR = path.resolve(import.meta.dirname, 'fixtures')
 // Mock HTTP request/response helpers
 // =====================================================================
 
-function createMockReq(opts: { method?: string; url?: string; body?: string } = {}) {
+// Token captured per setupPluginsWithServer() call so that mock requests
+// can pass the auth check the production code now enforces.
+let currentTestToken = ''
+
+function createMockReq(opts: { method?: string; url?: string; body?: string; headers?: Record<string, string> } = {}) {
   const req = new EventEmitter() as any
   req.method = opts.method || 'GET'
   req.url = opts.url || '/'
+  // Default to a same-origin browser request with the captured token plus
+  // application/json so the auth middleware accepts the request. Tests that
+  // want to exercise auth failures pass `headers: {}` explicitly.
+  const defaultHeaders: Record<string, string> = {
+    origin: 'http://localhost:5173',
+    'content-type': 'application/json',
+    'x-svelte-devtools-token': currentTestToken,
+  }
+  req.headers = { ...defaultHeaders, ...(opts.headers ?? {}) }
   // Simulate body streaming
   if (opts.body !== undefined) {
     setTimeout(() => {
@@ -87,7 +100,14 @@ function setupPluginsWithServer() {
     }
   }
 
-  return { plugins, middlewares, hotListeners, mockServer }
+  // Read the per-process auth token through the main plugin's `api`. This
+  // is the same channel inter-plugin code would use; tests don't need a
+  // production-only flag.
+  const mainPlugin = plugins[0]
+  const token = (mainPlugin.api as { getDevtoolsToken?: () => string } | undefined)?.getDevtoolsToken?.() ?? ''
+  currentTestToken = token
+
+  return { plugins, middlewares, hotListeners, mockServer, token }
 }
 
 // =====================================================================
