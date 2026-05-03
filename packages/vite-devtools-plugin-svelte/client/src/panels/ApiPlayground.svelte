@@ -86,14 +86,14 @@
         </div>
 
         <div class="input-group">
-          <label class="input-label">Headers (JSON)</label>
-          <textarea class="text-input" rows="2" bind:value={requestHeaders} placeholder="Headers JSON"></textarea>
+          <label class="input-label" for="api-playground-headers">Headers (JSON)</label>
+          <textarea id="api-playground-headers" class="text-input" rows="2" bind:value={requestHeaders} placeholder="Headers JSON"></textarea>
         </div>
 
         {#if method !== 'GET' && method !== 'HEAD'}
           <div class="input-group">
-            <label class="input-label">Body</label>
-            <textarea class="text-input" rows="3" bind:value={requestBody} placeholder="Request body"></textarea>
+            <label class="input-label" for="api-playground-body">Body</label>
+            <textarea id="api-playground-body" class="text-input" rows="3" bind:value={requestBody} placeholder="Request body"></textarea>
           </div>
         {/if}
       </Card>
