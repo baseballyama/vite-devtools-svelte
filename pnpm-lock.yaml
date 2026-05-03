@@ -19,8 +19,8 @@ importers:
   packages/vite-devtools-plugin-svelte:
     dependencies:
       '@vitejs/devtools-kit':
-        specifier: ^0.1.2
-        version: 0.1.2(@voidzero-dev/vite-plus-core@0.1.20)(typescript@5.9.3)(ws@8.20.0)
+        specifier: ^0.1.18
+        version: 0.1.18(@voidzero-dev/vite-plus-core@0.1.20)(launch-editor@2.13.2)(typescript@5.9.3)
       vite:
         specifier: npm:@voidzero-dev/vite-plus-core@latest
         version: '@voidzero-dev/vite-plus-core@0.1.20(@types/node@25.6.0)(@vitejs/devtools@0.1.18)(esbuild@0.27.4)(jiti@2.6.1)(publint@0.3.18)(typescript@5.9.3)'
@@ -41,8 +41,8 @@ importers:
         specifier: ^7.0.0
         version: 7.0.0(svelte@5.55.5(@typescript-eslint/types@8.57.1))(vite@8.0.0(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1))
       '@vitejs/devtools-kit':
-        specifier: ^0.1.2
-        version: 0.1.2(typescript@5.9.3)(vite@8.0.0(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1))(ws@8.20.0)
+        specifier: ^0.1.18
+        version: 0.1.18(launch-editor@2.13.2)(typescript@5.9.3)(vite@8.0.0(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1))
       svelte:
         specifier: ^5.55.5
         version: 5.55.5(@typescript-eslint/types@8.57.1)
@@ -952,21 +952,8 @@ packages:
     peerDependencies:
       vite: '*'
 
-  '@vitejs/devtools-kit@0.1.2':
-    resolution: {integrity: sha512-cSJRVRCsjX+VRdwkHAGp0gzlbw/TuvtQZmiDN6j3imT7l/pf0/qCyNolpUWdHNyOhujDHL1y7Qro5iKhB4MYnw==}
-    peerDependencies:
-      vite: '*'
-
   '@vitejs/devtools-rolldown@0.1.18':
     resolution: {integrity: sha512-wA6jiKfAw1qOH0Jj4YCzH1xaY2x4VHTle3oiNcpdUK9EXHYyGdsS6PlQfkMz26FBOv+lR6w679Ce53k1DVYE4w==}
-
-  '@vitejs/devtools-rpc@0.1.2':
-    resolution: {integrity: sha512-bpvotry6SWGmkBNcnJ+4U/ojZubMCB9V1fmcBy7qDNfe8VeUjyN2GV4m4hrsvLm5vQthbL7aWgZhqQyilTVBIw==}
-    peerDependencies:
-      ws: '*'
-    peerDependenciesMeta:
-      ws:
-        optional: true
 
   '@vitejs/devtools@0.1.18':
     resolution: {integrity: sha512-/XPGlE9EiWaHLe3AhMno9RipOTmltK5pIIoPLIk9Ekzs+74xFa2lwoeT9oKS1K2CMozd8jL61/qmFUlPtsIVHQ==}
@@ -1670,9 +1657,6 @@ packages:
   strip-comments-strings@1.2.0:
     resolution: {integrity: sha512-zwF4bmnyEjZwRhaak9jUWNxc0DoeKBJ7lwSN/LEc8dQXZcUFG6auaaTQJokQWXopLdM3iTx01nQT8E4aL29DAQ==}
 
-  structured-clone-es@1.0.0:
-    resolution: {integrity: sha512-FL8EeKFFyNQv5cMnXI31CIMCsFarSVI2bF0U0ImeNE3g/F1IvJQyqzOXxPBRXiwQfyBTlbNe88jh1jFW0O/jiQ==}
-
   structured-clone-es@2.0.0:
     resolution: {integrity: sha512-5UuAHmBLXYPCl22xWJrFuGmIhBKQzxISPVz6E7nmTmTcAOpUzlbjKJsRrCE4vADmMQ0dzeCnlWn9XufnAGf76Q==}
 
@@ -1786,14 +1770,6 @@ packages:
       ioredis:
         optional: true
       uploadthing:
-        optional: true
-
-  valibot@1.2.0:
-    resolution: {integrity: sha512-mm1rxUsmOxzrwnX5arGS+U4T25RdvpPjPN4yR0u9pUBov9+zGVtO84tif1eY4r6zWxVxu3KzIyknJy3rxfRZZg==}
-    peerDependencies:
-      typescript: '>=5'
-    peerDependenciesMeta:
-      typescript:
         optional: true
 
   valibot@1.3.1:
@@ -2480,9 +2456,8 @@ snapshots:
       - launch-editor
       - typescript
       - utf-8-validate
-    optional: true
 
-  '@vitejs/devtools-kit@0.1.18(launch-editor@2.13.2)(typescript@5.9.3)(vite@8.0.0)':
+  '@vitejs/devtools-kit@0.1.18(launch-editor@2.13.2)(typescript@5.9.3)(vite@8.0.0(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1))':
     dependencies:
       birpc: 4.0.0
       devframe: 0.1.18(launch-editor@2.13.2)(typescript@5.9.3)
@@ -2496,26 +2471,6 @@ snapshots:
       - launch-editor
       - typescript
       - utf-8-validate
-
-  '@vitejs/devtools-kit@0.1.2(@voidzero-dev/vite-plus-core@0.1.20)(typescript@5.9.3)(ws@8.20.0)':
-    dependencies:
-      '@vitejs/devtools-rpc': 0.1.2(typescript@5.9.3)(ws@8.20.0)
-      birpc: 4.0.0
-      immer: 11.1.4
-      vite: '@voidzero-dev/vite-plus-core@0.1.20(@types/node@25.6.0)(@vitejs/devtools@0.1.18)(esbuild@0.27.4)(jiti@2.6.1)(publint@0.3.18)(typescript@5.9.3)'
-    transitivePeerDependencies:
-      - typescript
-      - ws
-
-  '@vitejs/devtools-kit@0.1.2(typescript@5.9.3)(vite@8.0.0(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1))(ws@8.20.0)':
-    dependencies:
-      '@vitejs/devtools-rpc': 0.1.2(typescript@5.9.3)(ws@8.20.0)
-      birpc: 4.0.0
-      immer: 11.1.4
-      vite: 8.0.0(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@25.6.0)(@vitejs/devtools@0.1.18)(esbuild@0.27.4)(jiti@2.6.1)
-    transitivePeerDependencies:
-      - typescript
-      - ws
 
   '@vitejs/devtools-rolldown@0.1.18(@pnpm/logger@1001.0.1)(@voidzero-dev/vite-plus-core@0.1.20)(launch-editor@2.13.2)(typescript@5.9.3)(vue@3.5.33(typescript@5.9.3))':
     dependencies:
@@ -2582,7 +2537,7 @@ snapshots:
       '@floating-ui/dom': 1.7.6
       '@pnpm/read-project-manifest': 1001.2.6(@pnpm/logger@1001.0.1)
       '@rolldown/debug': 1.0.0-rc.18
-      '@vitejs/devtools-kit': 0.1.18(launch-editor@2.13.2)(typescript@5.9.3)(vite@8.0.0)
+      '@vitejs/devtools-kit': 0.1.18(launch-editor@2.13.2)(typescript@5.9.3)(vite@8.0.0(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1))
       ansis: 4.2.0
       birpc: 4.0.0
       cac: 7.0.0
@@ -2636,18 +2591,6 @@ snapshots:
       - vite
       - vue
 
-  '@vitejs/devtools-rpc@0.1.2(typescript@5.9.3)(ws@8.20.0)':
-    dependencies:
-      birpc: 4.0.0
-      ohash: 2.0.11
-      p-limit: 7.3.0
-      structured-clone-es: 1.0.0
-      valibot: 1.2.0(typescript@5.9.3)
-    optionalDependencies:
-      ws: 8.20.0
-    transitivePeerDependencies:
-      - typescript
-
   '@vitejs/devtools@0.1.18(@pnpm/logger@1001.0.1)(@voidzero-dev/vite-plus-core@0.1.20)(typescript@5.9.3)':
     dependencies:
       '@vitejs/devtools-kit': 0.1.18(@voidzero-dev/vite-plus-core@0.1.20)(launch-editor@2.13.2)(typescript@5.9.3)
@@ -2699,7 +2642,7 @@ snapshots:
 
   '@vitejs/devtools@0.1.18(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@8.0.0)':
     dependencies:
-      '@vitejs/devtools-kit': 0.1.18(launch-editor@2.13.2)(typescript@5.9.3)(vite@8.0.0)
+      '@vitejs/devtools-kit': 0.1.18(launch-editor@2.13.2)(typescript@5.9.3)(vite@8.0.0(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1))
       '@vitejs/devtools-rolldown': 0.1.18(@pnpm/logger@1001.0.1)(launch-editor@2.13.2)(typescript@5.9.3)(vite@8.0.0)(vue@3.5.33(typescript@5.9.3))
       birpc: 4.0.0
       cac: 7.0.0
@@ -3445,8 +3388,6 @@ snapshots:
 
   strip-comments-strings@1.2.0: {}
 
-  structured-clone-es@1.0.0: {}
-
   structured-clone-es@2.0.0: {}
 
   svelte@5.55.5(@typescript-eslint/types@8.57.1):
@@ -3523,10 +3464,6 @@ snapshots:
       node-fetch-native: 1.6.7
       ofetch: 1.5.1
       ufo: 1.6.4
-
-  valibot@1.2.0(typescript@5.9.3):
-    optionalDependencies:
-      typescript: 5.9.3
 
   valibot@1.3.1(typescript@5.9.3):
     optionalDependencies:
