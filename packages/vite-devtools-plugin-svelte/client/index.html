@@ -4,6 +4,27 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Svelte DevTools</title>
+    <script>
+      // Theme bootstrap — runs synchronously before stylesheet to prevent FOUC.
+      // Stored: 'dark' | 'light' (explicit user override)
+      // Otherwise: follow `prefers-color-scheme` and react to system changes.
+      ;(() => {
+        try {
+          const stored = localStorage.getItem('svelte-devtools-theme')
+          const valid = stored === 'dark' || stored === 'light' ? stored : null
+          const apply = () => {
+            const m = window.matchMedia('(prefers-color-scheme: dark)')
+            document.documentElement.dataset.theme = valid ?? (m.matches ? 'dark' : 'light')
+          }
+          apply()
+          if (!valid) {
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', apply)
+          }
+        } catch {
+          document.documentElement.dataset.theme = 'dark'
+        }
+      })()
+    </script>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       html, body { height: 100%; overflow: hidden; }
