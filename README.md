@@ -191,6 +191,17 @@ The plugin uses a **virtual module architecture** instead of fragile regex trans
 
 The plugin is **development-only** — it adds zero overhead to production builds.
 
+## Security model
+
+The DevTools backend exposes a small set of dev-only HTTP endpoints (`/__svelte-devtools/rpc`, `/__svelte-devtools/asset`) to drive the panel UI. Some of those endpoints can read files from disk or open them in your editor, so we treat them as authenticated even though the dev server is normally only reachable from `localhost`.
+
+- **Per-process random token.** On every dev-server start the plugin generates a fresh UUID and injects it into the DevTools UI HTML as a `<meta>` tag. The HTTP fallback RPC and the asset middleware require that token in the `x-svelte-devtools-token` header, plus a same-origin `Origin`/`Referer`. Cross-origin requests, requests with the wrong token, and requests without `Content-Type: application/json` are rejected with `403` / `415`. Bodies above 1 MB are rejected with `413`.
+- **Path sandbox.** `inspect-file`, `open-in-editor`, and `open-reactive-in-editor` resolve their input through `fs.realpath()` and refuse anything outside the project root, so a hostile RPC caller cannot read `/etc/passwd` or your `~/.ssh/` files even if they get past the token check. Symlinks inside the project are followed normally.
+- **SSRF defenses.** Outbound fetches from `send-api-request` and the OG-preview RPC block `127.0.0.0/8` / `10.0.0.0/8` / `172.16.0.0/12` / `192.168.0.0/16` / `169.254.0.0/16` / IPv6 loopback / `localhost` / `*.local` / `*.internal`.
+- **Dev-only by construction.** Both the runtime virtual module and the `svelte/internal/client` wrapper are gated on `config.command === 'serve'` and never resolve during a production build, so none of this surface ships to end users.
+
+If you bind your dev server to `0.0.0.0` (e.g. `vite --host`), the same-origin check still blocks LAN browsers from invoking RPC, but anyone on the LAN can still see the panel UI itself. Treat that as you would any unauthenticated dev tool: don't run it on networks you don't trust.
+
 ## Development
 
 This is a pnpm monorepo.
