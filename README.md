@@ -218,7 +218,25 @@ pnpm -C packages/vite-devtools-svelte test
 
 # Watch mode
 pnpm -C packages/vite-devtools-svelte test:watch
+
+# Lint and format (oxlint / oxfmt)
+pnpm lint
+pnpm format
 ```
+
+### Reproducible environment with Nix (optional)
+
+A [Nix flake](https://nixos.wiki/wiki/Flakes) is provided so every contributor
+can pin the exact Node.js toolchain. With Nix installed:
+
+```bash
+nix develop                # drop into a shell with Node 24 + corepack
+```
+
+If you use [direnv](https://direnv.net/), `direnv allow` in the repo root will
+do this automatically. The shell uses corepack to materialize the pnpm version
+declared by the `packageManager` field in `package.json`, so `pnpm --version`
+matches across machines.
 
 ### Project Structure
 
