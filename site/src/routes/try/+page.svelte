@@ -1,5 +1,5 @@
 <script lang="ts">
-  const repo = 'baseballyama/vite-devtool-plugin-svelte'
+  const repo = 'baseballyama/vite-devtools-svelte'
   const file = 'playground/src/routes/+page.svelte'
 
   // ctl=1 (click-to-load) avoids burning StackBlitz embed quota until the user opts in.

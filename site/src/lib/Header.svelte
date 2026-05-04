@@ -35,7 +35,7 @@
       {/each}
       <a
         class="nav-link"
-        href="https://github.com/baseballyama/vite-devtool-plugin-svelte"
+        href="https://github.com/baseballyama/vite-devtools-svelte"
         rel="noreferrer noopener"
         target="_blank"
       >

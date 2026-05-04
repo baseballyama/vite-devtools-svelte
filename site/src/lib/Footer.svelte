@@ -15,7 +15,7 @@
       <a href="{base}/try">Try Live</a>
       <a href="{base}/roadmap">Roadmap</a>
       <a
-        href="https://github.com/baseballyama/vite-devtool-plugin-svelte"
+        href="https://github.com/baseballyama/vite-devtools-svelte"
         target="_blank"
         rel="noreferrer noopener">GitHub</a
       >

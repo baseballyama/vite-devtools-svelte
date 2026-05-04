@@ -24,7 +24,7 @@
       <a class="btn btn-secondary" href="{base}/try">Try Live in StackBlitz</a>
       <a
         class="btn btn-secondary"
-        href="https://github.com/baseballyama/vite-devtool-plugin-svelte"
+        href="https://github.com/baseballyama/vite-devtools-svelte"
         target="_blank"
         rel="noreferrer noopener">View on GitHub</a
       >
