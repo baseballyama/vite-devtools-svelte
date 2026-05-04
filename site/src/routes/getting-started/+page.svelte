@@ -89,7 +89,7 @@ npm run dev`
         <li>
           Read the
           <a
-            href="https://github.com/baseballyama/vite-devtool-plugin-svelte"
+            href="https://github.com/baseballyama/vite-devtools-svelte"
             target="_blank"
             rel="noreferrer noopener">README on GitHub</a
           >

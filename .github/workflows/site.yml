@@ -42,7 +42,7 @@ jobs:
         working-directory: site
         env:
           NODE_ENV: production
-          BASE_PATH: /vite-devtool-plugin-svelte
+          BASE_PATH: /vite-devtools-svelte
         run: pnpm build
 
       - uses: actions/configure-pages@v5
