@@ -10,8 +10,31 @@ import { analyzeRoutes } from './analyzers/routes.js'
 import { analyzeAssets, MIME_TYPES } from './analyzers/assets.js'
 import { analyzeProject } from './analyzers/project.js'
 import { analyzeComponents } from './analyzers/components.js'
-import { RUNTIME_MODULE_ID, RESOLVED_RUNTIME_ID, runtimeCode, WRAPPER_MODULE_ID, wrapperCode } from './runtime.js'
-import type { ComponentInstance, RenderProfile, LoadProfile, ReactiveGraph, StateChange, CompilerWarning, RuntimeError, InspectResult, ApiEndpoint, ApiResponse, ModuleGraphData, ModuleNode, OGPreview, BuildAnalysis, BuildChunk, FpsSample } from './types.js'
+import {
+  RUNTIME_MODULE_ID,
+  RESOLVED_RUNTIME_ID,
+  runtimeCode,
+  WRAPPER_MODULE_ID,
+  wrapperCode,
+} from './runtime.js'
+import type {
+  ComponentInstance,
+  RenderProfile,
+  LoadProfile,
+  ReactiveGraph,
+  StateChange,
+  CompilerWarning,
+  RuntimeError,
+  InspectResult,
+  ApiEndpoint,
+  ApiResponse,
+  ModuleGraphData,
+  ModuleNode,
+  OGPreview,
+  BuildAnalysis,
+  BuildChunk,
+  FpsSample,
+} from './types.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -159,7 +182,11 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
         }
       },
 
-      'svelte-devtools:open-reactive-in-editor': async (filePath: string, name: string, type: string) => {
+      'svelte-devtools:open-reactive-in-editor': async (
+        filePath: string,
+        name: string,
+        type: string,
+      ) => {
         const resolved = resolveWithinRoot(String(filePath))
         let line = 0
         try {
@@ -169,7 +196,8 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
             // Find the $effect( declaration
             for (let i = 0; i < lines.length; i++) {
               if (lines[i].includes('$effect(') || lines[i].includes('$effect.pre(')) {
-                line = i + 1; break
+                line = i + 1
+                break
               }
             }
           } else {
@@ -178,11 +206,14 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
             const regex = new RegExp(`(?:let|const|var)\\s+${escaped}\\b`)
             for (let i = 0; i < lines.length; i++) {
               if (regex.test(lines[i])) {
-                line = i + 1; break
+                line = i + 1
+                break
               }
             }
           }
-        } catch { /* file not readable */ }
+        } catch {
+          /* file not readable */
+        }
         if (line > 0) {
           execFile('code', ['--goto', `${resolved}:${line}`])
         } else {
@@ -195,9 +226,15 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       'svelte-devtools:get-reactive-graph': async () => {
         if (!server) return reactiveGraph
         server.hot.send('svelte-devtools:request-reactive-graph', {})
-        return new Promise<ReactiveGraph>((resolve) => {
+        return new Promise<ReactiveGraph>(resolve => {
           let resolved = false
-          const resolver = (graph: ReactiveGraph) => { if (!resolved) { resolved = true; clearTimeout(timeout); resolve(graph) } }
+          const resolver = (graph: ReactiveGraph) => {
+            if (!resolved) {
+              resolved = true
+              clearTimeout(timeout)
+              resolve(graph)
+            }
+          }
           const timeout = setTimeout(() => {
             resolved = true
             // Remove this resolver to prevent memory leak
@@ -211,14 +248,22 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
 
       'svelte-devtools:get-load-profiles': async () => loadProfiles,
 
-      'svelte-devtools:clear-load-profiles': async () => { loadProfiles = [] },
+      'svelte-devtools:clear-load-profiles': async () => {
+        loadProfiles = []
+      },
 
       'svelte-devtools:get-state-timeline': async () => {
         if (!server) return stateTimeline
         server.hot.send('svelte-devtools:request-state-timeline', {})
-        return new Promise<StateChange[]>((resolve) => {
+        return new Promise<StateChange[]>(resolve => {
           let resolved = false
-          const resolver = (changes: StateChange[]) => { if (!resolved) { resolved = true; clearTimeout(timeout); resolve(changes) } }
+          const resolver = (changes: StateChange[]) => {
+            if (!resolved) {
+              resolved = true
+              clearTimeout(timeout)
+              resolve(changes)
+            }
+          }
           const timeout = setTimeout(() => {
             resolved = true
             const idx = stateTimelineResolvers.indexOf(resolver)
@@ -242,10 +287,18 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
           const serverFile = route.files.find(f => f.type === 'endpoint')
           if (serverFile) {
             let content = ''
-            try { content = fs.readFileSync(serverFile.path, 'utf-8') } catch { /* file may not exist */ }
+            try {
+              content = fs.readFileSync(serverFile.path, 'utf-8')
+            } catch {
+              /* file may not exist */
+            }
             const methods: string[] = []
             for (const m of ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']) {
-              if (content.includes(`export const ${m}`) || content.includes(`export async function ${m}`) || content.includes(`export function ${m}`)) {
+              if (
+                content.includes(`export const ${m}`) ||
+                content.includes(`export async function ${m}`) ||
+                content.includes(`export function ${m}`)
+              ) {
                 methods.push(m)
               }
             }
@@ -256,20 +309,40 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
         return endpoints
       },
 
-      'svelte-devtools:send-api-request': async (requestUrl: string, method: string, headers: string, body: string) => {
+      'svelte-devtools:send-api-request': async (
+        requestUrl: string,
+        method: string,
+        headers: string,
+        body: string,
+      ) => {
         const start = performance.now()
         try {
           validateExternalUrl(String(requestUrl))
           const parsedHeaders = headers ? JSON.parse(String(headers)) : {}
           const fetchOpts: RequestInit = { method: String(method), headers: parsedHeaders }
-          if (body && String(method) !== 'GET' && String(method) !== 'HEAD') fetchOpts.body = String(body)
+          if (body && String(method) !== 'GET' && String(method) !== 'HEAD')
+            fetchOpts.body = String(body)
           const res = await fetch(String(requestUrl), fetchOpts)
           const resBody = await res.text()
           const resHeaders: Record<string, string> = {}
-          res.headers.forEach((v, k) => { resHeaders[k] = v })
-          return { status: res.status, statusText: res.statusText, headers: resHeaders, body: resBody, duration: Math.round((performance.now() - start) * 100) / 100 } as ApiResponse
+          res.headers.forEach((v, k) => {
+            resHeaders[k] = v
+          })
+          return {
+            status: res.status,
+            statusText: res.statusText,
+            headers: resHeaders,
+            body: resBody,
+            duration: Math.round((performance.now() - start) * 100) / 100,
+          } as ApiResponse
         } catch (e) {
-          return { status: 0, statusText: String(e), headers: {}, body: '', duration: Math.round((performance.now() - start) * 100) / 100 } as ApiResponse
+          return {
+            status: 0,
+            statusText: String(e),
+            headers: {},
+            body: '',
+            duration: Math.round((performance.now() - start) * 100) / 100,
+          } as ApiResponse
         }
       },
 
@@ -277,7 +350,10 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
 
       'svelte-devtools:get-runtime-errors': async () => runtimeErrors,
 
-      'svelte-devtools:clear-errors': async () => { compilerWarnings = []; runtimeErrors = [] },
+      'svelte-devtools:clear-errors': async () => {
+        compilerWarnings = []
+        runtimeErrors = []
+      },
 
       'svelte-devtools:get-svelte-files': async () => {
         const components = analyzeComponents(root)
@@ -293,7 +369,11 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
           return { source: '', compiled: '', file: fp } as InspectResult
         }
         let source = ''
-        try { source = fs.readFileSync(resolved, 'utf-8') } catch { return { source: '', compiled: '', file: fp } as InspectResult }
+        try {
+          source = fs.readFileSync(resolved, 'utf-8')
+        } catch {
+          return { source: '', compiled: '', file: fp } as InspectResult
+        }
         let compiled = ''
         let mappings: string | undefined
         let sources: string[] | undefined
@@ -306,7 +386,9 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
               mappings = map.mappings
               sources = map.sources
             }
-          } catch { compiled = '// Transform failed' }
+          } catch {
+            compiled = '// Transform failed'
+          }
         }
         return { source, compiled, file: fp, mappings, sources } as InspectResult
       },
@@ -319,7 +401,9 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
 
       'svelte-devtools:get-fps': async () => fpsSamples,
 
-      'svelte-devtools:clear-fps': async () => { fpsSamples = [] },
+      'svelte-devtools:clear-fps': async () => {
+        fpsSamples = []
+      },
     }
     return _rpcHandlers
   }
@@ -411,14 +495,20 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
         return set
       }
 
-      const isAuthorizedRequest = (req: { headers: Record<string, string | string[] | undefined> }): boolean => {
+      const isAuthorizedRequest = (req: {
+        headers: Record<string, string | string[] | undefined>
+      }): boolean => {
         const allowed = buildAllowedOrigins()
         const origin = req.headers.origin
         const referer = req.headers.referer
         const sourceOrigin = (() => {
           if (typeof origin === 'string' && origin) return origin
           if (typeof referer === 'string' && referer) {
-            try { return new URL(referer).origin } catch { return null }
+            try {
+              return new URL(referer).origin
+            } catch {
+              return null
+            }
           }
           return null
         })()
@@ -459,7 +549,9 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
             }
             return
           }
-        } catch { /* file doesn't exist, fall through */ }
+        } catch {
+          /* file doesn't exist, fall through */
+        }
         next()
       })
 
@@ -644,7 +736,9 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
           }
         }
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     // Fallback: try legacy moduleGraph
     if (allModules.length === 0) {
@@ -653,7 +747,9 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
         if (mg?.idToModuleMap) {
           for (const mod of mg.idToModuleMap.values()) allModules.push(mod)
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
 
     for (const mod of allModules) {
@@ -662,10 +758,30 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       if (relFile.startsWith('..')) continue
       if (idMap.has(mod.file)) continue // deduplicate
       const ext = path.extname(mod.file).toLowerCase()
-      const type = ext === '.svelte' ? 'svelte' : ext === '.ts' || ext === '.js' ? (ext === '.ts' ? 'ts' : 'js') : ext === '.css' ? 'css' : 'other'
+      const type =
+        ext === '.svelte'
+          ? 'svelte'
+          : ext === '.ts' || ext === '.js'
+            ? ext === '.ts'
+              ? 'ts'
+              : 'js'
+            : ext === '.css'
+              ? 'css'
+              : 'other'
       let size: number | undefined
-      try { size = fs.statSync(mod.file).size } catch { /* ignore */ }
-      const node: ModuleNode = { id: relFile, file: mod.file, type: type as ModuleNode['type'], importedBy: [], imports: [], size }
+      try {
+        size = fs.statSync(mod.file).size
+      } catch {
+        /* ignore */
+      }
+      const node: ModuleNode = {
+        id: relFile,
+        file: mod.file,
+        type: type as ModuleNode['type'],
+        importedBy: [],
+        imports: [],
+        size,
+      }
       idMap.set(mod.file, node)
       moduleById.set(relFile, node)
       modules.push(node)
@@ -706,7 +822,8 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
         return
       }
       if (visited.has(id)) return
-      visited.add(id); stack.add(id)
+      visited.add(id)
+      stack.add(id)
       pathBuf.push(id)
       const node = moduleById.get(id)
       if (node) for (const imp of node.imports) dfs(imp)
@@ -779,7 +896,10 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
         const walkDir = (d: string) => {
           for (const entry of fs.readdirSync(d, { withFileTypes: true })) {
             const full = path.join(d, entry.name)
-            if (entry.isDirectory()) { walkDir(full); continue }
+            if (entry.isDirectory()) {
+              walkDir(full)
+              continue
+            }
             const ext = path.extname(entry.name).toLowerCase()
             if (['.js', '.css', '.html'].includes(ext)) {
               const stat = fs.statSync(full)
@@ -794,7 +914,9 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
           }
         }
         walkDir(dir)
-      } catch { /* directory doesn't exist or not readable */ }
+      } catch {
+        /* directory doesn't exist or not readable */
+      }
     }
 
     chunks.sort((a, b) => b.size - a.size)
@@ -820,10 +942,12 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
 
       const importLine = `import '${RUNTIME_MODULE_ID}';\n`
 
-      const modified = importLine + code.replace(
-        /(\$\.push\([^)]+\);?)/,
-        `if (typeof window !== 'undefined' && window.__SVELTE_DEVTOOLS__) { window.__SVELTE_DEVTOOLS__._pendingFile = ${safeId}; }\n$1`
-      )
+      const modified =
+        importLine +
+        code.replace(
+          /(\$\.push\([^)]+\);?)/,
+          `if (typeof window !== 'undefined' && window.__SVELTE_DEVTOOLS__) { window.__SVELTE_DEVTOOLS__._pendingFile = ${safeId}; }\n$1`,
+        )
 
       return { code: modified, map: null }
     },
@@ -854,16 +978,13 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
 
       // Replace the exported load function with a profiled version.
       // Supports both `export const load = ...` and `export (async) function load(...)` patterns.
-      let transformed = code.replace(
-        /export\s+const\s+load\s*=\s*/,
-        `const __original_load = `
-      )
+      let transformed = code.replace(/export\s+const\s+load\s*=\s*/, `const __original_load = `)
 
       if (transformed === code) {
         // Try `export function load` / `export async function load` pattern
         transformed = code.replace(
           /export\s+(async\s+)?function\s+load\s*\(/,
-          `const __original_load = $1function __load_impl(`
+          `const __original_load = $1function __load_impl(`,
         )
       }
 
@@ -892,7 +1013,11 @@ export const load = async (event) => {
     configureServer() {
       // Make the recording function available globally on the server
       ;(globalThis as Record<string, unknown>).__svelte_devtools_record_load = (
-        route: string, file: string, type: string, duration: number, dataSize: number
+        route: string,
+        file: string,
+        type: string,
+        duration: number,
+        dataSize: number,
       ) => {
         loadProfiles.push({
           route,
@@ -925,7 +1050,8 @@ export const load = async (event) => {
           const codeMatch = msg.match(/\(([a-z0-9_-]+)\)/)
           compilerWarnings.push({
             code: codeMatch?.[1] || 'unknown',
-            message: msg.replace(/\x1b\[[0-9;]*m/g, '').trim(), // strip ANSI
+            // oxlint-disable-next-line no-control-regex -- intentional: strip ANSI escape sequences
+            message: msg.replace(/\x1b\[[0-9;]*m/g, '').trim(),
             file: fileMatch?.[1] || '',
             line: fileMatch?.[2] ? parseInt(fileMatch[2]) : undefined,
             column: fileMatch?.[3] ? parseInt(fileMatch[3]) : undefined,
@@ -937,5 +1063,11 @@ export const load = async (event) => {
     },
   }
 
-  return [mainPlugin, trackingPlugin, loadProfilePlugin, loadProfileServerPlugin, warningCapturePlugin]
+  return [
+    mainPlugin,
+    trackingPlugin,
+    loadProfilePlugin,
+    loadProfileServerPlugin,
+    warningCapturePlugin,
+  ]
 }

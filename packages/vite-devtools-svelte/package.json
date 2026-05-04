@@ -2,6 +2,10 @@
   "name": "vite-devtools-svelte",
   "version": "0.0.1",
   "description": "Svelte DevTools plugin for Vite DevTools",
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
   "type": "module",
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
@@ -12,17 +16,11 @@
       "types": "./dist/index.d.mts"
     }
   },
-  "files": [
-    "dist"
-  ],
   "scripts": {
     "build": "vp pack",
     "dev": "vp pack --watch",
     "test": "vp test run",
     "test:watch": "vp test"
-  },
-  "peerDependencies": {
-    "vite": "^8.0.0"
   },
   "dependencies": {
     "@vitejs/devtools-kit": "^0.1.18"
@@ -32,5 +30,7 @@
     "typescript": "^5.8.0",
     "vite-plus": "latest"
   },
-  "license": "MIT"
+  "peerDependencies": {
+    "vite": "^8.0.0"
+  }
 }

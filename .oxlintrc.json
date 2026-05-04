@@ -4,7 +4,11 @@
   "categories": {
     "correctness": "error"
   },
-  "rules": {},
+  "rules": {
+    "vitest/require-mock-type-parameters": "off",
+    "jest/no-standalone-expect": "off",
+    "jest/require-to-throw-message": "off"
+  },
   "env": {
     "builtin": true,
     "browser": true,

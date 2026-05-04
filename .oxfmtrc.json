@@ -1,4 +1,11 @@
 {
+  "singleQuote": true,
+  "semi": false,
+  "printWidth": 100,
+  "tabWidth": 2,
+  "useTabs": false,
+  "trailingComma": "all",
+  "arrowParens": "avoid",
   "ignorePatterns": [
     "**/node_modules/**",
     "**/dist/**",

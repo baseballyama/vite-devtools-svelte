@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vite-plus/test'
+import { describe, it, expect, vi, afterEach } from 'vite-plus/test'
 import { svelteDevtools } from '../plugin.js'
 import path from 'node:path'
 
@@ -17,7 +17,10 @@ function setupWithRpc() {
   mainPlugin.devtools!.setup({
     views: { hostStatic: () => {} },
     docks: { register: () => {} },
-    rpc: { register: ({ name, handler }: { name: string; handler: Function }) => rpcHandlers.set(name, handler) },
+    rpc: {
+      register: ({ name, handler }: { name: string; handler: Function }) =>
+        rpcHandlers.set(name, handler),
+    },
   } as any)
 
   return rpcHandlers
@@ -36,7 +39,8 @@ describe('OG Preview', () => {
 
   it('should parse og:title, og:description, og:image from HTML', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
-      text: () => Promise.resolve(`
+      text: () =>
+        Promise.resolve(`
         <html>
           <head>
             <meta property="og:title" content="Test Page" />
@@ -52,7 +56,7 @@ describe('OG Preview', () => {
 
     const rpcHandlers = setupWithRpc()
     const handler = rpcHandlers.get('svelte-devtools:get-og-preview')!
-    const result = await handler('https://example.com') as any
+    const result = (await handler('https://example.com')) as any
 
     expect(result.title).toBe('Test Page')
     expect(result.description).toBe('A test description')
@@ -63,7 +67,8 @@ describe('OG Preview', () => {
 
   it('should fallback to <title> when og:title is missing', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
-      text: () => Promise.resolve(`
+      text: () =>
+        Promise.resolve(`
         <html>
           <head>
             <title>Fallback Title</title>
@@ -77,7 +82,9 @@ describe('OG Preview', () => {
     })
 
     const rpcHandlers = setupWithRpc()
-    const result = await rpcHandlers.get('svelte-devtools:get-og-preview')!('https://example.com') as any
+    const result = (await rpcHandlers.get('svelte-devtools:get-og-preview')!(
+      'https://example.com',
+    )) as any
 
     expect(result.title).toBe('Fallback Title')
     expect(result.issues.length).toBe(0)
@@ -85,7 +92,8 @@ describe('OG Preview', () => {
 
   it('should fallback to meta description when og:description is missing', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
-      text: () => Promise.resolve(`
+      text: () =>
+        Promise.resolve(`
         <html>
           <head>
             <meta property="og:title" content="Title" />
@@ -99,7 +107,9 @@ describe('OG Preview', () => {
     })
 
     const rpcHandlers = setupWithRpc()
-    const result = await rpcHandlers.get('svelte-devtools:get-og-preview')!('https://example.com') as any
+    const result = (await rpcHandlers.get('svelte-devtools:get-og-preview')!(
+      'https://example.com',
+    )) as any
 
     expect(result.description).toBe('Meta description fallback')
     expect(result.issues.length).toBe(0)
@@ -107,13 +117,16 @@ describe('OG Preview', () => {
 
   it('should report issues for missing required OG tags', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
-      text: () => Promise.resolve(`
+      text: () =>
+        Promise.resolve(`
         <html><head></head><body></body></html>
       `),
     })
 
     const rpcHandlers = setupWithRpc()
-    const result = await rpcHandlers.get('svelte-devtools:get-og-preview')!('https://example.com') as any
+    const result = (await rpcHandlers.get('svelte-devtools:get-og-preview')!(
+      'https://example.com',
+    )) as any
 
     expect(result.issues).toContain('Missing og:title or <title>')
     expect(result.issues).toContain('Missing og:description or meta description')
@@ -126,7 +139,9 @@ describe('OG Preview', () => {
     globalThis.fetch = vi.fn().mockRejectedValue(new Error('Network error'))
 
     const rpcHandlers = setupWithRpc()
-    const result = await rpcHandlers.get('svelte-devtools:get-og-preview')!('https://example.com') as any
+    const result = (await rpcHandlers.get('svelte-devtools:get-og-preview')!(
+      'https://example.com',
+    )) as any
 
     expect(result.issues.length).toBeGreaterThan(0)
     expect(result.issues[0]).toContain('Failed to fetch')
@@ -135,7 +150,9 @@ describe('OG Preview', () => {
 
   it('should reject SSRF attempts', async () => {
     const rpcHandlers = setupWithRpc()
-    const result = await rpcHandlers.get('svelte-devtools:get-og-preview')!('http://169.254.169.254/metadata') as any
+    const result = (await rpcHandlers.get('svelte-devtools:get-og-preview')!(
+      'http://169.254.169.254/metadata',
+    )) as any
 
     expect(result.issues.length).toBeGreaterThan(0)
     expect(result.issues[0]).toContain('Blocked')
@@ -143,7 +160,7 @@ describe('OG Preview', () => {
 
   it('should reject invalid URLs', async () => {
     const rpcHandlers = setupWithRpc()
-    const result = await rpcHandlers.get('svelte-devtools:get-og-preview')!('not-a-url') as any
+    const result = (await rpcHandlers.get('svelte-devtools:get-og-preview')!('not-a-url')) as any
 
     expect(result.issues.length).toBeGreaterThan(0)
     expect(result.issues[0]).toContain('Failed to fetch')
@@ -151,7 +168,8 @@ describe('OG Preview', () => {
 
   it('should handle meta tags with reversed attribute order', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
-      text: () => Promise.resolve(`
+      text: () =>
+        Promise.resolve(`
         <html>
           <head>
             <meta content="Reversed Title" property="og:title" />
@@ -165,7 +183,9 @@ describe('OG Preview', () => {
     })
 
     const rpcHandlers = setupWithRpc()
-    const result = await rpcHandlers.get('svelte-devtools:get-og-preview')!('https://example.com') as any
+    const result = (await rpcHandlers.get('svelte-devtools:get-og-preview')!(
+      'https://example.com',
+    )) as any
 
     expect(result.title).toBe('Reversed Title')
     expect(result.description).toBe('Reversed Desc')
@@ -174,7 +194,8 @@ describe('OG Preview', () => {
 
   it('should handle self-closing meta tags', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
-      text: () => Promise.resolve(`
+      text: () =>
+        Promise.resolve(`
         <html>
           <head>
             <meta property="og:title" content="Self Close"/>
@@ -186,7 +207,9 @@ describe('OG Preview', () => {
     })
 
     const rpcHandlers = setupWithRpc()
-    const result = await rpcHandlers.get('svelte-devtools:get-og-preview')!('https://example.com') as any
+    const result = (await rpcHandlers.get('svelte-devtools:get-og-preview')!(
+      'https://example.com',
+    )) as any
 
     expect(result.title).toBe('Self Close')
   })
@@ -197,7 +220,9 @@ describe('OG Preview', () => {
     })
 
     const rpcHandlers = setupWithRpc()
-    const result = await rpcHandlers.get('svelte-devtools:get-og-preview')!('https://example.com/page') as any
+    const result = (await rpcHandlers.get('svelte-devtools:get-og-preview')!(
+      'https://example.com/page',
+    )) as any
 
     expect(result.url).toBe('https://example.com/page')
   })

@@ -27,12 +27,14 @@ function createMockRes() {
   return res
 }
 
-function createMockReq(opts: {
-  method?: string
-  url?: string
-  body?: string
-  headers?: Record<string, string>
-} = {}) {
+function createMockReq(
+  opts: {
+    method?: string
+    url?: string
+    body?: string
+    headers?: Record<string, string>
+  } = {},
+) {
   const req = new EventEmitter() as any
   req.method = opts.method || 'POST'
   req.url = opts.url || '/'
@@ -84,9 +86,9 @@ function setup(): SetupResult {
     }
   }
 
-  const rpc = middlewares.find((m) => m.path === '/__svelte-devtools/rpc')!.handler
-  const asset = middlewares.find((m) => m.path === '/__svelte-devtools/asset')!.handler
-  const clientUi = middlewares.find((m) => m.path === '/.svelte-devtools')!.handler
+  const rpc = middlewares.find(m => m.path === '/__svelte-devtools/rpc')!.handler
+  const asset = middlewares.find(m => m.path === '/__svelte-devtools/asset')!.handler
+  const clientUi = middlewares.find(m => m.path === '/.svelte-devtools')!.handler
 
   const mainPlugin = plugins[0]
   const token =
@@ -256,7 +258,7 @@ describe('inspect-file path sandbox', () => {
 
   beforeEach(() => {
     const plugins = svelteDevtools()
-    const plugin = plugins.find((p) => p.name === 'vite-devtools-svelte')!
+    const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
     if (typeof plugin.configResolved === 'function') {
       plugin.configResolved({
         command: 'serve',
@@ -282,7 +284,9 @@ describe('inspect-file path sandbox', () => {
   })
 
   it('returns empty source when given a traversal-style relative path', async () => {
-    const result = (await rpcHandlers.get('svelte-devtools:inspect-file')!('../../../etc/passwd')) as any
+    const result = (await rpcHandlers.get('svelte-devtools:inspect-file')!(
+      '../../../etc/passwd',
+    )) as any
     expect(result.source).toBe('')
   })
 
@@ -299,7 +303,7 @@ describe('open-in-editor path sandbox', () => {
 
   beforeEach(() => {
     const plugins = svelteDevtools()
-    const plugin = plugins.find((p) => p.name === 'vite-devtools-svelte')!
+    const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
     if (typeof plugin.configResolved === 'function') {
       plugin.configResolved({
         command: 'serve',
@@ -319,9 +323,9 @@ describe('open-in-editor path sandbox', () => {
   })
 
   it('throws when given a path outside the project root', async () => {
-    await expect(
-      rpcHandlers.get('svelte-devtools:open-in-editor')!('/etc/passwd'),
-    ).rejects.toThrow(/Forbidden|File not found/)
+    await expect(rpcHandlers.get('svelte-devtools:open-in-editor')!('/etc/passwd')).rejects.toThrow(
+      /Forbidden|File not found/,
+    )
   })
 
   it('throws when given a non-existent file', async () => {
@@ -336,7 +340,7 @@ describe('open-reactive-in-editor path sandbox', () => {
 
   beforeEach(() => {
     const plugins = svelteDevtools()
-    const plugin = plugins.find((p) => p.name === 'vite-devtools-svelte')!
+    const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
     if (typeof plugin.configResolved === 'function') {
       plugin.configResolved({
         command: 'serve',
@@ -369,7 +373,7 @@ describe('open-reactive-in-editor path sandbox', () => {
 describe('dev-only virtual module gates', () => {
   it('does not resolve runtime virtual modules during build', () => {
     const plugins = svelteDevtools()
-    const plugin = plugins.find((p) => p.name === 'vite-devtools-svelte')!
+    const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
     if (typeof plugin.configResolved === 'function') {
       // command: 'build' — production build should skip our virtual modules
       plugin.configResolved({
@@ -380,14 +384,16 @@ describe('dev-only virtual module gates', () => {
     }
     const resolveId = plugin.resolveId as Function
     const load = plugin.load as Function
-    expect(resolveId.call(plugin, 'virtual:svelte-devtools-runtime', '/some/file.ts')).toBeUndefined()
+    expect(
+      resolveId.call(plugin, 'virtual:svelte-devtools-runtime', '/some/file.ts'),
+    ).toBeUndefined()
     expect(load.call(plugin, '\0virtual:svelte-devtools-runtime')).toBeUndefined()
     expect(load.call(plugin, '\0svelte-devtools:wrapped-client')).toBeUndefined()
   })
 
   it('does resolve runtime virtual modules during dev', () => {
     const plugins = svelteDevtools()
-    const plugin = plugins.find((p) => p.name === 'vite-devtools-svelte')!
+    const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
     if (typeof plugin.configResolved === 'function') {
       plugin.configResolved({
         command: 'serve',

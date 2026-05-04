@@ -153,10 +153,7 @@ import { sveltekit } from '@sveltejs/kit/vite'
 import { defineConfig } from 'vite-plus'
 
 export default defineConfig({
-  plugins: [
-    svelteDevtools(),
-    sveltekit(),
-  ],
+  plugins: [svelteDevtools(), sveltekit()],
 })
 ```
 

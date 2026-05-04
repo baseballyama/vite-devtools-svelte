@@ -137,19 +137,27 @@ describe('validateExternalUrl', () => {
   })
 
   it('should reject .local domains', () => {
-    expect(() => validateExternalUrl('http://my-machine.local/api')).toThrow('Blocked: internal hostname')
+    expect(() => validateExternalUrl('http://my-machine.local/api')).toThrow(
+      'Blocked: internal hostname',
+    )
     expect(() => validateExternalUrl('http://printer.local')).toThrow('Blocked: internal hostname')
   })
 
   it('should reject .internal domains', () => {
-    expect(() => validateExternalUrl('http://service.internal/api')).toThrow('Blocked: internal hostname')
-    expect(() => validateExternalUrl('http://db.internal:5432')).toThrow('Blocked: internal hostname')
+    expect(() => validateExternalUrl('http://service.internal/api')).toThrow(
+      'Blocked: internal hostname',
+    )
+    expect(() => validateExternalUrl('http://db.internal:5432')).toThrow(
+      'Blocked: internal hostname',
+    )
   })
 
   it('should reject private IPs', () => {
     expect(() => validateExternalUrl('http://10.0.0.1/admin')).toThrow('Blocked: private IP')
     expect(() => validateExternalUrl('http://192.168.1.1/')).toThrow('Blocked: private IP')
-    expect(() => validateExternalUrl('http://169.254.169.254/metadata')).toThrow('Blocked: private IP')
+    expect(() => validateExternalUrl('http://169.254.169.254/metadata')).toThrow(
+      'Blocked: private IP',
+    )
     expect(() => validateExternalUrl('http://172.16.0.1/admin')).toThrow('Blocked: private IP')
     expect(() => validateExternalUrl('http://127.0.0.1:8080/api')).toThrow('Blocked: private IP')
   })
@@ -187,7 +195,9 @@ describe('validateExternalUrl', () => {
   })
 
   it('should block AWS metadata endpoint', () => {
-    expect(() => validateExternalUrl('http://169.254.169.254/latest/meta-data/')).toThrow('Blocked: private IP')
+    expect(() => validateExternalUrl('http://169.254.169.254/latest/meta-data/')).toThrow(
+      'Blocked: private IP',
+    )
   })
 
   it('should block 0.0.0.0', () => {
@@ -202,11 +212,16 @@ describe('validateExternalUrl', () => {
 describe('SSRF protection via API request', () => {
   it('should ensure all private IP ranges are blocked', () => {
     const privateIPs = [
-      '127.0.0.1', '127.255.255.255',
-      '10.0.0.1', '10.255.255.255',
-      '172.16.0.1', '172.31.255.255',
-      '192.168.0.1', '192.168.255.255',
-      '169.254.0.1', '169.254.255.255',
+      '127.0.0.1',
+      '127.255.255.255',
+      '10.0.0.1',
+      '10.255.255.255',
+      '172.16.0.1',
+      '172.31.255.255',
+      '192.168.0.1',
+      '192.168.255.255',
+      '169.254.0.1',
+      '169.254.255.255',
       '0.0.0.0',
     ]
     for (const ip of privateIPs) {
@@ -215,11 +230,7 @@ describe('SSRF protection via API request', () => {
   })
 
   it('should ensure all internal hostnames are blocked', () => {
-    const internalHosts = [
-      'localhost',
-      'my-server.local',
-      'internal-api.internal',
-    ]
+    const internalHosts = ['localhost', 'my-server.local', 'internal-api.internal']
     for (const host of internalHosts) {
       expect(() => validateExternalUrl(`http://${host}/`)).toThrow()
     }

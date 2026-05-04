@@ -107,7 +107,10 @@ function Component($$anchor) {
 
   it('should skip node_modules files', () => {
     const plugin = getTrackingPlugin()
-    const result = (plugin.transform as Function)!('$.push()', '/test/node_modules/svelte/Component.svelte')
+    const result = (plugin.transform as Function)!(
+      '$.push()',
+      '/test/node_modules/svelte/Component.svelte',
+    )
     expect(result).toBeNull()
   })
 
@@ -196,7 +199,10 @@ describe('loadProfilePlugin transform', () => {
   it('should wrap export const load with profiling', () => {
     const plugin = getLoadProfilePlugin()
     const code = `export const load = async ({ params }) => { return { title: params.slug } }`
-    const result = (plugin.transform as Function)!(code, '/test/src/routes/blog/[slug]/+page.server.ts')
+    const result = (plugin.transform as Function)!(
+      code,
+      '/test/src/routes/blog/[slug]/+page.server.ts',
+    )
     expect(result).not.toBeNull()
     const output = typeof result === 'string' ? result : result!.code
     expect(output).toContain('__original_load')
@@ -207,7 +213,10 @@ describe('loadProfilePlugin transform', () => {
   it('should wrap export function load with profiling', () => {
     const plugin = getLoadProfilePlugin()
     const code = `export function load({ params }) { return { title: params.slug } }`
-    const result = (plugin.transform as Function)!(code, '/test/src/routes/blog/[slug]/+page.server.ts')
+    const result = (plugin.transform as Function)!(
+      code,
+      '/test/src/routes/blog/[slug]/+page.server.ts',
+    )
     expect(result).not.toBeNull()
     const output = typeof result === 'string' ? result : result!.code
     expect(output).toContain('__original_load')
@@ -217,7 +226,10 @@ describe('loadProfilePlugin transform', () => {
   it('should wrap export async function load with profiling', () => {
     const plugin = getLoadProfilePlugin()
     const code = `export async function load({ params }) { return { title: params.slug } }`
-    const result = (plugin.transform as Function)!(code, '/test/src/routes/blog/[slug]/+page.server.ts')
+    const result = (plugin.transform as Function)!(
+      code,
+      '/test/src/routes/blog/[slug]/+page.server.ts',
+    )
     expect(result).not.toBeNull()
     const output = typeof result === 'string' ? result : result!.code
     expect(output).toContain('__original_load')
@@ -233,7 +245,10 @@ describe('loadProfilePlugin transform', () => {
   it('should extract route from file path', () => {
     const plugin = getLoadProfilePlugin()
     const code = `export const load = async () => ({ data: 1 })`
-    const result = (plugin.transform as Function)!(code, '/test/src/routes/blog/[slug]/+page.server.ts')
+    const result = (plugin.transform as Function)!(
+      code,
+      '/test/src/routes/blog/[slug]/+page.server.ts',
+    )
     const output = typeof result === 'string' ? result : result!.code
     expect(output).toContain('/blog/[slug]')
   })
@@ -241,7 +256,10 @@ describe('loadProfilePlugin transform', () => {
   it('should handle +layout.server.ts files', () => {
     const plugin = getLoadProfilePlugin()
     const code = `export const load = async () => ({ user: {} })`
-    const result = (plugin.transform as Function)!(code, '/test/src/routes/dashboard/+layout.server.ts')
+    const result = (plugin.transform as Function)!(
+      code,
+      '/test/src/routes/dashboard/+layout.server.ts',
+    )
     expect(result).not.toBeNull()
     const output = typeof result === 'string' ? result : result!.code
     expect(output).toContain('"server"')
@@ -259,7 +277,10 @@ describe('loadProfilePlugin transform', () => {
   it('should skip node_modules files', () => {
     const plugin = getLoadProfilePlugin()
     const code = `export const load = async () => ({ data: 1 })`
-    const result = (plugin.transform as Function)!(code, '/test/node_modules/@sveltejs/kit/src/routes/+page.server.ts')
+    const result = (plugin.transform as Function)!(
+      code,
+      '/test/node_modules/@sveltejs/kit/src/routes/+page.server.ts',
+    )
     expect(result).toBeNull()
   })
 

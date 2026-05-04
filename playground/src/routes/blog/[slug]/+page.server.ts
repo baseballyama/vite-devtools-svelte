@@ -11,7 +11,8 @@ const posts: Record<string, { title: string; content: string }> = {
   },
   'advanced-features': {
     title: 'Advanced Features',
-    content: 'Explore advanced features like reactive graph visualization and performance profiling.',
+    content:
+      'Explore advanced features like reactive graph visualization and performance profiling.',
   },
 }
 

@@ -1,4 +1,23 @@
-import type { RouteInfo, AssetInfo, ProjectInfo, ComponentRelation, ComponentInstance, RenderProfile, LoadProfile, ReactiveGraph, StateChange, ApiEndpoint, ApiResponse, CompilerWarning, RuntimeError, InspectResult, ModuleGraphData, OGPreview, BuildAnalysis, FpsSample } from './types.js'
+import type {
+  RouteInfo,
+  AssetInfo,
+  ProjectInfo,
+  ComponentRelation,
+  ComponentInstance,
+  RenderProfile,
+  LoadProfile,
+  ReactiveGraph,
+  StateChange,
+  ApiEndpoint,
+  ApiResponse,
+  CompilerWarning,
+  RuntimeError,
+  InspectResult,
+  ModuleGraphData,
+  OGPreview,
+  BuildAnalysis,
+  FpsSample,
+} from './types.js'
 
 interface RpcClient {
   call(method: string, ...args: unknown[]): Promise<unknown>
@@ -31,7 +50,9 @@ function createHttpClient(): RpcClient {
       })
       if (!res.ok) {
         const body = await res.text().catch(() => '')
-        throw new Error(`RPC ${method} failed: ${res.status} ${res.statusText}${body ? ` — ${body}` : ''}`)
+        throw new Error(
+          `RPC ${method} failed: ${res.status} ${res.statusText}${body ? ` — ${body}` : ''}`,
+        )
       }
       return res.json()
     },
@@ -98,7 +119,11 @@ export async function openInEditor(filePath: string, line?: number): Promise<voi
   await client.call('svelte-devtools:open-in-editor', filePath, line ?? 0)
 }
 
-export async function openReactiveInEditor(file: string, name: string, type: string): Promise<void> {
+export async function openReactiveInEditor(
+  file: string,
+  name: string,
+  type: string,
+): Promise<void> {
   const client = await getClient()
   await client.call('svelte-devtools:open-reactive-in-editor', file, name, type)
 }
@@ -142,9 +167,20 @@ export async function getApiEndpoints(): Promise<ApiEndpoint[]> {
   return client.call('svelte-devtools:get-api-endpoints') as Promise<ApiEndpoint[]>
 }
 
-export async function sendApiRequest(url: string, method: string, headers: string, body: string): Promise<ApiResponse> {
+export async function sendApiRequest(
+  url: string,
+  method: string,
+  headers: string,
+  body: string,
+): Promise<ApiResponse> {
   const client = await getClient()
-  return client.call('svelte-devtools:send-api-request', url, method, headers, body) as Promise<ApiResponse>
+  return client.call(
+    'svelte-devtools:send-api-request',
+    url,
+    method,
+    headers,
+    body,
+  ) as Promise<ApiResponse>
 }
 
 export async function getCompilerWarnings(): Promise<CompilerWarning[]> {
@@ -164,7 +200,9 @@ export async function clearErrors(): Promise<void> {
 
 export async function getSvelteFiles(): Promise<{ file: string; name: string }[]> {
   const client = await getClient()
-  return client.call('svelte-devtools:get-svelte-files') as Promise<{ file: string; name: string }[]>
+  return client.call('svelte-devtools:get-svelte-files') as Promise<
+    { file: string; name: string }[]
+  >
 }
 
 export async function inspectFile(filePath: string): Promise<InspectResult> {

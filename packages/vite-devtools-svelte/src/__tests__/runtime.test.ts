@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vite-plus/test'
-import { RUNTIME_MODULE_ID, RESOLVED_RUNTIME_ID, runtimeCode, WRAPPER_MODULE_ID, wrapperCode } from '../runtime.js'
+import {
+  RUNTIME_MODULE_ID,
+  RESOLVED_RUNTIME_ID,
+  runtimeCode,
+  WRAPPER_MODULE_ID,
+  wrapperCode,
+} from '../runtime.js'
 
 // =====================================================================
 // Module Constants

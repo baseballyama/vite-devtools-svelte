@@ -3,7 +3,6 @@ import { svelteDevtools } from '../plugin.js'
 import { EventEmitter } from 'node:events'
 import { Writable } from 'node:stream'
 import path from 'node:path'
-import type { Plugin } from 'vite'
 
 const FIXTURES_DIR = path.resolve(import.meta.dirname, 'fixtures')
 
@@ -15,7 +14,9 @@ const FIXTURES_DIR = path.resolve(import.meta.dirname, 'fixtures')
 // can pass the auth check the production code now enforces.
 let currentTestToken = ''
 
-function createMockReq(opts: { method?: string; url?: string; body?: string; headers?: Record<string, string> } = {}) {
+function createMockReq(
+  opts: { method?: string; url?: string; body?: string; headers?: Record<string, string> } = {},
+) {
   const req = new EventEmitter() as any
   req.method = opts.method || 'GET'
   req.url = opts.url || '/'
@@ -27,7 +28,7 @@ function createMockReq(opts: { method?: string; url?: string; body?: string; hea
     'content-type': 'application/json',
     'x-svelte-devtools-token': currentTestToken,
   }
-  req.headers = { ...defaultHeaders, ...(opts.headers ?? {}) }
+  req.headers = { ...defaultHeaders, ...opts.headers }
   // Simulate body streaming
   if (opts.body !== undefined) {
     setTimeout(() => {
@@ -68,7 +69,9 @@ function setupPluginsWithServer() {
 
   const mockServer = {
     hot: {
-      on: (event: string, handler: Function) => { hotListeners[event] = handler },
+      on: (event: string, handler: Function) => {
+        hotListeners[event] = handler
+      },
       send: vi.fn(),
     },
     middlewares: {
@@ -104,7 +107,8 @@ function setupPluginsWithServer() {
   // is the same channel inter-plugin code would use; tests don't need a
   // production-only flag.
   const mainPlugin = plugins[0]
-  const token = (mainPlugin.api as { getDevtoolsToken?: () => string } | undefined)?.getDevtoolsToken?.() ?? ''
+  const token =
+    (mainPlugin.api as { getDevtoolsToken?: () => string } | undefined)?.getDevtoolsToken?.() ?? ''
   currentTestToken = token
 
   return { plugins, middlewares, hotListeners, mockServer, token }
@@ -316,11 +320,16 @@ describe('asset serving middleware', () => {
     // Use a real Writable stream so pipe() works
     const chunks: Buffer[] = []
     const res = new Writable({
-      write(chunk, _enc, cb) { chunks.push(chunk); cb() },
+      write(chunk, _enc, cb) {
+        chunks.push(chunk)
+        cb()
+      },
     }) as any
     res.statusCode = 200
     res.headers = {} as Record<string, string>
-    res.setHeader = (key: string, value: string) => { res.headers[key.toLowerCase()] = value }
+    res.setHeader = (key: string, value: string) => {
+      res.headers[key.toLowerCase()] = value
+    }
     assetMiddleware(req, res)
     // Should set Content-Type for png
     expect(res.headers['content-type']).toBe('image/png')
@@ -375,7 +384,9 @@ describe('client UI serving middleware', () => {
     const req = createMockReq({ url: '/nonexistent-file.xyz' })
     const res = createMockRes()
     let nextCalled = false
-    clientMw.handler(req, res, () => { nextCalled = true })
+    clientMw.handler(req, res, () => {
+      nextCalled = true
+    })
     expect(nextCalled).toBe(true)
   })
 })
@@ -419,7 +430,10 @@ describe('HMR event listeners', () => {
     mainPlugin.devtools!.setup({
       views: { hostStatic: () => {} },
       docks: { register: () => {} },
-      rpc: { register: ({ name, handler }: { name: string; handler: Function }) => rpcHandlers.set(name, handler) },
+      rpc: {
+        register: ({ name, handler }: { name: string; handler: Function }) =>
+          rpcHandlers.set(name, handler),
+      },
     } as any)
 
     const mockComponents = [
@@ -439,11 +453,23 @@ describe('HMR event listeners', () => {
     mainPlugin.devtools!.setup({
       views: { hostStatic: () => {} },
       docks: { register: () => {} },
-      rpc: { register: ({ name, handler }: { name: string; handler: Function }) => rpcHandlers.set(name, handler) },
+      rpc: {
+        register: ({ name, handler }: { name: string; handler: Function }) =>
+          rpcHandlers.set(name, handler),
+      },
     } as any)
 
     const mockProfiles = [
-      { componentId: 0, file: '/test/Counter.svelte', name: 'Counter', initTime: 5, renderCount: 3, totalRenderTime: 15, lastRenderTime: 5, lastRenderAt: Date.now() },
+      {
+        componentId: 0,
+        file: '/test/Counter.svelte',
+        name: 'Counter',
+        initTime: 5,
+        renderCount: 3,
+        totalRenderTime: 15,
+        lastRenderTime: 5,
+        lastRenderAt: Date.now(),
+      },
     ]
     hotListeners['svelte-devtools:profiles']({ profiles: mockProfiles })
 
@@ -459,7 +485,10 @@ describe('HMR event listeners', () => {
     mainPlugin.devtools!.setup({
       views: { hostStatic: () => {} },
       docks: { register: () => {} },
-      rpc: { register: ({ name, handler }: { name: string; handler: Function }) => rpcHandlers.set(name, handler) },
+      rpc: {
+        register: ({ name, handler }: { name: string; handler: Function }) =>
+          rpcHandlers.set(name, handler),
+      },
     } as any)
 
     // Push 210 errors
@@ -470,28 +499,34 @@ describe('HMR event listeners', () => {
       })
     }
 
-    const result = await rpcHandlers.get('svelte-devtools:get-runtime-errors')!() as any[]
+    const result = (await rpcHandlers.get('svelte-devtools:get-runtime-errors')!()) as any[]
     expect(result.length).toBeLessThanOrEqual(200)
     // Should keep the latest errors
     expect(result[result.length - 1].message).toBe('Error 209')
   })
 
   it('should resolve reactive graph requests from HMR', async () => {
-    const { hotListeners, plugins, mockServer } = setupPluginsWithServer()
+    const { hotListeners, plugins } = setupPluginsWithServer()
     const mainPlugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
 
     let rpcHandlers = new Map<string, Function>()
     mainPlugin.devtools!.setup({
       views: { hostStatic: () => {} },
       docks: { register: () => {} },
-      rpc: { register: ({ name, handler }: { name: string; handler: Function }) => rpcHandlers.set(name, handler) },
+      rpc: {
+        register: ({ name, handler }: { name: string; handler: Function }) =>
+          rpcHandlers.set(name, handler),
+      },
     } as any)
 
     // Start a reactive graph request - the handler will send a request to the client and wait
     const graphPromise = rpcHandlers.get('svelte-devtools:get-reactive-graph')!()
 
     // Simulate the client responding with reactive graph data
-    const mockGraph = { nodes: [{ id: '0:count', type: 'state', name: 'count', componentId: 0, componentFile: '' }], edges: [] }
+    const mockGraph = {
+      nodes: [{ id: '0:count', type: 'state', name: 'count', componentId: 0, componentFile: '' }],
+      edges: [],
+    }
     hotListeners['svelte-devtools:reactive-graph'](mockGraph)
 
     const result = await graphPromise
@@ -499,19 +534,31 @@ describe('HMR event listeners', () => {
   })
 
   it('should resolve state timeline requests from HMR', async () => {
-    const { hotListeners, plugins, mockServer } = setupPluginsWithServer()
+    const { hotListeners, plugins } = setupPluginsWithServer()
     const mainPlugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
 
     let rpcHandlers = new Map<string, Function>()
     mainPlugin.devtools!.setup({
       views: { hostStatic: () => {} },
       docks: { register: () => {} },
-      rpc: { register: ({ name, handler }: { name: string; handler: Function }) => rpcHandlers.set(name, handler) },
+      rpc: {
+        register: ({ name, handler }: { name: string; handler: Function }) =>
+          rpcHandlers.set(name, handler),
+      },
     } as any)
 
     const timelinePromise = rpcHandlers.get('svelte-devtools:get-state-timeline')!()
 
-    const mockTimeline = [{ id: '0:count', name: 'count', componentFile: '', oldValue: 0, newValue: 1, timestamp: Date.now() }]
+    const mockTimeline = [
+      {
+        id: '0:count',
+        name: 'count',
+        componentFile: '',
+        oldValue: 0,
+        newValue: 1,
+        timestamp: Date.now(),
+      },
+    ]
     hotListeners['svelte-devtools:state-timeline']({ changes: mockTimeline })
 
     const result = await timelinePromise
@@ -519,14 +566,17 @@ describe('HMR event listeners', () => {
   })
 
   it('should send clear-state-timeline to client', async () => {
-    const { hotListeners, plugins, mockServer } = setupPluginsWithServer()
+    const { plugins, mockServer } = setupPluginsWithServer()
     const mainPlugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
 
     let rpcHandlers = new Map<string, Function>()
     mainPlugin.devtools!.setup({
       views: { hostStatic: () => {} },
       docks: { register: () => {} },
-      rpc: { register: ({ name, handler }: { name: string; handler: Function }) => rpcHandlers.set(name, handler) },
+      rpc: {
+        register: ({ name, handler }: { name: string; handler: Function }) =>
+          rpcHandlers.set(name, handler),
+      },
     } as any)
 
     await rpcHandlers.get('svelte-devtools:clear-state-timeline')!()
@@ -553,10 +603,15 @@ describe('inspect-file with server', () => {
     mainPlugin.devtools!.setup({
       views: { hostStatic: () => {} },
       docks: { register: () => {} },
-      rpc: { register: ({ name, handler }: { name: string; handler: Function }) => rpcHandlers.set(name, handler) },
+      rpc: {
+        register: ({ name, handler }: { name: string; handler: Function }) =>
+          rpcHandlers.set(name, handler),
+      },
     } as any)
 
-    const result = await rpcHandlers.get('svelte-devtools:inspect-file')!('src/lib/components/Counter.svelte') as any
+    const result = (await rpcHandlers.get('svelte-devtools:inspect-file')!(
+      'src/lib/components/Counter.svelte',
+    )) as any
     expect(result.source).toContain('$state')
     expect(result.compiled).toBe('const compiled = true;')
     expect(result.mappings).toBe('AAAA')
@@ -573,10 +628,15 @@ describe('inspect-file with server', () => {
     mainPlugin.devtools!.setup({
       views: { hostStatic: () => {} },
       docks: { register: () => {} },
-      rpc: { register: ({ name, handler }: { name: string; handler: Function }) => rpcHandlers.set(name, handler) },
+      rpc: {
+        register: ({ name, handler }: { name: string; handler: Function }) =>
+          rpcHandlers.set(name, handler),
+      },
     } as any)
 
-    const result = await rpcHandlers.get('svelte-devtools:inspect-file')!('src/lib/components/Counter.svelte') as any
+    const result = (await rpcHandlers.get('svelte-devtools:inspect-file')!(
+      'src/lib/components/Counter.svelte',
+    )) as any
     expect(result.source).toContain('$state')
     expect(result.compiled).toBe('// Transform failed')
   })
@@ -594,10 +654,15 @@ describe('inspect-file with server', () => {
     mainPlugin.devtools!.setup({
       views: { hostStatic: () => {} },
       docks: { register: () => {} },
-      rpc: { register: ({ name, handler }: { name: string; handler: Function }) => rpcHandlers.set(name, handler) },
+      rpc: {
+        register: ({ name, handler }: { name: string; handler: Function }) =>
+          rpcHandlers.set(name, handler),
+      },
     } as any)
 
-    const result = await rpcHandlers.get('svelte-devtools:inspect-file')!('src/lib/components/Counter.svelte') as any
+    const result = (await rpcHandlers.get('svelte-devtools:inspect-file')!(
+      'src/lib/components/Counter.svelte',
+    )) as any
     expect(result.mappings).toBe('BBBB')
     expect(result.sources).toEqual(['test.svelte'])
   })
@@ -628,7 +693,9 @@ describe('module graph with server', () => {
 
     const mockServer = {
       hot: {
-        on: (event: string, handler: Function) => { hotListeners[event] = handler },
+        on: (event: string, handler: Function) => {
+          hotListeners[event] = handler
+        },
         send: vi.fn(),
       },
       middlewares: { use: (...args: any[]) => middlewares.push(args) },
@@ -642,7 +709,11 @@ describe('module graph with server', () => {
 
     for (const plugin of plugins) {
       if (typeof plugin.configResolved === 'function') {
-        plugin.configResolved({ command: 'serve', root: FIXTURES_DIR, logger: { warn: () => {} } } as any)
+        plugin.configResolved({
+          command: 'serve',
+          root: FIXTURES_DIR,
+          logger: { warn: () => {} },
+        } as any)
       }
     }
     for (const plugin of plugins) {
@@ -656,10 +727,13 @@ describe('module graph with server', () => {
     mainPlugin.devtools!.setup({
       views: { hostStatic: () => {} },
       docks: { register: () => {} },
-      rpc: { register: ({ name, handler }: { name: string; handler: Function }) => rpcHandlers.set(name, handler) },
+      rpc: {
+        register: ({ name, handler }: { name: string; handler: Function }) =>
+          rpcHandlers.set(name, handler),
+      },
     } as any)
 
-    const result = await rpcHandlers.get('svelte-devtools:get-module-graph')!() as any
+    const result = (await rpcHandlers.get('svelte-devtools:get-module-graph')!()) as any
     expect(result.modules.length).toBe(2)
 
     const counterModule = result.modules.find((m: any) => m.id.includes('Counter'))
@@ -706,7 +780,9 @@ describe('module graph with server', () => {
 
     const mockServer = {
       hot: {
-        on: (event: string, handler: Function) => { hotListeners[event] = handler },
+        on: (event: string, handler: Function) => {
+          hotListeners[event] = handler
+        },
         send: vi.fn(),
       },
       middlewares: { use: (...args: any[]) => middlewares.push(args) },
@@ -718,7 +794,11 @@ describe('module graph with server', () => {
 
     for (const plugin of plugins) {
       if (typeof plugin.configResolved === 'function') {
-        plugin.configResolved({ command: 'serve', root: FIXTURES_DIR, logger: { warn: () => {} } } as any)
+        plugin.configResolved({
+          command: 'serve',
+          root: FIXTURES_DIR,
+          logger: { warn: () => {} },
+        } as any)
       }
     }
     for (const plugin of plugins) {
@@ -732,10 +812,13 @@ describe('module graph with server', () => {
     mainPlugin.devtools!.setup({
       views: { hostStatic: () => {} },
       docks: { register: () => {} },
-      rpc: { register: ({ name, handler }: { name: string; handler: Function }) => rpcHandlers.set(name, handler) },
+      rpc: {
+        register: ({ name, handler }: { name: string; handler: Function }) =>
+          rpcHandlers.set(name, handler),
+      },
     } as any)
 
-    const result = await rpcHandlers.get('svelte-devtools:get-module-graph')!() as any
+    const result = (await rpcHandlers.get('svelte-devtools:get-module-graph')!()) as any
     expect(result.modules.length).toBe(3)
     expect(result.cycles.length).toBeGreaterThan(0)
 
@@ -746,7 +829,9 @@ describe('module graph with server', () => {
 
     // Cleanup
     for (const name of ['a.ts', 'b.ts', 'c.ts']) {
-      try { fs.unlinkSync(path.join(srcDir, name)) } catch {}
+      try {
+        fs.unlinkSync(path.join(srcDir, name))
+      } catch {}
     }
   })
 
@@ -754,12 +839,20 @@ describe('module graph with server', () => {
     const plugins = svelteDevtools()
     const hotListeners: Record<string, Function> = {}
 
-    const moduleLegacy = { file: path.join(FIXTURES_DIR, 'src/routes/+page.svelte'), importedModules: new Set() }
+    const moduleLegacy = {
+      file: path.join(FIXTURES_DIR, 'src/routes/+page.svelte'),
+      importedModules: new Set(),
+    }
     const legacyIdToModuleMap = new Map()
     legacyIdToModuleMap.set('legacy', moduleLegacy)
 
     const mockServer = {
-      hot: { on: (e: string, h: Function) => { hotListeners[e] = h }, send: vi.fn() },
+      hot: {
+        on: (e: string, h: Function) => {
+          hotListeners[e] = h
+        },
+        send: vi.fn(),
+      },
       middlewares: { use: () => {} },
       // No environments (or empty environments)
       environments: {},
@@ -769,7 +862,12 @@ describe('module graph with server', () => {
     }
 
     for (const p of plugins) {
-      if (typeof p.configResolved === 'function') p.configResolved({ command: 'serve', root: FIXTURES_DIR, logger: { warn: () => {} } } as any)
+      if (typeof p.configResolved === 'function')
+        p.configResolved({
+          command: 'serve',
+          root: FIXTURES_DIR,
+          logger: { warn: () => {} },
+        } as any)
     }
     for (const p of plugins) {
       if (typeof p.configureServer === 'function') p.configureServer(mockServer as any)
@@ -780,10 +878,13 @@ describe('module graph with server', () => {
     mainPlugin.devtools!.setup({
       views: { hostStatic: () => {} },
       docks: { register: () => {} },
-      rpc: { register: ({ name, handler }: { name: string; handler: Function }) => rpcHandlers.set(name, handler) },
+      rpc: {
+        register: ({ name, handler }: { name: string; handler: Function }) =>
+          rpcHandlers.set(name, handler),
+      },
     } as any)
 
-    const result = await rpcHandlers.get('svelte-devtools:get-module-graph')!() as any
+    const result = (await rpcHandlers.get('svelte-devtools:get-module-graph')!()) as any
     expect(result.modules.length).toBe(1)
     expect(result.modules[0].type).toBe('svelte')
   })
@@ -792,22 +893,38 @@ describe('module graph with server', () => {
     const plugins = svelteDevtools()
     const hotListeners: Record<string, Function> = {}
 
-    const moduleNM = { file: path.join(FIXTURES_DIR, 'node_modules/svelte/index.js'), importedModules: new Set() }
-    const moduleApp = { file: path.join(FIXTURES_DIR, 'src/routes/+page.svelte'), importedModules: new Set() }
+    const moduleNM = {
+      file: path.join(FIXTURES_DIR, 'node_modules/svelte/index.js'),
+      importedModules: new Set(),
+    }
+    const moduleApp = {
+      file: path.join(FIXTURES_DIR, 'src/routes/+page.svelte'),
+      importedModules: new Set(),
+    }
 
     const idToModuleMap = new Map()
     idToModuleMap.set('nm', moduleNM)
     idToModuleMap.set('app', moduleApp)
 
     const mockServer = {
-      hot: { on: (e: string, h: Function) => { hotListeners[e] = h }, send: vi.fn() },
+      hot: {
+        on: (e: string, h: Function) => {
+          hotListeners[e] = h
+        },
+        send: vi.fn(),
+      },
       middlewares: { use: () => {} },
       environments: { client: { moduleGraph: { idToModuleMap } } },
       transformRequest: vi.fn(),
     }
 
     for (const p of plugins) {
-      if (typeof p.configResolved === 'function') p.configResolved({ command: 'serve', root: FIXTURES_DIR, logger: { warn: () => {} } } as any)
+      if (typeof p.configResolved === 'function')
+        p.configResolved({
+          command: 'serve',
+          root: FIXTURES_DIR,
+          logger: { warn: () => {} },
+        } as any)
     }
     for (const p of plugins) {
       if (typeof p.configureServer === 'function') p.configureServer(mockServer as any)
@@ -818,10 +935,13 @@ describe('module graph with server', () => {
     mainPlugin.devtools!.setup({
       views: { hostStatic: () => {} },
       docks: { register: () => {} },
-      rpc: { register: ({ name, handler }: { name: string; handler: Function }) => rpcHandlers.set(name, handler) },
+      rpc: {
+        register: ({ name, handler }: { name: string; handler: Function }) =>
+          rpcHandlers.set(name, handler),
+      },
     } as any)
 
-    const result = await rpcHandlers.get('svelte-devtools:get-module-graph')!() as any
+    const result = (await rpcHandlers.get('svelte-devtools:get-module-graph')!()) as any
     const nmModule = result.modules.find((m: any) => m.file?.includes('node_modules'))
     expect(nmModule).toBeUndefined()
   })
@@ -837,8 +957,14 @@ describe('module graph with server', () => {
       if (!fs.existsSync(filePath)) fs.writeFileSync(filePath, `/* ${name} */`)
     }
 
-    const moduleSvelte = { file: path.join(FIXTURES_DIR, 'src/routes/+page.svelte'), importedModules: new Set() }
-    const moduleTS = { file: path.join(FIXTURES_DIR, 'src/routes/api/hello/+server.ts'), importedModules: new Set() }
+    const moduleSvelte = {
+      file: path.join(FIXTURES_DIR, 'src/routes/+page.svelte'),
+      importedModules: new Set(),
+    }
+    const moduleTS = {
+      file: path.join(FIXTURES_DIR, 'src/routes/api/hello/+server.ts'),
+      importedModules: new Set(),
+    }
     const moduleJS = { file: path.join(FIXTURES_DIR, 'src/test.js'), importedModules: new Set() }
     const moduleCSS = { file: path.join(FIXTURES_DIR, 'src/test.css'), importedModules: new Set() }
 
@@ -849,14 +975,24 @@ describe('module graph with server', () => {
     idToModuleMap.set('css', moduleCSS)
 
     const mockServer = {
-      hot: { on: (e: string, h: Function) => { hotListeners[e] = h }, send: vi.fn() },
+      hot: {
+        on: (e: string, h: Function) => {
+          hotListeners[e] = h
+        },
+        send: vi.fn(),
+      },
       middlewares: { use: () => {} },
       environments: { client: { moduleGraph: { idToModuleMap } } },
       transformRequest: vi.fn(),
     }
 
     for (const p of plugins) {
-      if (typeof p.configResolved === 'function') p.configResolved({ command: 'serve', root: FIXTURES_DIR, logger: { warn: () => {} } } as any)
+      if (typeof p.configResolved === 'function')
+        p.configResolved({
+          command: 'serve',
+          root: FIXTURES_DIR,
+          logger: { warn: () => {} },
+        } as any)
     }
     for (const p of plugins) {
       if (typeof p.configureServer === 'function') p.configureServer(mockServer as any)
@@ -867,10 +1003,13 @@ describe('module graph with server', () => {
     mainPlugin.devtools!.setup({
       views: { hostStatic: () => {} },
       docks: { register: () => {} },
-      rpc: { register: ({ name, handler }: { name: string; handler: Function }) => rpcHandlers.set(name, handler) },
+      rpc: {
+        register: ({ name, handler }: { name: string; handler: Function }) =>
+          rpcHandlers.set(name, handler),
+      },
     } as any)
 
-    const result = await rpcHandlers.get('svelte-devtools:get-module-graph')!() as any
+    const result = (await rpcHandlers.get('svelte-devtools:get-module-graph')!()) as any
     const svelteModule = result.modules.find((m: any) => m.id.endsWith('.svelte'))
     const tsModule = result.modules.find((m: any) => m.id.endsWith('.ts'))
     const jsModule = result.modules.find((m: any) => m.id.endsWith('.js'))
@@ -883,7 +1022,9 @@ describe('module graph with server', () => {
 
     // Cleanup
     for (const name of ['test.js', 'test.css']) {
-      try { fs.unlinkSync(path.join(FIXTURES_DIR, 'src', name)) } catch {}
+      try {
+        fs.unlinkSync(path.join(FIXTURES_DIR, 'src', name))
+      } catch {}
     }
   })
 })
