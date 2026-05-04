@@ -48,7 +48,7 @@ export function createThemeStore() {
   // Listen for OS preference changes — only relevant in 'system' mode, but
   // attach unconditionally so toggling back to 'system' takes immediate effect.
   if (typeof window !== 'undefined') {
-    window.matchMedia(MQ).addEventListener('change', (e) => {
+    window.matchMedia(MQ).addEventListener('change', e => {
       if (mode === 'system') apply(e.matches ? 'dark' : 'light')
     })
   }
@@ -56,17 +56,25 @@ export function createThemeStore() {
   function set(next: ThemeMode) {
     mode = next
     if (next === 'system') {
-      try { localStorage.removeItem(STORAGE_KEY) } catch {}
+      try {
+        localStorage.removeItem(STORAGE_KEY)
+      } catch {}
       apply(systemTheme())
     } else {
-      try { localStorage.setItem(STORAGE_KEY, next) } catch {}
+      try {
+        localStorage.setItem(STORAGE_KEY, next)
+      } catch {}
       apply(next)
     }
   }
 
   return {
-    get mode() { return mode },
-    get resolved() { return resolved },
+    get mode() {
+      return mode
+    },
+    get resolved() {
+      return resolved
+    },
     set,
   }
 }

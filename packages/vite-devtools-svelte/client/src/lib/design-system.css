@@ -88,10 +88,10 @@
   --color-surface-code: rgba(255, 255, 255, 0.04);
   --color-glass: rgba(17, 17, 17, 0.5);
 
-  --color-text: #e5e5e5;            /* 13.6:1 on base */
-  --color-text-secondary: #b3b3b3;  /* 8.7:1 on base */
-  --color-text-muted: #9a9a9a;      /* 6.0:1 on base */
-  --color-text-faint: #8e8e8e;      /* 4.7:1 on base — bumped from #777 (3.5:1) */
+  --color-text: #e5e5e5; /* 13.6:1 on base */
+  --color-text-secondary: #b3b3b3; /* 8.7:1 on base */
+  --color-text-muted: #9a9a9a; /* 6.0:1 on base */
+  --color-text-faint: #8e8e8e; /* 4.7:1 on base — bumped from #777 (3.5:1) */
   --color-text-subtle: var(--color-text-faint);
   --color-text-accent: var(--color-accent-400);
 
@@ -130,24 +130,24 @@
   --color-surface-code: rgba(0, 0, 0, 0.04);
   --color-glass: rgba(255, 255, 255, 0.7);
 
-  --color-text: #1a1a1a;            /* 16.7:1 on base */
-  --color-text-secondary: #404040;  /* 10.2:1 on base */
-  --color-text-muted: #595959;      /* 7.0:1 on base */
-  --color-text-faint: #737373;      /* 5.4:1 on base — was effectively #777 (4.7:1) */
+  --color-text: #1a1a1a; /* 16.7:1 on base */
+  --color-text-secondary: #404040; /* 10.2:1 on base */
+  --color-text-muted: #595959; /* 7.0:1 on base */
+  --color-text-faint: #737373; /* 5.4:1 on base — was effectively #777 (4.7:1) */
   --color-text-subtle: var(--color-text-faint);
-  --color-text-accent: var(--color-accent-600);  /* darker accent for AA on white */
+  --color-text-accent: var(--color-accent-600); /* darker accent for AA on white */
 
   --color-border: rgba(0, 0, 0, 0.12);
   --color-border-active: rgba(255, 62, 0, 0.5);
   --color-border-input: rgba(0, 0, 0, 0.22);
 
-  --color-info: #1d4ed8;            /* darker for AA on white */
+  --color-info: #1d4ed8; /* darker for AA on white */
   --color-info-bg: rgba(29, 78, 216, 0.1);
   --color-info-border: rgba(29, 78, 216, 0.3);
   --color-success: #15803d;
   --color-success-bg: rgba(21, 128, 61, 0.1);
   --color-success-border: rgba(21, 128, 61, 0.3);
-  --color-warning: #b45309;         /* amber-700 — readable on white */
+  --color-warning: #b45309; /* amber-700 — readable on white */
   --color-warning-bg: rgba(180, 83, 9, 0.12);
   --color-warning-border: rgba(180, 83, 9, 0.3);
   --color-warning-text: #92400e;
@@ -207,7 +207,8 @@
   box-sizing: border-box;
 }
 
-html, body {
+html,
+body {
   height: 100%;
   overflow: hidden;
   font-family: var(--font-sans);
@@ -245,24 +246,58 @@ html, body {
 /* ===== Utility Classes ===== */
 
 /* Text */
-.text-accent { color: var(--color-text-accent); }
-.text-secondary { color: var(--color-text-secondary); }
-.text-muted { color: var(--color-text-muted); }
-.text-faint { color: var(--color-text-faint); }
-.font-mono { font-family: var(--font-mono); }
-.font-medium { font-weight: 500; }
-.font-semibold { font-weight: 600; }
+.text-accent {
+  color: var(--color-text-accent);
+}
+.text-secondary {
+  color: var(--color-text-secondary);
+}
+.text-muted {
+  color: var(--color-text-muted);
+}
+.text-faint {
+  color: var(--color-text-faint);
+}
+.font-mono {
+  font-family: var(--font-mono);
+}
+.font-medium {
+  font-weight: 500;
+}
+.font-semibold {
+  font-weight: 600;
+}
 
 /* Surfaces */
-.bg-base { background: var(--color-base); }
-.bg-surface { background: var(--color-surface); }
-.bg-surface-secondary { background: var(--color-surface-secondary); }
-.bg-active { background: var(--color-surface-active); }
+.bg-base {
+  background: var(--color-base);
+}
+.bg-surface {
+  background: var(--color-surface);
+}
+.bg-surface-secondary {
+  background: var(--color-surface-secondary);
+}
+.bg-active {
+  background: var(--color-surface-active);
+}
 
 /* Borders */
-.border-base { border: 1px solid var(--color-border); }
-.border-active { border: 1px solid var(--color-border-active); }
+.border-base {
+  border: 1px solid var(--color-border);
+}
+.border-active {
+  border: 1px solid var(--color-border-active);
+}
 
 /* Layout */
-.flex-center { display: flex; align-items: center; justify-content: center; }
-.flex-between { display: flex; align-items: center; justify-content: space-between; }
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}

@@ -22,7 +22,17 @@ export interface ParamInfo {
 }
 
 export interface RouteFile {
-  type: 'page' | 'layout' | 'server-page' | 'server-layout' | 'endpoint' | 'page-load' | 'layout-load' | 'error' | 'page-load-server' | 'layout-load-server'
+  type:
+    | 'page'
+    | 'layout'
+    | 'server-page'
+    | 'server-layout'
+    | 'endpoint'
+    | 'page-load'
+    | 'layout-load'
+    | 'error'
+    | 'page-load-server'
+    | 'layout-load-server'
   path: string
 }
 

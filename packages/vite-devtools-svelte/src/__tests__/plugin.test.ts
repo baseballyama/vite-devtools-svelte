@@ -1,6 +1,12 @@
-import { describe, it, expect, beforeEach, vi } from 'vite-plus/test'
+import { describe, it, expect, beforeEach } from 'vite-plus/test'
 import { svelteDevtools } from '../plugin.js'
-import { RUNTIME_MODULE_ID, RESOLVED_RUNTIME_ID, runtimeCode, WRAPPER_MODULE_ID, wrapperCode } from '../runtime.js'
+import {
+  RUNTIME_MODULE_ID,
+  RESOLVED_RUNTIME_ID,
+  runtimeCode,
+  WRAPPER_MODULE_ID,
+  wrapperCode,
+} from '../runtime.js'
 import type { Plugin } from 'vite'
 
 // =====================================================================
@@ -109,19 +115,28 @@ describe('mainPlugin virtual module resolution', () => {
   // svelte/internal/client wrapper
   it('should intercept svelte/internal/client from user code', () => {
     const plugin = getMainPlugin()
-    const resolved = (plugin.resolveId as Function)!('svelte/internal/client', '/test/src/lib/Counter.svelte')
+    const resolved = (plugin.resolveId as Function)!(
+      'svelte/internal/client',
+      '/test/src/lib/Counter.svelte',
+    )
     expect(resolved).toBe(WRAPPER_MODULE_ID)
   })
 
   it('should NOT intercept svelte/internal/client from node_modules', () => {
     const plugin = getMainPlugin()
-    const resolved = (plugin.resolveId as Function)!('svelte/internal/client', '/test/node_modules/svelte/src/index.js')
+    const resolved = (plugin.resolveId as Function)!(
+      'svelte/internal/client',
+      '/test/node_modules/svelte/src/index.js',
+    )
     expect(resolved).toBeUndefined()
   })
 
   it('should NOT intercept svelte/internal/client from virtual modules (\\0 prefix)', () => {
     const plugin = getMainPlugin()
-    const resolved = (plugin.resolveId as Function)!('svelte/internal/client', '\0svelte-devtools:wrapped-client')
+    const resolved = (plugin.resolveId as Function)!(
+      'svelte/internal/client',
+      '\0svelte-devtools:wrapped-client',
+    )
     expect(resolved).toBeUndefined()
   })
 
@@ -137,7 +152,10 @@ describe('mainPlugin virtual module resolution', () => {
     if (typeof plugin.configResolved === 'function') {
       plugin.configResolved({ command: 'build', root: '/test', logger: { warn: () => {} } } as any)
     }
-    const resolved = (plugin.resolveId as Function)!('svelte/internal/client', '/test/src/lib/Counter.svelte')
+    const resolved = (plugin.resolveId as Function)!(
+      'svelte/internal/client',
+      '/test/src/lib/Counter.svelte',
+    )
     expect(resolved).toBeUndefined()
   })
 
@@ -147,7 +165,10 @@ describe('mainPlugin virtual module resolution', () => {
     if (typeof plugin.configResolved === 'function') {
       plugin.configResolved({ command: 'serve', root: '/test', logger: { warn: () => {} } } as any)
     }
-    const resolved = (plugin.resolveId as Function)!('svelte/internal/client', '/test/src/lib/Counter.svelte')
+    const resolved = (plugin.resolveId as Function)!(
+      'svelte/internal/client',
+      '/test/src/lib/Counter.svelte',
+    )
     expect(resolved).toBeUndefined()
   })
 
@@ -260,35 +281,42 @@ describe('RPC handlers (via devtools.setup)', () => {
     const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
     const fixturesDir = new URL('fixtures', import.meta.url).pathname
     if (typeof plugin.configResolved === 'function') {
-      plugin.configResolved({ command: 'serve', root: fixturesDir, logger: { warn: () => {} } } as any)
+      plugin.configResolved({
+        command: 'serve',
+        root: fixturesDir,
+        logger: { warn: () => {} },
+      } as any)
     }
 
     rpcHandlers = new Map()
     const mockCtx = {
       views: { hostStatic: () => {} },
       docks: { register: () => {} },
-      rpc: { register: ({ name, handler }: { name: string; handler: Function }) => rpcHandlers.set(name, handler) },
+      rpc: {
+        register: ({ name, handler }: { name: string; handler: Function }) =>
+          rpcHandlers.set(name, handler),
+      },
     }
     plugin.devtools!.setup(mockCtx as any)
   })
 
   it('get-project should return project info', async () => {
-    const result = await rpcHandlers.get('svelte-devtools:get-project')!() as any
+    const result = (await rpcHandlers.get('svelte-devtools:get-project')!()) as any
     expect(result.name).toBe('test-fixture')
   })
 
   it('get-routes should return route info', async () => {
-    const result = await rpcHandlers.get('svelte-devtools:get-routes')!() as any[]
+    const result = (await rpcHandlers.get('svelte-devtools:get-routes')!()) as any[]
     expect(result.length).toBeGreaterThan(0)
   })
 
   it('get-assets should return asset info', async () => {
-    const result = await rpcHandlers.get('svelte-devtools:get-assets')!() as any[]
+    const result = (await rpcHandlers.get('svelte-devtools:get-assets')!()) as any[]
     expect(result.length).toBeGreaterThan(0)
   })
 
   it('get-component-relations should return component relations', async () => {
-    const result = await rpcHandlers.get('svelte-devtools:get-component-relations')!() as any[]
+    const result = (await rpcHandlers.get('svelte-devtools:get-component-relations')!()) as any[]
     expect(result.find((c: any) => c.name === 'Counter')).toBeDefined()
   })
 
@@ -297,17 +325,20 @@ describe('RPC handlers (via devtools.setup)', () => {
   })
 
   it('get-module-graph should return empty graph without server', async () => {
-    expect(await rpcHandlers.get('svelte-devtools:get-module-graph')!()).toEqual({ modules: [], cycles: [] })
+    expect(await rpcHandlers.get('svelte-devtools:get-module-graph')!()).toEqual({
+      modules: [],
+      cycles: [],
+    })
   })
 
   it('get-build-analysis should handle missing build dir', async () => {
-    const result = await rpcHandlers.get('svelte-devtools:get-build-analysis')!() as any
+    const result = (await rpcHandlers.get('svelte-devtools:get-build-analysis')!()) as any
     expect(result.chunks).toEqual([])
     expect(result.totalSize).toBe(0)
   })
 
   it('get-api-endpoints should detect HTTP methods', async () => {
-    const result = await rpcHandlers.get('svelte-devtools:get-api-endpoints')!() as any[]
+    const result = (await rpcHandlers.get('svelte-devtools:get-api-endpoints')!()) as any[]
     const usersEndpoint = result.find((e: any) => e.path.includes('users'))
     expect(usersEndpoint).toBeDefined()
     expect(usersEndpoint.methods).toContain('GET')
@@ -316,18 +347,27 @@ describe('RPC handlers (via devtools.setup)', () => {
   })
 
   it('send-api-request should reject SSRF attempts', async () => {
-    const result = await rpcHandlers.get('svelte-devtools:send-api-request')!('http://169.254.169.254/metadata', 'GET', '{}', '') as any
+    const result = (await rpcHandlers.get('svelte-devtools:send-api-request')!(
+      'http://169.254.169.254/metadata',
+      'GET',
+      '{}',
+      '',
+    )) as any
     expect(result.status).toBe(0)
     expect(result.statusText).toContain('Blocked')
   })
 
   it('inspect-file should return source for existing file', async () => {
-    const result = await rpcHandlers.get('svelte-devtools:inspect-file')!('src/lib/components/Counter.svelte') as any
+    const result = (await rpcHandlers.get('svelte-devtools:inspect-file')!(
+      'src/lib/components/Counter.svelte',
+    )) as any
     expect(result.source).toContain('$state')
   })
 
   it('inspect-file should handle nonexistent file gracefully', async () => {
-    const result = await rpcHandlers.get('svelte-devtools:inspect-file')!('nonexistent.svelte') as any
+    const result = (await rpcHandlers.get('svelte-devtools:inspect-file')!(
+      'nonexistent.svelte',
+    )) as any
     expect(result.source).toBe('')
   })
 })
@@ -349,19 +389,26 @@ describe('warningCapturePlugin', () => {
       logger: { warn: (msg: string) => capturedWarnings.push(msg) },
     }
 
-    if (typeof mainPlugin.configResolved === 'function') mainPlugin.configResolved(mockConfig as any)
-    if (typeof warningPlugin.configResolved === 'function') warningPlugin.configResolved(mockConfig as any)
+    if (typeof mainPlugin.configResolved === 'function')
+      mainPlugin.configResolved(mockConfig as any)
+    if (typeof warningPlugin.configResolved === 'function')
+      warningPlugin.configResolved(mockConfig as any)
 
     let rpcHandlers = new Map<string, Function>()
     mainPlugin.devtools!.setup({
       views: { hostStatic: () => {} },
       docks: { register: () => {} },
-      rpc: { register: ({ name, handler }: { name: string; handler: Function }) => rpcHandlers.set(name, handler) },
+      rpc: {
+        register: ({ name, handler }: { name: string; handler: Function }) =>
+          rpcHandlers.set(name, handler),
+      },
     } as any)
 
-    mockConfig.logger.warn('/test/src/lib/Counter.svelte:5:2 (a11y_no_redundant_roles) Warning message')
+    mockConfig.logger.warn(
+      '/test/src/lib/Counter.svelte:5:2 (a11y_no_redundant_roles) Warning message',
+    )
 
-    const warnings = await rpcHandlers.get('svelte-devtools:get-compiler-warnings')!() as any[]
+    const warnings = (await rpcHandlers.get('svelte-devtools:get-compiler-warnings')!()) as any[]
     expect(warnings.length).toBe(1)
     expect(warnings[0].code).toBe('a11y_no_redundant_roles')
     expect(capturedWarnings.length).toBe(1)

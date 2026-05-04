@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vite-plus/test'
 import { svelteDevtools } from '../plugin.js'
-import { EventEmitter } from 'node:events'
 import path from 'node:path'
 
 const FIXTURES_DIR = path.resolve(import.meta.dirname, 'fixtures')
@@ -16,40 +15,6 @@ interface Setup {
   rpc: (req: any, res: any) => void
   rpcHandlers: Map<string, Function>
   token: string
-}
-
-function createMockRes() {
-  const res = {
-    statusCode: 200,
-    headers: {} as Record<string, string>,
-    body: '',
-    ended: false,
-    setHeader(key: string, value: string) {
-      this.headers[key.toLowerCase()] = value
-    },
-    end(data?: string) {
-      if (data) this.body = data
-      this.ended = true
-    },
-    pipe: null as any,
-  }
-  return res
-}
-
-function makeAuthorizedReq(body: string, token: string) {
-  const req = new EventEmitter() as any
-  req.method = 'POST'
-  req.url = '/'
-  req.headers = {
-    origin: 'http://localhost:5173',
-    'content-type': 'application/json',
-    'x-svelte-devtools-token': token,
-  }
-  setTimeout(() => {
-    req.emit('data', Buffer.from(body))
-    req.emit('end')
-  }, 0)
-  return req
 }
 
 function setup(): Setup {
@@ -89,7 +54,7 @@ function setup(): Setup {
     }
   }
 
-  const rpc = middlewares.find((m) => m.path === '/__svelte-devtools/rpc')!.handler
+  const rpc = middlewares.find(m => m.path === '/__svelte-devtools/rpc')!.handler
 
   const rpcHandlers = new Map<string, Function>()
   const mainPlugin = plugins[0]
@@ -196,9 +161,15 @@ describe('server-side buffer caps', () => {
   })
 
   it('handles non-array payloads defensively (empty buffers, no throw)', async () => {
-    expect(() => s.hotListeners['svelte-devtools:components']({ components: null as any })).not.toThrow()
-    expect(() => s.hotListeners['svelte-devtools:profiles']({ profiles: 'oops' as any })).not.toThrow()
-    expect(() => s.hotListeners['svelte-devtools:state-timeline']({ changes: undefined as any })).not.toThrow()
+    expect(() =>
+      s.hotListeners['svelte-devtools:components']({ components: null as any }),
+    ).not.toThrow()
+    expect(() =>
+      s.hotListeners['svelte-devtools:profiles']({ profiles: 'oops' as any }),
+    ).not.toThrow()
+    expect(() =>
+      s.hotListeners['svelte-devtools:state-timeline']({ changes: undefined as any }),
+    ).not.toThrow()
 
     const live = (await s.rpcHandlers.get('svelte-devtools:get-live-components')!()) as any[]
     const profiles = (await s.rpcHandlers.get('svelte-devtools:get-render-profiles')!()) as any[]

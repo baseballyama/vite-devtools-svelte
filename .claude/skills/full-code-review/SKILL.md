@@ -592,15 +592,15 @@ ${BASE_BRANCH}
 
 ## 参照ドキュメント
 
-| フェーズ                | 参照先                                                                          |
-| ----------------------- | ------------------------------------------------------------------------------- |
-| Phase 1 (WHY)           | `ROADMAP.md`、PR 本文、関連 Issue                                               |
-| Phase 2 (設計)          | `README.md`、`plugin.ts` の既存パターン                                         |
-| Phase 3 (実装レビュー)  | 各 Agent が以下を読み込んで独立にレビュー:                                      |
-|                         | - Agent 1: `security-review` スキル呼び出し（組み込みスキル）                   |
-|                         | - Agent 2: `implementation-checklist.md`（カテゴリに応じた観点を切り替え）      |
-|                         | - Agent 3: `simplify` スキル呼び出し                                            |
-|                         | - Agent 4: `coderabbit:review` スキル呼び出し                                   |
-|                         | - Agent 5: `codex-review` スキル呼び出し（CLI インストール時のみ）              |
+| フェーズ               | 参照先                                                                     |
+| ---------------------- | -------------------------------------------------------------------------- |
+| Phase 1 (WHY)          | `ROADMAP.md`、PR 本文、関連 Issue                                          |
+| Phase 2 (設計)         | `README.md`、`plugin.ts` の既存パターン                                    |
+| Phase 3 (実装レビュー) | 各 Agent が以下を読み込んで独立にレビュー:                                 |
+|                        | - Agent 1: `security-review` スキル呼び出し（組み込みスキル）              |
+|                        | - Agent 2: `implementation-checklist.md`（カテゴリに応じた観点を切り替え） |
+|                        | - Agent 3: `simplify` スキル呼び出し                                       |
+|                        | - Agent 4: `coderabbit:review` スキル呼び出し                              |
+|                        | - Agent 5: `codex-review` スキル呼び出し（CLI インストール時のみ）         |
 
 **`implementation-checklist.md`** は `.claude/skills/full-code-review/implementation-checklist.md` に配置されている。

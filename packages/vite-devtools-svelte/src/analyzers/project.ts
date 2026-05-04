@@ -21,9 +21,7 @@ export function analyzeProject(root: string): ProjectInfo {
 
 function _analyzeProjectUncached(root: string): ProjectInfo {
   const pkgPath = path.join(root, 'package.json')
-  const pkg = fs.existsSync(pkgPath)
-    ? JSON.parse(fs.readFileSync(pkgPath, 'utf-8'))
-    : {}
+  const pkg = fs.existsSync(pkgPath) ? JSON.parse(fs.readFileSync(pkgPath, 'utf-8')) : {}
 
   const deps = pkg.dependencies || {}
   const devDeps = pkg.devDependencies || {}
@@ -31,8 +29,13 @@ function _analyzeProjectUncached(root: string): ProjectInfo {
   return {
     name: pkg.name || path.basename(root),
     version: pkg.version || '0.0.0',
-    svelteVersion: getInstalledVersion(root, 'svelte') || deps.svelte || devDeps.svelte || 'unknown',
-    sveltekitVersion: getInstalledVersion(root, '@sveltejs/kit') || deps['@sveltejs/kit'] || devDeps['@sveltejs/kit'] || 'unknown',
+    svelteVersion:
+      getInstalledVersion(root, 'svelte') || deps.svelte || devDeps.svelte || 'unknown',
+    sveltekitVersion:
+      getInstalledVersion(root, '@sveltejs/kit') ||
+      deps['@sveltejs/kit'] ||
+      devDeps['@sveltejs/kit'] ||
+      'unknown',
     viteVersion: getInstalledVersion(root, 'vite') || deps.vite || devDeps.vite || 'unknown',
     dependencies: deps,
     devDependencies: devDeps,
@@ -55,10 +58,7 @@ function getInstalledVersion(root: string, pkg: string): string | null {
 }
 
 function findRoutesDir(root: string): string {
-  const candidates = [
-    path.join(root, 'src', 'routes'),
-    path.join(root, 'src', 'pages'),
-  ]
+  const candidates = [path.join(root, 'src', 'routes'), path.join(root, 'src', 'pages')]
   for (const dir of candidates) {
     if (fs.existsSync(dir)) return dir
   }
@@ -66,10 +66,7 @@ function findRoutesDir(root: string): string {
 }
 
 function findStaticDir(root: string): string {
-  const candidates = [
-    path.join(root, 'static'),
-    path.join(root, 'public'),
-  ]
+  const candidates = [path.join(root, 'static'), path.join(root, 'public')]
   for (const dir of candidates) {
     if (fs.existsSync(dir)) return dir
   }

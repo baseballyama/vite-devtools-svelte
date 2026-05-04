@@ -1,0 +1,26 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "import", "vitest"],
+  "categories": {
+    "correctness": "error"
+  },
+  "rules": {
+    "vitest/require-mock-type-parameters": "off",
+    "jest/no-standalone-expect": "off",
+    "jest/require-to-throw-message": "off"
+  },
+  "env": {
+    "builtin": true,
+    "browser": true,
+    "node": true,
+    "es2024": true
+  },
+  "ignorePatterns": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.svelte-kit/**",
+    "**/coverage/**",
+    "**/*.svelte"
+  ]
+}
