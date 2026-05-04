@@ -1,5 +1,5 @@
 {
-  "name": "vite-devtools-plugin-svelte",
+  "name": "vite-devtools-svelte",
   "version": "0.0.1",
   "description": "Svelte DevTools plugin for Vite DevTools",
   "type": "module",

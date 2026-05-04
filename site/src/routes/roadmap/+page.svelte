@@ -5,7 +5,7 @@
 </script>
 
 <svelte:head>
-  <title>Roadmap — vite-devtools-plugin-svelte</title>
+  <title>Roadmap — vite-devtools-svelte</title>
 </svelte:head>
 
 <section class="section">
@@ -14,7 +14,7 @@
     <h1>Roadmap</h1>
     <p class="lead">
       Research, design decisions, and the implementation plan behind
-      vite-devtools-plugin-svelte. Pulled from
+      vite-devtools-svelte. Pulled from
       <code>ROADMAP.md</code>.
     </p>
 

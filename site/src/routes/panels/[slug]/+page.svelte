@@ -9,7 +9,7 @@
 </script>
 
 <svelte:head>
-  <title>{panel.title} — vite-devtools-plugin-svelte</title>
+  <title>{panel.title} — vite-devtools-svelte</title>
   <meta name="description" content={panel.tagline} />
 </svelte:head>
 

@@ -1,6 +1,6 @@
 packages:
   - 'packages/*'
-  - 'packages/vite-devtools-plugin-svelte/client'
+  - 'packages/vite-devtools-svelte/client'
   - 'playground'
   - 'site'
 

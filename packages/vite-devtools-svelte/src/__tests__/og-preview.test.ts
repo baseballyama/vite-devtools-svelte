@@ -12,7 +12,7 @@ function setupWithRpc() {
     }
   }
 
-  const mainPlugin = plugins.find(p => p.name === 'vite-devtools-plugin-svelte')!
+  const mainPlugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
   const rpcHandlers = new Map<string, Function>()
   mainPlugin.devtools!.setup({
     views: { hostStatic: () => {} },

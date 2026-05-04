@@ -31,11 +31,11 @@ function getBuildPlugins(options = {}) {
 }
 
 function getTrackingPlugin(options = {}): Plugin {
-  return getPlugins(options).find(p => p.name === 'vite-devtools-plugin-svelte:tracking')!
+  return getPlugins(options).find(p => p.name === 'vite-devtools-svelte:tracking')!
 }
 
 function getLoadProfilePlugin(options = {}): Plugin {
-  return getPlugins(options).find(p => p.name === 'vite-devtools-plugin-svelte:load-profile')!
+  return getPlugins(options).find(p => p.name === 'vite-devtools-svelte:load-profile')!
 }
 
 // =====================================================================
@@ -130,7 +130,7 @@ export function something() {}
 
   it('should skip in build mode', () => {
     const plugins = getBuildPlugins()
-    const plugin = plugins.find(p => p.name === 'vite-devtools-plugin-svelte:tracking')!
+    const plugin = plugins.find(p => p.name === 'vite-devtools-svelte:tracking')!
     const code = `
 import * as $ from 'svelte/internal/client';
 function Component($$anchor) {
@@ -272,7 +272,7 @@ describe('loadProfilePlugin transform', () => {
 
   it('should skip in build mode', () => {
     const plugins = getBuildPlugins()
-    const plugin = plugins.find(p => p.name === 'vite-devtools-plugin-svelte:load-profile')!
+    const plugin = plugins.find(p => p.name === 'vite-devtools-svelte:load-profile')!
     const code = `export const load = async () => ({ data: 1 })`
     const result = (plugin.transform as Function)!(code, '/test/src/routes/+page.server.ts')
     expect(result).toBeNull()

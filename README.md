@@ -1,4 +1,4 @@
-# vite-devtools-plugin-svelte
+# vite-devtools-svelte
 
 Svelte DevTools plugin for [Vite DevTools](https://github.com/nicepkg/vite-devtools). Provides 15 specialized panels for debugging, profiling, and inspecting Svelte/SvelteKit applications — all integrated directly into the Vite DevTools UI.
 
@@ -139,7 +139,7 @@ Svelte DevTools plugin for [Vite DevTools](https://github.com/nicepkg/vite-devto
 ## Installation
 
 ```bash
-npm install -D vite-devtools-plugin-svelte
+npm install -D vite-devtools-svelte
 ```
 
 ## Setup
@@ -148,7 +148,7 @@ Add the plugin to your `vite.config.ts`. **It must come before `sveltekit()`** s
 
 ```ts
 // vite.config.ts
-import { svelteDevtools } from 'vite-devtools-plugin-svelte'
+import { svelteDevtools } from 'vite-devtools-svelte'
 import { sveltekit } from '@sveltejs/kit/vite'
 import { defineConfig } from 'vite-plus'
 
@@ -217,16 +217,16 @@ pnpm build
 pnpm dev
 
 # Run tests
-pnpm -C packages/vite-devtools-plugin-svelte test
+pnpm -C packages/vite-devtools-svelte test
 
 # Watch mode
-pnpm -C packages/vite-devtools-plugin-svelte test:watch
+pnpm -C packages/vite-devtools-svelte test:watch
 ```
 
 ### Project Structure
 
 ```
-├── packages/vite-devtools-plugin-svelte/
+├── packages/vite-devtools-svelte/
 │   ├── src/              # Plugin core (Vite plugin, runtime, analyzers)
 │   ├── client/           # DevTools UI (Svelte 5 SPA)
 │   └── dist/             # Build output

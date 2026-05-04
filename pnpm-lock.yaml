@@ -16,7 +16,7 @@ importers:
         specifier: latest
         version: 0.1.20(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)(publint@0.3.18)(typescript@5.9.3)(vite@8.0.0(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1))
 
-  packages/vite-devtools-plugin-svelte:
+  packages/vite-devtools-svelte:
     dependencies:
       '@vitejs/devtools-kit':
         specifier: ^0.1.18
@@ -35,14 +35,14 @@ importers:
         specifier: latest
         version: 0.1.20(@types/node@25.6.0)(@vitejs/devtools@0.1.18)(esbuild@0.27.4)(jiti@2.6.1)(publint@0.3.18)(typescript@5.9.3)(vite@8.0.0)
 
-  packages/vite-devtools-plugin-svelte/client:
+  packages/vite-devtools-svelte/client:
     devDependencies:
       '@sveltejs/vite-plugin-svelte':
         specifier: ^7.0.0
-        version: 7.0.0(svelte@5.55.5(@typescript-eslint/types@8.57.1))(vite@8.0.0(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1))
+        version: 7.0.0(svelte@5.55.5(@typescript-eslint/types@8.57.1))(vite@8.0.0)
       '@vitejs/devtools-kit':
         specifier: ^0.1.18
-        version: 0.1.18(launch-editor@2.13.2)(typescript@5.9.3)(vite@8.0.0(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1))
+        version: 0.1.18(launch-editor@2.13.2)(typescript@5.9.3)(vite@8.0.0)
       svelte:
         specifier: ^5.55.5
         version: 5.55.5(@typescript-eslint/types@8.57.1)
@@ -63,7 +63,7 @@ importers:
         version: 2.59.0(@sveltejs/vite-plugin-svelte@7.0.0(svelte@5.55.5(@typescript-eslint/types@8.57.1))(vite@8.0.0(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)))(svelte@5.55.5(@typescript-eslint/types@8.57.1))(typescript@5.9.3)(vite@8.0.0(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1))
       '@sveltejs/vite-plugin-svelte':
         specifier: ^7.0.0
-        version: 7.0.0(svelte@5.55.5(@typescript-eslint/types@8.57.1))(vite@8.0.0(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1))
+        version: 7.0.0(svelte@5.55.5(@typescript-eslint/types@8.57.1))(vite@8.0.0)
       '@vitejs/devtools':
         specifier: ^0.1.18
         version: 0.1.18(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@8.0.0)
@@ -73,9 +73,9 @@ importers:
       typescript:
         specifier: ^5.8.0
         version: 5.9.3
-      vite-devtools-plugin-svelte:
+      vite-devtools-svelte:
         specifier: workspace:*
-        version: link:../packages/vite-devtools-plugin-svelte
+        version: link:../packages/vite-devtools-svelte
       vite-plus:
         specifier: latest
         version: 0.1.20(@types/node@25.6.0)(@vitejs/devtools@0.1.18)(esbuild@0.27.4)(jiti@2.6.1)(publint@0.3.18)(typescript@5.9.3)(vite@8.0.0)
@@ -90,7 +90,7 @@ importers:
         version: 2.59.0(@sveltejs/vite-plugin-svelte@7.0.0(svelte@5.55.5(@typescript-eslint/types@8.57.1))(vite@8.0.0(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)))(svelte@5.55.5(@typescript-eslint/types@8.57.1))(typescript@5.9.3)(vite@8.0.0(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1))
       '@sveltejs/vite-plugin-svelte':
         specifier: ^7.0.0
-        version: 7.0.0(svelte@5.55.5(@typescript-eslint/types@8.57.1))(vite@8.0.0(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1))
+        version: 7.0.0(svelte@5.55.5(@typescript-eslint/types@8.57.1))(vite@8.0.0)
       marked:
         specifier: ^18.0.3
         version: 18.0.3
@@ -1477,11 +1477,6 @@ packages:
     resolution: {integrity: sha512-Y3wQdFg2Va6etvQ5I82yUhGdsKrcYox6p7FfL1LbK2J4V01F9TGlepTIhnK24t7koZibmg82KGglhA1XK5IsLQ==}
     engines: {node: '>=10'}
 
-  nanoid@3.3.11:
-    resolution: {integrity: sha512-N8SpfPUnUp1bK+PMYW8qSWdl9U+wwNWI4QKxOYDy9JAro3WMX7p2OeVRF9v+347pnakNevPmiHhNmZ2HbFA76w==}
-    engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
-    hasBin: true
-
   nanoid@3.3.12:
     resolution: {integrity: sha512-ZB9RH/39qpq5Vu6Y+NmUaFhQR6pp+M2Xt76XBnEwDaGcVAqhlvxrl3B2bKS5D3NH3QR76v3aSrKaF/Kiy7lEtQ==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
@@ -1574,10 +1569,6 @@ packages:
 
   postcss@8.5.13:
     resolution: {integrity: sha512-qif0+jGGZoLWdHey3UFHHWP0H7Gbmsk8T5VEqyYFbWqPr1XqvLGBbk/sl8V5exGmcYJklJOhOQq1pV9IcsiFag==}
-    engines: {node: ^10 || ^12 || >=14}
-
-  postcss@8.5.8:
-    resolution: {integrity: sha512-OW/rX8O/jXnm82Ey1k44pObPtdblfiuWnrd8X7GJ7emImCOstunGbXUpp7HdBrFQX6rJzn3sPT397Wp5aCwCHg==}
     engines: {node: ^10 || ^12 || >=14}
 
   powershell-utils@0.1.0:
@@ -2384,7 +2375,7 @@ snapshots:
     dependencies:
       '@standard-schema/spec': 1.1.0
       '@sveltejs/acorn-typescript': 1.0.9(acorn@8.16.0)
-      '@sveltejs/vite-plugin-svelte': 7.0.0(svelte@5.55.5(@typescript-eslint/types@8.57.1))(vite@8.0.0(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1))
+      '@sveltejs/vite-plugin-svelte': 7.0.0(svelte@5.55.5(@typescript-eslint/types@8.57.1))(vite@8.0.0)
       '@types/cookie': 0.6.0
       acorn: 8.16.0
       cookie: 0.6.0
@@ -2400,14 +2391,14 @@ snapshots:
     optionalDependencies:
       typescript: 5.9.3
 
-  '@sveltejs/vite-plugin-svelte@7.0.0(svelte@5.55.5(@typescript-eslint/types@8.57.1))(vite@8.0.0(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1))':
+  '@sveltejs/vite-plugin-svelte@7.0.0(svelte@5.55.5(@typescript-eslint/types@8.57.1))(vite@8.0.0)':
     dependencies:
       deepmerge: 4.3.1
       magic-string: 0.30.21
       obug: 2.1.1
       svelte: 5.55.5(@typescript-eslint/types@8.57.1)
       vite: 8.0.0(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@25.6.0)(@vitejs/devtools@0.1.18)(esbuild@0.27.4)(jiti@2.6.1)
-      vitefu: 1.1.2(vite@8.0.0(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1))
+      vitefu: 1.1.2(vite@8.0.0)
 
   '@tybys/wasm-util@0.10.1':
     dependencies:
@@ -2453,7 +2444,7 @@ snapshots:
       - typescript
       - utf-8-validate
 
-  '@vitejs/devtools-kit@0.1.18(launch-editor@2.13.2)(typescript@5.9.3)(vite@8.0.0(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1))':
+  '@vitejs/devtools-kit@0.1.18(launch-editor@2.13.2)(typescript@5.9.3)(vite@8.0.0)':
     dependencies:
       birpc: 4.0.0
       devframe: 0.1.18(launch-editor@2.13.2)(typescript@5.9.3)
@@ -2533,7 +2524,7 @@ snapshots:
       '@floating-ui/dom': 1.7.6
       '@pnpm/read-project-manifest': 1001.2.6(@pnpm/logger@1001.0.1)
       '@rolldown/debug': 1.0.0-rc.18
-      '@vitejs/devtools-kit': 0.1.18(launch-editor@2.13.2)(typescript@5.9.3)(vite@8.0.0(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1))
+      '@vitejs/devtools-kit': 0.1.18(launch-editor@2.13.2)(typescript@5.9.3)(vite@8.0.0)
       ansis: 4.2.0
       birpc: 4.0.0
       cac: 7.0.0
@@ -2638,7 +2629,7 @@ snapshots:
 
   '@vitejs/devtools@0.1.18(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@8.0.0)':
     dependencies:
-      '@vitejs/devtools-kit': 0.1.18(launch-editor@2.13.2)(typescript@5.9.3)(vite@8.0.0(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1))
+      '@vitejs/devtools-kit': 0.1.18(launch-editor@2.13.2)(typescript@5.9.3)(vite@8.0.0)
       '@vitejs/devtools-rolldown': 0.1.18(@pnpm/logger@1001.0.1)(launch-editor@2.13.2)(typescript@5.9.3)(vite@8.0.0)(vue@3.5.33(typescript@5.9.3))
       birpc: 4.0.0
       cac: 7.0.0
@@ -2689,7 +2680,7 @@ snapshots:
       '@oxc-project/runtime': 0.127.0
       '@oxc-project/types': 0.127.0
       lightningcss: 1.32.0
-      postcss: 8.5.8
+      postcss: 8.5.13
     optionalDependencies:
       '@types/node': 25.6.0
       '@vitejs/devtools': 0.1.18(@pnpm/logger@1001.0.1)(@voidzero-dev/vite-plus-core@0.1.20)(typescript@5.9.3)
@@ -3151,8 +3142,6 @@ snapshots:
 
   mrmime@2.0.1: {}
 
-  nanoid@3.3.11: {}
-
   nanoid@3.3.12: {}
 
   node-fetch-native@1.6.7: {}
@@ -3299,12 +3288,6 @@ snapshots:
   postcss@8.5.13:
     dependencies:
       nanoid: 3.3.12
-      picocolors: 1.1.1
-      source-map-js: 1.2.1
-
-  postcss@8.5.8:
-    dependencies:
-      nanoid: 3.3.11
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
@@ -3575,7 +3558,7 @@ snapshots:
       - '@emnapi/core'
       - '@emnapi/runtime'
 
-  vitefu@1.1.2(vite@8.0.0(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)):
+  vitefu@1.1.2(vite@8.0.0):
     optionalDependencies:
       vite: 8.0.0(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@25.6.0)(@vitejs/devtools@0.1.18)(esbuild@0.27.4)(jiti@2.6.1)
 

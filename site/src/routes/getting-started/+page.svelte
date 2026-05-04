@@ -2,9 +2,9 @@
   import { base } from '$app/paths'
   import CodeBlock from '$lib/CodeBlock.svelte'
 
-  const installCode = `npm install -D vite-devtools-plugin-svelte`
+  const installCode = `npm install -D vite-devtools-svelte`
 
-  const configCode = `import { svelteDevtools } from 'vite-devtools-plugin-svelte'
+  const configCode = `import { svelteDevtools } from 'vite-devtools-svelte'
 import { sveltekit } from '@sveltejs/kit/vite'
 import { defineConfig } from 'vite-plus'
 
@@ -26,7 +26,7 @@ npm run dev`
 </script>
 
 <svelte:head>
-  <title>Getting Started — vite-devtools-plugin-svelte</title>
+  <title>Getting Started — vite-devtools-svelte</title>
 </svelte:head>
 
 <section class="section">

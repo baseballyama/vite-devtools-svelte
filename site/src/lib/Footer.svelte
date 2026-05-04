@@ -5,7 +5,7 @@
 <footer>
   <div class="container row">
     <div>
-      <strong>vite-devtools-plugin-svelte</strong>
+      <strong>vite-devtools-svelte</strong>
       <p class="muted">
         Svelte DevTools plugin for Vite DevTools. MIT licensed.
       </p>

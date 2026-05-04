@@ -1,5 +1,5 @@
 import { sveltekit } from '@sveltejs/kit/vite'
-import { svelteDevtools } from 'vite-devtools-plugin-svelte'
+import { svelteDevtools } from 'vite-devtools-svelte'
 import { defineConfig } from 'vite-plus'
 
 export default defineConfig({

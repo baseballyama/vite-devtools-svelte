@@ -325,7 +325,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
   }
 
   const mainPlugin: Plugin = {
-    name: 'vite-devtools-plugin-svelte',
+    name: 'vite-devtools-svelte',
     enforce: 'pre',
 
     // Vite plugins may expose data through `api` for inter-plugin (and test)
@@ -806,7 +806,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
   // which component file is being initialized. All reactive tracking (state,
   // derived, proxy, effect) is handled by the svelte/internal/client wrapper.
   const trackingPlugin: Plugin = {
-    name: 'vite-devtools-plugin-svelte:tracking',
+    name: 'vite-devtools-svelte:tracking',
     enforce: 'post',
 
     transform(code, id) {
@@ -831,7 +831,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
 
   // Load function profiling transform plugin
   const loadProfilePlugin: Plugin = {
-    name: 'vite-devtools-plugin-svelte:load-profile',
+    name: 'vite-devtools-svelte:load-profile',
     enforce: 'post',
 
     transform(code, id) {
@@ -887,7 +887,7 @@ export const load = async (event) => {
 
   // Register load profiling hook on server
   const loadProfileServerPlugin: Plugin = {
-    name: 'vite-devtools-plugin-svelte:load-profile-server',
+    name: 'vite-devtools-svelte:load-profile-server',
 
     configureServer() {
       // Make the recording function available globally on the server
@@ -912,7 +912,7 @@ export const load = async (event) => {
 
   // Compiler warning capture plugin
   const warningCapturePlugin: Plugin = {
-    name: 'vite-devtools-plugin-svelte:warning-capture',
+    name: 'vite-devtools-svelte:warning-capture',
     enforce: 'post',
 
     configResolved(resolvedConfig) {

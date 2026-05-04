@@ -33,10 +33,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build plugin
-        run: pnpm -C packages/vite-devtools-plugin-svelte build
+        run: pnpm -C packages/vite-devtools-svelte build
 
       - name: Run plugin tests
-        run: pnpm -C packages/vite-devtools-plugin-svelte test
+        run: pnpm -C packages/vite-devtools-svelte test
 
       - name: Build client UI
         run: pnpm build:client
@@ -87,7 +87,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build plugin (consumed by playground)
-        run: pnpm -C packages/vite-devtools-plugin-svelte build
+        run: pnpm -C packages/vite-devtools-svelte build
 
       # Asserts the dev-only virtual modules don't leak into a production
       # bundle. If they ever do, this step fails — guarding against

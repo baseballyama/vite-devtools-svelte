@@ -256,7 +256,7 @@ describe('inspect-file path sandbox', () => {
 
   beforeEach(() => {
     const plugins = svelteDevtools()
-    const plugin = plugins.find((p) => p.name === 'vite-devtools-plugin-svelte')!
+    const plugin = plugins.find((p) => p.name === 'vite-devtools-svelte')!
     if (typeof plugin.configResolved === 'function') {
       plugin.configResolved({
         command: 'serve',
@@ -299,7 +299,7 @@ describe('open-in-editor path sandbox', () => {
 
   beforeEach(() => {
     const plugins = svelteDevtools()
-    const plugin = plugins.find((p) => p.name === 'vite-devtools-plugin-svelte')!
+    const plugin = plugins.find((p) => p.name === 'vite-devtools-svelte')!
     if (typeof plugin.configResolved === 'function') {
       plugin.configResolved({
         command: 'serve',
@@ -336,7 +336,7 @@ describe('open-reactive-in-editor path sandbox', () => {
 
   beforeEach(() => {
     const plugins = svelteDevtools()
-    const plugin = plugins.find((p) => p.name === 'vite-devtools-plugin-svelte')!
+    const plugin = plugins.find((p) => p.name === 'vite-devtools-svelte')!
     if (typeof plugin.configResolved === 'function') {
       plugin.configResolved({
         command: 'serve',
@@ -369,7 +369,7 @@ describe('open-reactive-in-editor path sandbox', () => {
 describe('dev-only virtual module gates', () => {
   it('does not resolve runtime virtual modules during build', () => {
     const plugins = svelteDevtools()
-    const plugin = plugins.find((p) => p.name === 'vite-devtools-plugin-svelte')!
+    const plugin = plugins.find((p) => p.name === 'vite-devtools-svelte')!
     if (typeof plugin.configResolved === 'function') {
       // command: 'build' — production build should skip our virtual modules
       plugin.configResolved({
@@ -387,7 +387,7 @@ describe('dev-only virtual module gates', () => {
 
   it('does resolve runtime virtual modules during dev', () => {
     const plugins = svelteDevtools()
-    const plugin = plugins.find((p) => p.name === 'vite-devtools-plugin-svelte')!
+    const plugin = plugins.find((p) => p.name === 'vite-devtools-svelte')!
     if (typeof plugin.configResolved === 'function') {
       plugin.configResolved({
         command: 'serve',
