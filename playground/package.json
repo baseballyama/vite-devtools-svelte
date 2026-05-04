@@ -15,7 +15,7 @@
     "@sveltejs/vite-plugin-svelte": "^7.0.0",
     "@vitejs/devtools": "^0.1.18",
     "svelte": "^5.55.5",
-    "typescript": "^5.8.0",
+    "typescript": "^6.0.3",
     "vite-devtools-svelte": "workspace:*",
     "vite-plus": "latest"
   }

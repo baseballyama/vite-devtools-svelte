@@ -14,7 +14,7 @@
     "@sveltejs/vite-plugin-svelte": "^7.0.0",
     "marked": "^18.0.3",
     "svelte": "^5.55.5",
-    "typescript": "^5.8.0",
+    "typescript": "^6.0.3",
     "vite-plus": "0.1.20"
   }
 }
