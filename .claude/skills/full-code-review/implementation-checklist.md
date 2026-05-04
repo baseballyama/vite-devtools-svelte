@@ -1,4 +1,4 @@
-# 実装レビューチェックリスト（vite-devtools-plugin-svelte）
+# 実装レビューチェックリスト（vite-devtools-svelte）
 
 `full-code-review` の Phase 3（実装）で Agent が参照する実装レベルのレビュー観点。
 すべての PR は、変更内容に応じた適切なテストカバレッジを持つ必要がある。

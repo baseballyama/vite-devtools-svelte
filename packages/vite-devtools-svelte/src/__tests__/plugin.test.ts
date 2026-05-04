@@ -17,25 +17,25 @@ describe('svelteDevtools factory', () => {
   it('should return plugins with correct names', () => {
     const plugins = svelteDevtools()
     const names = plugins.map(p => p.name)
-    expect(names).toContain('vite-devtools-plugin-svelte')
-    expect(names).toContain('vite-devtools-plugin-svelte:tracking')
-    expect(names).toContain('vite-devtools-plugin-svelte:load-profile')
-    expect(names).toContain('vite-devtools-plugin-svelte:load-profile-server')
-    expect(names).toContain('vite-devtools-plugin-svelte:warning-capture')
+    expect(names).toContain('vite-devtools-svelte')
+    expect(names).toContain('vite-devtools-svelte:tracking')
+    expect(names).toContain('vite-devtools-svelte:load-profile')
+    expect(names).toContain('vite-devtools-svelte:load-profile-server')
+    expect(names).toContain('vite-devtools-svelte:warning-capture')
   })
 
   it('should NOT include effect-tracking plugin (removed)', () => {
     const plugins = svelteDevtools()
     const names = plugins.map(p => p.name)
-    expect(names).not.toContain('vite-devtools-plugin-svelte:effect-tracking')
+    expect(names).not.toContain('vite-devtools-svelte:effect-tracking')
   })
 
   it('should have correct enforce order', () => {
     const plugins = svelteDevtools()
-    const mainPlugin = plugins.find(p => p.name === 'vite-devtools-plugin-svelte')!
-    const tracking = plugins.find(p => p.name === 'vite-devtools-plugin-svelte:tracking')!
-    const loadProfile = plugins.find(p => p.name === 'vite-devtools-plugin-svelte:load-profile')!
-    const warningCapture = plugins.find(p => p.name === 'vite-devtools-plugin-svelte:warning-capture')!
+    const mainPlugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
+    const tracking = plugins.find(p => p.name === 'vite-devtools-svelte:tracking')!
+    const loadProfile = plugins.find(p => p.name === 'vite-devtools-svelte:load-profile')!
+    const warningCapture = plugins.find(p => p.name === 'vite-devtools-svelte:warning-capture')!
 
     expect(mainPlugin.enforce).toBe('pre')
     expect(tracking.enforce).toBe('post')
@@ -45,8 +45,8 @@ describe('svelteDevtools factory', () => {
 
   it('main plugin should come before tracking plugin', () => {
     const plugins = svelteDevtools()
-    const mainIdx = plugins.findIndex(p => p.name === 'vite-devtools-plugin-svelte')
-    const trackingIdx = plugins.findIndex(p => p.name === 'vite-devtools-plugin-svelte:tracking')
+    const mainIdx = plugins.findIndex(p => p.name === 'vite-devtools-svelte')
+    const trackingIdx = plugins.findIndex(p => p.name === 'vite-devtools-svelte:tracking')
     expect(mainIdx).toBeLessThan(trackingIdx)
   })
 
@@ -66,7 +66,7 @@ describe('svelteDevtools factory', () => {
         p.configResolved({ command: 'serve', root: '/test', logger: { warn: () => {} } } as any)
       }
     }
-    const trackingPlugin = plugins.find(p => p.name === 'vite-devtools-plugin-svelte:tracking')!
+    const trackingPlugin = plugins.find(p => p.name === 'vite-devtools-svelte:tracking')!
     const code = `
 import * as $ from 'svelte/internal/client';
 function Component($$anchor) {
@@ -86,7 +86,7 @@ function Component($$anchor) {
 describe('mainPlugin virtual module resolution', () => {
   function getMainPlugin(): Plugin {
     const plugins = svelteDevtools()
-    const plugin = plugins.find(p => p.name === 'vite-devtools-plugin-svelte')!
+    const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
     if (typeof plugin.configResolved === 'function') {
       plugin.configResolved({ command: 'serve', root: '/test', logger: { warn: () => {} } } as any)
     }
@@ -133,7 +133,7 @@ describe('mainPlugin virtual module resolution', () => {
 
   it('should NOT intercept svelte/internal/client in build mode', () => {
     const plugins = svelteDevtools()
-    const plugin = plugins.find(p => p.name === 'vite-devtools-plugin-svelte')!
+    const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
     if (typeof plugin.configResolved === 'function') {
       plugin.configResolved({ command: 'build', root: '/test', logger: { warn: () => {} } } as any)
     }
@@ -143,7 +143,7 @@ describe('mainPlugin virtual module resolution', () => {
 
   it('should NOT intercept svelte/internal/client when componentTracking is disabled', () => {
     const plugins = svelteDevtools({ componentTracking: false })
-    const plugin = plugins.find(p => p.name === 'vite-devtools-plugin-svelte')!
+    const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
     if (typeof plugin.configResolved === 'function') {
       plugin.configResolved({ command: 'serve', root: '/test', logger: { warn: () => {} } } as any)
     }
@@ -171,7 +171,7 @@ describe('mainPlugin virtual module resolution', () => {
 describe('mainPlugin transformIndexHtml', () => {
   it('should inject runtime script in serve mode', () => {
     const plugins = svelteDevtools()
-    const plugin = plugins.find(p => p.name === 'vite-devtools-plugin-svelte')!
+    const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
     if (typeof plugin.configResolved === 'function') {
       plugin.configResolved({ command: 'serve', root: '/test', logger: { warn: () => {} } } as any)
     }
@@ -186,7 +186,7 @@ describe('mainPlugin transformIndexHtml', () => {
 
   it('should not inject anything in build mode', () => {
     const plugins = svelteDevtools()
-    const plugin = plugins.find(p => p.name === 'vite-devtools-plugin-svelte')!
+    const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
     if (typeof plugin.configResolved === 'function') {
       plugin.configResolved({ command: 'build', root: '/test', logger: { warn: () => {} } } as any)
     }
@@ -202,14 +202,14 @@ describe('mainPlugin transformIndexHtml', () => {
 describe('mainPlugin devtools setup', () => {
   it('should have devtools.setup function', () => {
     const plugins = svelteDevtools()
-    const plugin = plugins.find(p => p.name === 'vite-devtools-plugin-svelte')!
+    const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
     expect(plugin.devtools).toBeDefined()
     expect(typeof plugin.devtools!.setup).toBe('function')
   })
 
   it('should register devtools dock and RPC handlers', () => {
     const plugins = svelteDevtools()
-    const plugin = plugins.find(p => p.name === 'vite-devtools-plugin-svelte')!
+    const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
     if (typeof plugin.configResolved === 'function') {
       plugin.configResolved({ command: 'serve', root: '/test', logger: { warn: () => {} } } as any)
     }
@@ -257,7 +257,7 @@ describe('RPC handlers (via devtools.setup)', () => {
 
   beforeEach(() => {
     const plugins = svelteDevtools()
-    const plugin = plugins.find(p => p.name === 'vite-devtools-plugin-svelte')!
+    const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
     const fixturesDir = new URL('fixtures', import.meta.url).pathname
     if (typeof plugin.configResolved === 'function') {
       plugin.configResolved({ command: 'serve', root: fixturesDir, logger: { warn: () => {} } } as any)
@@ -339,8 +339,8 @@ describe('RPC handlers (via devtools.setup)', () => {
 describe('warningCapturePlugin', () => {
   it('should intercept Svelte compiler warnings', async () => {
     const plugins = svelteDevtools()
-    const warningPlugin = plugins.find(p => p.name === 'vite-devtools-plugin-svelte:warning-capture')!
-    const mainPlugin = plugins.find(p => p.name === 'vite-devtools-plugin-svelte')!
+    const warningPlugin = plugins.find(p => p.name === 'vite-devtools-svelte:warning-capture')!
+    const mainPlugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
 
     let capturedWarnings: string[] = []
     const mockConfig = {
@@ -375,7 +375,7 @@ describe('warningCapturePlugin', () => {
 describe('loadProfileServerPlugin', () => {
   it('should register global load recording function', () => {
     const plugins = svelteDevtools()
-    const serverPlugin = plugins.find(p => p.name === 'vite-devtools-plugin-svelte:load-profile-server')!
+    const serverPlugin = plugins.find(p => p.name === 'vite-devtools-svelte:load-profile-server')!
     if (typeof serverPlugin.configureServer === 'function') {
       serverPlugin.configureServer({} as any)
     }

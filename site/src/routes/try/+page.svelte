@@ -13,10 +13,10 @@
 </script>
 
 <svelte:head>
-  <title>Try Live — vite-devtools-plugin-svelte</title>
+  <title>Try Live — vite-devtools-svelte</title>
   <meta
     name="description"
-    content="Try vite-devtools-plugin-svelte live in StackBlitz — runs the included SvelteKit playground in your browser with full DevTools support."
+    content="Try vite-devtools-svelte live in StackBlitz — runs the included SvelteKit playground in your browser with full DevTools support."
   />
 </svelte:head>
 
@@ -43,7 +43,7 @@
     <div class="frame">
       <iframe
         src={embedUrl}
-        title="vite-devtools-plugin-svelte playground in StackBlitz"
+        title="vite-devtools-svelte playground in StackBlitz"
         loading="lazy"
         allow="clipboard-read; clipboard-write; cross-origin-isolated"
         sandbox="allow-scripts allow-popups allow-forms allow-same-origin allow-modals allow-pointer-lock"

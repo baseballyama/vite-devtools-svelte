@@ -4,7 +4,7 @@
 </script>
 
 <svelte:head>
-  <title>vite-devtools-plugin-svelte — DevTools for Svelte, inside Vite</title>
+  <title>vite-devtools-svelte — DevTools for Svelte, inside Vite</title>
 </svelte:head>
 
 <section class="hero">
@@ -33,7 +33,7 @@
     <div class="hero-figure">
       <img
         src="{base}/images/panel-overview.png"
-        alt="Overview panel of vite-devtools-plugin-svelte"
+        alt="Overview panel of vite-devtools-svelte"
         loading="eager"
       />
     </div>

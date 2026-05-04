@@ -21,7 +21,7 @@
   <div class="container row">
     <a class="brand" href="{base}/">
       <span class="logo" aria-hidden="true">◆</span>
-      <span class="brand-name">vite-devtools-plugin-svelte</span>
+      <span class="brand-name">vite-devtools-svelte</span>
     </a>
     <nav>
       {#each links as link (link.href)}

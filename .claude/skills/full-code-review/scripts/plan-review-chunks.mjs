@@ -57,7 +57,7 @@ const files = raw
   })
   .filter((f) => f.path && f.lines >= 0);
 
-// vite-devtools-plugin-svelte 固有のカテゴリ分類:
+// vite-devtools-svelte 固有のカテゴリ分類:
 // - runtime: src/runtime.ts は browser-injected コードで独立してレビューしたいため別カテゴリ
 // - plugin: src/ 配下の他のファイル (plugin.ts / analyzers / types.ts)
 // - tests:  src/__tests__/ 配下
@@ -66,7 +66,7 @@ const files = raw
 // - config: ルート直下の package.json / tsconfig / *.config.*
 // - docs:   README / ROADMAP / docs/
 // - other:  その他
-const PKG_PREFIX = 'packages/vite-devtools-plugin-svelte/';
+const PKG_PREFIX = 'packages/vite-devtools-svelte/';
 function categoryOf(path) {
   if (path === `${PKG_PREFIX}src/runtime.ts`) return 'runtime';
   if (path.startsWith(`${PKG_PREFIX}src/__tests__/`)) return 'tests';

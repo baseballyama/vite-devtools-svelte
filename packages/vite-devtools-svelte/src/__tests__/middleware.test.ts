@@ -412,7 +412,7 @@ describe('HMR event listeners', () => {
 
   it('should update live components when data received', async () => {
     const { hotListeners, plugins } = setupPluginsWithServer()
-    const mainPlugin = plugins.find(p => p.name === 'vite-devtools-plugin-svelte')!
+    const mainPlugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
 
     // Get RPC handlers
     let rpcHandlers = new Map<string, Function>()
@@ -433,7 +433,7 @@ describe('HMR event listeners', () => {
 
   it('should update render profiles when data received', async () => {
     const { hotListeners, plugins } = setupPluginsWithServer()
-    const mainPlugin = plugins.find(p => p.name === 'vite-devtools-plugin-svelte')!
+    const mainPlugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
 
     let rpcHandlers = new Map<string, Function>()
     mainPlugin.devtools!.setup({
@@ -453,7 +453,7 @@ describe('HMR event listeners', () => {
 
   it('should buffer runtime errors (max 200)', async () => {
     const { hotListeners, plugins } = setupPluginsWithServer()
-    const mainPlugin = plugins.find(p => p.name === 'vite-devtools-plugin-svelte')!
+    const mainPlugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
 
     let rpcHandlers = new Map<string, Function>()
     mainPlugin.devtools!.setup({
@@ -478,7 +478,7 @@ describe('HMR event listeners', () => {
 
   it('should resolve reactive graph requests from HMR', async () => {
     const { hotListeners, plugins, mockServer } = setupPluginsWithServer()
-    const mainPlugin = plugins.find(p => p.name === 'vite-devtools-plugin-svelte')!
+    const mainPlugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
 
     let rpcHandlers = new Map<string, Function>()
     mainPlugin.devtools!.setup({
@@ -500,7 +500,7 @@ describe('HMR event listeners', () => {
 
   it('should resolve state timeline requests from HMR', async () => {
     const { hotListeners, plugins, mockServer } = setupPluginsWithServer()
-    const mainPlugin = plugins.find(p => p.name === 'vite-devtools-plugin-svelte')!
+    const mainPlugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
 
     let rpcHandlers = new Map<string, Function>()
     mainPlugin.devtools!.setup({
@@ -520,7 +520,7 @@ describe('HMR event listeners', () => {
 
   it('should send clear-state-timeline to client', async () => {
     const { hotListeners, plugins, mockServer } = setupPluginsWithServer()
-    const mainPlugin = plugins.find(p => p.name === 'vite-devtools-plugin-svelte')!
+    const mainPlugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
 
     let rpcHandlers = new Map<string, Function>()
     mainPlugin.devtools!.setup({
@@ -541,7 +541,7 @@ describe('HMR event listeners', () => {
 describe('inspect-file with server', () => {
   it('should return source and compiled code for valid file', async () => {
     const { plugins, mockServer } = setupPluginsWithServer()
-    const mainPlugin = plugins.find(p => p.name === 'vite-devtools-plugin-svelte')!
+    const mainPlugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
 
     // Mock transformRequest to return compiled code
     mockServer.transformRequest.mockResolvedValue({
@@ -565,7 +565,7 @@ describe('inspect-file with server', () => {
 
   it('should handle transform failure gracefully', async () => {
     const { plugins, mockServer } = setupPluginsWithServer()
-    const mainPlugin = plugins.find(p => p.name === 'vite-devtools-plugin-svelte')!
+    const mainPlugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
 
     mockServer.transformRequest.mockRejectedValue(new Error('Transform error'))
 
@@ -583,7 +583,7 @@ describe('inspect-file with server', () => {
 
   it('should handle source map as string', async () => {
     const { plugins, mockServer } = setupPluginsWithServer()
-    const mainPlugin = plugins.find(p => p.name === 'vite-devtools-plugin-svelte')!
+    const mainPlugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
 
     mockServer.transformRequest.mockResolvedValue({
       code: 'compiled',
@@ -651,7 +651,7 @@ describe('module graph with server', () => {
       }
     }
 
-    const mainPlugin = plugins.find(p => p.name === 'vite-devtools-plugin-svelte')!
+    const mainPlugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
     let rpcHandlers = new Map<string, Function>()
     mainPlugin.devtools!.setup({
       views: { hostStatic: () => {} },
@@ -727,7 +727,7 @@ describe('module graph with server', () => {
       }
     }
 
-    const mainPlugin = plugins.find(p => p.name === 'vite-devtools-plugin-svelte')!
+    const mainPlugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
     let rpcHandlers = new Map<string, Function>()
     mainPlugin.devtools!.setup({
       views: { hostStatic: () => {} },
@@ -775,7 +775,7 @@ describe('module graph with server', () => {
       if (typeof p.configureServer === 'function') p.configureServer(mockServer as any)
     }
 
-    const mainPlugin = plugins.find(p => p.name === 'vite-devtools-plugin-svelte')!
+    const mainPlugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
     let rpcHandlers = new Map<string, Function>()
     mainPlugin.devtools!.setup({
       views: { hostStatic: () => {} },
@@ -813,7 +813,7 @@ describe('module graph with server', () => {
       if (typeof p.configureServer === 'function') p.configureServer(mockServer as any)
     }
 
-    const mainPlugin = plugins.find(p => p.name === 'vite-devtools-plugin-svelte')!
+    const mainPlugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
     let rpcHandlers = new Map<string, Function>()
     mainPlugin.devtools!.setup({
       views: { hostStatic: () => {} },
@@ -862,7 +862,7 @@ describe('module graph with server', () => {
       if (typeof p.configureServer === 'function') p.configureServer(mockServer as any)
     }
 
-    const mainPlugin = plugins.find(p => p.name === 'vite-devtools-plugin-svelte')!
+    const mainPlugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
     let rpcHandlers = new Map<string, Function>()
     mainPlugin.devtools!.setup({
       views: { hostStatic: () => {} },
