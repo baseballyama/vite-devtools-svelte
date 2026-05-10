@@ -84,6 +84,7 @@
     border-radius: var(--radius-xl);
     min-width: 0;
     position: relative;
+    box-shadow: var(--shadow-sm);
   }
   .spacer {
     position: relative;

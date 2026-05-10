@@ -50,14 +50,11 @@
   })
 </script>
 
-<PanelContainer>
-  <div class="header">
-    <h2>Load Profiler</h2>
-    <div class="actions">
-      <ActionButton onclick={refresh}>Refresh</ActionButton>
-      <ActionButton onclick={clear}>Clear</ActionButton>
-    </div>
-  </div>
+<PanelContainer summary="Time spent in load functions for each route — server, universal, and layout splits.">
+  {#snippet actions()}
+    <ActionButton onclick={refresh}>Refresh</ActionButton>
+    <ActionButton onclick={clear}>Clear</ActionButton>
+  {/snippet}
 
   {#if profiles.length === 0}
     <Card>
@@ -116,25 +113,6 @@
 </PanelContainer>
 
 <style>
-  .header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: var(--space-3);
-  }
-
-  h2 {
-    font-size: var(--text-lg);
-    font-weight: 600;
-    color: var(--color-text);
-    margin: 0;
-  }
-
-  .actions {
-    display: flex;
-    gap: var(--space-2);
-  }
-
   .empty {
     color: var(--color-text-muted);
     font-size: var(--text-sm);

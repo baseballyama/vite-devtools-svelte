@@ -36,22 +36,19 @@
   })
 </script>
 
-<PanelContainer>
-  <div class="header">
-    <h2>Errors & Warnings</h2>
-    <div class="actions">
-      <div class="tab-buttons">
-        <button class="tab-btn" class:active={activeTab === 'warnings'} onclick={() => activeTab = 'warnings'}>
-          Warnings <Badge variant="warning">{warnings.length}</Badge>
-        </button>
-        <button class="tab-btn" class:active={activeTab === 'errors'} onclick={() => activeTab = 'errors'}>
-          Errors <Badge variant="error">{errors.length}</Badge>
-        </button>
-      </div>
-      <ActionButton onclick={refresh}>Refresh</ActionButton>
-      <ActionButton onclick={clear}>Clear</ActionButton>
+<PanelContainer summary="Compiler warnings from svelte-check and runtime errors caught during dev — switch tabs to filter.">
+  {#snippet actions()}
+    <div class="tab-buttons">
+      <button class="tab-btn" class:active={activeTab === 'warnings'} onclick={() => activeTab = 'warnings'}>
+        Warnings <Badge variant="warning">{warnings.length}</Badge>
+      </button>
+      <button class="tab-btn" class:active={activeTab === 'errors'} onclick={() => activeTab = 'errors'}>
+        Errors <Badge variant="error">{errors.length}</Badge>
+      </button>
     </div>
-  </div>
+    <ActionButton onclick={refresh}>Refresh</ActionButton>
+    <ActionButton onclick={clear}>Clear</ActionButton>
+  {/snippet}
 
   {#if activeTab === 'warnings'}
     {#if warnings.length === 0}
@@ -100,9 +97,6 @@
 </PanelContainer>
 
 <style>
-  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-3); flex-wrap: wrap; gap: var(--space-2); }
-  h2 { font-size: var(--text-lg); font-weight: 600; color: var(--color-text); margin: 0; }
-  .actions { display: flex; align-items: center; gap: var(--space-2); }
   .empty { color: var(--color-text-muted); font-size: var(--text-sm); }
 
   .tab-buttons { display: flex; gap: 2px; background: var(--color-surface); border-radius: var(--radius-md); padding: 2px; }

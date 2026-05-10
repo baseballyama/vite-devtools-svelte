@@ -142,18 +142,15 @@
   })
 </script>
 
-<PanelContainer>
-  <div class="header">
-    <h2>FPS Monitor</h2>
-    <div class="actions">
-      {#if recording}
-        <ActionButton onclick={stopRecording}>Stop Recording</ActionButton>
-      {:else}
-        <ActionButton onclick={startRecording}>Record</ActionButton>
-      {/if}
-      <ActionButton onclick={clear}>Clear</ActionButton>
-    </div>
-  </div>
+<PanelContainer summary="Live frame rate over the last 30 seconds, with a recordable window for benchmarking.">
+  {#snippet actions()}
+    {#if recording}
+      <ActionButton primary onclick={stopRecording}>Stop</ActionButton>
+    {:else}
+      <ActionButton onclick={startRecording}>Record</ActionButton>
+    {/if}
+    <ActionButton onclick={clear}>Clear</ActionButton>
+  {/snippet}
 
   <div class="fps-current">
     <span class="fps-number" style="color: {fpsColor(currentFps)}">{currentFps}</span>
@@ -235,9 +232,6 @@
 </PanelContainer>
 
 <style>
-  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-3); }
-  h2 { font-size: var(--text-lg); font-weight: 600; color: var(--color-text); margin: 0; }
-  .actions { display: flex; gap: var(--space-2); }
 
   .fps-current {
     display: flex;

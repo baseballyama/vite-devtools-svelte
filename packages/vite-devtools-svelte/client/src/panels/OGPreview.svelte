@@ -28,11 +28,7 @@
   })
 </script>
 
-<PanelContainer>
-  <div class="header">
-    <h2>OG Preview</h2>
-  </div>
-
+<PanelContainer summary="See how each route's social card looks across X, Discord, Slack, and link unfurlers.">
   <div class="controls">
     <select class="route-select" bind:value={selectedRoute}>
       {#each routes as route}
@@ -100,8 +96,6 @@
 </PanelContainer>
 
 <style>
-  .header { margin-bottom: var(--space-3); }
-  h2 { font-size: var(--text-lg); font-weight: 600; color: var(--color-text); margin: 0; }
   .empty { color: var(--color-text-muted); font-size: var(--text-sm); }
 
   .controls { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }

@@ -34,16 +34,13 @@
   onMount(() => { refresh() })
 </script>
 
-<PanelContainer>
-  <div class="header">
-    <h2>Build Analysis</h2>
-    <div class="actions">
-      {#if analysis}
-        <span class="total">Total: {formatSize(analysis.totalSize)}</span>
-      {/if}
-      <ActionButton onclick={refresh}>Refresh</ActionButton>
-    </div>
-  </div>
+<PanelContainer summary="Bundle composition by chunk — entry points, sizes, and gzipped weight.">
+  {#snippet actions()}
+    {#if analysis}
+      <span class="total font-mono">Σ {formatSize(analysis.totalSize)}</span>
+    {/if}
+    <ActionButton onclick={refresh}>Refresh</ActionButton>
+  {/snippet}
 
   {#if loading}
     <Card><p class="empty">Loading...</p></Card>
@@ -71,10 +68,14 @@
 </PanelContainer>
 
 <style>
-  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-3); }
-  h2 { font-size: var(--text-lg); font-weight: 600; color: var(--color-text); margin: 0; }
-  .actions { display: flex; align-items: center; gap: var(--space-2); }
-  .total { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--color-text-muted); }
+  .total {
+    display: inline-flex; align-items: center;
+    padding: 3px var(--space-2);
+    background: var(--color-surface-active);
+    border-radius: var(--radius-full);
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
+  }
   .empty { color: var(--color-text-muted); font-size: var(--text-sm); }
   .empty code { background: var(--color-surface-active); padding: 1px 6px; border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: var(--text-xs); }
 
