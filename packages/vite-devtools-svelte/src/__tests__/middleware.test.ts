@@ -124,8 +124,8 @@ describe('RPC fallback endpoint', () => {
   beforeEach(() => {
     const { middlewares } = setupPluginsWithServer()
     const rpc = middlewares.find(m => m.path === '/__svelte-devtools/rpc')
-    expect(rpc).toBeDefined()
-    rpcMiddleware = rpc!.handler
+    if (!rpc) throw new Error('RPC middleware not registered')
+    rpcMiddleware = rpc.handler
   })
 
   it('should reject non-POST requests', () => {
@@ -302,8 +302,8 @@ describe('asset serving middleware', () => {
   beforeEach(() => {
     const { middlewares } = setupPluginsWithServer()
     const asset = middlewares.find(m => m.path === '/__svelte-devtools/asset')
-    expect(asset).toBeDefined()
-    assetMiddleware = asset!.handler
+    if (!asset) throw new Error('asset middleware not registered')
+    assetMiddleware = asset.handler
   })
 
   it('should return 400 if path parameter is missing', () => {
