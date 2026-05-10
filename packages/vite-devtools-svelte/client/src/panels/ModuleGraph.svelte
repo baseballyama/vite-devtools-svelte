@@ -44,21 +44,18 @@
   onMount(() => { refresh() })
 </script>
 
-<PanelContainer>
-  <div class="header">
-    <h2>Module Graph</h2>
-    <div class="actions">
-      <select class="filter-select" bind:value={filterType}>
-        <option value="all">All ({totalModules()})</option>
-        <option value="svelte">Svelte ({svelteCount()})</option>
-        <option value="ts">TypeScript</option>
-        <option value="js">JavaScript</option>
-        <option value="css">CSS</option>
-      </select>
-      <SearchInput bind:value={search} placeholder="Search modules..." />
-      <ActionButton onclick={refresh}>Refresh</ActionButton>
-    </div>
-  </div>
+<PanelContainer summary="Vite's transformed module graph — every imported file, with cycle detection.">
+  {#snippet actions()}
+    <select class="filter-select" bind:value={filterType}>
+      <option value="all">All ({totalModules()})</option>
+      <option value="svelte">Svelte ({svelteCount()})</option>
+      <option value="ts">TypeScript</option>
+      <option value="js">JavaScript</option>
+      <option value="css">CSS</option>
+    </select>
+    <SearchInput bind:value={search} placeholder="Search modules…" />
+    <ActionButton onclick={refresh}>Refresh</ActionButton>
+  {/snippet}
 
   {#if data && data.cycles.length > 0}
     <div class="warning-banner">
@@ -125,9 +122,6 @@
 </PanelContainer>
 
 <style>
-  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-3); flex-wrap: wrap; gap: var(--space-2); }
-  h2 { font-size: var(--text-lg); font-weight: 600; color: var(--color-text); margin: 0; }
-  .actions { display: flex; align-items: center; gap: var(--space-2); }
   .empty { color: var(--color-text-muted); font-size: var(--text-sm); }
 
   .filter-select { padding: var(--space-1) var(--space-2); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text); font-size: var(--text-xs); }

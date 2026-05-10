@@ -48,11 +48,7 @@
   })
 </script>
 
-<PanelContainer>
-  <div class="header">
-    <h2>API Playground</h2>
-  </div>
-
+<PanelContainer summary="Send requests to your +server.ts endpoints without leaving the devtools.">
   <div class="api-layout">
     <div class="endpoints-list">
       <Card title="Endpoints ({endpoints.length})">
@@ -121,8 +117,6 @@
 </PanelContainer>
 
 <style>
-  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-3); }
-  h2 { font-size: var(--text-lg); font-weight: 600; color: var(--color-text); margin: 0; }
   .empty { color: var(--color-text-muted); font-size: var(--text-sm); }
 
   .api-layout { display: flex; gap: var(--space-3); }

@@ -69,21 +69,19 @@
   }
 </script>
 
-<PanelContainer>
-  <div class="header">
-    <div class="header-left">
-      <h2 class="page-title">Assets <span class="count">({assets.length})</span></h2>
-      <span class="total-size">{formatSize(totalSize)}</span>
-    </div>
-    <div class="header-actions">
-      <select class="filter-select" bind:value={filterType}>
-        {#each assetTypes as type}
-          <option value={type}>{type === 'all' ? 'All types' : type}</option>
-        {/each}
-      </select>
-      <SearchInput bind:value={searchQuery} />
-    </div>
-  </div>
+<PanelContainer
+  count={assets.length}
+  summary="Static-folder assets, sized and grouped by MIME — preview images at a glance."
+>
+  {#snippet actions()}
+    <span class="total-size font-mono" title="Combined size">{formatSize(totalSize)}</span>
+    <select class="filter-select" bind:value={filterType}>
+      {#each assetTypes as type}
+        <option value={type}>{type === 'all' ? 'All types' : type}</option>
+      {/each}
+    </select>
+    <SearchInput bind:value={searchQuery} />
+  {/snippet}
 
   {#if loading}
     <p class="status-text">Loading...</p>
@@ -132,12 +130,15 @@
 </PanelContainer>
 
 <style>
-  .header { display: flex; align-items: center; justify-content: space-between; }
-  .header-left { display: flex; align-items: baseline; gap: var(--space-2); }
-  .header-actions { display: flex; gap: var(--space-2); align-items: center; }
-  .page-title { font-size: var(--text-lg); font-weight: 600; color: var(--color-text); }
-  .count { color: var(--color-text-muted); font-weight: 400; }
-  .total-size { color: var(--color-text-faint); font-size: var(--text-xs); font-family: var(--font-mono); }
+  .total-size {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px var(--space-2);
+    background: var(--color-surface-active);
+    border-radius: var(--radius-full);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+  }
   .status-text { color: var(--color-text-muted); padding: var(--space-4); }
   .status-text.error { color: var(--color-error); }
   .empty { color: var(--color-text-faint); padding: var(--space-5); text-align: center; }

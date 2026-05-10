@@ -62,11 +62,13 @@
   }
 </script>
 
-<PanelContainer>
-  <div class="header">
-    <h2 class="page-title">Routes <span class="count">({routes.length})</span></h2>
-    <SearchInput bind:value={searchQuery} placeholder="Search routes..." />
-  </div>
+<PanelContainer
+  count={routes.length}
+  summary="Filesystem-derived routes from src/routes — each row maps to one or more route files."
+>
+  {#snippet actions()}
+    <SearchInput bind:value={searchQuery} placeholder="Search routes…" />
+  {/snippet}
 
   {#if loading}
     <p class="status-text">Loading...</p>
@@ -128,9 +130,6 @@
 </PanelContainer>
 
 <style>
-  .header { display: flex; align-items: center; justify-content: space-between; }
-  .page-title { font-size: var(--text-lg); font-weight: 600; color: var(--color-text); }
-  .count { color: var(--color-text-muted); font-weight: 400; }
   .status-text { color: var(--color-text-muted); padding: var(--space-4); }
   .status-text.error { color: var(--color-error); }
   .empty { color: var(--color-text-faint); padding: var(--space-5); text-align: center; }

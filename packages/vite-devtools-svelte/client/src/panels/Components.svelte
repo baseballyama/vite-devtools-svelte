@@ -96,19 +96,17 @@
   }
 </script>
 
-<PanelContainer>
-  <div class="header">
-    <h2 class="page-title">
-      Components <span class="count">({viewMode === 'static' ? relations.length : liveComponents.length})</span>
-    </h2>
-    <div class="header-actions">
-      <div class="toggle-group">
-        <ActionButton active={viewMode === 'static'} small onclick={() => (viewMode = 'static')}>Static</ActionButton>
-        <ActionButton active={viewMode === 'live'} small onclick={() => (viewMode = 'live')}>Live</ActionButton>
-      </div>
-      <SearchInput bind:value={searchQuery} />
+<PanelContainer
+  count={viewMode === 'static' ? relations.length : liveComponents.length}
+  summary={viewMode === 'static' ? 'Static analysis of import relations across your component tree.' : 'Live mounted component tree, refreshed every two seconds.'}
+>
+  {#snippet actions()}
+    <div class="toggle-group">
+      <ActionButton active={viewMode === 'static'} small onclick={() => (viewMode = 'static')}>Static</ActionButton>
+      <ActionButton active={viewMode === 'live'} small onclick={() => (viewMode = 'live')}>Live</ActionButton>
     </div>
-  </div>
+    <SearchInput bind:value={searchQuery} />
+  {/snippet}
 
   {#if loading}
     <p class="status-text">Loading...</p>
@@ -203,11 +201,7 @@
 {/snippet}
 
 <style>
-  .header { display: flex; align-items: center; justify-content: space-between; }
-  .header-actions { display: flex; gap: var(--space-2); align-items: center; }
-  .toggle-group { display: flex; gap: 0; }
-  .page-title { font-size: var(--text-lg); font-weight: 600; color: var(--color-text); }
-  .count { color: var(--color-text-muted); font-weight: 400; }
+  .toggle-group { display: inline-flex; gap: 4px; padding: 2px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
   .status-text { color: var(--color-text-muted); padding: var(--space-4); }
   .status-text.error { color: var(--color-error); }
   .empty, .empty-live { color: var(--color-text-faint); padding: var(--space-5); text-align: center; }

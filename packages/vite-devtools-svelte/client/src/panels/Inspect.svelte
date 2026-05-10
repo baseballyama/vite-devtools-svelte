@@ -230,14 +230,11 @@
   })
 </script>
 
-<PanelContainer>
-  <div class="header">
-    <h2>Inspect</h2>
-    <div class="header-right">
-      {#if hasMappings}<span class="mapping-hint">Click a line to see its mapping</span>{/if}
-      <SearchInput bind:value={search} placeholder="Search files..." />
-    </div>
-  </div>
+<PanelContainer summary="See the compiled JS that Svelte produces from your .svelte files — line mappings included.">
+  {#snippet actions()}
+    {#if hasMappings}<span class="mapping-hint">Click a line to see its mapping</span>{/if}
+    <SearchInput bind:value={search} placeholder="Search files…" />
+  {/snippet}
 
   <div class="inspect-layout">
     <div class="file-list">
@@ -323,9 +320,6 @@
 </PanelContainer>
 
 <style>
-  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-3); }
-  .header-right { display: flex; align-items: center; gap: var(--space-3); }
-  h2 { font-size: var(--text-lg); font-weight: 600; color: var(--color-text); margin: 0; }
   .empty, .loading { color: var(--color-text-muted); font-size: var(--text-sm); }
   .mapping-hint { font-size: var(--text-xs); color: var(--color-text-subtle); font-style: italic; }
 

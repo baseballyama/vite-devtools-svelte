@@ -77,18 +77,15 @@
   })
 </script>
 
-<PanelContainer>
-  <div class="header">
-    <h2>Reactive Graph</h2>
-    <div class="actions">
-      <div class="legend">
-        <span class="legend-item state">State</span>
-        <span class="legend-item derived">Derived</span>
-        <span class="legend-item effect">Effect</span>
-      </div>
-      <ActionButton onclick={refresh}>Refresh</ActionButton>
+<PanelContainer summary="$state, $derived, and $effect dependency graph — drag nodes to explore.">
+  {#snippet actions()}
+    <div class="legend">
+      <span class="legend-item state">State</span>
+      <span class="legend-item derived">Derived</span>
+      <span class="legend-item effect">Effect</span>
     </div>
-  </div>
+    <ActionButton onclick={refresh}>Refresh</ActionButton>
+  {/snippet}
 
   <div class="graph-layout">
     <div class="graph-area">
@@ -164,26 +161,6 @@
 </PanelContainer>
 
 <style>
-  .header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: var(--space-3);
-  }
-
-  h2 {
-    font-size: var(--text-lg);
-    font-weight: 600;
-    color: var(--color-text);
-    margin: 0;
-  }
-
-  .actions {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-  }
-
   .legend {
     display: flex;
     gap: var(--space-2);

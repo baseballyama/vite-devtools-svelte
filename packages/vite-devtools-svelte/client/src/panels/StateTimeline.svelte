@@ -46,15 +46,14 @@
   })
 </script>
 
-<PanelContainer>
-  <div class="header">
-    <h2>State Timeline</h2>
-    <div class="actions">
-      <span class="count">{changes.length} changes</span>
-      <ActionButton onclick={refresh}>Refresh</ActionButton>
-      <ActionButton onclick={clear}>Clear</ActionButton>
-    </div>
-  </div>
+<PanelContainer
+  count={changes.length}
+  summary="A scrubbable record of every $state mutation — useful for tracing unexpected updates."
+>
+  {#snippet actions()}
+    <ActionButton onclick={refresh}>Refresh</ActionButton>
+    <ActionButton onclick={clear}>Clear</ActionButton>
+  {/snippet}
 
   {#if changes.length === 0}
     <Card>
@@ -134,10 +133,6 @@
 </PanelContainer>
 
 <style>
-  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-3); }
-  h2 { font-size: var(--text-lg); font-weight: 600; color: var(--color-text); margin: 0; }
-  .actions { display: flex; align-items: center; gap: var(--space-2); }
-  .count { font-size: var(--text-xs); color: var(--color-text-subtle); }
   .empty { color: var(--color-text-muted); font-size: var(--text-sm); }
 
   .timeline-layout { display: flex; gap: var(--space-3); }
