@@ -225,14 +225,14 @@ describe('SSRF protection via API request', () => {
       '0.0.0.0',
     ]
     for (const ip of privateIPs) {
-      expect(() => validateExternalUrl(`http://${ip}/`)).toThrow()
+      expect(() => validateExternalUrl(`http://${ip}/`)).toThrow(/blocked|disallowed|not allowed/i)
     }
   })
 
   it('should ensure all internal hostnames are blocked', () => {
     const internalHosts = ['localhost', 'my-server.local', 'internal-api.internal']
     for (const host of internalHosts) {
-      expect(() => validateExternalUrl(`http://${host}/`)).toThrow()
+      expect(() => validateExternalUrl(`http://${host}/`)).toThrow(/blocked|disallowed|not allowed/i)
     }
   })
 
@@ -244,7 +244,7 @@ describe('SSRF protection via API request', () => {
       'dict://example.com',
     ]
     for (const url of blockedSchemes) {
-      expect(() => validateExternalUrl(url)).toThrow()
+      expect(() => validateExternalUrl(url)).toThrow(/blocked|disallowed|not allowed/i)
     }
   })
 })
