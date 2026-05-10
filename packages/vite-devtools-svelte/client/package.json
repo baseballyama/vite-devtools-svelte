@@ -8,7 +8,7 @@
     "build": "vp build"
   },
   "devDependencies": {
-    "@sveltejs/vite-plugin-svelte": "^7.0.0",
+    "@sveltejs/vite-plugin-svelte": "^7.1.2",
     "@vitejs/devtools-kit": "^0.1.18",
     "svelte": "^5.55.5",
     "typescript": "^5.8.0",
