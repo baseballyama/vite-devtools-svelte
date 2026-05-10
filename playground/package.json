@@ -11,9 +11,9 @@
   },
   "devDependencies": {
     "@sveltejs/adapter-auto": "^7.0.1",
-    "@sveltejs/kit": "^2.59.0",
-    "@sveltejs/vite-plugin-svelte": "^7.0.0",
-    "@vitejs/devtools": "^0.1.18",
+    "@sveltejs/kit": "^2.59.1",
+    "@sveltejs/vite-plugin-svelte": "^7.1.2",
+    "@vitejs/devtools": "^0.1.21",
     "svelte": "^5.55.5",
     "typescript": "^6.0.3",
     "vite-devtools-svelte": "workspace:*",
