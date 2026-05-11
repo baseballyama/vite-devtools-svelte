@@ -1,0 +1,70 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":semanticCommits",
+    ":dependencyDashboard",
+    ":maintainLockFilesWeekly",
+    "group:allNonMajor",
+    "schedule:weekends"
+  ],
+  "timezone": "Asia/Tokyo",
+  "labels": ["dependencies"],
+  "rangeStrategy": "bump",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 5am on monday"]
+  },
+  "packageRules": [
+    {
+      "description": "Group all type definitions",
+      "matchPackageNames": ["/^@types//"],
+      "groupName": "type definitions"
+    },
+    {
+      "description": "Group changesets tooling",
+      "matchPackageNames": ["@changesets/cli", "@changesets/changelog-github"],
+      "groupName": "changesets"
+    },
+    {
+      "description": "Group vitest tooling",
+      "matchPackageNames": ["/^vitest/", "/^@vitest//"],
+      "groupName": "vitest"
+    },
+    {
+      "description": "Group Svelte / SvelteKit / Vite tooling",
+      "matchPackageNames": [
+        "/^@sveltejs//",
+        "/^svelte/",
+        "/^vite/",
+        "/^@vitejs//"
+      ],
+      "groupName": "svelte-vite"
+    },
+    {
+      "description": "Group GitHub Actions updates",
+      "matchManagers": ["github-actions"],
+      "groupName": "github-actions",
+      "pinDigests": true
+    },
+    {
+      "description": "Pin Node engine: support all active LTS lines, no auto-bumps",
+      "matchDepNames": ["node"],
+      "enabled": false
+    },
+    {
+      "description": "Pin @types/node to the lowest supported Node major; no auto-bumps",
+      "matchPackageNames": ["@types/node"],
+      "enabled": false
+    }
+  ],
+  "vulnerabilityAlerts": {
+    "labels": ["security"],
+    "schedule": ["at any time"]
+  },
+  "postUpdateOptions": ["pnpmDedupe"],
+  "ignorePaths": [
+    "**/node_modules/**",
+    "**/dist/**"
+  ]
+}
