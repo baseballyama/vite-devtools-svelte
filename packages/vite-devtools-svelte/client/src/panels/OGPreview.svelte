@@ -47,7 +47,7 @@
         <div class="social-card">
           {#if preview.image}
             <div class="card-image">
-              <img src={preview.image} alt="OG Image" />
+              <img src={preview.image} alt={preview.title || ''} />
             </div>
           {:else}
             <div class="card-image no-image">No og:image</div>

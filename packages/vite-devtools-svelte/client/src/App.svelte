@@ -285,7 +285,7 @@
     </header>
 
     {#key activeTab}
-      <section class="panel-stage" role="region" aria-label={activeMeta.label}>
+      <section class="panel-stage" aria-label={activeMeta.label}>
         <ActivePanel />
       </section>
     {/key}
@@ -307,8 +307,20 @@
 </div>
 
 {#if paletteOpen}
-  <div class="palette-scrim" role="presentation" onclick={closePalette}>
-    <div class="palette" role="dialog" aria-modal="true" aria-label="Quick switch panels" onclick={(e) => e.stopPropagation()}>
+  <div
+    class="palette-scrim"
+    role="presentation"
+    onclick={(e) => {
+      if (e.target === e.currentTarget) closePalette()
+    }}
+  >
+    <div
+      class="palette"
+      role="dialog"
+      tabindex="-1"
+      aria-modal="true"
+      aria-label="Quick switch panels"
+    >
       <div class="palette-input-row">
         <span class="palette-input-icon i-search" aria-hidden="true"></span>
         <!-- svelte-ignore a11y_autofocus -->
