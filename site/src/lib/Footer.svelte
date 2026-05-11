@@ -13,7 +13,6 @@
     <div class="links">
       <a href="{base}/getting-started">Getting Started</a>
       <a href="{base}/try">Try Live</a>
-      <a href="{base}/roadmap">Roadmap</a>
       <a
         href="https://github.com/baseballyama/vite-devtools-svelte"
         target="_blank"

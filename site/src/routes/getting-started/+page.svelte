@@ -117,10 +117,6 @@ export default defineConfig({
     color: var(--text-dim);
   }
 
-  .small {
-    font-size: 0.875rem;
-  }
-
   .next {
     margin-top: 3rem;
     padding-top: 1.5rem;

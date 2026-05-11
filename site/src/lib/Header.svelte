@@ -7,7 +7,6 @@
     { href: '/', label: 'Home' },
     { href: '/getting-started', label: 'Getting Started' },
     { href: '/try', label: 'Try Live' },
-    { href: '/roadmap', label: 'Roadmap' },
   ]
 
   function isActive(href: string): boolean {
