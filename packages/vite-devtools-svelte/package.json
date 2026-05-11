@@ -1,6 +1,6 @@
 {
   "name": "vite-devtools-svelte",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Svelte DevTools plugin for Vite DevTools",
   "license": "MIT",
   "author": "Yuichiro Yamashita",
