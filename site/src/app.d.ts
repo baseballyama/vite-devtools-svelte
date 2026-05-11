@@ -13,4 +13,6 @@ declare module '*.md?raw' {
   export default content
 }
 
+declare const __PKG_VERSION__: string
+
 export {}
