@@ -1,13 +1,41 @@
-import { defineConfig } from 'vite-plus'
+import { defineConfig } from 'vite'
+import dts from 'vite-plugin-dts'
 
 export default defineConfig({
-  pack: {
-    entry: ['src/index.ts'],
-    format: ['esm'],
-    dts: true,
+  plugins: [
+    dts({
+      entryRoot: 'src',
+      include: ['src/**/*.ts'],
+      exclude: ['src/__tests__/**'],
+      outDir: 'dist',
+    }),
+  ],
+  build: {
     outDir: 'dist',
-    deps: {
-      neverBundle: ['vite', '@vitejs/devtools-kit'],
+    emptyOutDir: true,
+    sourcemap: true,
+    target: 'node18',
+    lib: {
+      entry: 'src/index.ts',
+      formats: ['es'],
+      fileName: () => 'index.mjs',
+    },
+    rollupOptions: {
+      external: [
+        'vite',
+        '@vitejs/devtools-kit',
+        /^node:/,
+        'fs',
+        'fs/promises',
+        'path',
+        'url',
+        'crypto',
+        'http',
+        'https',
+        'os',
+        'stream',
+        'util',
+      ],
     },
   },
 })

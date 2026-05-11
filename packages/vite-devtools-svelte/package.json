@@ -9,18 +9,18 @@
   "type": "module",
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
-  "types": "./dist/index.d.mts",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "import": "./dist/index.mjs",
-      "types": "./dist/index.d.mts"
+      "types": "./dist/index.d.ts"
     }
   },
   "scripts": {
-    "build": "vp pack",
-    "dev": "vp pack --watch",
-    "test": "vp test run",
-    "test:watch": "vp test"
+    "build": "vite build",
+    "dev": "vite build --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@vitejs/devtools-kit": "^0.1.21"
@@ -28,7 +28,9 @@
   "devDependencies": {
     "@types/node": "^25.6.2",
     "typescript": "^6.0.3",
-    "vite-plus": "latest"
+    "vite": "^8.0.0",
+    "vite-plugin-dts": "^4.5.4",
+    "vitest": "^3.0.0"
   },
   "peerDependencies": {
     "vite": "^8.0.0"

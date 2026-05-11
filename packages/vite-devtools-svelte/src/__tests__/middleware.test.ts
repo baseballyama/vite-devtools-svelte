@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vite-plus/test'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { svelteDevtools } from '../plugin.js'
 import { EventEmitter } from 'node:events'
 import { Writable } from 'node:stream'

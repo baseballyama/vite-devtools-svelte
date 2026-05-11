@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vite-plus/test'
+import { describe, it, expect } from 'vitest'
 import {
   RUNTIME_MODULE_ID,
   RESOLVED_RUNTIME_ID,

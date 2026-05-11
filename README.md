@@ -150,20 +150,17 @@ Add the plugin to your `vite.config.ts`. **It must come before `sveltekit()`** s
 // vite.config.ts
 import { svelteDevtools } from 'vite-devtools-svelte'
 import { sveltekit } from '@sveltejs/kit/vite'
-import { defineConfig } from 'vite-plus'
+import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [svelteDevtools(), sveltekit()],
 })
 ```
 
-> **Note:** This project uses [Vite+](https://viteplus.dev/) as its toolchain. If you use plain Vite, replace `'vite-plus'` with `'vite'` in the import above.
-
 Then start your dev server as usual:
 
 ```bash
-vp dev
-# or with plain Vite: npm run dev
+npm run dev
 ```
 
 The Svelte DevTools panels will appear inside the Vite DevTools UI.

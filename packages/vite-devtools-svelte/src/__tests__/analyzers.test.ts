@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vite-plus/test'
+import { describe, it, expect } from 'vitest'
 import path from 'node:path'
 import fs from 'node:fs'
 import { analyzeRoutes } from '../analyzers/routes.js'
