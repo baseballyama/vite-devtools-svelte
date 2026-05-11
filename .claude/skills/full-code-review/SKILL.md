@@ -366,7 +366,7 @@ DevTools UI（Svelte 5 SPA）のコードレビューを、以下の対象ファ
 
 ## 特に重視する観点
 - 新規追加された RPC ハンドラ / analyzer / runtime ロジックに対応するテストが存在するか
-- `vp test`（vite-plus test）で動くこと（Vitest 互換）
+- `vitest run` で動くこと
 - フィクスチャ（`src/__tests__/fixtures`）を流用しているか、ad-hoc な fs モックを書きすぎていないか
 - 外部 URL fetch を含むテストはモックしているか（実ネットワークアクセスを発生させていない）
 - セキュリティ系（SSRF / パストラバーサル）の負例テストが含まれているか

@@ -6,7 +6,7 @@
 
   const configCode = `import { svelteDevtools } from 'vite-devtools-svelte'
 import { sveltekit } from '@sveltejs/kit/vite'
-import { defineConfig } from 'vite-plus'
+import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [
@@ -15,9 +15,7 @@ export default defineConfig({
   ],
 })`
 
-  const runCode = `vp dev
-# or with plain Vite:
-npm run dev`
+  const runCode = `npm run dev`
 
   const optionsCode = `svelteDevtools({
   // Enable component lifecycle tracking (default: true)
@@ -41,7 +39,7 @@ npm run dev`
     <div class="callout">
       <strong>Requirements</strong>
       <ul>
-        <li>Vite ≥ 8.0.0 (or Vite+)</li>
+        <li>Vite ≥ 8.0.0</li>
         <li>Svelte 5 (runes mode)</li>
         <li>SvelteKit recommended for full feature set</li>
       </ul>
@@ -57,15 +55,6 @@ npm run dev`
       <code>sveltekit()</code> so its transforms run before the Svelte compiler.
     </p>
     <CodeBlock code={configCode} lang="ts" filename="vite.config.ts" />
-
-    <p class="muted small">
-      Note: this project uses
-      <a href="https://viteplus.dev/" target="_blank" rel="noreferrer noopener"
-        >Vite+</a
-      >
-      as its toolchain. With plain Vite, replace
-      <code>'vite-plus'</code> with <code>'vite'</code> in the import above.
-    </p>
 
     <h2>3. Run the dev server</h2>
     <CodeBlock code={runCode} lang="bash" />

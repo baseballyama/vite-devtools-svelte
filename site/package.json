@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vp dev",
-    "build": "vp build",
-    "preview": "vp preview"
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.0",
@@ -15,6 +15,6 @@
     "marked": "^18.0.3",
     "svelte": "^5.55.5",
     "typescript": "^6.0.3",
-    "vite-plus": "0.1.20"
+    "vite": "^8.0.0"
   }
 }

@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vite-plus/test'
+import { describe, it, expect, afterEach } from 'vitest'
 import { svelteDevtools } from '../plugin.js'
 import fs from 'node:fs'
 import os from 'node:os'
