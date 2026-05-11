@@ -1,12 +1,21 @@
 <script lang="ts">
   import { page } from '$app/state'
+
+  const isDev = import.meta.env.DEV
 </script>
 
 <header>
   <nav>
-    <a href="/" class:active={page.url.pathname === '/'}>Home</a>
-    <a href="/about" class:active={page.url.pathname === '/about'}>About</a>
-    <a href="/blog" class:active={page.url.pathname.startsWith('/blog')}>Blog</a>
+    <div class="links">
+      <a href="/" class:active={page.url.pathname === '/'}>Home</a>
+      <a href="/about" class:active={page.url.pathname === '/about'}>About</a>
+      <a href="/blog" class:active={page.url.pathname.startsWith('/blog')}>Blog</a>
+    </div>
+    {#if isDev}
+      <a class="devtools-link" href="/__devtools/" target="_blank" rel="noreferrer">
+        Open DevTools ↗
+      </a>
+    {/if}
   </nav>
 </header>
 
@@ -19,9 +28,16 @@
 
   nav {
     display: flex;
+    align-items: center;
+    justify-content: space-between;
     gap: 24px;
     max-width: 800px;
     margin: 0 auto;
+  }
+
+  .links {
+    display: flex;
+    gap: 24px;
   }
 
   a {
@@ -33,5 +49,18 @@
   a:hover, a.active {
     color: #ff3e00;
     text-decoration: none;
+  }
+
+  .devtools-link {
+    color: #fff;
+    background: #ff3e00;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-weight: 600;
+  }
+
+  .devtools-link:hover {
+    background: #e63600;
+    color: #fff;
   }
 </style>
