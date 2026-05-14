@@ -1,5 +1,11 @@
 # vite-devtools-svelte
 
+## 0.1.2
+
+### Patch Changes
+
+- [#39](https://github.com/baseballyama/vite-devtools-svelte/pull/39) [`8e5c7fd`](https://github.com/baseballyama/vite-devtools-svelte/commit/8e5c7fdf1beb440ef687dba836e1d06f44825a09) Thanks [@baseballyama](https://github.com/baseballyama)! - Bump `@vitejs/devtools-kit` to `^0.1.23` to track upstream Vite DevTools, and fix the upstream link in the README to point at `vitejs/devtools`.
+
 ## 0.1.1
 
 ### Patch Changes
