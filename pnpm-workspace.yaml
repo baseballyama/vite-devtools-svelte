@@ -3,3 +3,9 @@ packages:
   - 'packages/vite-devtools-svelte/client'
   - 'playground'
   - 'site'
+
+minimumReleaseAgeExclude:
+  - '@vitejs/devtools'
+  - '@vitejs/devtools-kit'
+  - '@vitejs/devtools-rolldown'
+  - 'devframe'

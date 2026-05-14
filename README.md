@@ -1,6 +1,6 @@
 # vite-devtools-svelte
 
-Svelte DevTools plugin for [Vite DevTools](https://github.com/nicepkg/vite-devtools). Provides 15 specialized panels for debugging, profiling, and inspecting Svelte/SvelteKit applications — all integrated directly into the Vite DevTools UI.
+Svelte DevTools plugin for [Vite DevTools](https://github.com/vitejs/devtools). Provides 15 specialized panels for debugging, profiling, and inspecting Svelte/SvelteKit applications — all integrated directly into the Vite DevTools UI.
 
 > **Status:** Early development (v0.0.1). APIs may change.
 

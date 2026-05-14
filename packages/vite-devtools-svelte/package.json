@@ -47,7 +47,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@vitejs/devtools-kit": "^0.1.21"
+    "@vitejs/devtools-kit": "^0.1.23"
   },
   "devDependencies": {
     "@types/node": "^25.6.2",
