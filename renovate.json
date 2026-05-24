@@ -65,6 +65,7 @@
   "postUpdateOptions": ["pnpmDedupe"],
   "ignorePaths": [
     "**/node_modules/**",
-    "**/dist/**"
+    "**/dist/**",
+    "**/__tests__/fixtures/**"
   ]
 }
