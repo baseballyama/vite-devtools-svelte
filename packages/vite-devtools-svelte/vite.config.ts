@@ -24,6 +24,8 @@ export default defineConfig({
       external: [
         'vite',
         '@vitejs/devtools-kit',
+        /^@modelcontextprotocol\/sdk/,
+        'zod',
         /^node:/,
         'fs',
         'fs/promises',

@@ -25,7 +25,8 @@
     "node": ">=22.0.0"
   },
   "files": [
-    "dist"
+    "dist",
+    "skills"
   ],
   "type": "module",
   "main": "./dist/index.mjs",
@@ -47,7 +48,9 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@vitejs/devtools-kit": "^0.2.0"
+    "@modelcontextprotocol/sdk": "^1.18.0",
+    "@vitejs/devtools-kit": "^0.2.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^25.6.2",
