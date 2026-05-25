@@ -185,6 +185,52 @@ The plugin uses a **virtual module architecture** instead of fragile regex trans
 
 The plugin is **development-only** — it adds zero overhead to production builds.
 
+## AI access (MCP)
+
+The plugin exposes an MCP (Model Context Protocol) endpoint so AI agents such as Claude Code can read performance metrics and run measurement sessions autonomously. The intent: surface the same data the panels show, in a shape an agent can act on — and let the agent's own file-editing tools propose fixes.
+
+On dev-server startup the plugin prints a copy-pasteable registration command:
+
+```
+svelte-devtools MCP ready — register with Claude Code:
+  claude mcp add --transport http svelte http://localhost:5173/__svelte-devtools/mcp --header x-svelte-devtools-token:<token>
+```
+
+The endpoint is gated by the same per-process random token used by the panel UI. The token rotates every dev-server start, so you'll re-register after a restart.
+
+### Tools exposed
+
+| Tool | Purpose |
+|---|---|
+| `list_performance_issues` | Cross-cuts render / reactive / load / fps and returns ranked issues with `suggestedTool` for drill-down. Entry point. |
+| `get_component_hotspots` | Top components by total render time. |
+| `get_reactive_graph_problems` | Classified reactive-graph issues (over-connected effects, orphan deriveds, isolated nodes). |
+| `get_load_waterfall` | SvelteKit `load` timings grouped by route. |
+| `get_fps_drops` | FPS samples below threshold. |
+| `get_render_profile` | Render profile entries for a specific file. |
+| `start_session`, `end_session`, `compare_sessions` | Bracket a measurement window so the agent can diff before/after a fix. `persist:true` writes the session to `node_modules/.vite-devtools-svelte/sessions/`. |
+| `list_sessions`, `load_session`, `delete_session` | Session inspection / cleanup. The agent owns disposal — the plugin never auto-persists. |
+
+### Skills
+
+Two Claude Code skills ship under `node_modules/vite-devtools-svelte/skills/`:
+
+- `vite-devtools-svelte:perf-audit` — captures a baseline session, calls `list_performance_issues`, and presents the top issues for the user to triage.
+- `vite-devtools-svelte:perf-fix` — one issue per run: baseline → edit → after → `compare_sessions`, with `verdict` reported verbatim and an explicit revert path if the change regresses or has no effect.
+
+Skill names are namespaced with `vite-devtools-svelte:` so they don't collide with other skills in your `.claude/skills/`.
+
+To install for a given project:
+
+```bash
+mkdir -p .claude/skills
+cp -r node_modules/vite-devtools-svelte/skills/* .claude/skills/
+```
+
+### Scope
+
+The MCP server is **read + measure only** — it never edits files. Editing is left to the agent's own tools (Claude Code's `Edit`/`Write`), which keeps the permission boundary clean and lets `git` own rollback.
+
 ## Security model
 
 The DevTools backend exposes a small set of dev-only HTTP endpoints (`/__svelte-devtools/rpc`, `/__svelte-devtools/asset`) to drive the panel UI. Some of those endpoints can read files from disk or open them in your editor, so we treat them as authenticated even though the dev server is normally only reachable from `localhost`.

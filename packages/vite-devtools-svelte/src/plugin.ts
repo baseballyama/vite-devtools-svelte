@@ -17,6 +17,8 @@ import {
   WRAPPER_MODULE_ID,
   wrapperCode,
 } from './runtime.js'
+import { SessionStore } from './mcp/sessions.js'
+import { buildMcpServer, StreamableHTTPServerTransport } from './mcp/server.js'
 import type {
   ComponentInstance,
   RenderProfile,
@@ -149,6 +151,23 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
   let compilerWarnings: CompilerWarning[] = []
   let runtimeErrors: RuntimeError[] = []
   let fpsSamples: FpsSample[] = []
+
+  // Session store for AI-driven measurement workflows.
+  // Built lazily after `root` is resolved.
+  let sessions: SessionStore | null = null
+  function getSessions(): SessionStore {
+    if (!sessions) {
+      sessions = new SessionStore({
+        persistDir: path.join(root, 'node_modules', '.vite-devtools-svelte', 'sessions'),
+        getters: {
+          getRenderProfiles: () => renderProfiles,
+          getLoadProfiles: () => loadProfiles,
+          getFpsSamples: () => fpsSamples,
+        },
+      })
+    }
+    return sessions
+  }
 
   // --- Shared RPC handler implementations ---
   // Used by both DevTools Kit RPC registration and HTTP fallback endpoint.
@@ -460,6 +479,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       server.hot.on('svelte-devtools:fps', (data: FpsSample) => {
         fpsSamples.push(data)
         if (fpsSamples.length > 1200) fpsSamples = fpsSamples.slice(-1200)
+        getSessions().recordFpsSample(data)
       })
 
       server.hot.on('svelte-devtools:runtime-error', (data: RuntimeError) => {
@@ -651,6 +671,103 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
         } catch {
           res.statusCode = 404
           res.end('Not found')
+        }
+      })
+
+      // MCP endpoint: lets AI agents (Claude Code etc.) read metrics + run
+      // measurement sessions over the Streamable HTTP transport. Auth reuses
+      // the same per-process token; same-origin is *not* required because MCP
+      // clients are local processes that don't run inside a browser tab and
+      // can't be redirected by a hostile origin (they only speak to URLs the
+      // user explicitly configured via `claude mcp add`).
+      const mcpServerFactory = () =>
+        buildMcpServer({
+          getProject: () => analyzeProject(root),
+          getRoutes: () => {
+            const projectInfo = analyzeProject(root)
+            return analyzeRoutes(projectInfo.routesDir)
+          },
+          getLiveComponents: () => liveComponents,
+          getComponentRelations: () => analyzeComponents(root),
+          getRenderProfiles: () => renderProfiles,
+          getReactiveGraph: () => getRpcHandlers()['svelte-devtools:get-reactive-graph']() as Promise<ReactiveGraph>,
+          getLoadProfiles: () => loadProfiles,
+          getFpsSamples: () => fpsSamples,
+          sessions: getSessions(),
+        })
+
+      // Print a one-line `claude mcp add` snippet once the dev server is
+      // actually listening — that's when we know the resolved port.
+      devServer.httpServer?.once('listening', () => {
+        try {
+          const addr = devServer.httpServer?.address()
+          if (!addr || typeof addr === 'string') return
+          const proto = devServer.config.server?.https ? 'https' : 'http'
+          // For wildcard / loopback bindings prefer the literal `localhost`
+          // so the printed URL parses as-is. Brackets aren't enough for `::`
+          // (wildcard) and `::1` is just a more verbose form of loopback.
+          const loopbackOrWildcard =
+            addr.address === '::' ||
+            addr.address === '0.0.0.0' ||
+            addr.address === '::1' ||
+            addr.address === '127.0.0.1'
+          const host = loopbackOrWildcard
+            ? 'localhost'
+            : addr.family === 'IPv6'
+              ? `[${addr.address}]`
+              : addr.address
+          const url = `${proto}://${host}:${addr.port}/__svelte-devtools/mcp`
+          const cmd = `claude mcp add --transport http svelte ${url} --header x-svelte-devtools-token:${devtoolsToken}`
+          devServer.config.logger.info('')
+          devServer.config.logger.info(`  svelte-devtools MCP ready — register with Claude Code:`)
+          devServer.config.logger.info(`    ${cmd}`)
+          devServer.config.logger.info('')
+        } catch {
+          /* logging is best-effort */
+        }
+      })
+
+      server.middlewares.use('/__svelte-devtools/mcp', async (req, res) => {
+        const tokenHeader = req.headers['x-svelte-devtools-token']
+        const token = Array.isArray(tokenHeader) ? tokenHeader[0] : tokenHeader
+        if (token !== devtoolsToken) {
+          res.statusCode = 403
+          res.end('Forbidden')
+          return
+        }
+        // Build a fresh server+transport per request. Stateless mode in the
+        // SDK still keeps per-instance bookkeeping that gets corrupted when
+        // the same transport handles multiple requests, so reusing one
+        // breaks the second call onward.
+        const mcpServer = mcpServerFactory()
+        const mcpTransport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: undefined,
+          enableJsonResponse: true,
+        })
+        mcpTransport.onerror = err => {
+          devServer.config.logger.error(
+            `[svelte-devtools] MCP transport error: ${err.stack || err.message}`,
+          )
+        }
+        try {
+          await mcpServer.connect(mcpTransport)
+          // The SDK consumes the request body via @hono/node-server inside
+          // handleRequest; pre-reading would leave the stream empty.
+          await mcpTransport.handleRequest(req as any, res as any)
+        } catch (e) {
+          devServer.config.logger.error(
+            `[svelte-devtools] MCP handler error: ${
+              e instanceof Error ? e.stack || e.message : String(e)
+            }`,
+          )
+          if (!res.headersSent) {
+            res.statusCode = 500
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ error: String(e) }))
+          }
+        } finally {
+          await mcpTransport.close().catch(() => {})
+          await mcpServer.close().catch(() => {})
         }
       })
     },
@@ -1019,18 +1136,20 @@ export const load = async (event) => {
         duration: number,
         dataSize: number,
       ) => {
-        loadProfiles.push({
+        const entry: LoadProfile = {
           route,
           file,
           type: type as 'server' | 'universal',
           duration: Math.round(duration * 100) / 100,
           dataSize,
           timestamp: Date.now(),
-        })
+        }
+        loadProfiles.push(entry)
         // Keep only last 200 entries
         if (loadProfiles.length > 200) {
           loadProfiles = loadProfiles.slice(-200)
         }
+        getSessions().recordLoadProfile(entry)
       }
     },
   }
