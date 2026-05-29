@@ -48,7 +48,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.18.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@vitejs/devtools-kit": "^0.2.0",
     "zod": "^4.4.3"
   },
