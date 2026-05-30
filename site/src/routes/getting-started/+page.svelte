@@ -130,9 +130,6 @@ export default defineConfig({
         <h2 class="content-h2">Next steps</h2>
         <ul>
           <li>
-            <a href="{base}/try">Try the live demo in StackBlitz</a>
-          </li>
-          <li>
             <a href="{base}/#panels">Browse the 15 panels</a>
           </li>
           <li>

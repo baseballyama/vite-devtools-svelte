@@ -54,10 +54,8 @@
         <h2 class="content-h2">Try it</h2>
         <p>
           Add the plugin to your project
-          (<a href="{base}/getting-started">Getting Started</a>),
-          or run the
-          <a href="{base}/try">live StackBlitz demo</a>
-          to play with this panel right in your browser.
+          (<a href="{base}/getting-started">Getting Started</a>)
+          to use this panel in your own dev server.
         </p>
       </section>
 
