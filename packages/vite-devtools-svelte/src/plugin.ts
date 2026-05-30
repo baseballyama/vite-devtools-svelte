@@ -19,6 +19,7 @@ import {
 } from './runtime.js'
 import { SessionStore } from './mcp/sessions.js'
 import { buildMcpServer, StreamableHTTPServerTransport } from './mcp/server.js'
+import { sveltekitTemplateInjector } from './template-injector.js'
 import type {
   ComponentInstance,
   RenderProfile,
@@ -1188,5 +1189,6 @@ export const load = async (event) => {
     loadProfilePlugin,
     loadProfileServerPlugin,
     warningCapturePlugin,
+    sveltekitTemplateInjector(),
   ]
 }
