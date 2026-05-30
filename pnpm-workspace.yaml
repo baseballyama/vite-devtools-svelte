@@ -2,6 +2,7 @@ packages:
   - 'packages/*'
   - 'packages/vite-devtools-svelte/client'
   - 'playground'
+  - 'examples/*'
   - 'site'
 
 minimumReleaseAgeExclude:

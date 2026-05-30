@@ -21,6 +21,33 @@ importers:
         specifier: ^1.66.0
         version: 1.66.0
 
+  examples/strict-csp-app:
+    devDependencies:
+      '@sveltejs/adapter-auto':
+        specifier: ^7.0.1
+        version: 7.0.1(@sveltejs/kit@2.61.1(@sveltejs/vite-plugin-svelte@7.1.2(svelte@5.55.9(@typescript-eslint/types@8.57.1))(vite@8.0.14))(svelte@5.55.9(@typescript-eslint/types@8.57.1))(typescript@6.0.3)(vite@8.0.14))
+      '@sveltejs/kit':
+        specifier: ^2.61.1
+        version: 2.61.1(@sveltejs/vite-plugin-svelte@7.1.2(svelte@5.55.9(@typescript-eslint/types@8.57.1))(vite@8.0.14))(svelte@5.55.9(@typescript-eslint/types@8.57.1))(typescript@6.0.3)(vite@8.0.14)
+      '@sveltejs/vite-plugin-svelte':
+        specifier: ^7.1.2
+        version: 7.1.2(svelte@5.55.9(@typescript-eslint/types@8.57.1))(vite@8.0.14)
+      '@vitejs/devtools':
+        specifier: ^0.2.0
+        version: 0.2.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(@pnpm/logger@1001.0.1)(typescript@6.0.3)(vite@8.0.14)
+      svelte:
+        specifier: ^5.55.9
+        version: 5.55.9(@typescript-eslint/types@8.57.1)
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.14
+        version: 8.0.14(@types/node@25.6.2)(@vitejs/devtools@0.2.0)(esbuild@0.27.4)(jiti@2.6.1)
+      vite-devtools-svelte:
+        specifier: workspace:*
+        version: link:../../packages/vite-devtools-svelte
+
   packages/vite-devtools-svelte:
     dependencies:
       '@modelcontextprotocol/sdk':
@@ -3964,7 +3991,7 @@ snapshots:
       magic-string: 0.30.21
       obug: 2.1.1
       svelte: 5.55.9(@typescript-eslint/types@8.57.1)
-      vite: 8.0.14(@types/node@25.6.2)(@vitejs/devtools@0.1.23)(esbuild@0.27.4)(jiti@2.6.1)
+      vite: 8.0.14(@types/node@25.6.2)(@vitejs/devtools@0.2.0)(esbuild@0.27.4)(jiti@2.6.1)
       vitefu: 1.1.2(vite@8.0.14)
 
   '@tybys/wasm-util@0.10.1':
@@ -5706,7 +5733,7 @@ snapshots:
 
   vitefu@1.1.2(vite@8.0.14):
     optionalDependencies:
-      vite: 8.0.14(@types/node@25.6.2)(@vitejs/devtools@0.1.23)(esbuild@0.27.4)(jiti@2.6.1)
+      vite: 8.0.14(@types/node@25.6.2)(@vitejs/devtools@0.2.0)(esbuild@0.27.4)(jiti@2.6.1)
 
   vitest@4.1.7(@types/node@25.6.2)(vite@8.0.14):
     dependencies:
