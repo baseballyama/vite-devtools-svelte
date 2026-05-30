@@ -1,5 +1,12 @@
 # vite-devtools-svelte
 
+## 0.2.1
+
+### Patch Changes
+
+- [#59](https://github.com/baseballyama/vite-devtools-svelte/pull/59) [`01d3de7`](https://github.com/baseballyama/vite-devtools-svelte/commit/01d3de7cc44e8ef0d58904d6348980c63ba801f3) Thanks [@baseballyama](https://github.com/baseballyama)! - - Bump `@modelcontextprotocol/sdk` runtime dependency from `^1.18.0` to `^1.29.0`.
+  - Update package README to clarify that `@vitejs/devtools` is a required peer and must be registered alongside `svelteDevtools()` — without it the dev server starts but the DevTools UI does not appear.
+
 ## 0.2.0
 
 ### Minor Changes
