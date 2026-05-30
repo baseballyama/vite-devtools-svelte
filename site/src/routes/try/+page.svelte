@@ -2,11 +2,8 @@
   const repo = 'baseballyama/vite-devtools-svelte'
   const file = 'playground/src/routes/+page.svelte'
 
-  // ctl=1 (click-to-load) avoids burning StackBlitz embed quota until the user opts in.
-  const embedUrl = `https://stackblitz.com/github/${repo}?embed=1&ctl=1&file=${encodeURIComponent(
-    file,
-  )}&terminal=dev&theme=dark&view=editor`
-
+  // Open StackBlitz in a top-level tab rather than a nested iframe — the DevTools
+  // overlay UI does not initialize reliably inside StackBlitz's embed iframe.
   const openUrl = `https://stackblitz.com/github/${repo}?file=${encodeURIComponent(
     file,
   )}&terminal=dev`
@@ -14,9 +11,9 @@
   const steps = [
     {
       num: '01',
-      title: 'Run',
+      title: 'Launch',
       body:
-        'Click "Run this project" on the embed. StackBlitz clones the repo, installs deps via pnpm, and runs pnpm dev.',
+        'Click "Open in StackBlitz". The project opens in a new tab — StackBlitz clones the repo, installs deps via pnpm, and runs pnpm dev.',
     },
     {
       num: '02',
@@ -64,31 +61,11 @@
           target="_blank"
           rel="noreferrer noopener"
         >
-          Open in a new tab
+          Open in StackBlitz
           <span class="btn-arrow" aria-hidden="true">↗</span>
         </a>
       </div>
     </header>
-
-    <div class="frame">
-      <header class="frame-chrome mono">
-        <span class="dot"></span>
-        <span class="dot"></span>
-        <span class="dot"></span>
-        <span class="frame-url">stackblitz.com/github/{repo}</span>
-        <span class="frame-status">
-          <span class="led"></span>
-          embedded
-        </span>
-      </header>
-      <iframe
-        src={embedUrl}
-        title="vite-devtools-svelte playground in StackBlitz"
-        loading="lazy"
-        allow="clipboard-read; clipboard-write; cross-origin-isolated"
-        sandbox="allow-scripts allow-popups allow-forms allow-same-origin allow-modals allow-pointer-lock"
-      ></iframe>
-    </div>
 
     <section class="how-section">
       <div class="head-meta">
@@ -189,77 +166,6 @@
 
   .btn:hover .btn-arrow {
     transform: translate(2px, -2px);
-  }
-
-  .frame {
-    position: relative;
-    margin-top: 2.5rem;
-    border: 1px solid var(--line);
-    border-radius: var(--radius-xl);
-    overflow: hidden;
-    background: var(--paper);
-    box-shadow: var(--shadow-lg);
-  }
-
-  .frame-chrome {
-    display: flex;
-    align-items: center;
-    gap: 0.45rem;
-    padding: 0.6rem 0.85rem;
-    background: var(--paper-2);
-    border-bottom: 1px solid var(--line);
-    font-size: 0.72rem;
-    color: var(--text-3);
-  }
-
-  .dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: var(--bg-3);
-  }
-
-  .frame-chrome .dot:nth-child(1) {
-    background: #ff5f57;
-  }
-  .frame-chrome .dot:nth-child(2) {
-    background: #ffbd2e;
-  }
-  .frame-chrome .dot:nth-child(3) {
-    background: #27c93f;
-  }
-
-  .frame-url {
-    margin-left: 0.6rem;
-    flex: 1;
-    text-align: center;
-    color: var(--text-2);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .frame-status {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-  }
-
-  .led {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--accent);
-    box-shadow: 0 0 4px var(--accent);
-  }
-
-  iframe {
-    display: block;
-    width: 100%;
-    height: 78vh;
-    min-height: 600px;
-    border: 0;
-    background: #0a0d10;
   }
 
   .how-section {
