@@ -14,10 +14,10 @@ import type { Plugin } from 'vite'
 // =====================================================================
 
 describe('svelteDevtools factory', () => {
-  it('should return an array of 5 plugins', () => {
+  it('should return an array of 6 plugins', () => {
     const plugins = svelteDevtools()
     expect(Array.isArray(plugins)).toBe(true)
-    expect(plugins.length).toBe(5)
+    expect(plugins.length).toBe(6)
   })
 
   it('should return plugins with correct names', () => {
@@ -27,6 +27,7 @@ describe('svelteDevtools factory', () => {
     expect(names).toContain('vite-devtools-svelte:tracking')
     expect(names).toContain('vite-devtools-svelte:load-profile')
     expect(names).toContain('vite-devtools-svelte:load-profile-server')
+    expect(names).toContain('vite-devtools-svelte:sveltekit-template-injector')
     expect(names).toContain('vite-devtools-svelte:warning-capture')
   })
 
