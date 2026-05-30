@@ -7,7 +7,6 @@
   const links = [
     { href: '/', label: 'Home', short: '/' },
     { href: '/getting-started', label: 'Getting Started', short: 'start' },
-    { href: '/try', label: 'Try Live', short: 'try' },
   ]
 
   function isActive(href: string): boolean {

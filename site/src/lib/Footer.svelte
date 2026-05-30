@@ -42,7 +42,6 @@
           <ul>
             <li><a href="{base}/getting-started">Getting Started</a></li>
             <li><a href="{base}/#panels">All panels</a></li>
-            <li><a href="{base}/try">Try Live</a></li>
           </ul>
         </section>
         <section>

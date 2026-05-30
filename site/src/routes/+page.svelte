@@ -67,9 +67,6 @@
         Get Started
         <span class="btn-arrow" aria-hidden="true">→</span>
       </a>
-      <a class="btn btn-secondary" href="{base}/try">
-        Try Live in StackBlitz
-      </a>
       <a
         class="btn btn-ghost"
         href="https://github.com/baseballyama/vite-devtools-svelte"
@@ -232,9 +229,6 @@
           <a class="btn btn-primary" href="{base}/getting-started">
             Read the setup
             <span class="btn-arrow" aria-hidden="true">→</span>
-          </a>
-          <a class="btn btn-secondary" href="{base}/try">
-            Open in StackBlitz
           </a>
         </div>
       </div>
