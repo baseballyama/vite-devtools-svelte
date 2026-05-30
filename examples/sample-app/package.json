@@ -1,0 +1,23 @@
+{
+  "name": "sample-app",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-auto": "^7.0.1",
+    "@sveltejs/kit": "^2.61.1",
+    "@sveltejs/vite-plugin-svelte": "^7.1.2",
+    "@vitejs/devtools": "^0.2.0",
+    "svelte": "^5.55.9",
+    "svelte-check": "^4.0.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.14",
+    "vite-devtools-svelte": "workspace:*"
+  }
+}
