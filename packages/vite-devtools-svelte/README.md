@@ -1,6 +1,6 @@
 # vite-devtools-svelte
 
-Svelte DevTools plugin for [Vite DevTools](https://github.com/nicepkg/vite-devtools). Provides 15 specialized panels for debugging, profiling, and inspecting Svelte/SvelteKit applications — all integrated directly into the Vite DevTools UI.
+Svelte DevTools plugin for [Vite DevTools](https://github.com/vitejs/devtools). Provides 15 specialized panels for debugging, profiling, and inspecting Svelte/SvelteKit applications — all integrated directly into the Vite DevTools UI.
 
 > **Status:** Early development. APIs may change.
 
@@ -135,25 +135,33 @@ Svelte DevTools plugin for [Vite DevTools](https://github.com/nicepkg/vite-devto
 - **Vite** >= 8.0.0
 - **Svelte** 5 (runes mode)
 - **SvelteKit** (recommended, but not required for basic features)
+- **[@vitejs/devtools](https://devtools.vite.dev/)** — the host UI this plugin's panels render inside
 
 ## Installation
 
+`vite-devtools-svelte` is a panel provider — it needs the [`@vitejs/devtools`](https://devtools.vite.dev/) host plugin to render its UI. Install both:
+
 ```bash
-npm install -D vite-devtools-svelte
+npm install -D vite-devtools-svelte @vitejs/devtools
 ```
 
 ## Setup
 
-Add the plugin to your `vite.config.ts`. **It must come before `sveltekit()`** so that the transforms run before the Svelte compiler.
+Register **both** plugins in your `vite.config.ts`. `svelteDevtools()` **must come before `sveltekit()`** so that its transforms run before the Svelte compiler.
 
 ```ts
 // vite.config.ts
-import { svelteDevtools } from 'vite-devtools-svelte'
 import { sveltekit } from '@sveltejs/kit/vite'
+import { DevTools } from '@vitejs/devtools'
+import { svelteDevtools } from 'vite-devtools-svelte'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
-  plugins: [svelteDevtools(), sveltekit()],
+  plugins: [
+    svelteDevtools(), // must come before sveltekit()
+    DevTools(),       // the @vitejs/devtools host — without it the panels have nowhere to render
+    sveltekit(),
+  ],
 })
 ```
 
@@ -163,7 +171,10 @@ Then start your dev server as usual:
 npm run dev
 ```
 
-The Svelte DevTools panels will appear inside the Vite DevTools UI.
+Open your app in the browser. The Vite DevTools drawer appears at the bottom edge of the page — click the floating handle to open it, then switch to the **Svelte** tab to see the panels provided by this plugin.
+
+> [!NOTE]
+> If you only register `svelteDevtools()` without `DevTools()` from `@vitejs/devtools`, the dev server starts fine but **no DevTools UI appears** — there is no host for the panels to mount into.
 
 ## Options
 
