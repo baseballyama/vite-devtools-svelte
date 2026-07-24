@@ -152,9 +152,53 @@ describe('wrapper code structure', () => {
       const testCode = wrapperCode
         .replace(/import .* from .*/g, '// import removed')
         .replace(/export \* from .*/g, '// re-export removed')
+        .replace(/export \{[^}]*\}/g, '// alias export removed')
         .replace(/export function/g, 'function')
       new Function(testCode)
     }).not.toThrow()
+  })
+})
+
+// =====================================================================
+// Wrapper Code: Render Profiling & Block Attribution
+// =====================================================================
+
+describe('wrapper render profiling', () => {
+  it('should wrap template_effect and deferred_template_effect', () => {
+    expect(wrapperCode).toContain('export function template_effect(')
+    expect(wrapperCode).toContain('export function deferred_template_effect(')
+    expect(wrapperCode).toContain('__svelte_original.template_effect.apply')
+    expect(wrapperCode).toContain('__svelte_original.deferred_template_effect.apply')
+  })
+
+  it('should capture the owning component id at effect creation', () => {
+    expect(wrapperCode).toContain('function __wrapTemplateEffect(')
+  })
+
+  it('should skip the initial (mount-time) run', () => {
+    expect(wrapperCode).toContain('initialRun')
+  })
+
+  it('should pool durations per microtask and record once per flush', () => {
+    expect(wrapperCode).toContain('__pendingRenderDurations')
+    expect(wrapperCode).toContain('__flushRenderDurations')
+    expect(wrapperCode).toContain('queueMicrotask')
+    expect(wrapperCode).toContain('dt.recordRender(')
+    expect(wrapperCode).toContain('dt.recordRenderTime(')
+  })
+
+  it('should wrap block helpers for owner attribution', () => {
+    expect(wrapperCode).toContain('function __wrapBlock(')
+    expect(wrapperCode).toContain('export function each(')
+    expect(wrapperCode).toContain('export function key(')
+    expect(wrapperCode).toContain('export function component(')
+    expect(wrapperCode).toContain('export function boundary(')
+  })
+
+  it('should export reserved-word blocks (if/await) via aliases', () => {
+    expect(wrapperCode).toContain('export { __if_block as if, __await_block as await }')
+    expect(wrapperCode).toContain("__svelte_original['if'].apply")
+    expect(wrapperCode).toContain("__svelte_original['await'].apply")
   })
 })
 
@@ -210,6 +254,26 @@ describe('runtime code structure', () => {
 
   it('should limit state timeline to 500 entries', () => {
     expect(runtimeCode).toContain('_stateTimeline.length >= 500')
+  })
+
+  it('should purge all per-component maps on unmount via _cleanupComponent', () => {
+    expect(runtimeCode).toContain('_cleanupComponent(id)')
+    expect(runtimeCode).toContain('this._profiles.delete(id)')
+    expect(runtimeCode).toContain('this._initStartTimes.delete(id)')
+  })
+
+  it('should purge nodeId-keyed maps in _cleanupReactiveNodes', () => {
+    expect(runtimeCode).toContain('this._reactiveProxies.delete(nodeId)')
+    expect(runtimeCode).toContain('this._stateSnapshots.delete(nodeId)')
+    expect(runtimeCode).toContain('this._stateSnapshotStrs.delete(nodeId)')
+  })
+
+  it('should refresh the profile view after unmount', () => {
+    const unmountBody = runtimeCode.slice(
+      runtimeCode.indexOf('unmount(id)'),
+      runtimeCode.indexOf('_cleanupComponent(id) {'),
+    )
+    expect(unmountBody).toContain('this._scheduleProfileUpdate()')
   })
 
   it('should capture runtime errors', () => {

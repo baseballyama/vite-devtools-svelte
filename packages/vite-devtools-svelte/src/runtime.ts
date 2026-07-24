@@ -16,6 +16,8 @@ export const WRAPPER_MODULE_ID = '\0svelte-devtools:wrapped-client'
  * - tag/tag_proxy: named signal/proxy tracking (Svelte dev mode)
  * - state/derived/proxy: type markers consumed by tag/tag_proxy
  * - user_effect/user_pre_effect: effect tracking
+ * - template_effect/deferred_template_effect: render count/time profiling
+ * - each/if/key/await/component/boundary: block-callback owner attribution
  *
  * This single module replaces all post-compilation regex transforms
  * for reactive tracking, making the approach Svelte-compiler-output agnostic.
@@ -172,6 +174,153 @@ export function user_pre_effect() {
   } catch {}
   return result;
 }
+
+// --- Render Profiling ---
+//
+// Svelte 5 has no virtual DOM: the compiler wraps every dynamic part of a
+// template in a template_effect (deferred_template_effect for <svelte:head>
+// <title>). A re-run of such an effect IS the component updating the DOM, so
+// these two functions are the measurement points for renders / render time.
+//
+// The first run of an effect is the mount-time paint, already covered by
+// initTime, so it is skipped (initialRun). One state change re-runs several
+// effects of the same component, so durations are pooled per microtask and
+// recorded once per flush: recordRender() +1, recordRenderTime() the sum.
+
+const __pendingRenderDurations = new Map();
+let __renderFlushScheduled = false;
+
+function __flushRenderDurations() {
+  __renderFlushScheduled = false;
+  const dt = __dt();
+  for (const [cid, duration] of __pendingRenderDurations) {
+    if (dt) {
+      try { dt.recordRender(cid); } catch {}
+      try { dt.recordRenderTime(cid, duration); } catch {}
+    }
+  }
+  __pendingRenderDurations.clear();
+}
+
+function __recordRenderDuration(cid, duration) {
+  __pendingRenderDurations.set(cid, (__pendingRenderDurations.get(cid) || 0) + duration);
+  if (!__renderFlushScheduled) {
+    __renderFlushScheduled = true;
+    queueMicrotask(__flushRenderDurations);
+  }
+}
+
+// Returns a (possibly new) args array whose first element times each re-run
+// of the effect closure. The owning component is whatever id is on top of
+// __idStack at effect-creation time. User exceptions propagate untouched;
+// only the args are built inside try so the original is called exactly once.
+function __wrapTemplateEffect(args) {
+  const cid = __currentId();
+  const fn = args[0];
+  if (cid === null || typeof fn !== 'function') return args;
+  const wrapped = Array.prototype.slice.call(args);
+  let initialRun = true;
+  wrapped[0] = function () {
+    if (initialRun) {
+      initialRun = false;
+      return fn.apply(this, arguments);
+    }
+    const start = performance.now();
+    try {
+      return fn.apply(this, arguments);
+    } finally {
+      try { __recordRenderDuration(cid, performance.now() - start); } catch {}
+    }
+  };
+  return wrapped;
+}
+
+export function template_effect() {
+  let args = arguments;
+  try { args = __wrapTemplateEffect(arguments); } catch {}
+  return __svelte_original.template_effect.apply(null, args);
+}
+
+export function deferred_template_effect() {
+  let args = arguments;
+  try { args = __wrapTemplateEffect(arguments); } catch {}
+  return __svelte_original.deferred_template_effect.apply(null, args);
+}
+
+// --- Block Attribution ---
+//
+// Svelte creates render effects synchronously at creation time. At mount this
+// happens during the component function (between push/pop), so __idStack has
+// the owner. But effects for {#each} items added later or re-created {#if}
+// branches are created during a batch flush, when the stack is empty — they
+// would never be attributed. Block helpers themselves ARE always called
+// during their owner's init (or inside an outer block's callback), so the
+// owner id is on the stack at block-creation time. __wrapBlock captures it
+// and re-pushes it around every function argument the block invokes later,
+// so effects created inside land on the innermost owner. Child components
+// push their own id on top, keeping nested attribution correct.
+
+function __wrapBlockFn(fn, cid) {
+  return function () {
+    let pushed = false;
+    try { __idStack.push(cid); pushed = true; } catch {}
+    try {
+      return fn.apply(this, arguments);
+    } finally {
+      if (pushed) { try { __idStack.pop(); } catch {} }
+    }
+  };
+}
+
+function __wrapBlock(args) {
+  const cid = __currentId();
+  if (cid === null) return args;
+  const wrapped = Array.prototype.slice.call(args);
+  for (let i = 0; i < wrapped.length; i++) {
+    if (typeof wrapped[i] === 'function') wrapped[i] = __wrapBlockFn(wrapped[i], cid);
+  }
+  return wrapped;
+}
+
+export function each() {
+  let args = arguments;
+  try { args = __wrapBlock(arguments); } catch {}
+  return __svelte_original.each.apply(null, args);
+}
+
+export function key() {
+  let args = arguments;
+  try { args = __wrapBlock(arguments); } catch {}
+  return __svelte_original.key.apply(null, args);
+}
+
+export function component() {
+  let args = arguments;
+  try { args = __wrapBlock(arguments); } catch {}
+  return __svelte_original.component.apply(null, args);
+}
+
+export function boundary() {
+  let args = arguments;
+  try { args = __wrapBlock(arguments); } catch {}
+  return __svelte_original.boundary.apply(null, args);
+}
+
+// 'if' and 'await' are reserved words, so they cannot be declared as
+// function names and are exported via aliases instead.
+function __if_block() {
+  let args = arguments;
+  try { args = __wrapBlock(arguments); } catch {}
+  return __svelte_original['if'].apply(null, args);
+}
+
+function __await_block() {
+  let args = arguments;
+  try { args = __wrapBlock(arguments); } catch {}
+  return __svelte_original['await'].apply(null, args);
+}
+
+export { __if_block as if, __await_block as await };
 `
 
 export const runtimeCode = /* js */ `
@@ -236,16 +385,28 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
           }
         }
         this._removeChildren(id);
-        this._cleanupReactiveNodes(id);
-        this._instances.delete(id);
+        this._cleanupComponent(id);
       }
       this._scheduleUpdate();
+      this._scheduleProfileUpdate();
+    },
+
+    // Remounts get a fresh id, so entries keyed by a dead id would otherwise
+    // survive forever — every per-component map must be purged here.
+    _cleanupComponent(id) {
+      this._cleanupReactiveNodes(id);
+      this._instances.delete(id);
+      this._profiles.delete(id);
+      this._initStartTimes.delete(id);
     },
 
     _cleanupReactiveNodes(componentId) {
       for (const [nodeId, entry] of this._reactiveNodes) {
         if (entry.meta.componentId === componentId) {
           this._reactiveNodes.delete(nodeId);
+          this._reactiveProxies.delete(nodeId);
+          this._stateSnapshots.delete(nodeId);
+          if (this._stateSnapshotStrs) this._stateSnapshotStrs.delete(nodeId);
         }
       }
     },
@@ -255,8 +416,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       if (!parent) return;
       for (const childId of [...parent.children]) {
         this._removeChildren(childId);
-        this._cleanupReactiveNodes(childId);
-        this._instances.delete(childId);
+        this._cleanupComponent(childId);
       }
     },
 
