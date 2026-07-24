@@ -54,6 +54,7 @@
   ] as const satisfies readonly Tab[]
 
   type TabId = (typeof tabs)[number]['id']
+  type TabEntry = Tab & { id: TabId }
 
   const groupLabels: Record<Group, string> = {
     inspect: 'Inspect',
@@ -66,8 +67,8 @@
   const ActivePanel = $derived(activeMeta.component)
 
   const groups = $derived.by(() => {
-    const out: { group: Group; label: string; tabs: Tab[] }[] = []
-    let current: { group: Group; label: string; tabs: Tab[] } | null = null
+    const out: { group: Group; label: string; tabs: TabEntry[] }[] = []
+    let current: { group: Group; label: string; tabs: TabEntry[] } | null = null
     for (const tab of tabs) {
       if (!current || current.group !== tab.group) {
         current = { group: tab.group, label: groupLabels[tab.group], tabs: [] }

@@ -223,8 +223,8 @@
   })
   const highlightedCompiledHtml = $derived(compiledLines.map(l => l ? render(tokJS(l)) : ' '))
 
-  onMount(async () => {
-    try { files = await getSvelteFiles() } catch { /* ignore */ }
+  onMount(() => {
+    getSvelteFiles().then(f => { files = f }).catch(() => { /* ignore */ })
     const interval = setInterval(() => updateGutterHeight(), 500)
     return () => clearInterval(interval)
   })

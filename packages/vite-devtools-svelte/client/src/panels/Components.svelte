@@ -52,9 +52,11 @@
     })
   )
 
+  type TreeNode = ComponentInstance & { children: TreeNode[] }
+
   let liveTree = $derived.by(() => {
-    const roots: (ComponentInstance & { children: ComponentInstance[] })[] = []
-    const map = new Map<number, ComponentInstance & { children: ComponentInstance[] }>()
+    const roots: TreeNode[] = []
+    const map = new Map<number, TreeNode>()
     for (const comp of liveComponents) map.set(comp.id, { ...comp, children: [] })
     for (const comp of liveComponents) {
       const node = map.get(comp.id)!
@@ -187,7 +189,7 @@
   {/if}
 </PanelContainer>
 
-{#snippet treeNode(node: ComponentInstance & { children: ComponentInstance[] }, depth: number)}
+{#snippet treeNode(node: TreeNode, depth: number)}
   <div class="tree-node" style="padding-left: {depth * 16 + 8}px">
     <button class="tree-item" onclick={() => handleOpenFile(node.file)}>
       <span class="tree-dot" class:has-children={node.children.length > 0}></span>

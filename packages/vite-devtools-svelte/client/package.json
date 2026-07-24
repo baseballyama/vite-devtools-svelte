@@ -5,9 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build"
+    "build": "vite build",
+    "check": "rsvelte-check --tsconfig ./tsconfig.json"
   },
   "devDependencies": {
+    "@rsvelte/svelte-check": "^0.4.1",
     "@sveltejs/vite-plugin-svelte": "^7.1.2",
     "@vitejs/devtools-kit": "^0.2.0",
     "svelte": "^5.55.9",

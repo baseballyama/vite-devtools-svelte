@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   lint:
-    name: Lint + format check
+    name: Lint + format + typecheck
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -35,6 +35,9 @@ jobs:
 
       - name: Format check (oxfmt)
         run: pnpm format:check
+
+      - name: Client typecheck (rsvelte-check)
+        run: pnpm -C packages/vite-devtools-svelte/client check
 
   test:
     name: Plugin tests + build
