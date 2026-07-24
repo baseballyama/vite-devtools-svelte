@@ -12,11 +12,7 @@ import type {
   ComponentRelation,
 } from '../types.js'
 import { SessionStore } from './sessions.js'
-import {
-  listPerformanceIssues,
-  summarizeReactiveProblems,
-  type IssueThresholds,
-} from './issues.js'
+import { listPerformanceIssues, summarizeReactiveProblems, type IssueThresholds } from './issues.js'
 
 export interface McpDeps {
   getProject: () => ProjectInfo
@@ -32,7 +28,12 @@ export interface McpDeps {
 }
 
 const TEXT = (value: unknown) => ({
-  content: [{ type: 'text' as const, text: typeof value === 'string' ? value : JSON.stringify(value, null, 2) }],
+  content: [
+    {
+      type: 'text' as const,
+      text: typeof value === 'string' ? value : JSON.stringify(value, null, 2),
+    },
+  ],
 })
 
 export function buildMcpServer(deps: McpDeps): McpServer {
@@ -57,7 +58,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
         effectMaxDeps: z.number().optional(),
       },
     },
-    async (args) => {
+    async args => {
       const thresholds: IssueThresholds = args
       const reactiveGraph = await deps.getReactiveGraph()
       const issues = listPerformanceIssues(
@@ -116,7 +117,8 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     'get_load_waterfall',
     {
       title: 'SvelteKit load waterfall',
-      description: 'Load profiles grouped by route, with timing and data size. Optionally filtered by route.',
+      description:
+        'Load profiles grouped by route, with timing and data size. Optionally filtered by route.',
       inputSchema: { route: z.string().optional() },
     },
     async ({ route }) => {
@@ -175,7 +177,8 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     'get_render_profile',
     {
       title: 'Render profile for a specific file',
-      description: 'Returns render profile entries matching the given component file (substring match).',
+      description:
+        'Returns render profile entries matching the given component file (substring match).',
       inputSchema: { file: z.string() },
     },
     async ({ file }) => {
@@ -217,7 +220,8 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     'get_live_components',
     {
       title: 'Currently mounted components',
-      description: 'Component instances with file, parent, mounted status as currently mounted in the browser.',
+      description:
+        'Component instances with file, parent, mounted status as currently mounted in the browser.',
       inputSchema: {},
     },
     async () => TEXT(deps.getLiveComponents()),

@@ -2,27 +2,24 @@
   "name": "vite-devtools-svelte",
   "version": "0.2.1",
   "description": "Svelte DevTools plugin for Vite DevTools",
+  "keywords": [
+    "devtools",
+    "svelte",
+    "sveltekit",
+    "vite",
+    "vite-devtools",
+    "vite-plugin"
+  ],
+  "homepage": "https://github.com/baseballyama/vite-devtools-svelte#readme",
+  "bugs": {
+    "url": "https://github.com/baseballyama/vite-devtools-svelte/issues"
+  },
   "license": "MIT",
   "author": "Yuichiro Yamashita",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/baseballyama/vite-devtools-svelte.git",
     "directory": "packages/vite-devtools-svelte"
-  },
-  "homepage": "https://github.com/baseballyama/vite-devtools-svelte#readme",
-  "bugs": {
-    "url": "https://github.com/baseballyama/vite-devtools-svelte/issues"
-  },
-  "keywords": [
-    "vite",
-    "vite-plugin",
-    "vite-devtools",
-    "svelte",
-    "sveltekit",
-    "devtools"
-  ],
-  "engines": {
-    "node": ">=22.0.0"
   },
   "files": [
     "dist",
@@ -61,5 +58,8 @@
   },
   "peerDependencies": {
     "vite": "^8.0.14"
+  },
+  "engines": {
+    "node": ">=22.0.0"
   }
 }

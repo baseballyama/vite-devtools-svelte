@@ -691,7 +691,8 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
           getLiveComponents: () => liveComponents,
           getComponentRelations: () => analyzeComponents(root),
           getRenderProfiles: () => renderProfiles,
-          getReactiveGraph: () => getRpcHandlers()['svelte-devtools:get-reactive-graph']() as Promise<ReactiveGraph>,
+          getReactiveGraph: () =>
+            getRpcHandlers()['svelte-devtools:get-reactive-graph']() as Promise<ReactiveGraph>,
           getLoadProfiles: () => loadProfiles,
           getFpsSamples: () => fpsSamples,
           sessions: getSessions(),

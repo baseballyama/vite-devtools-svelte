@@ -1,9 +1,4 @@
-import type {
-  RenderProfile,
-  ReactiveGraph,
-  LoadProfile,
-  FpsSample,
-} from '../types.js'
+import type { RenderProfile, ReactiveGraph, LoadProfile, FpsSample } from '../types.js'
 
 export type IssueKind =
   | 'slow-component-render'
@@ -66,10 +61,15 @@ export function listPerformanceIssues(
       out.push({
         id: `slow-render:${p.file}:${p.componentId}`,
         kind: 'slow-component-render',
-        severity: avg >= t.avgRenderTimeMs * 4 ? 'high' : avg >= t.avgRenderTimeMs * 2 ? 'medium' : 'low',
+        severity:
+          avg >= t.avgRenderTimeMs * 4 ? 'high' : avg >= t.avgRenderTimeMs * 2 ? 'medium' : 'low',
         summary: `${p.name} averages ${avg.toFixed(2)}ms per render (${p.renderCount} renders)`,
         file: p.file,
-        metric: { avgRenderTimeMs: round(avg), renderCount: p.renderCount, totalRenderTimeMs: round(p.totalRenderTime) },
+        metric: {
+          avgRenderTimeMs: round(avg),
+          renderCount: p.renderCount,
+          totalRenderTimeMs: round(p.totalRenderTime),
+        },
         suggestedTool: 'get_render_profile',
       })
     }
@@ -77,7 +77,12 @@ export function listPerformanceIssues(
       out.push({
         id: `over-render:${p.file}:${p.componentId}`,
         kind: 'over-rendered-component',
-        severity: p.renderCount >= t.renderCount * 8 ? 'high' : p.renderCount >= t.renderCount * 3 ? 'medium' : 'low',
+        severity:
+          p.renderCount >= t.renderCount * 8
+            ? 'high'
+            : p.renderCount >= t.renderCount * 3
+              ? 'medium'
+              : 'low',
         summary: `${p.name} rendered ${p.renderCount} times`,
         file: p.file,
         metric: { renderCount: p.renderCount, avgRenderTimeMs: round(avg) },
@@ -91,7 +96,12 @@ export function listPerformanceIssues(
       out.push({
         id: `slow-load:${l.route}:${l.timestamp}`,
         kind: 'slow-load',
-        severity: l.duration >= t.loadDurationMs * 5 ? 'high' : l.duration >= t.loadDurationMs * 2 ? 'medium' : 'low',
+        severity:
+          l.duration >= t.loadDurationMs * 5
+            ? 'high'
+            : l.duration >= t.loadDurationMs * 2
+              ? 'medium'
+              : 'low',
         summary: `${l.type} load for ${l.route} took ${l.duration.toFixed(0)}ms`,
         file: l.file,
         metric: { durationMs: round(l.duration), dataSizeBytes: l.dataSize },
@@ -129,7 +139,8 @@ export function listPerformanceIssues(
         out.push({
           id: `effect-deps:${node.id}`,
           kind: 'effect-overconnected',
-          severity: deps >= t.effectMaxDeps * 3 ? 'high' : deps >= t.effectMaxDeps * 2 ? 'medium' : 'low',
+          severity:
+            deps >= t.effectMaxDeps * 3 ? 'high' : deps >= t.effectMaxDeps * 2 ? 'medium' : 'low',
           summary: `effect "${node.name}" depends on ${deps} reactive values`,
           file: node.componentFile,
           metric: { depCount: deps },
@@ -172,7 +183,10 @@ export interface ReactiveProblems {
   isolatedNodes: Array<{ id: string; name: string; type: string; file: string }>
 }
 
-export function summarizeReactiveProblems(graph: ReactiveGraph, t: IssueThresholds = {}): ReactiveProblems {
+export function summarizeReactiveProblems(
+  graph: ReactiveGraph,
+  t: IssueThresholds = {},
+): ReactiveProblems {
   const thresh = { ...DEFAULTS, ...t }
   const inDegree = new Map<string, number>()
   const outDegree = new Map<string, number>()
@@ -193,7 +207,12 @@ export function summarizeReactiveProblems(graph: ReactiveGraph, t: IssueThreshol
       orphanDeriveds.push({ id: node.id, name: node.name, file: node.componentFile })
     }
     if (ind === 0 && outd === 0) {
-      isolatedNodes.push({ id: node.id, name: node.name, type: node.type, file: node.componentFile })
+      isolatedNodes.push({
+        id: node.id,
+        name: node.name,
+        type: node.type,
+        file: node.componentFile,
+      })
     }
   }
   return { effects, orphanDeriveds, isolatedNodes }

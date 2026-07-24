@@ -26,8 +26,7 @@ import type { Plugin } from 'vite'
  * up in CI instead of as a missing dock in production.
  */
 
-export const SVELTEKIT_INTERNAL_SUFFIX =
-  '.svelte-kit/generated/server/internal.js'
+export const SVELTEKIT_INTERNAL_SUFFIX = '.svelte-kit/generated/server/internal.js'
 
 /** Marker that the `templates.app` literal in SvelteKit's generated server. */
 export const TEMPLATE_APP_MARKER = 'templates: {'
@@ -67,11 +66,7 @@ export function injectIntoSvelteKitInternal(code: string): string | null {
   const bodyIdx = code.indexOf(BODY_CLOSE, markerIdx)
   if (bodyIdx === -1) return null
 
-  return (
-    code.slice(0, bodyIdx) +
-    INJECT_TAG +
-    code.slice(bodyIdx)
-  )
+  return code.slice(0, bodyIdx) + INJECT_TAG + code.slice(bodyIdx)
 }
 
 /**

@@ -4,8 +4,6 @@ import type { RequestHandler } from './$types'
 
 export const GET: RequestHandler = async ({ url }) => {
   const category = url.searchParams.get('category')
-  const items = category
-    ? products.filter((p) => p.category === category)
-    : products
+  const items = category ? products.filter(p => p.category === category) : products
   return json({ items, count: items.length })
 }

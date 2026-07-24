@@ -68,11 +68,11 @@ pnpm -C examples/strict-csp-app dev
 
 ## まとめ: どこに issue を切るべきか
 
-| # | 振り分け先 |
-|---|---|
-| 1 | 本リポジトリ（PR #55） |
-| 2 | upstream（`vitejs/devtools`） — SvelteKit dev で `transformIndexHtml` が走らない件 + `client/inject` が top-level で `window` を触る件 |
-| 3 | クローズ可（現バージョンで再現せず） |
-| 4 | upstream（`vitejs/devtools`） — UI が外部アイコンを実行時取得する件 |
-| 5 | upstream（`vitejs/devtools`） — Vue feature flags の build config 件 |
-| 6 | 再現待ち |
+| #   | 振り分け先                                                                                                                             |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | 本リポジトリ（PR #55）                                                                                                                 |
+| 2   | upstream（`vitejs/devtools`） — SvelteKit dev で `transformIndexHtml` が走らない件 + `client/inject` が top-level で `window` を触る件 |
+| 3   | クローズ可（現バージョンで再現せず）                                                                                                   |
+| 4   | upstream（`vitejs/devtools`） — UI が外部アイコンを実行時取得する件                                                                    |
+| 5   | upstream（`vitejs/devtools`） — Vue feature flags の build config 件                                                                   |
+| 6   | 再現待ち                                                                                                                               |

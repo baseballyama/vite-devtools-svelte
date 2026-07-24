@@ -16,19 +16,19 @@ pnpm -C examples/sample-app dev
 
 ## 何を見せるためのアプリか
 
-| パネル | このアプリでの確認ポイント |
-|---|---|
-| Component Inspector | `Header` / `ProductCard` / `ReactivePriceChart` のツリーを確認 |
-| Render Profiler | `/dashboard` の `HeavyList` で件数を増やし、再レンダー時間を観察 |
-| Reactive Graph | `/cart` の `ReactivePriceChart` が `$state → $derived → $effect` の連鎖を描画 |
-| Route Viewer | `/`, `/products`, `/products/[id]`, `/cart`, `/dashboard`, `/api/*` を一覧 |
-| Load Profiler | `/products` と `/products/[id]`, `/dashboard` の `+page.server.ts` が並列 / 順次 load を発生 |
-| State Timeline | `/cart` で数量を変えると履歴に記録 |
-| API Playground | `/api/products`, `/api/cart` (POST), `/api/stats` の 3 エンドポイント |
-| FPS Monitor | ホーム下部の `FpsCanvas` でパーティクル数を上げると FPS が落ちる |
-| Asset Browser | `static/favicon.svg`, `static/og-image.svg` |
-| OG Preview | `+layout.svelte` と `/products/[id]` に OG メタタグ |
-| Module Graph | カートのストア (`cart.svelte.ts`) を中心に依存グラフを観察 |
+| パネル              | このアプリでの確認ポイント                                                                   |
+| ------------------- | -------------------------------------------------------------------------------------------- |
+| Component Inspector | `Header` / `ProductCard` / `ReactivePriceChart` のツリーを確認                               |
+| Render Profiler     | `/dashboard` の `HeavyList` で件数を増やし、再レンダー時間を観察                             |
+| Reactive Graph      | `/cart` の `ReactivePriceChart` が `$state → $derived → $effect` の連鎖を描画                |
+| Route Viewer        | `/`, `/products`, `/products/[id]`, `/cart`, `/dashboard`, `/api/*` を一覧                   |
+| Load Profiler       | `/products` と `/products/[id]`, `/dashboard` の `+page.server.ts` が並列 / 順次 load を発生 |
+| State Timeline      | `/cart` で数量を変えると履歴に記録                                                           |
+| API Playground      | `/api/products`, `/api/cart` (POST), `/api/stats` の 3 エンドポイント                        |
+| FPS Monitor         | ホーム下部の `FpsCanvas` でパーティクル数を上げると FPS が落ちる                             |
+| Asset Browser       | `static/favicon.svg`, `static/og-image.svg`                                                  |
+| OG Preview          | `+layout.svelte` と `/products/[id]` に OG メタタグ                                          |
+| Module Graph        | カートのストア (`cart.svelte.ts`) を中心に依存グラフを観察                                   |
 
 ## 構成
 

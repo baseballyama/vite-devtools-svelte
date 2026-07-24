@@ -33,12 +33,7 @@
     },
     {
       "description": "Group Svelte / SvelteKit / Vite tooling",
-      "matchPackageNames": [
-        "/^@sveltejs//",
-        "/^svelte/",
-        "/^vite/",
-        "/^@vitejs//"
-      ],
+      "matchPackageNames": ["/^@sveltejs//", "/^svelte/", "/^vite/", "/^@vitejs//"],
       "groupName": "svelte-vite"
     },
     {
@@ -63,9 +58,5 @@
     "schedule": ["at any time"]
   },
   "postUpdateOptions": ["pnpmDedupe"],
-  "ignorePaths": [
-    "**/node_modules/**",
-    "**/dist/**",
-    "**/__tests__/fixtures/**"
-  ]
+  "ignorePaths": ["**/node_modules/**", "**/dist/**", "**/__tests__/fixtures/**"]
 }

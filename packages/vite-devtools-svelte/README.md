@@ -159,7 +159,7 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [
     svelteDevtools(), // must come before sveltekit()
-    DevTools(),       // the @vitejs/devtools host — without it the panels have nowhere to render
+    DevTools(), // the @vitejs/devtools host — without it the panels have nowhere to render
     sveltekit(),
   ],
 })

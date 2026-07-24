@@ -25,7 +25,7 @@ If either is missing, stop and tell the user what to do; do not invent metrics.
 
 ## Guardrails
 
-- Never claim performance improved without a `compare_sessions` result. This skill produces only the *before* baseline.
+- Never claim performance improved without a `compare_sessions` result. This skill produces only the _before_ baseline.
 - If `list_performance_issues` returns an empty list, say so and ask the user whether to lower thresholds or exercise additional flows — do not fabricate issues.
 - The reactive graph view depends on the browser being open; if `get_reactive_graph_problems` returns empty categories, ask the user to keep the page open and retry.
 - Session disposal: at the end, ask whether to keep the baseline (`keep: "memory"` for this session, or persist with `keep: "disk"`). Do not silently retain or delete.

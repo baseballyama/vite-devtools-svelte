@@ -61,7 +61,9 @@ describe('injectIntoSvelteKitInternal', () => {
 
   it('bails out cleanly if no </body> appears', () => {
     expect(
-      injectIntoSvelteKitInternal(`export const options = { ${TEMPLATE_APP_MARKER} app: () => "" }`),
+      injectIntoSvelteKitInternal(
+        `export const options = { ${TEMPLATE_APP_MARKER} app: () => "" }`,
+      ),
     ).toBeNull()
   })
 })
@@ -95,14 +97,8 @@ describe('sveltekitTemplateInjector plugin', () => {
   })
 
   it('ignores other modules', () => {
-    const transform = plugin.transform as (
-      this: unknown,
-      code: string,
-      id: string,
-    ) => unknown
-    expect(
-      transform.call({}, FAKE_INTERNAL_JS, '/abs/project/src/lib/foo.ts'),
-    ).toBeUndefined()
+    const transform = plugin.transform as (this: unknown, code: string, id: string) => unknown
+    expect(transform.call({}, FAKE_INTERNAL_JS, '/abs/project/src/lib/foo.ts')).toBeUndefined()
   })
 })
 

@@ -25,7 +25,7 @@ function createCart() {
       return uniqueCount
     },
     add(item: { id: string; name: string; price: number }) {
-      const existing = lines.find((l) => l.id === item.id)
+      const existing = lines.find(l => l.id === item.id)
       if (existing) {
         existing.qty += 1
       } else {
@@ -33,13 +33,13 @@ function createCart() {
       }
     },
     remove(id: string) {
-      lines = lines.filter((l) => l.id !== id)
+      lines = lines.filter(l => l.id !== id)
     },
     setQty(id: string, qty: number) {
-      const line = lines.find((l) => l.id === id)
+      const line = lines.find(l => l.id === id)
       if (!line) return
       if (qty <= 0) {
-        lines = lines.filter((l) => l.id !== id)
+        lines = lines.filter(l => l.id !== id)
       } else {
         line.qty = qty
       }

@@ -159,7 +159,7 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [
     svelteDevtools(), // must come before sveltekit()
-    DevTools(),       // the @vitejs/devtools host — without it the panels have nowhere to render
+    DevTools(), // the @vitejs/devtools host — without it the panels have nowhere to render
     sveltekit(),
   ],
 })
@@ -211,16 +211,16 @@ The endpoint is gated by the same per-process random token used by the panel UI.
 
 ### Tools exposed
 
-| Tool | Purpose |
-|---|---|
-| `list_performance_issues` | Cross-cuts render / reactive / load / fps and returns ranked issues with `suggestedTool` for drill-down. Entry point. |
-| `get_component_hotspots` | Top components by total render time. |
-| `get_reactive_graph_problems` | Classified reactive-graph issues (over-connected effects, orphan deriveds, isolated nodes). |
-| `get_load_waterfall` | SvelteKit `load` timings grouped by route. |
-| `get_fps_drops` | FPS samples below threshold. |
-| `get_render_profile` | Render profile entries for a specific file. |
+| Tool                                               | Purpose                                                                                                                                                     |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list_performance_issues`                          | Cross-cuts render / reactive / load / fps and returns ranked issues with `suggestedTool` for drill-down. Entry point.                                       |
+| `get_component_hotspots`                           | Top components by total render time.                                                                                                                        |
+| `get_reactive_graph_problems`                      | Classified reactive-graph issues (over-connected effects, orphan deriveds, isolated nodes).                                                                 |
+| `get_load_waterfall`                               | SvelteKit `load` timings grouped by route.                                                                                                                  |
+| `get_fps_drops`                                    | FPS samples below threshold.                                                                                                                                |
+| `get_render_profile`                               | Render profile entries for a specific file.                                                                                                                 |
 | `start_session`, `end_session`, `compare_sessions` | Bracket a measurement window so the agent can diff before/after a fix. `persist:true` writes the session to `node_modules/.vite-devtools-svelte/sessions/`. |
-| `list_sessions`, `load_session`, `delete_session` | Session inspection / cleanup. The agent owns disposal — the plugin never auto-persists. |
+| `list_sessions`, `load_session`, `delete_session`  | Session inspection / cleanup. The agent owns disposal — the plugin never auto-persists.                                                                     |
 
 ### Skills
 

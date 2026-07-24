@@ -6,10 +6,7 @@ import { defineConfig } from 'vite'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const pkg = JSON.parse(
-  readFileSync(
-    resolve(__dirname, '../packages/vite-devtools-svelte/package.json'),
-    'utf-8',
-  ),
+  readFileSync(resolve(__dirname, '../packages/vite-devtools-svelte/package.json'), 'utf-8'),
 ) as { version: string }
 
 export default defineConfig({

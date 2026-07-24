@@ -40,7 +40,8 @@
 
   /* Typography */
   --font-display: 'Instrument Serif', 'Iowan Old Style', 'Apple Garamond', Georgia, serif;
-  --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+  --font-sans:
+    'Geist', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', ui-monospace, monospace;
 
   --text-2xs: 10px;
@@ -138,8 +139,18 @@
   --color-border-active: rgba(255, 84, 36, 0.55);
   --color-border-input: rgba(255, 255, 255, 0.18);
 
-  --color-rail: linear-gradient(180deg, transparent, var(--color-accent-500) 25%, var(--color-accent-400) 75%, transparent);
-  --color-glow: radial-gradient(60% 80% at 100% 0%, rgba(255, 62, 0, 0.13) 0%, rgba(255, 62, 0, 0) 60%);
+  --color-rail: linear-gradient(
+    180deg,
+    transparent,
+    var(--color-accent-500) 25%,
+    var(--color-accent-400) 75%,
+    transparent
+  );
+  --color-glow: radial-gradient(
+    60% 80% at 100% 0%,
+    rgba(255, 62, 0, 0.13) 0%,
+    rgba(255, 62, 0, 0) 60%
+  );
   --color-grid-dot: rgba(255, 255, 255, 0.045);
   --color-vignette: radial-gradient(120% 80% at 50% 0%, transparent 30%, rgba(0, 0, 0, 0.3) 100%);
 
@@ -194,10 +205,24 @@
   --color-border-active: rgba(255, 62, 0, 0.55);
   --color-border-input: rgba(20, 16, 12, 0.22);
 
-  --color-rail: linear-gradient(180deg, transparent, var(--color-accent-600) 25%, var(--color-accent-500) 75%, transparent);
-  --color-glow: radial-gradient(60% 80% at 100% 0%, rgba(255, 62, 0, 0.07) 0%, rgba(255, 62, 0, 0) 60%);
+  --color-rail: linear-gradient(
+    180deg,
+    transparent,
+    var(--color-accent-600) 25%,
+    var(--color-accent-500) 75%,
+    transparent
+  );
+  --color-glow: radial-gradient(
+    60% 80% at 100% 0%,
+    rgba(255, 62, 0, 0.07) 0%,
+    rgba(255, 62, 0, 0) 60%
+  );
   --color-grid-dot: rgba(20, 16, 12, 0.06);
-  --color-vignette: radial-gradient(120% 80% at 50% 0%, transparent 30%, rgba(20, 16, 12, 0.06) 100%);
+  --color-vignette: radial-gradient(
+    120% 80% at 50% 0%,
+    transparent 30%,
+    rgba(20, 16, 12, 0.06) 100%
+  );
 
   --color-info: #1d4ed8;
   --color-info-bg: rgba(29, 78, 216, 0.08);
@@ -247,10 +272,24 @@
     --color-border-strong: rgba(20, 16, 12, 0.18);
     --color-border-active: rgba(255, 62, 0, 0.55);
     --color-border-input: rgba(20, 16, 12, 0.22);
-    --color-rail: linear-gradient(180deg, transparent, var(--color-accent-600) 25%, var(--color-accent-500) 75%, transparent);
-    --color-glow: radial-gradient(60% 80% at 100% 0%, rgba(255, 62, 0, 0.07) 0%, rgba(255, 62, 0, 0) 60%);
+    --color-rail: linear-gradient(
+      180deg,
+      transparent,
+      var(--color-accent-600) 25%,
+      var(--color-accent-500) 75%,
+      transparent
+    );
+    --color-glow: radial-gradient(
+      60% 80% at 100% 0%,
+      rgba(255, 62, 0, 0.07) 0%,
+      rgba(255, 62, 0, 0) 60%
+    );
     --color-grid-dot: rgba(20, 16, 12, 0.06);
-    --color-vignette: radial-gradient(120% 80% at 50% 0%, transparent 30%, rgba(20, 16, 12, 0.06) 100%);
+    --color-vignette: radial-gradient(
+      120% 80% at 50% 0%,
+      transparent 30%,
+      rgba(20, 16, 12, 0.06) 100%
+    );
     --color-info: #1d4ed8;
     --color-info-bg: rgba(29, 78, 216, 0.08);
     --color-info-border: rgba(29, 78, 216, 0.25);
@@ -302,8 +341,7 @@ body::before {
   position: fixed;
   inset: 0;
   background:
-    var(--color-glow),
-    radial-gradient(var(--color-grid-dot) 1px, transparent 1px),
+    var(--color-glow), radial-gradient(var(--color-grid-dot) 1px, transparent 1px),
     var(--color-vignette);
   background-size:
     auto,

@@ -1,11 +1,8 @@
 :root {
   --font-display: 'Fraunces', ui-serif, Georgia, 'Times New Roman', serif;
-  --font-sans:
-    'DM Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-    sans-serif;
+  --font-sans: 'DM Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono:
-    'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas,
-    monospace;
+    'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
 
   --brand: #ff3e00;
   --brand-soft: #ff7a45;
@@ -25,8 +22,7 @@
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.06);
   --shadow-md: 0 10px 30px rgba(0, 0, 0, 0.15), 0 2px 8px rgba(0, 0, 0, 0.08);
-  --shadow-lg:
-    0 30px 80px rgba(0, 0, 0, 0.25), 0 12px 24px rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 30px 80px rgba(0, 0, 0, 0.25), 0 12px 24px rgba(0, 0, 0, 0.12);
 }
 
 html[data-theme='dark'] {
@@ -127,7 +123,9 @@ h2,
 h3,
 h4 {
   font-family: var(--font-display);
-  font-variation-settings: 'opsz' 144, 'SOFT' 50;
+  font-variation-settings:
+    'opsz' 144,
+    'SOFT' 50;
   font-weight: 380;
   letter-spacing: -0.035em;
   line-height: 1.02;
@@ -137,7 +135,9 @@ h4 {
 
 h1 {
   font-size: clamp(2.5rem, 6.5vw, 5.5rem);
-  font-variation-settings: 'opsz' 144, 'SOFT' 30;
+  font-variation-settings:
+    'opsz' 144,
+    'SOFT' 30;
   font-weight: 360;
 }
 
@@ -168,7 +168,9 @@ p {
 
 em {
   font-style: italic;
-  font-variation-settings: 'opsz' 144, 'SOFT' 100;
+  font-variation-settings:
+    'opsz' 144,
+    'SOFT' 100;
 }
 
 code,
@@ -176,7 +178,9 @@ pre,
 kbd {
   font-family: var(--font-mono);
   font-size: 0.92em;
-  font-feature-settings: 'liga' 0, 'calt' 1;
+  font-feature-settings:
+    'liga' 0,
+    'calt' 1;
 }
 
 pre {
@@ -419,10 +423,8 @@ kbd {
     linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
   background-size: 56px 56px;
   background-position: 0 0;
-  mask-image:
-    radial-gradient(ellipse 80% 70% at 50% 30%, #000 30%, transparent 100%);
-  -webkit-mask-image:
-    radial-gradient(ellipse 80% 70% at 50% 30%, #000 30%, transparent 100%);
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 30%, #000 30%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 30%, #000 30%, transparent 100%);
   z-index: 0;
 }
 

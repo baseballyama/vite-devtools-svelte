@@ -104,8 +104,11 @@ function takeSnapshot(getters: MetricGetters): SessionSnapshot {
   }
 }
 
-function classify(diff: number, threshold: number, lowerIsBetter: boolean):
-  'improved' | 'regressed' | 'unchanged' {
+function classify(
+  diff: number,
+  threshold: number,
+  lowerIsBetter: boolean,
+): 'improved' | 'regressed' | 'unchanged' {
   if (Math.abs(diff) < threshold) return 'unchanged'
   const negativeIsBetter = lowerIsBetter
   if (negativeIsBetter) return diff < 0 ? 'improved' : 'regressed'
@@ -276,8 +279,7 @@ export class SessionStore {
           name: end.name,
           renderCountDelta,
           totalRenderTimeDelta,
-          avgRenderTimeDelta:
-            renderCountDelta > 0 ? totalRenderTimeDelta / renderCountDelta : 0,
+          avgRenderTimeDelta: renderCountDelta > 0 ? totalRenderTimeDelta / renderCountDelta : 0,
         }
       })
       .filter(c => c.renderCountDelta > 0)

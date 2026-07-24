@@ -232,7 +232,9 @@ describe('SSRF protection via API request', () => {
   it('should ensure all internal hostnames are blocked', () => {
     const internalHosts = ['localhost', 'my-server.local', 'internal-api.internal']
     for (const host of internalHosts) {
-      expect(() => validateExternalUrl(`http://${host}/`)).toThrow(/blocked|disallowed|not allowed/i)
+      expect(() => validateExternalUrl(`http://${host}/`)).toThrow(
+        /blocked|disallowed|not allowed/i,
+      )
     }
   })
 
