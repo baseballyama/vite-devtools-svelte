@@ -46,7 +46,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@vitejs/devtools-kit": "^0.4.7",
+    "@vitejs/devtools-kit": "^0.4.8",
     "zod": "^4.4.3"
   },
   "devDependencies": {
