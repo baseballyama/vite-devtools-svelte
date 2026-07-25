@@ -1,5 +1,15 @@
 # vite-devtools-svelte
 
+## 0.3.0
+
+### Minor Changes
+
+- [#64](https://github.com/baseballyama/vite-devtools-svelte/pull/64) [`1e57970`](https://github.com/baseballyama/vite-devtools-svelte/commit/1e5797021f908e26af7b20e204ae2d77bd22a9d2) Thanks [@aster-mnch](https://github.com/aster-mnch)! - Record per-component render counts and render times in the Render tab. The profiling APIs (`recordRender` / `recordRenderTime`) existed but had no call sites, so renders always showed 0. The `svelte/internal/client` wrapper now instruments `template_effect` / `deferred_template_effect` (skipping the initial mount-time run, pooling durations per microtask flush) and wraps block helpers (`each` / `if` / `key` / `await` / `component` / `boundary`) so effects created during batch flushes — e.g. `{#each}` items added later or re-created `{#if}` branches — are attributed to their owning component. Profiles and reactive-node snapshots are now also cleaned up on unmount, so the Render tab no longer accumulates stale rows after client-side navigation.
+
+### Patch Changes
+
+- [`53990d9`](https://github.com/baseballyama/vite-devtools-svelte/commit/53990d9c717905b1a1a0800f203740a695185d53) Thanks [@aster-mnch](https://github.com/aster-mnch)! - Fix the Inspect panel leaking its gutter-height polling interval: `onMount` was async, so the returned cleanup was wrapped in a Promise and never ran on unmount. The mount callback is now synchronous and the interval is cleared when the panel is closed.
+
 ## 0.2.1
 
 ### Patch Changes
@@ -16,6 +26,7 @@
   The MCP server is **read + measure only** — it never edits files. Editing is left to the agent's own tools, which keeps the permission boundary clean and lets `git` own rollback.
 
   **Tools exposed**
+
   - `list_performance_issues` — cross-cuts render / reactive / load / fps and returns ranked issues with `suggestedTool` for drill-down.
   - `get_component_hotspots`, `get_reactive_graph_problems`, `get_load_waterfall`, `get_fps_drops`, `get_render_profile` — detail views.
   - `get_project_info`, `get_routes`, `get_live_components`, `get_component_relations` — context.
@@ -24,6 +35,7 @@
   The endpoint reuses the existing per-process random token used by the panel UI. On dev-server startup the plugin prints a copy-pasteable `claude mcp add` command including the URL and token.
 
   **Skills** shipped under `node_modules/vite-devtools-svelte/skills/`:
+
   - `vite-devtools-svelte:perf-audit` — captures a baseline session, calls `list_performance_issues`, and presents the top issues for the user to triage.
   - `vite-devtools-svelte:perf-fix` — one issue per run: baseline → edit → after → `compare_sessions`, with `verdict` reported verbatim and an explicit revert path if the change regresses or has no effect.
 
