@@ -9,7 +9,7 @@
     "check": "rsvelte-check --tsconfig ./tsconfig.json"
   },
   "devDependencies": {
-    "@rsvelte/svelte-check": "^0.4.1",
+    "@rsvelte/svelte-check": "^0.5.1",
     "@sveltejs/vite-plugin-svelte": "^7.2.0",
     "@vitejs/devtools-kit": "^0.4.8",
     "svelte": "^5.56.8",
