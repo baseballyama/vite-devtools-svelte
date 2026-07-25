@@ -19,10 +19,10 @@
   "devDependencies": {
     "@changesets/changelog-github": "^0.7.0",
     "@changesets/cli": "^2.31.0",
-    "oxfmt": "^0.52.0",
-    "oxlint": "^1.67.0"
+    "oxfmt": "^0.60.0",
+    "oxlint": "^1.75.0"
   },
-  "packageManager": "pnpm@10.34.1",
+  "packageManager": "pnpm@10.34.5",
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild"
