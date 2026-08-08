@@ -46,18 +46,18 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@vitejs/devtools-kit": "^0.4.8",
+    "@vitejs/devtools-kit": "^0.4.12",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^25.6.2",
     "typescript": "^6.0.3",
-    "vite": "^8.1.5",
+    "vite": "^8.2.1",
     "vite-plugin-dts": "^5.0.3",
     "vitest": "^4.1.10"
   },
   "peerDependencies": {
-    "vite": "^8.1.5"
+    "vite": "^8.2.1"
   },
   "engines": {
     "node": ">=22.0.0"
