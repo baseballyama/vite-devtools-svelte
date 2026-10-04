@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PERF_PHASE: smoke-reactive
+  PERF_PHASE: pairA
 
 jobs:
   measure:
@@ -44,7 +44,7 @@ jobs:
         run: pnpm exec playwright-core install --with-deps chromium
 
       - name: Measure (${{ env.PERF_PHASE }})
-        timeout-minutes: 14
+        timeout-minutes: 16
         run: bash perf/ci/run-phase.sh "$PERF_PHASE"
 
       - name: Sanitize artifact (fail closed)

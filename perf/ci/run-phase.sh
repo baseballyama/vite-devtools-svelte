@@ -10,8 +10,8 @@
 #           timings are not compared with latency runs)
 #   smoke-reactive  smoke, then the reactive phase below (both mode latency)
 #   reactive reduced reactive fixture (separate axis), OFF / CLOSED / OPEN, n = 1
-#   pairA   ee3a716 vs dc60aa2 (code delta, same deps)    — later run
-#   pairB   dc60aa2 vs e0d1e51 (deps delta, same source)  — later run
+#   pairA   B ee3a716 vs F dc60aa2 (code delta, same deps), BFFB, OFF/CLOSED/OPEN + UI
+#   pairB   B dc60aa2 vs F e0d1e51 (deps delta, same plugin source), same protocol
 set -euo pipefail
 
 PHASE="${1:?phase}"
@@ -58,7 +58,11 @@ side() { # <sha> <label>: pristine worktree, its own pnpm, build
   local sha="$1" dir="$SIDES/$2"
   git worktree add -q --detach "$dir" "$sha"
   local pm; pm=$(node -p "require('$dir/package.json').packageManager.replace(/\+.*/, '')")
-  (cd "$dir" && npx -y "$pm" install --frozen-lockfile --reporter=silent && npx -y "$pm" build >/dev/null)
+  # build:plugin + build:client called directly with the side's own pnpm (the
+  # root "build" script would re-enter whichever pnpm is on PATH)
+  (cd "$dir" && npx -y "$pm" install --frozen-lockfile --reporter=silent \
+    && npx -y "$pm" -C packages/vite-devtools-svelte build >/dev/null \
+    && npx -y "$pm" -C packages/vite-devtools-svelte/client build >/dev/null)
   manifest "$dir" "$2"
   step "side $2 ($sha, $pm) installed + built"
 }
@@ -121,6 +125,27 @@ case "$PHASE" in
     node perf/reactive-smoke.mjs --treeDepth=3 --gate=$(nproc):50 --linux-gate=2048:10 \
       --gate-wait=180 --max-min=9 2>&1 | tee "$OUT/reactive.log"
     step "reactive smoke done (mode latency)"
+    ;;
+  pairA | pairB)
+    # Fixed baselines, pristine detached worktrees, each installed with its own
+    # pnpm and built; the harness and Chromium come from this branch.
+    #   pairA: B = ee3a716 (pre-wave-1 runtime), F = dc60aa2 (wave 1), same deps
+    #   pairB: B = dc60aa2, F = e0d1e51 (same plugin source, deps only)
+    if [ "$PHASE" = pairA ]; then
+      side ee3a71690a5544d9cf3324aaabf6ac47e16a2dcc ee3a716
+      side dc60aa216c9dbbe3d351a264936ed3740756a252 dc60aa2
+      BDIR="$SIDES/ee3a716" FDIR="$SIDES/dc60aa2"
+    else
+      side dc60aa216c9dbbe3d351a264936ed3740756a252 dc60aa2
+      side e0d1e5165ebb16436da8ea4897e2cf3050047fd5 e0d1e51
+      BDIR="$SIDES/dc60aa2" FDIR="$SIDES/e0d1e51"
+    fi
+    node perf/run-paired.mjs --baseline="$BDIR" --final="$FDIR" --order=BFFB \
+      --parts=A,OFF,UI --scales="${PAIR_SCALES:-3000:4x5}" --label="$PHASE" $GATE \
+      --max-min=12 2>&1 | tee "$OUT/$PHASE.log"
+    mkdir -p "$OUT/results"
+    cp -r "$FDIR/playground/.temp/perf-results/$PHASE" "$OUT/results/" 2>/dev/null || true
+    step "$PHASE BFFB done (mode latency)"
     ;;
   *)
     echo "phase $PHASE not enabled in this run" >&2
