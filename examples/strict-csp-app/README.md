@@ -26,16 +26,11 @@ pnpm -C examples/strict-csp-app dev
 
 [PR #55](https://github.com/baseballyama/vite-devtools-svelte/pull/55) で対応済み。
 
-### ⚠️ #51-2: SvelteKit では `import '@vitejs/devtools/client/inject'` が **本当に必要**
+### ✅ #51-2: SvelteKit で `import '@vitejs/devtools/client/inject'` が必要だった件（現在は不要）
 
-- `@vitejs/devtools` の `DevTools()` プラグインは内部の `DevToolsInjection` で `transformIndexHtml` を使い `<script src=".../client/inject.js">` を `<body>` に注入する。
-- **しかし SvelteKit dev は app.html を独自の SSR パイプラインで処理するため、Vite の `transformIndexHtml` フックを通さない。**
-- 結果: SvelteKit のページには inject script が一切入らず、ドックが出ない。
-  - 本リポジトリの `playground` / `examples/sample-app` の HTML を curl で確認しても、inject script は HTML に存在しない。`playground` は `Header.svelte` 内に `/__devtools/` への外部リンクを足してこれを回避している。
-- ワークアラウンドとして `+layout.svelte` で `import('@vitejs/devtools/client/inject')` すると、Vite のモジュールパイプラインで配信されるため SvelteKit の nonce 付き chunk として読み込まれ、ドックが復活する。
-- **さらなる罠**: `client/inject.js` は top-level で `window` を触るため、`if (browser)` で囲まないと SSR 中に `ReferenceError: window is not defined` で dev サーバーが落ちる（本アプリの `+layout.svelte` を参照）。
-
-**→ これは `@vitejs/devtools` 側の問題（SvelteKit 統合不備 + SSR 非対応）。** upstream に報告すべき。
+- 当時（`@vitejs/devtools@0.2.0`）: `DevTools()` は `transformIndexHtml` で inject script を注入するが、SvelteKit dev は app.html を独自の SSR パイプラインで処理して `transformIndexHtml` を通さないため、ドックが出なかった。回避策として `+layout.svelte` で `import('@vitejs/devtools/client/inject')`（`browser` ガード付き）していた。
+- **現在（`@vitejs/devtools` >= 0.7.6）: `@vitejs/devtools/client/inject` は存在しない**（exports から削除）。回避策の import は production build を `"./client/inject" is not exported` で壊すため削除した。
+- 代わりに vite-devtools-svelte の `svelteDevtools()` が SvelteKit の生成テンプレートに `<script type="module" src="/__devtools/embedded.js">` を注入する（`packages/vite-devtools-svelte/src/template-injector.ts`）。同一 origin の静的 `src` なので `script-src 'self'` の strict CSP でも動く。
 
 ### ✅ #51-3: `connect-src` の WS ポート
 
@@ -68,11 +63,11 @@ pnpm -C examples/strict-csp-app dev
 
 ## まとめ: どこに issue を切るべきか
 
-| #   | 振り分け先                                                                                                                             |
-| --- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | 本リポジトリ（PR #55）                                                                                                                 |
-| 2   | upstream（`vitejs/devtools`） — SvelteKit dev で `transformIndexHtml` が走らない件 + `client/inject` が top-level で `window` を触る件 |
-| 3   | クローズ可（現バージョンで再現せず）                                                                                                   |
-| 4   | upstream（`vitejs/devtools`） — UI が外部アイコンを実行時取得する件                                                                    |
-| 5   | upstream（`vitejs/devtools`） — Vue feature flags の build config 件                                                                   |
-| 6   | 再現待ち                                                                                                                               |
+| #   | 振り分け先                                                                                                                      |
+| --- | ------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | 本リポジトリ（PR #55）                                                                                                          |
+| 2   | 対応済み — vite-devtools-svelte が SvelteKit テンプレートに `embedded.js` を注入（`client/inject` は devtools >= 0.7.6 で廃止） |
+| 3   | クローズ可（現バージョンで再現せず）                                                                                            |
+| 4   | upstream（`vitejs/devtools`） — UI が外部アイコンを実行時取得する件                                                             |
+| 5   | upstream（`vitejs/devtools`） — Vue feature flags の build config 件                                                            |
+| 6   | 再現待ち                                                                                                                        |

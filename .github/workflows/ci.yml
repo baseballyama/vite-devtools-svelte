@@ -178,6 +178,8 @@ jobs:
       # Same approach as the site typecheck: the workspace's svelte-check
       # (from the Kit 2 example) against each app's tsconfig, after sync.
       - name: Playground & strict-csp-app typecheck (svelte-check)
+        # independent of the build/CSP step above: report both on one run
+        if: ${{ !cancelled() }}
         run: |
           pnpm -C playground exec svelte-kit sync
           pnpm -C examples/sample-app exec svelte-check --workspace ../../playground --tsconfig ./tsconfig.json
