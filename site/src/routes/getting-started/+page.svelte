@@ -59,8 +59,8 @@ export default defineConfig({
     </p>
     <p class="release-note">
       These steps need <strong>vite-devtools-svelte ≥ 0.4.0</strong> (built on
-      Devframe, not yet published). The latest published version, 0.3.0, is
-      documented to run inside <code>@vitejs/devtools</code>.
+      Devframe). Versions up to 0.3.x are documented to run inside
+      <code>@vitejs/devtools</code>.
     </p>
 
     <div class="requirements">
@@ -68,7 +68,7 @@ export default defineConfig({
       <dl>
         <div class="req">
           <dt>vite-devtools-svelte</dt>
-          <dd>≥ 0.4.0 — not yet published; 0.3.0 is documented to run inside @vitejs/devtools</dd>
+          <dd>≥ 0.4.0</dd>
         </div>
         <div class="req">
           <dt>Vite</dt>

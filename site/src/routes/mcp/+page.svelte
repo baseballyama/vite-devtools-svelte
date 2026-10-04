@@ -139,8 +139,8 @@ and what changed when I edited the tax rate.`
       panels, and every answer says what it covers.
     </p>
     <p class="release-note">
-      This guide describes <strong>vite-devtools-svelte ≥ 0.4.0</strong> (not yet
-      published). Set it up first with <a href="{base}/getting-started">Getting Started</a>.
+      This guide describes <strong>vite-devtools-svelte ≥ 0.4.0</strong>. Set it up
+      first with <a href="{base}/getting-started">Getting Started</a>.
     </p>
   </div>
 </section>
@@ -481,7 +481,7 @@ and what changed when I edited the tax rate.`
         <dl class="faq">
           <div>
             <dt>vite-devtools-svelte</dt>
-            <dd>≥ 0.4.0 (not yet published) for this guide and the four reactivity tools</dd>
+            <dd>≥ 0.4.0 for this guide and the four reactivity tools</dd>
           </div>
           <div>
             <dt>Vite</dt>
