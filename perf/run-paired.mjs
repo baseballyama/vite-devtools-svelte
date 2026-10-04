@@ -34,6 +34,7 @@ import { ensurePlaygroundSync, generate, DEFAULTS as FIXTURE } from './generate-
 import {
   INIT_SCRIPT,
   checkoutMeta,
+  cdpMetrics,
   connectInspector,
   envSnapshot,
   frameStats,
@@ -210,12 +211,21 @@ async function measureApp(app, scale, opts) {
   res.idle = []
   for (let i = 0; i < opts.idleReps; i++)
     res.idle.push(await idleWindow(page, cdp, opts.idleMs, ws))
-  const churn = await page.evaluate(ms => window.__bench.churn(50, ms), opts.churnMs)
-  res.churn = frameStats(churn)
+  // main-thread task time of the churn / input windows (CDP TaskDuration):
+  // covers the poll ticks that record the writes, not only the frames
+  const taskMs = async run => {
+    const before = await cdpMetrics(cdp)
+    const out = await run()
+    const after = await cdpMetrics(cdp)
+    return { out, ms: r1((after.TaskDuration - before.TaskDuration) * 1000) }
+  }
+  const churn = await taskMs(() => page.evaluate(ms => window.__bench.churn(50, ms), opts.churnMs))
+  res.churn = { ...frameStats(churn.out), taskMs: churn.ms }
   res.heapMountedMB = r1((await heapAfterGc(cdp)) / 1048576)
   res.dom = await page.evaluate(() => document.getElementsByTagName('*').length)
   res.runtime = await runtimeState(page)
-  res.input = await inputToPaint(page, '[data-bench="input"]', opts.inputReps)
+  const input = await taskMs(() => inputToPaint(page, '[data-bench="input"]', opts.inputReps))
+  res.input = { ...input.out, taskMs: input.ms }
   // Ground truth of the workload, next to what the runtime reports it saw
   // (`res.runtime.instances`; null without the plugin).
   res.groundTruth = {
