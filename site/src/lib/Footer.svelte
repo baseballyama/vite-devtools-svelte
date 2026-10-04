@@ -25,6 +25,7 @@
         <ul>
           <li><a href="{base}/getting-started">Get started</a></li>
           <li><a href="{base}/mcp">MCP for AI agents</a></li>
+          <li><a href="{base}/ja/mcp" hreflang="ja" lang="ja">MCP クイックスタート（日本語）</a></li>
           <li><a href="{base}/#panels">All panels</a></li>
         </ul>
       </section>
