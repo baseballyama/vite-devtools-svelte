@@ -111,9 +111,10 @@ function prepareFixture(repo) {
   const appDir = path.join(repo, 'playground/.temp/large-app')
   // Always regenerate (deterministic, wipes the dir incl. .svelte-kit and
   // Vite caches): an older fixture left in either checkout must not differ.
-  generate({ ...FIXTURE, out: appDir })
+  const { shape } = generate({ ...FIXTURE, out: appDir })
   return {
     appDir,
+    shape,
     src: sha256Tree(path.join(appDir, 'src')),
     config: sha256File(path.join(appDir, 'vite.config.js')),
   }
@@ -379,6 +380,11 @@ async function main() {
       `fixture vite.config differs between B and F: ${fixtures.B.config} vs ${fixtures.F.config}`,
     )
   }
+  if (fixtures.B && fixtures.B.shape !== fixtures.F.shape) {
+    throw new Error(
+      `fixture shape differs between B (${fixtures.B.shape}) and F (${fixtures.F.shape}): both checkouts must be on the same SvelteKit major`,
+    )
+  }
   if (fixtures.B && fixtures.B.src.sha256 !== fixtures.F.src.sha256) {
     throw new Error(
       `fixture sources differ between B and F: ${fixtures.B.src.sha256} vs ${fixtures.F.src.sha256}`,
@@ -414,6 +420,7 @@ async function main() {
     plan,
     meta,
     fixture: fixtures.F.src,
+    fixtureShape: fixtures.F.shape,
   }
   fs.writeFileSync(path.join(outDir, 'run.json'), JSON.stringify(header, null, 2) + '\n')
   log(

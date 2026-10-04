@@ -1,10 +1,10 @@
 <script lang="ts">
   // Japanese quickstart for the MCP guide. The English page (/mcp) is the
   // source of truth: keep facts, limits and versions in step with it.
-  import { base } from '$app/paths'
-  import CodeBlock from '$lib/CodeBlock.svelte'
-  import { MCP_TOOL_COUNT } from '$lib/mcp-tools'
-  import { mcpToolsJa } from '$lib/mcp-tools.ja'
+  import { resolve } from '$app/paths'
+  import CodeBlock from '#lib/CodeBlock.svelte'
+  import { MCP_TOOL_COUNT } from '#lib/mcp-tools.ts'
+  import { mcpToolsJa } from '#lib/mcp-tools.ja.ts'
 
   const groups = mcpToolsJa()
 
@@ -80,7 +80,7 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
     name="description"
     content="Claude Code などの MCP クライアントを Svelte の開発サーバーに接続する日本語クイックスタート: 接続と認証、基本の流れ、20 のツール、制約、トラブルシューティング。"
   />
-  <link rel="alternate" hreflang="en" href="{base}/mcp" />
+  <link rel="alternate" hreflang="en" href={resolve('/mcp')} />
 </svelte:head>
 
 <div lang="ja">
@@ -97,10 +97,10 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
       </p>
       <p class="release-note">
         このページは <strong>vite-devtools-svelte ≥ 0.4.0</strong> を対象にした、<a
-          href="{base}/mcp"
+          href={resolve('/mcp')}
           lang="en">英語の MCP ガイド</a
         >の要約です。内容が食い違う場合は英語版が正です。実際の回答例（JSON）とスクリーンショットは英語版にあります。先に
-        <a href="{base}/getting-started">Getting Started</a> でプラグインを設定してください。
+        <a href={resolve('/getting-started')}>Getting Started</a> でプラグインを設定してください。
       </p>
     </div>
   </section>
@@ -203,7 +203,7 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
             <h2>基本の流れ</h2>
           </header>
           <p>大きなアプリでも回答を小さく保つ順序です。各ステップの実際の回答は<a
-              href="{base}/mcp#walkthrough"
+              href={resolve('/mcp#walkthrough')}
               lang="en">英語版の Walkthrough</a
             >にあります（合成データのサンプルアプリ <code>examples/sample-app</code> で CI
             が記録したもの）。</p>
@@ -416,7 +416,7 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
               <dt>資料</dt>
               <dd>
                 動画による解説はまだありません。実際の回答例とスクリーンショット（CI
-                で記録）は<a href="{base}/mcp" lang="en">英語の MCP ガイド</a>にあります。
+                で記録）は<a href={resolve('/mcp')} lang="en">英語の MCP ガイド</a>にあります。
               </dd>
             </div>
           </dl>
@@ -425,9 +425,9 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
         <section class="next">
           <h2 class="content-h2">次に読む</h2>
           <ul>
-            <li><a href="{base}/getting-started">プラグインを設定する（英語）</a></li>
-            <li><a href="{base}/mcp#walkthrough">実際の回答例（英語）</a></li>
-            <li><a href="{base}/panels/reactive">Reactivity パネル（英語）</a></li>
+            <li><a href={resolve('/getting-started')}>プラグインを設定する（英語）</a></li>
+            <li><a href={resolve('/mcp#walkthrough')}>実際の回答例（英語）</a></li>
+            <li><a href={resolve('/panels/[slug]', { slug: 'reactive' })}>Reactivity パネル（英語）</a></li>
           </ul>
         </section>
       </article>

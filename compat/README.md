@@ -12,8 +12,8 @@ Smoke tests that run the plugin in three kinds of apps, each **standalone**
 | `kit3`         | `compat/kit3`                                                                  | SvelteKit 3                 | **outside** the workspace |
 
 `compat/kit3` stays outside the workspace on purpose. SvelteKit 3 needs
-Svelte ≥ 5.57.1, and keeping it in its own install means the Kit 2 apps keep
-the versions they were tested with. It also installs the plugin from a packed
+Svelte ≥ 5.57.1, and keeping it in its own install means the Kit 2 profile (`examples/sample-app`) keeps
+the versions it was tested with. It also installs the plugin from a packed
 tarball, the way users get it.
 
 This is a compatibility check, not a benchmark. The 50k-instance performance

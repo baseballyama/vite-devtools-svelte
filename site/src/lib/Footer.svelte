@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { base } from '$app/paths'
+  import { resolve } from '$app/paths'
   import SvelteMark from './SvelteMark.svelte'
   import { pkgVersion } from './version'
 
@@ -9,7 +9,7 @@
 <footer class="band">
   <div class="top">
     <div class="about">
-      <a class="brand" href="{base}/" aria-label="vite-devtools-svelte home">
+      <a class="brand" href={resolve('/')} aria-label="vite-devtools-svelte home">
         <SvelteMark size={28} />
         <span>vite-devtools-svelte</span>
       </a>
@@ -23,10 +23,10 @@
       <section>
         <h2 class="col-title">Docs</h2>
         <ul>
-          <li><a href="{base}/getting-started">Get started</a></li>
-          <li><a href="{base}/mcp">MCP for AI agents</a></li>
-          <li><a href="{base}/ja/mcp" hreflang="ja" lang="ja">MCP クイックスタート（日本語）</a></li>
-          <li><a href="{base}/#panels">All panels</a></li>
+          <li><a href={resolve('/getting-started')}>Get started</a></li>
+          <li><a href={resolve('/mcp')}>MCP for AI agents</a></li>
+          <li><a href={resolve('/ja/mcp')} hreflang="ja" lang="ja">MCP クイックスタート（日本語）</a></li>
+          <li><a href={resolve('/#panels')}>All panels</a></li>
         </ul>
       </section>
       <section>

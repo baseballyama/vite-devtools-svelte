@@ -1,3 +1,4 @@
+import adapter from '@sveltejs/adapter-auto'
 import { sveltekit } from '@sveltejs/kit/vite'
 import { DevTools } from '@vitejs/devtools'
 import { svelteDevtools } from 'vite-devtools-svelte'
@@ -9,6 +10,6 @@ export default defineConfig({
     // $effect transform runs before the Svelte compiler
     svelteDevtools(),
     DevTools(),
-    sveltekit(),
+    sveltekit({ adapter: adapter() }),
   ],
 })

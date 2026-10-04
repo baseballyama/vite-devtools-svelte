@@ -49,6 +49,13 @@
       "enabled": false
     },
     {
+      "description": "examples/sample-app is the SvelteKit 2 compat profile (compat/matrix.json). Keep it on Kit 2: no major updates of Kit or its adapter there; minor/patch still apply.",
+      "matchFileNames": ["examples/sample-app/package.json"],
+      "matchPackageNames": ["@sveltejs/kit", "@sveltejs/adapter-auto"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
       "description": "Pin Node engine: support all active LTS lines, no auto-bumps",
       "matchDepNames": ["node"],
       "enabled": false

@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { base } from '$app/paths'
-  import CodeBlock from '$lib/CodeBlock.svelte'
-  import { MCP_TOOL_COUNT, MCP_TOOL_GROUPS } from '$lib/mcp-tools'
-  import { MCP_EXAMPLES, MCP_EXAMPLES_SOURCE, type McpExample } from '$lib/mcp-examples'
+  import { resolve } from '$app/paths'
+  import { image } from '#lib/paths.ts'
+  import CodeBlock from '#lib/CodeBlock.svelte'
+  import { MCP_TOOL_COUNT, MCP_TOOL_GROUPS } from '#lib/mcp-tools.ts'
+  import { MCP_EXAMPLES, MCP_EXAMPLES_SOURCE, type McpExample } from '#lib/mcp-examples.ts'
 
   const printedCode = `  svelte-devtools MCP ready — register with Claude Code:
     claude mcp add --transport http svelte http://localhost:5173/__svelte-devtools/mcp --header x-svelte-devtools-token:<token>`
@@ -131,7 +132,7 @@ and what changed when I edited the tax rate.`
     <div class="head-meta">
       <span class="eyebrow"><span class="eyebrow-num">§ mcp</span> · for AI agents</span>
       <span class="mono dim">{MCP_TOOL_COUNT} tools</span>
-      <a class="mono" href="{base}/ja/mcp" hreflang="ja" lang="ja">日本語クイックスタート</a>
+      <a class="mono" href={resolve('/ja/mcp')} hreflang="ja" lang="ja">日本語クイックスタート</a>
     </div>
     <h1>MCP.</h1>
     <p class="lead">
@@ -141,7 +142,7 @@ and what changed when I edited the tax rate.`
     </p>
     <p class="release-note">
       This guide describes <strong>vite-devtools-svelte ≥ 0.4.0</strong>. Set it up
-      first with <a href="{base}/getting-started">Getting Started</a>.
+      first with <a href={resolve('/getting-started')}>Getting Started</a>.
     </p>
   </div>
 </section>
@@ -380,7 +381,7 @@ and what changed when I edited the tax rate.`
         <div class="shots">
           {#each shots as s (s.src)}
             <figure>
-              <img src="{base}/images/{s.src}" alt={s.alt} width="1440" height="900" loading="lazy" />
+              <img src={image(s.src)} alt={s.alt} width="1440" height="900" loading="lazy" />
               <figcaption>{s.caption}</figcaption>
             </figure>
           {/each}
@@ -506,8 +507,8 @@ and what changed when I edited the tax rate.`
       <section class="next">
         <h2 class="content-h2">Next steps</h2>
         <ul>
-          <li><a href="{base}/getting-started">Set up the plugin</a></li>
-          <li><a href="{base}/panels/reactive">The Reactivity panel</a></li>
+          <li><a href={resolve('/getting-started')}>Set up the plugin</a></li>
+          <li><a href={resolve('/panels/[slug]', { slug: 'reactive' })}>The Reactivity panel</a></li>
         </ul>
       </section>
     </article>

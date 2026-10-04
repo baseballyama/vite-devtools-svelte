@@ -114,24 +114,64 @@ function routeSegments(i, rand) {
   }
 }
 
+// Major version of the @sveltejs/kit that resolves from `dir` (playground's,
+// for anything under playground/). The fixture follows it so that a checkout
+// from before the Kit 3 move still generates the Kit 2 shape it was measured
+// with: Kit 2 reads svelte.config.js and `$lib`; Kit 3 takes its config from
+// the Vite plugin and uses the `#lib` subpath import. Run-paired refuses
+// B/F pairs whose fixture sources differ, so the two shapes never mix.
+function kitMajor(dir) {
+  for (let d = path.resolve(dir); ; d = path.dirname(d)) {
+    const file = path.join(d, 'node_modules/@sveltejs/kit/package.json')
+    if (fs.existsSync(file)) {
+      const { version } = JSON.parse(fs.readFileSync(file, 'utf8'))
+      const major = Number(version.split('.')[0])
+      if (!Number.isInteger(major)) throw new Error(`unexpected @sveltejs/kit version ${version}`)
+      return major
+    }
+    if (path.dirname(d) === d) throw new Error(`@sveltejs/kit not found from ${dir}`)
+  }
+}
+
+// Fixture shape for the Kit that resolves from `dir`.
+export function kitShape(dir) {
+  return kitMajor(dir) >= 3 ? 'kit3' : 'kit2'
+}
+
+// Shape of an existing fixture in `out` (null: none), to detect one generated
+// for another Kit major.
+export function fixtureShape(out) {
+  if (!fs.existsSync(path.join(out, 'package.json'))) return null
+  return fs.existsSync(path.join(out, 'svelte.config.js')) ? 'kit2' : 'kit3'
+}
+
 // Files under playground/.temp resolve playground/tsconfig.json, which extends
-// playground/.svelte-kit/tsconfig.json — absent in a fresh checkout. Generate
-// it (gitignored) the same way `svelte-kit sync` does in a normal dev flow.
+// the tsconfig `svelte-kit sync` generates (Kit 2: .svelte-kit/tsconfig.json,
+// Kit 3: node_modules/$app/tsconfig.json) — absent in a fresh checkout.
+// Generate it (gitignored) the same way a normal dev flow does.
 export function ensurePlaygroundSync(repo = repoRoot) {
   const playground = path.join(repo, 'playground')
-  if (fs.existsSync(path.join(playground, '.svelte-kit/tsconfig.json'))) return false
+  const generated =
+    kitShape(playground) === 'kit3'
+      ? 'node_modules/$app/tsconfig.json'
+      : '.svelte-kit/tsconfig.json'
+  if (fs.existsSync(path.join(playground, generated))) return false
   const res = spawnSync(
     process.execPath,
     [path.join(playground, 'node_modules/@sveltejs/kit/svelte-kit.js'), 'sync'],
     { cwd: playground, stdio: 'inherit' },
   )
-  if (res.status !== 0) throw new Error('svelte-kit sync failed in playground/')
+  // Kit 3's sync loads playground/vite.config.ts, so the plugin must be built.
+  if (res.status !== 0)
+    throw new Error('svelte-kit sync failed in playground/ (is the plugin built? pnpm build)')
   return true
 }
 
 export function generate(opts = DEFAULTS) {
   const rand = mulberry32(0x5eed)
   const out = opts.out
+  const shape = kitShape(out)
+  const lib = shape === 'kit3' ? '#lib' : '$lib'
   fs.rmSync(out, { recursive: true, force: true })
 
   write(
@@ -143,6 +183,7 @@ export function generate(opts = DEFAULTS) {
         name: 'perf-large-app',
         private: true,
         type: 'module',
+        ...(shape === 'kit3' && { imports: { '#lib/*': './src/lib/*' } }),
         devDependencies: Object.fromEntries(
           [
             '@sveltejs/kit',
@@ -181,21 +222,25 @@ export default defineConfig({
   write(
     path.join(out, 'tsconfig.json'),
     JSON.stringify(
-      {
-        extends: './.svelte-kit/tsconfig.json',
-        compilerOptions: { strict: true, skipLibCheck: true, moduleResolution: 'bundler' },
-      },
+      shape === 'kit3'
+        ? { extends: '$app/tsconfig', include: ['src', '*'], compilerOptions: { strict: true } }
+        : {
+            extends: './.svelte-kit/tsconfig.json',
+            compilerOptions: { strict: true, skipLibCheck: true, moduleResolution: 'bundler' },
+          },
       null,
       2,
     ) + '\n',
   )
 
-  write(
-    path.join(out, 'svelte.config.js'),
-    `/** @type {import('@sveltejs/kit').Config} */
+  if (shape === 'kit2') {
+    write(
+      path.join(out, 'svelte.config.js'),
+      `/** @type {import('@sveltejs/kit').Config} */
 export default { kit: {} }
 `,
-  )
+    )
+  }
 
   write(
     path.join(out, 'src/app.html'),
@@ -292,7 +337,7 @@ export default { kit: {} }
   write(
     path.join(out, 'src/routes/+page.svelte'),
     `<script lang="ts">
-  import C0000 from '$lib/components/gen/C0000.svelte'
+  import C0000 from '${lib}/components/gen/C0000.svelte'
 </script>
 
 <h1>perf large app</h1>
@@ -306,8 +351,8 @@ export default { kit: {} }
     path.join(out, 'src/routes/bench/+page.svelte'),
     `<script lang="ts">
   import { tick } from 'svelte'
-  import Row from '$lib/bench/Row.svelte'
-  import Tree from '$lib/bench/Tree.svelte'
+  import Row from '${lib}/bench/Row.svelte'
+  import Tree from '${lib}/bench/Tree.svelte'
 
   let rows = $state<{ id: number; value: number }[]>([])
   let tree = $state<{ depth: number; breadth: number } | null>(null)
@@ -404,7 +449,7 @@ export default { kit: {} }
     write(
       path.join(dir, '+page.svelte'),
       `<script lang="ts">
-  import C from '$lib/components/gen/C${pad(comp)}.svelte'
+  import C from '${lib}/components/gen/C${pad(comp)}.svelte'
   let { data } = $props()
 </script>
 
@@ -464,7 +509,7 @@ export async function POST({ request }) {
     write(file, content)
   }
 
-  return { out, ...opts }
+  return { out, shape, ...opts }
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

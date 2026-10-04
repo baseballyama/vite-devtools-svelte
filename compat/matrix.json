@@ -141,13 +141,13 @@
     },
     {
       "dir": "examples/strict-csp-app",
-      "kit": "2.70.3",
-      "note": "Existing strict-CSP example, unchanged and not a compat profile."
+      "kit": "3.0.0",
+      "note": "Existing strict-CSP example, not a compat profile. Built and type-checked in the CI job \"Playground production build\"."
     },
     {
       "dir": "playground",
-      "kit": "2.70.3",
-      "note": "Covered by the existing CI job \"Playground production build\"."
+      "kit": "3.0.0",
+      "note": "Built and type-checked in the CI job \"Playground production build\"."
     }
   ]
 }

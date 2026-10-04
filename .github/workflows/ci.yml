@@ -93,8 +93,9 @@ jobs:
         run: pnpm build
 
       # The build does not type-check. The site has no svelte-check of its
-      # own; use the workspace's official svelte-check (from the Kit 2
-      # example) against the site's tsconfig, after svelte-kit sync.
+      # own; use the workspace's official svelte-check (installed in the Kit 2
+      # example; the site is on Kit 3) against the site's tsconfig, after
+      # svelte-kit sync.
       - name: Site typecheck (svelte-check)
         run: |
           pnpm -C site exec svelte-kit sync
@@ -150,6 +151,40 @@ jobs:
             echo "::error::Devtools virtual modules leaked into production build"
             exit 1
           fi
+
+      # The example exists to enforce a nonce-based CSP; check that the built
+      # app actually sends it. Only the preview server started here is stopped.
+      - name: Build strict-csp-app & check its CSP response header
+        working-directory: examples/strict-csp-app
+        timeout-minutes: 3
+        run: |
+          pnpm exec vite build
+          node node_modules/vite/bin/vite.js preview --port 4319 --strictPort > preview.log 2>&1 &
+          preview_pid=$!
+          trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
+          for _ in $(seq 1 30); do
+            curl -sf -o /dev/null --max-time 2 http://localhost:4319/ && break
+            sleep 1
+          done
+          headers=$(curl -sf -D - -o /dev/null --max-time 10 http://localhost:4319/ || true)
+          if ! grep -qi "^content-security-policy:.*script-src 'self' 'nonce-" <<< "$headers"; then
+            echo "::error::strict-csp-app did not send its nonce-based CSP header"
+            echo "$headers"
+            cat preview.log
+            exit 1
+          fi
+          grep -i '^content-security-policy:' <<< "$headers"
+
+      # Same approach as the site typecheck: the workspace's svelte-check
+      # (from the Kit 2 example) against each app's tsconfig, after sync.
+      - name: Playground & strict-csp-app typecheck (svelte-check)
+        # independent of the build/CSP step above: report both on one run
+        if: ${{ !cancelled() }}
+        run: |
+          pnpm -C playground exec svelte-kit sync
+          pnpm -C examples/sample-app exec svelte-check --workspace ../../playground --tsconfig ./tsconfig.json
+          pnpm -C examples/strict-csp-app exec svelte-kit sync
+          pnpm -C examples/sample-app exec svelte-check --workspace ../strict-csp-app --tsconfig ./tsconfig.json
 
   # Compatibility smoke tests (compat/README.md): the plugin in a plain
   # Svelte + Vite app, the existing SvelteKit 2 sample and a SvelteKit 3

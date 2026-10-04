@@ -1313,7 +1313,7 @@ async function tier2(p, getSrv, restart, app) {
 
   await step(
     'T2 HMR: page updates without reload, fixture components still listed',
-    45_000,
+    60_000,
     async () => {
       if (!p.targets.hmr) return { notRun: 'matrix.json has no smoke.hmr' }
       // marker set here (independent of earlier steps): a full reload loses it
@@ -1327,6 +1327,7 @@ async function tier2(p, getSrv, restart, app) {
         vite: app.viteLog.slice(logFrom, logFrom + 5),
         navigations: app.navigations() - navFrom,
       })
+      let result
       try {
         await page.waitForFunction(t => document.body.innerText.includes(t), p.targets.hmr.text, {
           timeout: 25_000,
@@ -1337,7 +1338,7 @@ async function tier2(p, getSrv, restart, app) {
         // the open UI keeps showing the fixture without a manual reload
         if (mode === 'dock') await uiShowsFixture(page.frameLocator(DOCK_FRAME), p)
         else if (ui) await uiShowsFixture(ui, p)
-        return {
+        result = {
           ...facts,
           ui: mode === 'dock' || ui ? 'still shows fixture components' : 'not open',
           update: how(),
@@ -1345,6 +1346,18 @@ async function tier2(p, getSrv, restart, app) {
       } finally {
         restore()
       }
+      // The revert is a second hot update. Wait until the page shows it: the
+      // next step restarts the server, and a restart while the client still
+      // fetches the reverted module makes Vite's HMR apply throw a page error.
+      try {
+        await page.waitForFunction(t => !document.body.innerText.includes(t), p.targets.hmr.text, {
+          timeout: 15_000,
+        })
+      } catch (e) {
+        const latest = { vite: app.viteLog.slice(-5), navigations: app.navigations() - navFrom }
+        throw new Error(`HMR revert not applied: ${e.message} ${JSON.stringify(latest)}`)
+      }
+      return result
     },
   )
 
