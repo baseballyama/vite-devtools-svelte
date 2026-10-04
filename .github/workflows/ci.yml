@@ -39,6 +39,9 @@ jobs:
       - name: Client typecheck (rsvelte-check)
         run: pnpm -C packages/vite-devtools-svelte/client check
 
+      - name: Plugin typecheck (tsc)
+        run: pnpm -C packages/vite-devtools-svelte exec tsc --noEmit -p tsconfig.json
+
   test:
     name: Plugin tests + build
     runs-on: ubuntu-latest
