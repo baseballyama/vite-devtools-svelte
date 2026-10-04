@@ -56,6 +56,11 @@
       "enabled": false
     },
     {
+      "description": "Keep typescript on 6.x for peers and API consumers (svelte-check peers ^5 || ^6). matchDepNames matches only the manifest key, so the root @typescript/native alias (TypeScript 7, packageName typescript) still updates. Do not switch this to matchPackageNames.",
+      "matchDepNames": ["typescript"],
+      "allowedVersions": "<7"
+    },
+    {
       "description": "Pin Node engine: support all active LTS lines, no auto-bumps",
       "matchDepNames": ["node"],
       "enabled": false
