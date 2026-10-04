@@ -5,6 +5,8 @@
 // uploads the artifact only when this script succeeded.
 //
 // Usage: node perf/ci/sanitize-artifact.mjs <src-dir>... --out=<dir>
+//        <cmd> | node perf/ci/sanitize-artifact.mjs --stream   (redact only, for
+//        console output that goes to the public job log)
 // Only text results are copied (.json .md .txt .cpuprofile .log); images are
 // dropped because they cannot be scanned for codes or paths.
 
@@ -13,9 +15,11 @@ import os from 'node:os'
 import path from 'node:path'
 
 const args = process.argv.slice(2)
+const stream = args.includes('--stream')
 const out = args.find(a => a.startsWith('--out='))?.slice(6)
 const srcs = args.filter(a => !a.startsWith('--'))
-if (!out || srcs.length === 0) throw new Error('usage: sanitize-artifact.mjs <src>... --out=<dir>')
+if (!stream && (!out || srcs.length === 0))
+  throw new Error('usage: sanitize-artifact.mjs <src>... --out=<dir> | --stream')
 
 const TEXT = /\.(json|md|txt|cpuprofile|log)$/
 const roots = [
@@ -37,7 +41,30 @@ const redact = text => {
   t = t.replace(/(auth code\s+)\d{6}/g, '$1<otp>')
   t = t.replace(/(devframe_otp=)\d{6}/g, '$1<otp>')
   t = t.replace(/([?&](?:token|auth|devframe_token)=)[^&\s"']+/g, '$1<redacted>')
+  // JSON-style secrets ("token": "…", "devframe_token": …, "trustedToken": …)
+  t = t.replace(
+    /("(?:[\w-]*token|[\w-]*secret|auth|authorization|password)"\s*:\s*)"(?!<redacted>)[^"]*"/gi,
+    '$1"<redacted>"',
+  )
+  // UUID-shaped ids (trusted tokens, the Node inspector session id) and ws URLs
+  t = t.replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, '<uuid>')
+  t = t.replace(/ws:\/\/(?!<redacted>)[^\s"']+/g, 'ws://<redacted>')
   return t
+}
+
+if (stream) {
+  // line-buffered pass-through for console output
+  let buf = ''
+  process.stdin.setEncoding('utf8')
+  process.stdin.on('data', d => {
+    buf += d
+    const i = buf.lastIndexOf('\n')
+    if (i >= 0) {
+      process.stdout.write(redact(buf.slice(0, i + 1)))
+      buf = buf.slice(i + 1)
+    }
+  })
+  process.stdin.on('end', () => process.stdout.write(redact(buf)))
 }
 
 const FORBIDDEN = [
@@ -49,32 +76,42 @@ const FORBIDDEN = [
   ['otp', /(auth code\s+|devframe_otp=)\d{6}/],
   ['token-param', /[?&](?:token|auth|devframe_token)=(?!<redacted>)[^&\s"']+/],
   ['bearer', /\bBearer\s+[A-Za-z0-9._-]{16,}/],
+  [
+    'json-token',
+    /"(?:[\w-]*token|[\w-]*secret|auth|authorization|password)"\s*:\s*(?!"<redacted>")"[^"]+"/i,
+  ],
+  ['uuid', /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i],
+  ['ws-url', /ws:\/\/(?!<redacted>)[^\s"']+/],
 ]
 
 let files = 0
 const hits = []
-const walk = (src, dst) => {
-  for (const ent of fs.readdirSync(src, { withFileTypes: true })) {
-    const s = path.join(src, ent.name)
-    const d = path.join(dst, ent.name)
-    if (ent.isDirectory()) walk(s, d)
-    else if (TEXT.test(ent.name)) {
-      const text = redact(fs.readFileSync(s, 'utf8'))
-      for (const [id, re] of FORBIDDEN)
-        if (re.test(text)) hits.push({ file: path.relative(out, d), id })
-      fs.mkdirSync(path.dirname(d), { recursive: true })
-      fs.writeFileSync(d, text)
-      files++
+if (!stream) run()
+
+function run() {
+  const walk = (src, dst) => {
+    for (const ent of fs.readdirSync(src, { withFileTypes: true })) {
+      const s = path.join(src, ent.name)
+      const d = path.join(dst, ent.name)
+      if (ent.isDirectory()) walk(s, d)
+      else if (TEXT.test(ent.name)) {
+        const text = redact(fs.readFileSync(s, 'utf8'))
+        for (const [id, re] of FORBIDDEN)
+          if (re.test(text)) hits.push({ file: path.relative(out, d), id })
+        fs.mkdirSync(path.dirname(d), { recursive: true })
+        fs.writeFileSync(d, text)
+        files++
+      }
     }
   }
-}
-fs.rmSync(out, { recursive: true, force: true })
-for (const src of srcs) if (fs.existsSync(src)) walk(src, path.join(out, path.basename(src)))
-if (hits.length) {
-  // fail closed: drop everything that was copied
   fs.rmSync(out, { recursive: true, force: true })
-  console.error(`sanitize: ${hits.length} forbidden match(es); artifact withheld`)
-  for (const h of hits) console.error(`  ${h.file}: ${h.id}`)
-  process.exit(1)
+  for (const src of srcs) if (fs.existsSync(src)) walk(src, path.join(out, path.basename(src)))
+  if (hits.length) {
+    // fail closed: drop everything that was copied
+    fs.rmSync(out, { recursive: true, force: true })
+    console.error(`sanitize: ${hits.length} forbidden match(es); artifact withheld`)
+    for (const h of hits) console.error(`  ${h.file}: ${h.id}`)
+    process.exit(1)
+  }
+  console.log(`sanitize: ${files} text file(s) copied, 0 forbidden matches`)
 }
-console.log(`sanitize: ${files} text file(s) copied, 0 forbidden matches`)

@@ -28,6 +28,7 @@ import {
   openDevtoolsTab,
   r1,
   repoRoot,
+  runtimeBreakdown,
   runtimeState,
   sha256File,
   sha256Tree,
@@ -127,6 +128,25 @@ async function measureState(browser, state) {
     res.groundTruth.countsAtEnd = await page.evaluate(() => window.__reactive.counts())
     res.heapEndMB = r1((await heapAfterGc(cdp)) / 1048576)
     res.runtime = await runtimeState(page)
+    // Ground truth vs runtime by kind (review M6). Expected counts cover the
+    // generated cells/groups only; probes (module state, class items, causal
+    // rows) show up per file in the breakdown. Unexplained differences are
+    // flagged, and node totals are not used as an axis until explained.
+    res.runtimeBreakdown = await runtimeBreakdown(page)
+    if (res.runtimeBreakdown) {
+      const exp = res.groundTruth.expected.nodes
+      const got = res.runtimeBreakdown.nodesByType
+      const proxies = res.runtimeBreakdown.proxies ?? 0
+      res.kindCompare = {
+        state: { expected: exp.state, runtime: (got.state ?? 0) - proxies },
+        proxy: { expected: exp.proxy, runtime: proxies },
+        derived: { expected: exp.derived, runtime: got.derived ?? 0 },
+        effect: { expected: exp.effect, runtime: got.effect ?? 0 },
+      }
+      res.kindMismatch = Object.entries(res.kindCompare)
+        .filter(([, v]) => v.expected !== v.runtime)
+        .map(([k, v]) => `${k}: expected ${v.expected}, runtime ${v.runtime}`)
+    }
     res.wsSentByEvent = ws.sentByEvent()
     res.errors = errors
     res.notes = side.notes
@@ -179,10 +199,21 @@ async function main() {
         log(`${state} skipped — gate failed`)
         continue
       }
-      const r = await measureState(browser, state)
+      let r
+      try {
+        r = await measureState(browser, state)
+      } catch (e) {
+        r = { state, error: String(e?.stack ?? e).slice(0, 2000) }
+      }
       r.gate = gate
       r.envAfter = envSnapshot()
       items.push(r)
+      // written after every state, so a later failure keeps earlier ones (M4)
+      fs.writeFileSync(
+        path.join(outDir, 'reactive.json'),
+        JSON.stringify({ ...header, items, complete: false }, null, 2) + '\n',
+      )
+      if (r.error) throw new Error(`reactive ${state} failed (recorded)`)
       log(
         `${state}: noise task ${r.noiseWindow.taskMs} ms / ${opts.noiseMs} ms, runtime nodes ${r.runtime?.reactiveNodes ?? 'n/a'} of ${r.groundTruth.expected.total} expected`,
       )
@@ -192,7 +223,7 @@ async function main() {
   }
   fs.writeFileSync(
     path.join(outDir, 'reactive.json'),
-    JSON.stringify({ ...header, items }, null, 2) + '\n',
+    JSON.stringify({ ...header, items, complete: true }, null, 2) + '\n',
   )
   log(`done → ${path.join(outDir, 'reactive.json')}`)
 }

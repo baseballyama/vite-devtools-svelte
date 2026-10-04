@@ -6,7 +6,8 @@
 import { median, r1 } from './harness.mjs'
 
 export const METRICS = [
-  ['rows mount ms', r => r.rows?.mountMs],
+  ['rows mount ms (steady, reps >= 2)', r => r.rows?.mountMs],
+  ['rows warm-up mount ms (rep 1)', r => r.rows?.warmupMountMs],
   ['rows unmount ms', r => r.rows?.unmountMs],
   ['tree mount ms', r => r.tree?.mountMs],
   ['tree unmount ms', r => r.tree?.unmountMs],
@@ -15,6 +16,7 @@ export const METRICS = [
   ['idle HMR bytes sent', r => median(r.idle.map(i => i.ws?.sent.bytes ?? 0))],
   ['mount/unmount HMR bytes sent', r => r.rows?.ws?.sent.bytes],
   ['churn frame p95 ms', r => r.churn?.p95],
+  ['input click -> frame median ms', r => r.input?.clickToFrameMs?.median],
   ['churn frames > 50 ms', r => r.churn?.over50ms],
   ['heap mounted MB', r => r.heapMountedMB],
   ['heap growth after cycles MB', r => r.leak?.growthMB],
@@ -49,10 +51,39 @@ export function compare(bVals, fVals) {
   }
 }
 
+export const UI_METRICS = [
+  ['Components select ms', u => u.interactions?.selectMs],
+  ['Components search ms', u => u.interactions?.searchMs],
+  ['Components expand ms', u => u.interactions?.expandMs],
+  ['panel switch Components ms', u => u.panels?.Components?.switchMs],
+  ['panel switch Reactive ms', u => u.panels?.Reactive?.switchMs],
+  ['panel switch Timeline ms', u => u.panels?.Timeline?.switchMs],
+  ['Components idle task ms', u => u.componentsIdle?.taskMs],
+]
+
+/**
+ * Only valid, latency-mode samples are aggregated: skipped/failed items, runs
+ * whose `validity.valid` is false, and profiled runs are excluded and counted.
+ */
 export function summarize(items) {
   const groups = new Map()
+  const excluded = []
+  const ui = { B: [], F: [] }
   for (const item of items) {
+    if (item.ui) {
+      if (item.ui.profiled || item.ui.validity?.valid === false || item.error)
+        excluded.push(
+          `${item.n}-${item.side} ui: ${item.ui.profiled ? 'profiled' : (item.ui.validity?.reasons ?? ['item error']).join('; ')}`,
+        )
+      else ui[item.side].push(item.ui)
+    }
     for (const run of item.app ?? []) {
+      if (run.profiled || run.validity?.valid === false || item.error) {
+        excluded.push(
+          `${item.n}-${item.side} ${run.scale} ${run.scenario}: ${run.profiled ? 'profiled' : (run.validity?.reasons ?? ['item error']).join('; ')}`,
+        )
+        continue
+      }
       const key = `${run.scale} / ${run.scenario}`
       if (!groups.has(key))
         groups.set(key, { scale: run.scale, scenario: run.scenario, B: [], F: [] })
@@ -74,5 +105,22 @@ export function summarize(items) {
       md.push(`| ${g.scale} | ${g.scenario} | ${name} | ${fmt(c.b)} | ${fmt(c.f)} | ${c.verdict} |`)
     }
   }
-  return { table: out, markdown: md.join('\n') }
+  if (ui.B.length || ui.F.length) {
+    out.ui = {}
+    md.push(
+      '',
+      '| DevTools UI | B median [min–max] (n) | F median [min–max] (n) | verdict |',
+      '|---|---|---|---|',
+    )
+    for (const [name, get] of UI_METRICS) {
+      const c = compare(ui.B.map(get), ui.F.map(get))
+      out.ui[name] = c
+      const fmt = s =>
+        s?.median === undefined ? '—' : `${s.median} [${r1(s.min)}–${r1(s.max)}] (${s.n})`
+      md.push(`| ${name} | ${fmt(c.b)} | ${fmt(c.f)} | ${c.verdict} |`)
+    }
+  }
+  if (excluded.length)
+    md.push('', `Excluded samples (${excluded.length}):`, ...excluded.map(e => `- ${e}`))
+  return { table: out, excluded, markdown: md.join('\n') }
 }

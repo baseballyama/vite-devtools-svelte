@@ -50,7 +50,7 @@ jobs:
       - name: Sanitize artifact (fail closed)
         id: sanitize
         if: always()
-        run: node perf/ci/sanitize-artifact.mjs perf-out --out=perf-artifact
+        run: node perf/ci/sanitize-artifact.mjs "$RUNNER_TEMP/perf-out" --out=perf-artifact
 
       - name: Upload artifact
         if: always() && steps.sanitize.outcome == 'success'

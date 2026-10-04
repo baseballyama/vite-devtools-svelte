@@ -1,26 +1,30 @@
 #!/usr/bin/env bash
 # One measurement phase on a GitHub-hosted Linux runner (perf-linux.yml).
 # Every phase records the runner spec, per-file hash manifests of each
-# measured checkout (same method on every side) and timings per step into
-# $OUT, which perf/ci/sanitize-artifact.mjs then scrubs before upload.
+# measured checkout (same method on every side), a resource sampler and
+# timings into $OUT (under $RUNNER_TEMP, outside every checkout), which
+# perf/ci/sanitize-artifact.mjs scrubs before upload. Console output is
+# redacted on the way to the public job log as well.
 #
-#   smoke   e0d1e51 (this branch's plugin source) only, S1k: OFF / CLOSED / OPEN
-#           + DevTools UI latencies. Harness check; n = 1, no effect conclusions.
-#   profile e0d1e51 OPEN with CDP + node CPU profiles (mode "profiled"; its
-#           timings are not compared with latency runs)
-#   smoke-reactive  smoke, then the reactive phase below (both mode latency)
-#   reactive reduced reactive fixture (separate axis), OFF / CLOSED / OPEN, n = 1
-#   pairA   B ee3a716 vs F dc60aa2 (code delta, same deps), BFFB, OFF/CLOSED/OPEN + UI
-#   pairB   B dc60aa2 vs F e0d1e51 (deps delta, same plugin source), same protocol
+#   smoke            e0d1e51 only, S1k: OFF / CLOSED / OPEN + DevTools UI. n = 1.
+#   smoke-reactive   smoke, then `reactive`.
+#   reactive         reduced reactive fixture (separate axis), OFF / CLOSED / OPEN, n = 1.
+#   profile          e0d1e51, mode "profiled": per-window CPU profiles (idle / input /
+#                    churn) for CLOSED and OPEN, server cold load vs steady windows,
+#                    DevTools UI operations. Never compared with latency runs.
+#   pairA            B ee3a716 vs F dc60aa2 (code delta, same deps), BFFB, mode latency.
+#   pairB            B dc60aa2 vs F e0d1e51 (deps delta, same plugin source), same protocol.
 set -euo pipefail
 
 PHASE="${1:?phase}"
 ROOT="$(pwd)"
-OUT="$ROOT/perf-out"
+OUT="${RUNNER_TEMP:?}/perf-out"
 SIDES="$RUNNER_TEMP/sides"
-mkdir -p "$OUT/manifests" "$SIDES"
+mkdir -p "$OUT/manifests" "$OUT/results" "$SIDES"
 T0=$(date +%s)
 step() { echo "$(( $(date +%s) - T0 ))s $*" | tee -a "$OUT/timings.txt"; }
+redact() { node "$ROOT/perf/ci/sanitize-artifact.mjs" --stream; }
+RESULT_DIRS=("$ROOT/playground/.temp/perf-results")
 
 spec() {
   {
@@ -39,23 +43,26 @@ spec() {
   } > "$OUT/spec.txt"
 }
 
-# Same method for every side: lockfile, plugin sources, dist files.
+# Same method for every side: lockfile, plugin and client sources, dist files,
+# resolved versions. `dirty` ignores the harness's own fixture/result dirs.
 manifest() { # <dir> <label>
   local d="$1" f="$OUT/manifests/$2.txt"
   {
     echo "rev $(git -C "$d" rev-parse HEAD)"
-    echo "dirty $(git -C "$d" status --porcelain | wc -l)"
+    echo "dirty $(git -C "$d" status --porcelain -- . ':!playground/.temp' | wc -l)"
     (cd "$d" && sha256sum pnpm-lock.yaml)
+    echo "src-tree $(cd "$d" && find packages/vite-devtools-svelte/src packages/vite-devtools-svelte/client/src -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-16)"
     (cd "$d" && find packages/vite-devtools-svelte/src -type f -print0 | sort -z | xargs -0 sha256sum)
     (cd "$d" && find packages/vite-devtools-svelte/dist -type f -print0 | sort -z | xargs -0 sha256sum)
     for p in vite svelte @sveltejs/kit @sveltejs/vite-plugin-svelte @vitejs/devtools; do
-      echo "$p $(node -p "require('$d/playground/node_modules/$p/package.json').version" 2>/dev/null || echo n/a)"
+      echo "dep $p $(node -p "require('$d/playground/node_modules/$p/package.json').version" 2>/dev/null || echo n/a)"
     done
   } > "$f"
 }
 
 side() { # <sha> <label>: pristine worktree, its own pnpm, build
   local sha="$1" dir="$SIDES/$2"
+  git cat-file -e "$sha^{commit}" || { echo "commit $sha not available" >&2; exit 2; }
   git worktree add -q --detach "$dir" "$sha"
   local pm; pm=$(node -p "require('$dir/package.json').packageManager.replace(/\+.*/, '')")
   # build:plugin + build:client called directly with the side's own pnpm (the
@@ -64,87 +71,117 @@ side() { # <sha> <label>: pristine worktree, its own pnpm, build
     && npx -y "$pm" -C packages/vite-devtools-svelte build >/dev/null \
     && npx -y "$pm" -C packages/vite-devtools-svelte/client build >/dev/null)
   manifest "$dir" "$2"
+  RESULT_DIRS+=("$dir/playground/.temp/perf-results")
   step "side $2 ($sha, $pm) installed + built"
 }
 
-# Resource sampler for the whole phase (peak memory / load / CPU): one line
-# every 2 s. Only this PID (our own child) is stopped at the end.
+# assert_same <a> <b> <regex of manifest lines that must match> <what>
+assert_same() {
+  local a="$OUT/manifests/$1.txt" b="$OUT/manifests/$2.txt"
+  if diff <(grep -E "$3" "$a") <(grep -E "$3" "$b") > /dev/null; then
+    echo "stack check: $4 identical ($1 vs $2)" | tee -a "$OUT/spec.txt"
+  else
+    echo "stack check: $4 DIFFERS ($1 vs $2)" | tee -a "$OUT/spec.txt"
+    diff <(grep -E "$3" "$a") <(grep -E "$3" "$b") | head -20 >> "$OUT/spec.txt" || true
+    exit 2
+  fi
+}
+
+# Resource sampler for the whole phase (peak memory / load / CPU / PSI): one
+# line every 2 s. Only this PID (our own child) is stopped at the end.
 sampler() {
   local prev; prev=$(head -1 /proc/stat)
   while sleep 2; do
     local cur; cur=$(head -1 /proc/stat)
     local idle; idle=$(awk -v a="$prev" -v b="$cur" 'BEGIN{split(a,x," ");split(b,y," ");i0=(y[5]+y[6])-(x[5]+x[6]);t=0;for(i=2;i<=11;i++)t+=y[i]-x[i];printf "%.1f",(t>0?100*i0/t:0)}')
     prev=$cur
-    echo "$(date +%s) avail_mb=$(awk '/^MemAvailable/{print int($2/1024)}' /proc/meminfo) load1=$(cut -d' ' -f1 /proc/loadavg) idle=$idle psi_mem=$(awk '/^some/{print $2}' /proc/pressure/memory 2>/dev/null)"
+    local psi; psi=$(awk '/^some/{sub("avg10=","",$2);print $2}' /proc/pressure/memory 2>/dev/null)
+    echo "$(date +%s) avail_mb=$(awk '/^MemAvailable/{print int($2/1024)}' /proc/meminfo) load1=$(cut -d' ' -f1 /proc/loadavg) idle=$idle psi_mem=${psi:-na}"
   done > "$OUT/resources.txt"
 }
 sampler &
 SAMPLER_PID=$!
 finish() {
+  local code=$?
   kill "$SAMPLER_PID" 2>/dev/null || true
+  # results are copied on every exit path, incl. failures and watchdogs (M4)
+  for d in "${RESULT_DIRS[@]}"; do
+    [ -d "$d" ] && cp -r "$d/." "$OUT/results/" 2>/dev/null || true
+  done
   if [ -s "$OUT/resources.txt" ]; then
     awk '{for(i=2;i<=NF;i++){split($i,kv,"=");v[kv[1]]=kv[2]}
-      if(min==""||v["avail_mb"]<min)min=v["avail_mb"]; if(v["load1"]>ml)ml=v["load1"];
-      if(mi==""||v["idle"]<mi)mi=v["idle"]; n++}
-      END{printf "samples %d (2 s), min MemAvailable %s MB, max load1 %s, min CPU idle %s%%\n",n,min,ml,mi}' \
+      if(min==""||v["avail_mb"]+0<min)min=v["avail_mb"]+0; if(v["load1"]+0>ml)ml=v["load1"]+0;
+      if(mi==""||v["idle"]+0<mi)mi=v["idle"]+0; if(v["psi_mem"]+0>mp)mp=v["psi_mem"]+0; n++}
+      END{printf "samples %d (2 s), min MemAvailable %s MB, max load1 %s, min CPU idle %s%%, max PSI mem some avg10 %s\n",n,min,ml,mi,mp+0}' \
       "$OUT/resources.txt" > "$OUT/resources-summary.txt"
   fi
+  echo "oom after phase: $(grep -E '^(oom|oom_kill) ' /sys/fs/cgroup/memory.events 2>/dev/null | tr '\n' ' ')" >> "$OUT/resources-summary.txt"
+  echo "exit $code" >> "$OUT/timings.txt"
 }
 trap finish EXIT
 
 spec
 step "start"
 GATE="--gate=$(nproc):50 --linux-gate=2048:10 --gate-wait=180 --gate-policy=skip"
+E0=e0d1e5165ebb16436da8ea4897e2cf3050047fd5
+
+same_as_e0() {
+  # This branch changes only perf/ and .github/ relative to e0d1e51.
+  if git diff --quiet "$E0" HEAD -- packages playground pnpm-lock.yaml; then
+    echo "plugin/playground/lockfile identical to e0d1e51" >> "$OUT/spec.txt"
+  else
+    echo "plugin/playground/lockfile DIFFERS from e0d1e51" | tee -a "$OUT/spec.txt"
+    exit 2
+  fi
+  manifest "$ROOT" e0d1e51-branch
+}
 
 case "$PHASE" in
   smoke | smoke-reactive)
-    # This branch changes only perf/ and .github/ relative to e0d1e51.
-    git diff --quiet e0d1e5165ebb16436da8ea4897e2cf3050047fd5 HEAD -- packages playground pnpm-lock.yaml \
-      && echo "plugin/playground/lockfile identical to e0d1e51" >> "$OUT/spec.txt"
-    manifest "$ROOT" e0d1e51-branch
+    same_as_e0
     node perf/run-paired.mjs --order=F --parts=A,OFF,UI --scales=1000:none \
-      --label=smoke-S1k $GATE --max-min=7 2>&1 | tee "$OUT/smoke.log"
+      --label=smoke-S1k $GATE --max-min=7 2>&1 | redact | tee "$OUT/smoke.log"
     step "smoke S1k OFF/CLOSED/OPEN/UI done (mode latency)"
     if [ "$PHASE" = smoke-reactive ]; then
       node perf/reactive-smoke.mjs --treeDepth=3 --gate=$(nproc):50 --linux-gate=2048:10 \
-        --gate-wait=180 --max-min=9 2>&1 | tee "$OUT/reactive.log"
+        --gate-wait=180 --max-min=9 2>&1 | redact | tee "$OUT/reactive.log"
       step "reactive smoke done (mode latency)"
     fi
     ;;
+  reactive)
+    same_as_e0
+    node perf/reactive-smoke.mjs --treeDepth=3 --gate=$(nproc):50 --linux-gate=2048:10 \
+      --gate-wait=180 --max-min=9 2>&1 | redact | tee "$OUT/reactive.log"
+    step "reactive smoke done (mode latency)"
+    ;;
   profile)
     # Separate run: profiler overhead must not leak into latency numbers.
-    manifest "$ROOT" e0d1e51-branch
-    node perf/run-paired.mjs --order=F --parts=A --scales=1000:none --cpu-profile=1 \
-      --label=profile-S1k-open $GATE --max-min=6 2>&1 | tee "$OUT/profile.log"
-    step "profiled OPEN item done (mode profiled)"
-    ;;
-  reactive)
-    # Separate axis: reduced reactive-state fixture (treeDepth 3 ~ 6 000 tracked
-    # nodes, not the 50 800-node default), OFF / CLOSED / OPEN, n = 1.
-    manifest "$ROOT" e0d1e51-branch
-    node perf/reactive-smoke.mjs --treeDepth=3 --gate=$(nproc):50 --linux-gate=2048:10 \
-      --gate-wait=180 --max-min=9 2>&1 | tee "$OUT/reactive.log"
-    step "reactive smoke done (mode latency)"
+    same_as_e0
+    node perf/run-paired.mjs --order=F --parts=A,UI --scales="${PROFILE_SCALES:-3000:4x5}" \
+      --cpu-profile=1 --label=profile $GATE --max-min=10 2>&1 | redact | tee "$OUT/profile.log"
+    step "profiled windows done (mode profiled)"
     ;;
   pairA | pairB)
     # Fixed baselines, pristine detached worktrees, each installed with its own
     # pnpm and built; the harness and Chromium come from this branch.
-    #   pairA: B = ee3a716 (pre-wave-1 runtime), F = dc60aa2 (wave 1), same deps
-    #   pairB: B = dc60aa2, F = e0d1e51 (same plugin source, deps only)
     if [ "$PHASE" = pairA ]; then
+      # ee3a716 is the #79 pre-squash history, reachable only from refs/pull/79/head
+      git fetch -q --no-tags origin +refs/pull/79/head:refs/remotes/origin/pr-79
       side ee3a71690a5544d9cf3324aaabf6ac47e16a2dcc ee3a716
       side dc60aa216c9dbbe3d351a264936ed3740756a252 dc60aa2
       BDIR="$SIDES/ee3a716" FDIR="$SIDES/dc60aa2"
+      # code delta only: the resolved dependency versions must be identical
+      assert_same ee3a716 dc60aa2 '^dep ' 'resolved deps'
     else
       side dc60aa216c9dbbe3d351a264936ed3740756a252 dc60aa2
-      side e0d1e5165ebb16436da8ea4897e2cf3050047fd5 e0d1e51
+      side "$E0" e0d1e51
       BDIR="$SIDES/dc60aa2" FDIR="$SIDES/e0d1e51"
+      # deps delta only: plugin + client sources must be identical
+      assert_same dc60aa2 e0d1e51 '^src-tree ' 'plugin/client source tree'
     fi
     node perf/run-paired.mjs --baseline="$BDIR" --final="$FDIR" --order=BFFB \
       --parts=A,OFF,UI --scales="${PAIR_SCALES:-3000:4x5}" --label="$PHASE" $GATE \
-      --max-min=12 2>&1 | tee "$OUT/$PHASE.log"
-    mkdir -p "$OUT/results"
-    cp -r "$FDIR/playground/.temp/perf-results/$PHASE" "$OUT/results/" 2>/dev/null || true
+      --max-min=13 2>&1 | redact | tee "$OUT/$PHASE.log"
     step "$PHASE BFFB done (mode latency)"
     ;;
   *)
@@ -152,5 +189,4 @@ case "$PHASE" in
     exit 2
     ;;
 esac
-cp -r playground/.temp/perf-results "$OUT/results" 2>/dev/null || true
 step "end"
