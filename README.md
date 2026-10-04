@@ -24,109 +24,110 @@ Svelte DevTools for Vite, built on [Devframe](https://devfra.me/). Provides 15 s
 
 ### Screenshots
 
+Captured from the current UI with synthetic demo data (Social preview: a generated SvelteKit test app).
+
 <details>
 <summary>Overview</summary>
 
-![Overview](docs/images/panel-overview.png)
+![Overview](docs/images/ui-overview.png)
 
 </details>
 
 <details>
 <summary>Components</summary>
 
-![Components](docs/images/panel-components.png)
+![Components](docs/images/ui-components.png)
 
 </details>
 
 <details>
 <summary>Routes</summary>
 
-![Routes](docs/images/panel-routes.png)
+![Routes](docs/images/ui-routes.png)
 
 </details>
 
 <details>
 <summary>Assets</summary>
 
-![Assets](docs/images/panel-assets.png)
+![Assets](docs/images/ui-assets.png)
 
 </details>
 
 <details>
-<summary>Render Profiler</summary>
+<summary>Render</summary>
 
-![Render Profiler](docs/images/panel-profiler.png)
-
-</details>
-
-<details>
-<summary>Reactive Graph</summary>
-
-![Reactive Graph](docs/images/panel-reactive.png)
+![Render](docs/images/ui-profiler.png)
 
 </details>
 
 <details>
-<summary>FPS Monitor</summary>
+<summary>Reactivity</summary>
 
-![FPS Monitor](docs/images/panel-fps.png)
-
-</details>
-
-<details>
-<summary>Load Profiler</summary>
-
-![Load Profiler](docs/images/panel-loads.png)
+![Reactivity](docs/images/ui-reactive.png)
 
 </details>
 
 <details>
-<summary>State Timeline</summary>
+<summary>Frame rate</summary>
 
-![State Timeline](docs/images/panel-timeline.png)
-
-</details>
-
-<details>
-<summary>API Playground</summary>
-
-![API Playground](docs/images/panel-api.png)
+![Frame rate](docs/images/ui-fps.png)
 
 </details>
 
 <details>
-<summary>Errors & Warnings</summary>
+<summary>Load functions</summary>
 
-![Errors & Warnings](docs/images/panel-errors.png)
-
-</details>
-
-<details>
-<summary>Code Inspector</summary>
-
-![Inspect](docs/images/panel-inspect.png)
-![Inspect Detail](docs/images/panel-inspect-detail.png)
+![Load functions](docs/images/ui-loads.png)
 
 </details>
 
 <details>
-<summary>Module Graph</summary>
+<summary>State timeline</summary>
 
-![Module Graph](docs/images/panel-modules.png)
-
-</details>
-
-<details>
-<summary>OG Preview</summary>
-
-![OG Preview](docs/images/panel-og.png)
+![State timeline](docs/images/ui-timeline.png)
 
 </details>
 
 <details>
-<summary>Build Analysis</summary>
+<summary>API</summary>
 
-![Build Analysis](docs/images/panel-build.png)
+![API](docs/images/ui-api.png)
+
+</details>
+
+<details>
+<summary>Problems</summary>
+
+![Problems](docs/images/ui-errors.png)
+
+</details>
+
+<details>
+<summary>Compiled output</summary>
+
+![Compiled output](docs/images/ui-inspect.png)
+
+</details>
+
+<details>
+<summary>Modules</summary>
+
+![Modules](docs/images/ui-modules.png)
+
+</details>
+
+<details>
+<summary>Social preview</summary>
+
+![Social preview](docs/images/ui-og.png)
+
+</details>
+
+<details>
+<summary>Build</summary>
+
+![Build](docs/images/ui-build.png)
 
 </details>
 

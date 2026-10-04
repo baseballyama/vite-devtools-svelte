@@ -24,109 +24,110 @@ Svelte DevTools for Vite, built on [Devframe](https://devfra.me/). Provides 15 s
 
 ### Screenshots
 
+Captured from the current UI with synthetic demo data (Social preview: a generated SvelteKit test app).
+
 <details>
 <summary>Overview</summary>
 
-![Overview](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/panel-overview.png)
+![Overview](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/ui-overview.png)
 
 </details>
 
 <details>
 <summary>Components</summary>
 
-![Components](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/panel-components.png)
+![Components](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/ui-components.png)
 
 </details>
 
 <details>
 <summary>Routes</summary>
 
-![Routes](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/panel-routes.png)
+![Routes](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/ui-routes.png)
 
 </details>
 
 <details>
 <summary>Assets</summary>
 
-![Assets](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/panel-assets.png)
+![Assets](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/ui-assets.png)
 
 </details>
 
 <details>
-<summary>Render Profiler</summary>
+<summary>Render</summary>
 
-![Render Profiler](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/panel-profiler.png)
-
-</details>
-
-<details>
-<summary>Reactive Graph</summary>
-
-![Reactive Graph](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/panel-reactive.png)
+![Render](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/ui-profiler.png)
 
 </details>
 
 <details>
-<summary>FPS Monitor</summary>
+<summary>Reactivity</summary>
 
-![FPS Monitor](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/panel-fps.png)
-
-</details>
-
-<details>
-<summary>Load Profiler</summary>
-
-![Load Profiler](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/panel-loads.png)
+![Reactivity](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/ui-reactive.png)
 
 </details>
 
 <details>
-<summary>State Timeline</summary>
+<summary>Frame rate</summary>
 
-![State Timeline](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/panel-timeline.png)
-
-</details>
-
-<details>
-<summary>API Playground</summary>
-
-![API Playground](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/panel-api.png)
+![Frame rate](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/ui-fps.png)
 
 </details>
 
 <details>
-<summary>Errors & Warnings</summary>
+<summary>Load functions</summary>
 
-![Errors & Warnings](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/panel-errors.png)
-
-</details>
-
-<details>
-<summary>Code Inspector</summary>
-
-![Inspect](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/panel-inspect.png)
-![Inspect Detail](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/panel-inspect-detail.png)
+![Load functions](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/ui-loads.png)
 
 </details>
 
 <details>
-<summary>Module Graph</summary>
+<summary>State timeline</summary>
 
-![Module Graph](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/panel-modules.png)
-
-</details>
-
-<details>
-<summary>OG Preview</summary>
-
-![OG Preview](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/panel-og.png)
+![State timeline](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/ui-timeline.png)
 
 </details>
 
 <details>
-<summary>Build Analysis</summary>
+<summary>API</summary>
 
-![Build Analysis](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/panel-build.png)
+![API](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/ui-api.png)
+
+</details>
+
+<details>
+<summary>Problems</summary>
+
+![Problems](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/ui-errors.png)
+
+</details>
+
+<details>
+<summary>Compiled output</summary>
+
+![Compiled output](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/ui-inspect.png)
+
+</details>
+
+<details>
+<summary>Modules</summary>
+
+![Modules](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/ui-modules.png)
+
+</details>
+
+<details>
+<summary>Social preview</summary>
+
+![Social preview](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/ui-og.png)
+
+</details>
+
+<details>
+<summary>Build</summary>
+
+![Build](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/ui-build.png)
 
 </details>
 
