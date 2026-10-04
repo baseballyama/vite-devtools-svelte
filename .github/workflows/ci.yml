@@ -172,3 +172,45 @@ jobs:
       - name: Repo unchanged
         if: always()
         run: git diff --exit-code -- pnpm-lock.yaml examples/ playground/ packages/
+
+  # Screenshots of the reactivity UI on the SvelteKit 2 sample with the real
+  # runtime (scripts/screenshots/reactivity.mjs). Images are scanned for
+  # machine paths, codes and tokens before being written; a hit fails the
+  # case instead of writing the image.
+  reactivity-shots:
+    name: Reactivity UI screenshots
+    needs: [test, compat]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build plugin and client UI
+        run: pnpm build
+
+      - name: Install Chromium (workspace playwright-core)
+        run: pnpm exec playwright-core install --with-deps chromium
+
+      - name: Capture
+        run: node scripts/screenshots/reactivity.mjs --out=reactivity-shots
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: reactivity-shots
+          path: reactivity-shots/
+          retention-days: 7
+
+      - name: Repo unchanged
+        if: always()
+        run: git diff --exit-code -- pnpm-lock.yaml examples/ playground/ packages/
