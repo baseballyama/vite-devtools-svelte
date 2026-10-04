@@ -55,6 +55,13 @@ const WIDTHS = [
 const CAP_MS = 300_000
 setTimeout(() => {
   console.log('CAP reached — stopping (counts as failure)')
+  try {
+    manifest.capped = true
+    failures++
+    writeResults()
+  } catch {
+    /* results are best effort here */
+  }
   process.exit(2)
 }, CAP_MS).unref()
 
@@ -140,6 +147,22 @@ const manifest = {
 }
 const qa = []
 let failures = 0
+/** Error text for the manifest, with machine paths and secrets replaced. */
+function scrub(text) {
+  let t = String(text).split(repoRoot).join('<repo>')
+  for (const re of SENSITIVE)
+    t = t.replace(
+      new RegExp(re.source, re.flags.includes('g') ? re.flags : re.flags + 'g'),
+      '<redacted>',
+    )
+  return t
+}
+function writeResults() {
+  mkdirSync(outDir, { recursive: true })
+  manifest.failures = failures
+  writeFileSync(path.join(outDir, 'qa.json'), JSON.stringify(qa, null, 2) + '\n')
+  writeFileSync(path.join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n')
+}
 
 async function newPage({ w, h }, theme, reducedMotion = 'no-preference') {
   const ctx = await browser.newContext({
@@ -253,7 +276,8 @@ try {
       for (const theme of ['dark', 'light']) {
         const { ctx, page } = await newPage(size, theme)
         const url = origin + BASE + (p.path === '/' ? '/' : p.path)
-        const res = await page.goto(url, { waitUntil: 'networkidle', timeout: 30_000 })
+        const res = await page.goto(url, { waitUntil: 'load', timeout: 30_000 })
+        await page.evaluate(() => document.fonts.ready)
         const r = { page: p.id, width: size.w, theme, status: res?.status() ?? null, problems: [] }
         const c = await page.evaluate(inPageChecks)
         pagesByPath.set(p.path, c.ids)
@@ -290,7 +314,7 @@ try {
   // Reduced motion: no animation may keep running.
   for (const p of PAGES) {
     const { ctx, page } = await newPage(WIDTHS[0], 'dark', 'reduce')
-    await page.goto(origin + BASE + (p.path === '/' ? '/' : p.path), { waitUntil: 'networkidle' })
+    await page.goto(origin + BASE + (p.path === '/' ? '/' : p.path), { waitUntil: 'load' })
     const running = await page.evaluate(
       () =>
         document
@@ -340,22 +364,23 @@ try {
       for (const size of WIDTHS) {
         const { ctx, page } = await newPage(size, 'dark')
         try {
+          // 'load' plus a short settle: third-party pages may never go network-idle.
           await page.goto(baseUrl + (p.path === '/' ? '/' : p.path), {
-            waitUntil: 'networkidle',
-            timeout: 30_000,
+            waitUntil: 'load',
+            timeout: 20_000,
           })
+          await page.waitForTimeout(1500)
           await shoot(page, dir, `${p.id}-${size.w}`)
         } catch (e) {
-          manifest.notes.push(`${dir} ${p.id} ${size.w}: ${String(e?.message ?? e).slice(0, 120)}`)
+          manifest.notes.push(
+            scrub(`${dir} ${p.id} ${size.w}: ${String(e?.message ?? e).slice(0, 120)}`),
+          )
         }
         await ctx.close()
       }
   }
 } finally {
-  mkdirSync(outDir, { recursive: true })
-  manifest.failures = failures
-  writeFileSync(path.join(outDir, 'qa.json'), JSON.stringify(qa, null, 2) + '\n')
-  writeFileSync(path.join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n')
+  writeResults()
   await browser.close()
   server.close()
 }
