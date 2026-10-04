@@ -261,7 +261,39 @@ const go = async id => {
   await ui.evaluate(id => (location.hash = `#/${id}`), id)
   await ui.waitForSelector(`${host} section.panel`, { timeout: 30_000 })
 }
-const radio = name => ui.locator(`${host} [role=radio]`, { hasText: name }).first()
+// Segmented controls are radiogroups; match the group and the radio's exact
+// name inside the visible panel ('Graph' must never hit the 'Full graph' tab).
+const radio = (group, name) =>
+  ui
+    .locator(host)
+    .getByRole('radiogroup', { name: group, exact: true })
+    .getByRole('radio', { name, exact: true })
+async function choose(group, name) {
+  const r = radio(group, name)
+  await r.click({ timeout: 15_000 })
+  await r.waitFor({ state: 'visible' })
+  if ((await r.getAttribute('aria-checked')) !== 'true')
+    throw new Error(`${group} → ${name} not selected`)
+}
+/** Short, masked text of what the visible panel shows (for a failed case). */
+async function panelDump() {
+  const t = await ui.evaluate(sel => {
+    const h = document.querySelector(sel)
+    const q = s => h?.querySelector(s)?.textContent?.replace(/\s+/g, ' ').trim() ?? null
+    const checked = [...(h?.querySelectorAll('[role=radiogroup]') ?? [])].map(
+      g =>
+        `${g.getAttribute('aria-label')}=${g.querySelector('[aria-checked=true]')?.textContent?.trim() ?? '?'}`,
+    )
+    return {
+      radios: checked,
+      empty: q('.empty .title'),
+      scope: q('.scope-bar'),
+      legend: q('.legend'),
+      hidden: document.hidden,
+    }
+  }, host)
+  return mask(JSON.stringify(t)).slice(0, 600)
+}
 const step = async (kase, fn) => {
   try {
     await fn()
@@ -275,6 +307,8 @@ try {
   // FpsCanvas `running` ($state) toggled three times on the app page.
   await step(1, async () => {
     await go('reactive')
+    await choose('Reactivity view', 'Overview')
+    await choose('Overview of', 'Components')
     await ui.waitForSelector(`${host} .record`, { timeout: 30_000 })
     await sleep(10_000)
     for (let i = 0; i < 3; i++) {
@@ -291,7 +325,7 @@ try {
 
   // 3 — Overview (States): the timeline buffer grouped by signal.
   await step(3, async () => {
-    await radio('States').click()
+    await choose('Overview of', 'States')
     await ui
       .locator(`${host} [role=option]`, { hasText: 'running' })
       .first()
@@ -314,12 +348,16 @@ try {
     await show.waitFor({ timeout: 15_000 })
     await show.click()
     await ui.waitForSelector(`${host} .scope-bar`, { timeout: 15_000 })
-    await radio('List').click()
+    await choose('Layout', 'List')
     await ui
       .locator(`${host} [role=option]`, { hasText: 'running' })
       .first()
       .click({ timeout: 15_000 })
-    await radio('Graph').click()
+    await choose('Layout', 'Graph')
+    // The shot must show the component view, not the Full graph tab.
+    const tab = radio('Reactivity view', '<FpsCanvas>')
+    if ((await tab.getAttribute('aria-checked')) !== 'true')
+      throw new Error(`component tab not selected: ${await panelDump()}`)
     await shot(
       '22-reactivity-component.png',
       2,
@@ -333,6 +371,7 @@ try {
     const notice = ui.getByText('The app page reloaded')
     for (let i = 0; i < 30; i++) {
       await ui
+        .locator(host)
         .getByRole('button', { name: /^Refresh/ })
         .first()
         .click({ timeout: 2000 })
@@ -341,7 +380,7 @@ try {
       await sleep(1000)
     }
     if (!(await notice.isVisible().catch(() => false)))
-      throw new Error('"The app page reloaded" not shown within 30 s')
+      throw new Error(`"The app page reloaded" not shown within 30 s: ${await panelDump()}`)
     await shot(
       '24-reactivity-epoch.png',
       4,
