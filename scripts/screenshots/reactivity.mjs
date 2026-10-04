@@ -357,7 +357,24 @@ try {
   // 2 — /cart → ReactivePriceChart ($state → $derived → $effect, all created at
   // component init) → local graph with `taxRate` selected.
   await step(2, async () => {
-    await app.goto(base + '/cart', { waitUntil: 'load', timeout: 30_000 })
+    // The cart is module-level $state (not persisted): add an item and reach
+    // /cart by client-side navigation through the app's own header links,
+    // since ReactivePriceChart only renders for a non-empty cart.
+    await app
+      .getByRole('link', { name: 'Products', exact: true })
+      .first()
+      .click({ timeout: 15_000 })
+    await app.waitForURL(/\/products$/, { timeout: 15_000 })
+    await app
+      .getByRole('button', { name: 'カートに追加', exact: true })
+      .and(app.locator(':enabled'))
+      .first()
+      .click({ timeout: 15_000 })
+    await app.getByRole('link', { name: /^Cart/ }).first().click({ timeout: 15_000 })
+    await app.waitForURL(/\/cart$/, { timeout: 15_000 })
+    const lines = app.locator('table tbody tr')
+    await lines.first().waitFor({ timeout: 15_000 })
+    if ((await lines.count()) < 1) throw new Error('cart has no line after adding an item')
     await showComponent('ReactivePriceChart')
     await choose('Layout', 'List')
     const row = ui.locator(`${host} [role=option]`, { hasText: 'taxRate' }).first()
@@ -375,7 +392,7 @@ try {
     await shot(
       '22-reactivity-component.png',
       2,
-      'Reactivity → one component (ReactivePriceChart, /cart) and the $state / $derived / $effect signals it is directly linked to (taxRate selected). Edges mean "can affect" (current dependencies, not a recorded cause); the inspector shows the current value and "Cause: Not recorded".',
+      'Reactivity → one component (ReactivePriceChart, /cart with one item added) and the $state / $derived / $effect signals it is directly linked to (taxRate selected). Edges mean "can affect" (current dependencies, not a recorded cause); the inspector shows the current value and "Cause: Not recorded".',
     )
   })
 
