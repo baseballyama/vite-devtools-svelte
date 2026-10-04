@@ -5,6 +5,7 @@
  * the server did not report is `null` / `false`.
  */
 import { getReactiveGraph, getReactiveSummary } from './rpc.js'
+import { formatValue } from './format.js'
 import type {
   ReactiveGraph,
   ReactiveGraphRequest,
@@ -128,6 +129,10 @@ export function baselineNotice(
 /** A value the runtime summarised instead of sending it. */
 export const isValueSummary = (v: unknown) =>
   typeof v === 'string' && /^(\(object\)|\[\d+\]|\{\d+\})$/.test(v)
+
+/** A node value for display: runtime summaries as they are (not as a quoted string). */
+export const nodeValueText = (v: unknown, max?: number) =>
+  isValueSummary(v) ? (v as string) : formatValue(v, max)
 
 const sameNode = (a: ReactiveNode, b: ReactiveNode) =>
   a.id === b.id &&

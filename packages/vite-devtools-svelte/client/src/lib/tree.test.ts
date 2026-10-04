@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { remapAcross, remapKeys, resolveAnchor, type AnchorIndex, type EpochIndex } from './tree.js'
+import {
+  defaultExpansion,
+  remapAcross,
+  remapKeys,
+  resolveAnchor,
+  type AnchorIndex,
+  type EpochIndex,
+} from './tree.js'
 
 // Mirrors Components.svelte keying: `parentPath/Name#ordinal`, ordinal among
 // same-name siblings in snapshot (registration) order.
@@ -152,5 +159,25 @@ describe('tree anchors across app page loads (review U4b epoch)', () => {
     expect(backInA).toBe(selected)
     // an epoch read that flipped mid-fetch (null) is never comparable either
     expect(across(selected, a, at(null, app([13, 20, 21, 22, 23])))).toBe(selected)
+  })
+})
+
+describe('defaultExpansion', () => {
+  type T = { key: string; children: T[] }
+  const t = (key: string, ...children: T[]): T => ({ key, children })
+  const keys = (roots: T[]) =>
+    defaultExpansion(
+      roots,
+      n => n.children,
+      n => n.key,
+    )
+
+  it('is empty while only childless roots have arrived (applied once children do)', () => {
+    expect(keys([t('root')])).toEqual([])
+    expect(keys([t('root', t('page', t('list', t('item', t('leaf')))))])).toEqual([
+      'root',
+      'page',
+      'list',
+    ])
   })
 })

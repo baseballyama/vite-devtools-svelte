@@ -685,8 +685,16 @@ async function uiShowsFixture(frame, p) {
     .first()
     .click({ timeout: 10_000 })
     .catch(() => {})
-  for (const name of want)
-    await frame.getByText(name, { exact: false }).first().waitFor({ timeout: 20_000 })
+  for (const name of want) {
+    try {
+      await frame.getByText(name, { exact: false }).first().waitFor({ timeout: 20_000 })
+    } catch (e) {
+      // same 20 s wait as before; on a miss, say what the UI showed instead
+      throw new Error(
+        `${String(e?.message ?? e).slice(0, 600)} | ui: ${JSON.stringify(await uiDump(frame))}`,
+      )
+    }
+  }
   return want
 }
 
@@ -773,25 +781,31 @@ async function dockUi(page, srv, p) {
 // connection status text, gate presence/visibility, active nav, first 300
 // chars of the body text (masked by the caller). No inputs, no screenshots.
 async function uiDump(ui) {
+  // Page or FrameLocator (dock iframe): evaluate on its <html>, never waiting long
   return ui
-    .evaluate(() => {
-      const visible = el => {
-        if (!el) return false
-        const r = el.getBoundingClientRect()
-        return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden'
-      }
-      const conn = document.querySelector('span.conn[role=status]')
-      const gate = [...document.querySelectorAll('[role=dialog]')].find(d =>
-        /Authorize this browser/.test(d.getAttribute('aria-label') ?? d.textContent ?? ''),
-      )
-      return {
-        hash: location.hash,
-        connection: conn ? (conn.textContent ?? '').trim() : null,
-        gate: gate ? (visible(gate) ? 'visible' : 'present, hidden') : 'absent',
-        nav: document.querySelector('nav [aria-current=page]')?.textContent?.trim() ?? null,
-        body: (document.body?.innerText ?? '').replace(/\b\d{6}\b/g, '<code>').slice(0, 300),
-      }
-    })
+    .locator('html')
+    .evaluate(
+      () => {
+        const visible = el => {
+          if (!el) return false
+          const r = el.getBoundingClientRect()
+          return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden'
+        }
+        const conn = document.querySelector('span.conn[role=status]')
+        const gate = [...document.querySelectorAll('[role=dialog]')].find(d =>
+          /Authorize this browser/.test(d.getAttribute('aria-label') ?? d.textContent ?? ''),
+        )
+        return {
+          hash: location.hash,
+          connection: conn ? (conn.textContent ?? '').trim() : null,
+          gate: gate ? (visible(gate) ? 'visible' : 'present, hidden') : 'absent',
+          nav: document.querySelector('nav [aria-current=page]')?.textContent?.trim() ?? null,
+          body: (document.body?.innerText ?? '').replace(/\b\d{6}\b/g, '<code>').slice(0, 300),
+        }
+      },
+      null,
+      { timeout: 2_000 },
+    )
     .catch(e => ({ dumpError: String(e?.message ?? e).slice(0, 120) }))
 }
 
@@ -1297,7 +1311,10 @@ async function tier2(p, getSrv, restart, app) {
             30_000,
           )
           const uiConnectedMs = Date.now() - restartedAt
-          if (settled.gate) uiState = `asked for a new code (after ${uiConnectedMs} ms)`
+          if (settled.gate)
+            throw new Error(
+              `UI asks for a new code after the restart (${uiConnectedMs} ms): same-browser trust not kept`,
+            )
           else {
             await uiShowsFixture(ui, p)
             uiState = `reconnected after ${uiConnectedMs} ms, fixture components shown`

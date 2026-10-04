@@ -14,6 +14,7 @@ const {
   BASELINE_UNKNOWN,
   groupByFile,
   isValueSummary,
+  nodeValueText,
   normalizeGraph,
   sameGraph,
   sameValue,
@@ -117,6 +118,19 @@ describe('isValueSummary', () => {
   it('recognises runtime summaries only', () => {
     expect(['(object)', '[3]', '{12}'].map(isValueSummary)).toEqual([true, true, true])
     expect(['object', '[a]', 3, null].map(isValueSummary)).toEqual([false, false, false, false])
+  })
+
+  it('shows runtime summaries unquoted and real strings quoted', () => {
+    expect(['(object)', '[3]', '{12}'].map(v => nodeValueText(v))).toEqual([
+      '(object)',
+      '[3]',
+      '{12}',
+    ])
+    expect([nodeValueText('object'), nodeValueText(false), nodeValueText(null)]).toEqual([
+      '"object"',
+      'false',
+      'null',
+    ])
   })
 })
 

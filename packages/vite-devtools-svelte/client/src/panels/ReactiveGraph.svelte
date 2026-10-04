@@ -6,7 +6,7 @@
   import { persisted } from '../lib/persisted.svelte.js'
   import { haystack, haystackMatcher } from '../lib/match.js'
   import { componentName, formatClock, formatMs, formatValue, prettyValue } from '../lib/format.js'
-  import { EMPTY_GRAPH, baselineNotice, fetchGraph, fetchSummary, groupByFile, isEpochChanged, isValueSummary, nodeCount, sameGraph, sameValue } from '../lib/reactive.js'
+  import { EMPTY_GRAPH, baselineNotice, fetchGraph, fetchSummary, groupByFile, isEpochChanged, isValueSummary, nodeCount, nodeValueText, sameGraph, sameValue } from '../lib/reactive.js'
   import { reactiveScope } from '../lib/reactive-selection.svelte.js'
   import { router } from '../lib/router.svelte.js'
   import { getLiveComponentsMeta, getStateTimelineDelta } from '../lib/rpc.js'
@@ -267,7 +267,7 @@
 
   // One lowercase haystack per node per graph update, so a keystroke is an
   // `includes` per node instead of formatting every value again.
-  const hay = $derived(new Map(data.nodes.map((n) => [n.id, haystack(n.name, n.componentFile, n.value === undefined ? '' : formatValue(n.value))])))
+  const hay = $derived(new Map(data.nodes.map((n) => [n.id, haystack(n.name, n.componentFile, n.value === undefined ? '' : nodeValueText(n.value))])))
 
   const nodes = $derived.by(() => {
     const m = haystackMatcher(query)
@@ -470,7 +470,7 @@
             {#snippet row(r, { visible })}
               <span class="truncate">
                 <span class="mono">{componentName(r.file)}</span>
-                {#if group === 'instance'}<span class="faint num"> #{r.instances[0].componentId}</span>{/if}
+                {#if group === 'instance'}<span class="faint num">{` #${r.instances[0].componentId}`}</span>{/if}
               </span>
               {#if visible.has('instances')}<span class="end num">{r.instances.length}</span>{/if}
               {#if visible.has('nodes')}
@@ -507,7 +507,7 @@
         </SplitView>
       </div>
       <p class="foot">
-        Listed: {s.rows.length.toLocaleString()} components ({s.truncated ? `top ${s.rows.length} of ${s.components.withActivity.toLocaleString()} active` : 'all active'}).
+        Listed: {s.rows.length.toLocaleString()} {s.rows.length === 1 ? 'component' : 'components'} ({s.truncated ? `top ${s.rows.length} of ${s.components.withActivity.toLocaleString()} active` : 'all active'}).
         {#if s.other}Other: {s.other.components.toLocaleString()} components with {s.other.nodes.toLocaleString()} signals.{:else}Other: unknown.{/if}
         Total registered: {totalLabel(s.components.total)}. Counts restart when the app page reloads.
       </p>
@@ -535,7 +535,7 @@
       >
         {#snippet row(h, { visible })}
           <span class="truncate mono name">{h.name}</span>
-          {#if visible.has('component')}<span class="truncate muted">{componentName(h.file)}{#if h.componentId !== null}<span class="faint num"> #{h.componentId}</span>{/if}</span>{/if}
+          {#if visible.has('component')}<span class="truncate muted">{componentName(h.file)}{#if h.componentId !== null}<span class="faint num">{` #${h.componentId}`}</span>{/if}</span>{/if}
           <span class="end num" title="changes of this state in the buffer (sampled every 200 ms); not a total or a rate">≥ {h.changes.toLocaleString()}</span>
           {#if visible.has('value')}<span class="truncate mono value">{formatValue(h.last.newValue, 80)}</span>{/if}
           <span class="end num faint">{formatClock(h.last.timestamp)}</span>
@@ -596,7 +596,7 @@
               <span><Badge tone={tones[n.type]}>{n.type}</Badge></span>
               <span class="truncate mono name" class:flash={changed.has(n.id)}><Highlight text={n.name} {query} /></span>
               {#if visible.has('component')}<span class="truncate muted"><Highlight text={componentName(n.componentFile)} {query} /></span>{/if}
-              <span class="truncate mono value">{n.value === undefined ? '' : formatValue(n.value, 120)}</span>
+              <span class="truncate mono value">{n.value === undefined ? '' : nodeValueText(n.value, 120)}</span>
               {#if visible.has('deps')}<span class="end num faint">{links.deps.get(n.id)?.length ?? 0} / {links.dependents.get(n.id)?.length ?? 0}</span>{/if}
             {/snippet}
             {#snippet empty()}<EmptyState icon="search" title="No loaded signals match" />{/snippet}
@@ -619,7 +619,7 @@
           {/snippet}
           {#if current.value !== undefined}
             <h3 class="section-title">Current value</h3>
-            <pre class="code-block" class:flash={changed.has(current.id)}>{prettyValue(current.value)}</pre>
+            <pre class="code-block" class:flash={changed.has(current.id)}>{isValueSummary(current.value) ? current.value : prettyValue(current.value)}</pre>
             {#if !capabilities.valueInspection && isValueSummary(current.value)}
               <p class="none">Full value: not available yet. This dev server reports only a summary for objects and arrays.</p>
             {/if}

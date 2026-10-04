@@ -337,36 +337,52 @@ try {
     )
   })
 
-  // 2 — Components → FpsCanvas → Show reactivity → local graph, `running` selected.
-  await step(2, async () => {
+  // Components → <name> → Show reactivity: the local (component) view of one instance.
+  async function showComponent(name) {
     await go('components')
     await ui
-      .locator(`${host} [role=treeitem]`, { hasText: 'FpsCanvas' })
+      .locator(`${host} [role=treeitem]`, { hasText: name })
       .first()
       .click({ timeout: 20_000 })
     const show = ui.getByRole('button', { name: 'Show reactivity', exact: true })
     await show.waitFor({ timeout: 15_000 })
-    await show.click()
+    await show.click({ timeout: 15_000 })
     await ui.waitForSelector(`${host} .scope-bar`, { timeout: 15_000 })
-    await choose('Layout', 'List')
-    await ui
-      .locator(`${host} [role=option]`, { hasText: 'running' })
-      .first()
-      .click({ timeout: 15_000 })
-    await choose('Layout', 'Graph')
-    // The shot must show the component view, not the Full graph tab.
-    const tab = radio('Reactivity view', '<FpsCanvas>')
+    const tab = radio('Reactivity view', `<${name}>`)
+    await tab.waitFor({ timeout: 15_000 })
     if ((await tab.getAttribute('aria-checked')) !== 'true')
+      throw new Error(`component tab not selected: ${await panelDump()}`)
+  }
+
+  // 2 — /cart → ReactivePriceChart ($state → $derived → $effect, all created at
+  // component init) → local graph with `taxRate` selected.
+  await step(2, async () => {
+    await app.goto(base + '/cart', { waitUntil: 'load', timeout: 30_000 })
+    await showComponent('ReactivePriceChart')
+    await choose('Layout', 'List')
+    const row = ui.locator(`${host} [role=option]`, { hasText: 'taxRate' }).first()
+    await row.click({ timeout: 15_000 })
+    // A meaningful local graph: taxRate must have outgoing links (tax depends on it).
+    const rowText = (await row.innerText()).replace(/\s+/g, ' ').trim()
+    if (/\b0 \/ 0$/.test(rowText) || !/\d+ \/ [1-9]\d*$/.test(rowText))
+      throw new Error(`taxRate has no "can affect" links: ${mask(rowText).slice(0, 120)}`)
+    await choose('Layout', 'Graph')
+    if (
+      (await radio('Reactivity view', '<ReactivePriceChart>').getAttribute('aria-checked')) !==
+      'true'
+    )
       throw new Error(`component tab not selected: ${await panelDump()}`)
     await shot(
       '22-reactivity-component.png',
       2,
-      'Reactivity → one component (FpsCanvas) and the signals it is directly linked to. Edges mean "can affect" (current dependencies, not a recorded cause); the inspector shows the current value and "Cause: Not recorded".',
+      'Reactivity → one component (ReactivePriceChart, /cart) and the $state / $derived / $effect signals it is directly linked to (taxRate selected). Edges mean "can affect" (current dependencies, not a recorded cause); the inspector shows the current value and "Cause: Not recorded".',
     )
   })
 
-  // 4 — the app page reloads while that component is selected.
+  // 4 — back on / with FpsCanvas selected, the app page reloads.
   await step(4, async () => {
+    await app.goto(base + '/', { waitUntil: 'load', timeout: 30_000 })
+    await showComponent('FpsCanvas')
     await app.reload({ waitUntil: 'load' })
     const notice = ui.getByText('The app page reloaded')
     for (let i = 0; i < 30; i++) {

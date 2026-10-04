@@ -5,7 +5,7 @@
   import { persisted } from '../lib/persisted.svelte.js'
   import { matcher } from '../lib/match.js'
   import { untrack } from 'svelte'
-  import { branchKeys, remapAcross } from '../lib/tree.js'
+  import { branchKeys, defaultExpansion, remapAcross } from '../lib/tree.js'
   import { componentName, shortPath } from '../lib/format.js'
   import Panel from '../components/Panel.svelte'
   import SplitView from '../components/SplitView.svelte'
@@ -111,7 +111,8 @@
   let expanded = $state(new Set<string>())
   let treeSelected = $state<string | null>(null)
   let treeView = $state<TreeView<LiveNode> | null>(null)
-  let seeded = false
+  /** Page load the default expansion was applied to (`undefined` = not yet). */
+  let seededEpoch: string | undefined = undefined
 
   // Carry selection / expansion across snapshots (see `tree` above);
   // across an epoch change only paths are used (`remapAcross`).
@@ -134,17 +135,16 @@
     })
   })
 
-  // Open the first three levels once, the first time data arrives.
+  // Open the first three levels once per app page load, as soon as the tree
+  // has children (after a reload the first snapshot may hold only the root).
+  // Expansion carried over by path (`remapAcross`) is kept.
   $effect(() => {
-    if (seeded || tree.roots.length === 0) return
-    seeded = true
-    const next = new Set<string>()
-    const walk = (nodes: LiveNode[], d: number) => {
-      if (d > 2) return
-      for (const n of nodes) if (n.children.length) (next.add(n.key), walk(n.children, d + 1))
-    }
-    walk(tree.roots, 0)
-    expanded = next
+    // `null` = the epoch flipped during the read: wait for a settled snapshot.
+    if (tree.epoch === null || seededEpoch === tree.epoch) return
+    const keys = defaultExpansion(tree.roots, (n) => n.children, keyOf)
+    if (keys.length === 0) return
+    seededEpoch = tree.epoch
+    untrack(() => (expanded = new Set([...expanded, ...keys])))
   })
 
   const treeFilter = $derived.by(() => {

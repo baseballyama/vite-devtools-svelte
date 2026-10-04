@@ -204,3 +204,28 @@ export function remapAcross<N>(
   const comparable = prev !== null && prev.epoch !== null && prev.epoch === next.epoch
   return remapKeys(keys, comparable ? prev : null, next, idOf, keyOf)
 }
+
+/**
+ * Keys of the nodes with children in the first `depth` levels: the default
+ * expansion of a tree. Empty while no node has children yet (a snapshot
+ * taken before the children arrived), so callers can apply it later.
+ */
+export function defaultExpansion<N>(
+  roots: N[],
+  childrenOf: (node: N) => N[],
+  keyOf: (node: N) => string,
+  depth = 3,
+): string[] {
+  const out: string[] = []
+  const walk = (nodes: N[], d: number) => {
+    if (d >= depth) return
+    for (const n of nodes) {
+      const children = childrenOf(n)
+      if (!children.length) continue
+      out.push(keyOf(n))
+      walk(children, d + 1)
+    }
+  }
+  walk(roots, 0)
+  return out
+}
