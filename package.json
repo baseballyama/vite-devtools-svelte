@@ -23,7 +23,7 @@
     "@changesets/changelog-github": "^1.0.1",
     "@changesets/cli": "^3.0.3",
     "axe-core": "^4.11.0",
-    "oxfmt": "^0.52.0",
+    "oxfmt": "^0.71.0",
     "oxlint": "^1.67.0",
     "playwright-core": "1.63.0"
   },
