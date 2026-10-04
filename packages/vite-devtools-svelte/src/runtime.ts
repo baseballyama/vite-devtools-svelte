@@ -361,6 +361,11 @@ export { __if_block as if, __await_block as await };
 export const runtimeCode = /* js */ `
 if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
   const __NO_VALUE = Symbol('no value');
+  // State timeline ring (§6.7 C): every read sees at most 500 entries and
+  // __TIMELINE_BYTES (also the server's buffer budget). The raw array may
+  // hold up to __TIMELINE_TRIM_AT (2 x the 500 cap) between bulk trims.
+  const __TIMELINE_BYTES = 4 * 1024 * 1024;
+  const __TIMELINE_TRIM_AT = 1000;
   // FNV-1a over UTF-16 code units: cheap change detection for large snapshots.
   const __hash = (str) => {
     let h = 0x811c9dc5;
@@ -1324,7 +1329,6 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     },
 
     _recordChange(nodeId, entry, oldValue, newValue, approxBytes) {
-      const TIMELINE_BYTES = 4 * 1024 * 1024;
       const change = {
         id: nodeId,
         name: entry.meta.name,
@@ -1343,23 +1347,24 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       this._stateSnapshots.set(nodeId, newValue);
       // The ring (_trimTimeline) is applied in bulk, not with one splice per
       // change (a poll tick can record thousands): before every read (each
-      // push, i.e. at least every 200 changes while active), and here once
-      // 1000 entries are held or the byte budget is exceeded.
-      if (this._stateTimeline.length > 1000 || this._timelineBytes > TIMELINE_BYTES) {
+      // push — with a hot channel and an active consumer, at least every 200
+      // changes — the full snapshot, getStateTimeline() and clear), and here
+      // once more than __TIMELINE_TRIM_AT entries are held or the byte budget
+      // is exceeded, which bounds memory when nothing reads or pushes.
+      if (this._stateTimeline.length > __TIMELINE_TRIM_AT || this._timelineBytes > __TIMELINE_BYTES) {
         this._trimTimeline();
       }
       this._scheduleTimelineUpdate();
     },
 
-    // Ring: at most 500 entries and TIMELINE_BYTES (the newest entry is
+    // Ring: at most 500 entries and __TIMELINE_BYTES (the newest entry is
     // always kept). Removed entries that were never pushed are disclosed
     // as dropped (§6.7 C); pushed ones are already on the server.
     _trimTimeline() {
-      const TIMELINE_BYTES = 4 * 1024 * 1024;
       const all = this._stateTimeline;
       let cut = 0;
       let bytesLeft = this._timelineBytes;
-      while (cut < all.length - 1 && (all.length - cut > 500 || bytesLeft > TIMELINE_BYTES)) {
+      while (cut < all.length - 1 && (all.length - cut > 500 || bytesLeft > __TIMELINE_BYTES)) {
         const info = this._entryInfo.get(all[cut]);
         const reason = all.length - cut > 500 ? 'runtime-count' : 'runtime-bytes';
         if (info.seq > this._pushedSeq) this._timelineDropped[reason]++;
@@ -1458,17 +1463,16 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     },
 
     // Full buffer (reset: true) — reply to request-state-timeline and the
-    // activation snapshot. Newest entries first up to TIMELINE_BYTES, the
+    // activation snapshot. Newest entries first up to __TIMELINE_BYTES, the
     // server's own buffer budget, so nothing is sent that it would drop.
     _timelineFull() {
-      const TIMELINE_BYTES = 4 * 1024 * 1024;
       this._trimTimeline();
       const all = this._stateTimeline;
       let start = all.length;
       let bytes = 0;
       while (start > 0) {
         const size = this._entryInfo.get(all[start - 1]).bytes;
-        if (bytes + size > TIMELINE_BYTES && start < all.length) break;
+        if (bytes + size > __TIMELINE_BYTES && start < all.length) break;
         bytes += size;
         start--;
       }
@@ -1483,6 +1487,9 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     },
 
     clearStateTimeline() {
+      // Ring first: unsent entries past the cap are disclosed as dropped,
+      // exactly as if they had been removed when recorded.
+      this._trimTimeline();
       this._stateTimeline = [];
       this._timelineBytes = 0;
       this._pushedSeq = this._timelineSeq;

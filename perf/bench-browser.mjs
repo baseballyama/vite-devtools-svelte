@@ -288,7 +288,8 @@ async function benchApp(browser, srv, opts, withDevtools) {
       instances: size(dt._instances),
       reactiveNodes: size(dt._reactiveNodes),
       profiles: size(dt._profiles),
-      timeline: size(dt._stateTimeline),
+      // observable ring (the raw array is bulk-trimmed, up to 2x between reads)
+      timeline: size(dt.getStateTimeline ? dt.getStateTimeline() : dt._stateTimeline),
       fpsFrames: size(dt._fpsFrameTimes),
     }
   })
