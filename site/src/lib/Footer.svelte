@@ -41,6 +41,7 @@
           <p class="col-title">Docs</p>
           <ul>
             <li><a href="{base}/getting-started">Getting Started</a></li>
+            <li><a href="{base}/mcp">MCP for AI agents</a></li>
             <li><a href="{base}/#panels">All panels</a></li>
           </ul>
         </section>
