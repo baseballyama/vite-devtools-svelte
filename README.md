@@ -2,7 +2,7 @@
 
 Svelte DevTools for Vite, built on [Devframe](https://devfra.me/). Provides 15 specialized panels for debugging, profiling, and inspecting Svelte/SvelteKit applications. The same tool runs **standalone** at `/.svelte-devtools/` on your dev server, or **inside the [Vite DevTools](https://devtools.vite.dev/) dock** when `@vitejs/devtools` is installed.
 
-> **Status:** Early development (v0.0.1). APIs may change.
+> **Status:** Early development. APIs may change. This README describes the **upcoming release** (Devframe host; not yet published — see `.changeset/`). The latest version on npm, **0.3.0**, still renders only inside `@vitejs/devtools`; see [Upgrading from 0.3.x](#upgrading-from-03x).
 
 ## Features
 
@@ -201,13 +201,13 @@ svelteDevtools({
 3. **Static analyzers** — Extract routes, component relations, assets, and project metadata from the filesystem.
 4. **Devframe tool** — One portable [Devframe](https://devfra.me/) definition exposes all of this over a typed, schema-validated RPC. It is served standalone (`initDevframe` on Vite's own HTTP server) or mounted into Vite DevTools (`createPluginFromDevframe`); the UI connects with `connectDevframe()` either way.
 
-The plugin is **development-only** — every sub-plugin is `apply: 'serve'`, so production builds are byte-identical with and without it.
+The plugin is **development-only** — every sub-plugin is `apply: 'serve'`, so nothing of it reaches a production build. In development, the runtime only samples while a DevTools tab or MCP agent is watching (an activity lease), and the dev server keeps its buffers bounded.
 
-## Upgrading from earlier versions
+## Upgrading from 0.3.x
 
 The public API is unchanged — still `svelteDevtools({ componentTracking })`, and the same 15 panels and MCP tools. What changed is how the UI is hosted and how it talks to the dev server:
 
-|           | before                                                                                  | now                                                                                                                  |
+|           | 0.3.x                                                                                   | upcoming release                                                                                                     |
 | --------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | Host      | panels only rendered inside `@vitejs/devtools` (required)                               | standalone at `/.svelte-devtools/`, or inside the Vite DevTools dock when `@vitejs/devtools` is installed (optional) |
 | Transport | DevTools Kit RPC + HTTP fallback (`/__svelte-devtools/rpc`, `/__svelte-devtools/asset`) | one Devframe WebSocket RPC (SSE in Vite middleware mode); the HTTP endpoints are removed                             |
