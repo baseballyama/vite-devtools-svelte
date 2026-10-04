@@ -1,4 +1,7 @@
 declare global {
+  /** Injected by Vite `define` (see vite.config.ts). */
+  const __PKG_VERSION__: string
+
   namespace App {
     // interface Error {}
     // interface Locals {}
@@ -12,7 +15,5 @@ declare module '*.md?raw' {
   const content: string
   export default content
 }
-
-declare const __PKG_VERSION__: string
 
 export {}

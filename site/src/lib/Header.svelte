@@ -47,6 +47,7 @@
           href="{base}{link.href}"
           class="nav-link"
           class:active={isActive(link.href)}
+          aria-current={isActive(link.href) ? 'page' : undefined}
         >
           <span class="nav-arrow" aria-hidden="true">→</span>
           {link.label}
@@ -227,6 +228,25 @@
     }
     .nav-label {
       display: none;
+    }
+  }
+
+  /* Phones: brand mark + Home / Getting Started / GitHub / theme stay on one row. */
+  @media (max-width: 520px) {
+    .row {
+      padding: 0.7rem 1rem;
+      gap: 0.5rem;
+    }
+    nav {
+      flex-wrap: nowrap;
+      gap: 0;
+    }
+    .nav-arrow {
+      display: none;
+    }
+    .nav-link {
+      padding: 0.35rem 0.45rem;
+      white-space: nowrap;
     }
   }
 </style>

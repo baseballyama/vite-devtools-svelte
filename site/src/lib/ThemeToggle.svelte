@@ -18,7 +18,7 @@
 <button
   class="toggle"
   type="button"
-  aria-label="Toggle color theme"
+  aria-label="Dark theme"
   aria-pressed={theme === 'dark'}
   onclick={toggle}
 >
@@ -55,7 +55,7 @@
     appearance: none;
     background: transparent;
     border: 0;
-    padding: 0;
+    padding: 0.3rem 0;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
