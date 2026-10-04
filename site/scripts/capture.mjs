@@ -46,6 +46,7 @@ const PAGES = [
   { id: 'home', path: '/' },
   { id: 'getting-started', path: '/getting-started' },
   { id: 'mcp', path: '/mcp' },
+  { id: 'mcp-ja', path: '/ja/mcp' },
   { id: 'panel-reactive', path: '/panels/reactive' },
 ]
 const WIDTHS = [

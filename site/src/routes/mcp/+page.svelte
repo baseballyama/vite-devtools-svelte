@@ -131,6 +131,7 @@ and what changed when I edited the tax rate.`
     <div class="head-meta">
       <span class="eyebrow"><span class="eyebrow-num">§ mcp</span> · for AI agents</span>
       <span class="mono dim">{MCP_TOOL_COUNT} tools</span>
+      <a class="mono" href="{base}/ja/mcp" hreflang="ja" lang="ja">日本語クイックスタート</a>
     </div>
     <h1>MCP.</h1>
     <p class="lead">
