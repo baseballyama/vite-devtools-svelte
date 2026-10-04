@@ -1,194 +1,282 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
-  import type { StateChange } from '../lib/types.js'
-  import { getStateTimeline, clearStateTimeline, openReactiveInEditor } from '../lib/rpc.js'
-  import { componentName } from '../lib/format.js'
-  import PanelContainer from '../components/PanelContainer.svelte'
-  import Card from '../components/Card.svelte'
+  import { getStateTimelineDelta, clearStateTimeline, openReactiveInEditor } from '../lib/rpc.js'
+  import type { StateChange, StateTimelineEntry } from '../lib/types.js'
+  import { datasetVersion } from '../lib/versions.js'
+  import { resource } from '../lib/resource.svelte.js'
+  import { haystack, haystackMatcher } from '../lib/match.js'
+  import { componentName, formatClock, formatValue, prettyValue } from '../lib/format.js'
+  import Panel from '../components/Panel.svelte'
+  import SplitView from '../components/SplitView.svelte'
+  import VirtualList from '../components/VirtualList.svelte'
+  import Inspector from '../components/Inspector.svelte'
+  import SearchField from '../components/SearchField.svelte'
+  import Button from '../components/Button.svelte'
   import Badge from '../components/Badge.svelte'
-  import ActionButton from '../components/ActionButton.svelte'
+  import Highlight from '../components/Highlight.svelte'
+  import EmptyState from '../components/EmptyState.svelte'
+  import LiveControls from '../components/LiveControls.svelte'
+  import CaptureNotice from '../components/CaptureNotice.svelte'
+  import { captureInfo } from '../lib/capture.svelte.js'
+  import { baselineNotice } from '../lib/reactive.js'
 
-  let changes = $state<StateChange[]>([])
-  let pollTimer: ReturnType<typeof setInterval> | null = null
-  let selectedChange = $state<StateChange | null>(null)
+  /** Mirrors the server buffer (docs/devframe-migration.md §6.4). */
+  const MAX_ENTRIES = 500
 
-  const sorted = $derived([...changes].reverse())
+  // Cursor-based pulls: the server answers from its own buffer (never pulls
+  // the app) and only sends entries after `cursor`; `reset` replaces the
+  // local list. The fetcher returns the same array when nothing arrived, so
+  // the resource skips re-deriving without serialising the buffer.
+  //
+  // Defensive against stale cursors (review D1/D2: server-side reset or a
+  // restarted dev server whose seq overtook ours): a changed server
+  // identity, a cursor moving backwards, or a non-increasing seq in an
+  // append all mean "our cursor is from another timeline" → refetch the full
+  // buffer instead of appending.
+  let cursor: number | undefined
+  let serverId: string | undefined
+  let buffer: StateTimelineEntry[] = []
 
-  function formatValue(v: unknown): string {
-    if (v === null) return 'null'
-    if (v === undefined) return 'undefined'
-    const s = JSON.stringify(v)
-    return s.length > 60 ? s.slice(0, 59) + '…' : s
+  /** Optional identity (`serverId`/`instanceId`) if §6.4 adds one; feature-detected. */
+  const identityOf = (d: object): string | undefined => {
+    const x = d as { serverId?: unknown; instanceId?: unknown }
+    const id = x.serverId ?? x.instanceId
+    return id == null ? undefined : String(id)
   }
 
-  function formatTime(ts: number): string {
-    return new Date(ts).toLocaleTimeString(undefined, { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 })
+  async function pull(): Promise<StateTimelineEntry[]> {
+    let d = await getStateTimelineDelta(cursor)
+    const id = identityOf(d)
+    const lastSeq = buffer.at(-1)?.seq
+    const stale =
+      !d.reset &&
+      cursor !== undefined &&
+      ((id !== undefined && serverId !== undefined && id !== serverId) ||
+        d.cursor < cursor ||
+        (d.changes.length > 0 && lastSeq !== undefined && d.changes[0].seq <= lastSeq))
+    if (stale) d = await getStateTimelineDelta(undefined)
+    serverId = identityOf(d)
+    cursor = d.cursor
+    if (d.reset || stale) buffer = d.changes.slice(-MAX_ENTRIES)
+    else if (d.changes.length) buffer = buffer.concat(d.changes).slice(-MAX_ENTRIES)
+    return buffer
   }
 
-  async function refresh() {
-    try { changes = await getStateTimeline() } catch { /* ignore */ }
+  const timeline = resource<StateTimelineEntry[]>(
+    pull,
+    { initial: [], interval: 1000, version: datasetVersion('stateTimeline'), equals: (a, b) => a === b },
+  )
+
+  const capture = captureInfo(1000)
+  let query = $state('')
+  let selected = $state<string | null>(null)
+
+  // Keyed by the server's monotonically increasing `seq`, stable across
+  // trims and resets of the buffer.
+  interface Entry {
+    key: string
+    c: StateChange
   }
 
-  async function handleOpenReactive(file: string, name: string) {
-    try { await openReactiveInEditor(file, name, 'state') } catch { /* ignore */ }
+  // Values are snapshots of up to 32 KB; stringify each entry once, not on
+  // every keystroke and row render. Entries are immutable once received.
+  interface Preview {
+    old: string
+    next: string
+    hay: string
   }
+  const previews = new WeakMap<StateChange, Preview>()
+  function preview(c: StateChange): Preview {
+    let p = previews.get(c)
+    if (!p) {
+      p = {
+        old: c.oldValue === null ? '' : formatValue(c.oldValue, 40),
+        next: formatValue(c.newValue, 80),
+        hay: haystack(c.name, c.componentFile, formatValue(c.newValue, 200)),
+      }
+      previews.set(c, p)
+    }
+    return p
+  }
+
+  const entries = $derived.by(() => {
+    const out: Entry[] = []
+    const m = haystackMatcher(query)
+    const data = timeline.data
+    for (let i = data.length - 1; i >= 0; i--) {
+      const c = data[i]
+      if (m && !m(preview(c).hay)) continue
+      out.push({ key: String(c.seq), c })
+    }
+    return out
+  })
+
+  const current = $derived(selected ? (entries.find((e) => e.key === selected)?.c ?? null) : null)
+  const signals = $derived(new Set(timeline.data.map((c) => c.id)).size)
 
   async function clear() {
-    await clearStateTimeline()
-    changes = []
-    selectedChange = null
+    await clearStateTimeline().catch(() => {})
+    cursor = undefined
+    buffer = []
+    timeline.set(buffer)
+    selected = null
   }
 
-  onMount(() => {
-    refresh()
-    pollTimer = setInterval(refresh, 1000)
-    return () => { if (pollTimer) clearInterval(pollTimer) }
-  })
+  function open(c: StateChange) {
+    openReactiveInEditor(c.componentFile, c.name, 'state').catch(() => {})
+  }
 </script>
 
-<PanelContainer
-  count={changes.length}
-  summary="A scrubbable record of every $state mutation — useful for tracing unexpected updates."
->
+<Panel title="State timeline" count={timeline.data.length}>
+  {#snippet toolbar()}
+    <SearchField bind:value={query} placeholder="Filter by signal, component or value…" count={entries.length} />
+    <CaptureNotice info={capture.data.stateTimeline} noun="changes" />
+    {#if baselineNotice(capture.data.stateTimeline?.baseline)}
+      <span class="baseline" role="status">{baselineNotice(capture.data.stateTimeline?.baseline)}</span>
+    {/if}
+    <span class="summary">{signals} signal{signals === 1 ? '' : 's'}</span>
+    <span
+      class="summary"
+      title="The app checks $state every 200 ms: several writes within one check are one entry, and times are when a change was detected. The dev server keeps the latest {MAX_ENTRIES} changes across all signals."
+    >
+      sampled every 200 ms · latest {MAX_ENTRIES}
+    </span>
+  {/snippet}
   {#snippet actions()}
-    <ActionButton onclick={refresh}>Refresh</ActionButton>
-    <ActionButton onclick={clear}>Clear</ActionButton>
+    <LiveControls res={timeline} onclear={clear} />
   {/snippet}
 
-  {#if changes.length === 0}
-    <Card>
-      <p class="empty">No state changes recorded yet. Interact with your app to see $state changes here.</p>
-    </Card>
-  {:else}
-    <div class="timeline-layout">
-      <div class="timeline-list">
-        {#each sorted as change, i (change.id + ':' + change.timestamp)}
-          {@const toggle = () => selectedChange = selectedChange === change ? null : change}
-          {@const openInEditor = () => handleOpenReactive(change.componentFile, change.name)}
-          <div
-            class="timeline-entry"
-            class:selected={selectedChange === change}
-            role="button"
-            tabindex="0"
-            aria-pressed={selectedChange === change}
-            onclick={toggle}
-            onkeydown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
-                toggle()
-              }
-            }}
-          >
-            <div class="entry-header">
-              <span class="entry-name">{change.name}</span>
-              <Badge variant={change.oldValue === null ? 'success' : 'info'}>
-                {change.oldValue === null ? 'init' : 'update'}
-              </Badge>
-            </div>
-            <div class="entry-meta">
-              <button
-                type="button"
-                class="entry-file-link"
-                onclick={(e) => { e.stopPropagation(); openInEditor() }}
-                onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.stopPropagation() }}
-                title="Open {change.componentFile} in editor"
-              >
-                {componentName(change.componentFile)}
-              </button>
-              <span class="entry-time">{formatTime(change.timestamp)}</span>
-            </div>
-            <div class="entry-values">
-              <span class="old-val">{formatValue(change.oldValue)}</span>
-              <span class="arrow">→</span>
-              <span class="new-val">{formatValue(change.newValue)}</span>
-            </div>
-          </div>
-        {/each}
+  <SplitView id="timeline" open={!!current}>
+    <div class="list">
+      <div class="head" aria-hidden="true">
+        <span>Time</span><span>Signal</span><span>Change</span>
       </div>
-
-      {#if selectedChange}
-        <div class="detail-sidebar">
-          <Card title={selectedChange.name}>
-            <div class="detail-row">
-              <span class="detail-label">Component</span>
-              <button class="detail-file-link" onclick={() => handleOpenReactive(selectedChange!.componentFile, selectedChange!.name)}>{componentName(selectedChange.componentFile)}</button>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">Time</span>
-              <span class="detail-val">{formatTime(selectedChange.timestamp)}</span>
-            </div>
-            <div class="detail-section">
-              <span class="detail-label">Old Value</span>
-              <pre class="detail-code">{JSON.stringify(selectedChange.oldValue, null, 2)}</pre>
-            </div>
-            <div class="detail-section">
-              <span class="detail-label">New Value</span>
-              <pre class="detail-code new">{JSON.stringify(selectedChange.newValue, null, 2)}</pre>
-            </div>
-          </Card>
-        </div>
-      {/if}
+      <div class="body">
+        <VirtualList items={entries} getKey={(e) => e.key} bind:selected label="State changes, newest first" onactivate={(e) => open(e.c)}>
+          {#snippet row({ c })}
+            <span class="time num">{formatClock(c.timestamp, true)}</span>
+            <span class="sig">
+              <span class="mono name"><Highlight text={c.name} {query} /></span>
+              <span class="comp truncate"><Highlight text={componentName(c.componentFile)} {query} /></span>
+            </span>
+            <span class="change mono truncate">
+              {#if c.oldValue === null}
+                <Badge tone="green">init</Badge>
+              {:else}
+                <span class="old">{preview(c).old}</span><span class="arrow">→</span>
+              {/if}
+              <span class="new"><Highlight text={preview(c).next} {query} /></span>
+            </span>
+          {/snippet}
+          {#snippet empty()}
+            {#if timeline.data.length === 0}
+              <EmptyState icon="timeline" title="No state changes yet"><p>Interact with your app — every <code>$state</code> write is recorded here, newest first.</p></EmptyState>
+            {:else}
+              <EmptyState icon="search" title="No changes match" />
+            {/if}
+          {/snippet}
+        </VirtualList>
+      </div>
     </div>
-  {/if}
-</PanelContainer>
+    {#snippet aside()}
+      {#if current}
+        <Inspector title={current.name} subtitle={current.componentFile} onclose={() => (selected = null)}>
+          {#snippet badges()}
+            <Badge tone={current.oldValue === null ? 'green' : 'blue'}>{current.oldValue === null ? 'init' : 'update'}</Badge>
+            <Badge>{formatClock(current.timestamp, true)}</Badge>
+          {/snippet}
+          {#snippet actions()}
+            <Button icon="editor" onclick={() => open(current)}>Go to definition</Button>
+          {/snippet}
+          <h3 class="section-title">Before</h3>
+          <pre class="code-block old-block">{prettyValue(current.oldValue)}</pre>
+          <h3 class="section-title">After</h3>
+          <pre class="code-block new-block">{prettyValue(current.newValue)}</pre>
+        </Inspector>
+      {/if}
+    {/snippet}
+  </SplitView>
+</Panel>
 
 <style>
-  .empty { color: var(--color-text-muted); font-size: var(--text-sm); }
-
-  .timeline-layout { display: flex; gap: var(--space-3); }
-  .timeline-list { flex: 1; display: flex; flex-direction: column; gap: 2px; max-height: 70vh; overflow-y: auto; }
-
-  .timeline-entry {
-    display: block; width: 100%; text-align: left; padding: var(--space-2) var(--space-3);
-    background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md);
-    cursor: pointer; font-family: var(--font-sans); transition: background var(--transition-fast);
+  .list {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
   }
-  .timeline-entry:hover { background: var(--color-surface-active); }
-  .timeline-entry.selected { border-color: var(--color-accent-500); background: var(--color-surface-active); }
-
-  .entry-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; }
-  .entry-name { font-weight: 600; font-size: var(--text-sm); color: var(--color-text); }
-  .entry-meta { display: flex; justify-content: space-between; font-size: var(--text-xs); color: var(--color-text-subtle); margin-bottom: 4px; }
-  .entry-file-link {
+  .head,
+  .list :global([role='option']) {
+    display: grid;
+    grid-template-columns: 92px minmax(140px, 0.6fr) minmax(0, 1fr);
+    column-gap: 12px;
+  }
+  .head {
+    height: 28px;
+    align-items: center;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-subtle);
+    font-size: var(--fs-xs);
+    font-weight: 500;
+    color: var(--fg-faint);
+  }
+  .body {
+    flex: 1;
+    min-height: 0;
+  }
+  .baseline {
+    font-size: var(--fs-xs);
+    color: var(--yellow);
+  }
+  .summary {
+    color: var(--fg-faint);
+    font-size: var(--fs-xs);
+  }
+  .time {
+    color: var(--fg-faint);
+    font-size: var(--fs-xs);
     font-family: var(--font-mono);
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: var(--color-accent-400);
-    font-size: var(--text-xs);
-    padding: 0;
-    text-decoration: underline;
-    text-decoration-style: dotted;
   }
-  .entry-file-link:hover { color: var(--color-accent-300); }
-  .entry-time { font-family: var(--font-mono); }
-
-  .entry-values { display: flex; align-items: center; gap: var(--space-1); font-family: var(--font-mono); font-size: var(--text-xs); }
-  .old-val { color: var(--color-text-subtle); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 120px; }
-  .arrow { color: var(--color-text-muted); flex-shrink: 0; }
-  .new-val { color: var(--color-accent-400); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 120px; }
-
-  .detail-sidebar { width: 300px; flex-shrink: 0; }
-  .detail-row { display: flex; justify-content: space-between; padding: var(--space-1) 0; font-size: var(--text-xs); }
-  .detail-label { color: var(--color-text-muted); font-weight: 500; }
-  .detail-val { color: var(--color-text); font-family: var(--font-mono); }
-  .detail-section { padding: var(--space-2) 0 0; border-top: 1px dashed var(--color-border); margin-top: var(--space-2); }
-  .detail-code {
-    margin: var(--space-1) 0 0; padding: var(--space-2); background: var(--color-base);
-    border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: var(--text-xs);
-    color: var(--color-text-subtle); overflow-x: auto; white-space: pre-wrap; max-height: 150px; overflow-y: auto;
+  .sig {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
   }
-  .detail-code.new { color: var(--color-accent-400); }
-  .detail-file-link {
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: var(--color-accent-400);
-    font-size: var(--text-xs);
-    font-family: var(--font-mono);
-    padding: 0;
-    text-decoration: underline;
-    text-decoration-style: dotted;
+  .name {
+    color: var(--blue);
+    white-space: nowrap;
   }
-  .detail-file-link:hover { color: var(--color-accent-300); }
+  .comp {
+    color: var(--fg-faint);
+    font-size: var(--fs-xs);
+  }
+  .change {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--fs-xs);
+    min-width: 0;
+  }
+  .old {
+    color: var(--fg-faint);
+    text-decoration: line-through;
+    text-decoration-color: var(--border-strong);
+    flex-shrink: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .arrow {
+    color: var(--fg-faint);
+  }
+  .new {
+    color: var(--fg);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .old-block {
+    color: var(--fg-muted);
+  }
+  .new-block {
+    border-color: color-mix(in srgb, var(--green) 35%, transparent);
+  }
 </style>

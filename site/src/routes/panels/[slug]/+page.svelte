@@ -54,7 +54,7 @@
         <h2 class="content-h2">Try it</h2>
         <p>
           Add the plugin to your project
-          (<a href="{base}/getting-started">Getting Started</a>)
+          (<a class="inline-link" href="{base}/getting-started">Getting Started</a>)
           to use this panel in your own dev server.
         </p>
       </section>
@@ -71,10 +71,15 @@
             <img
               src="{base}/images/{src}"
               alt={`${panel.title} screenshot ${i + 1}`}
+              width="1200"
+              height="750"
               loading={i === 0 ? 'eager' : 'lazy'}
             />
           </figure>
         {/each}
+        {#if panel.caption}
+          <p class="shot-caption">{panel.caption}</p>
+        {/if}
       </aside>
     </div>
 
@@ -270,6 +275,7 @@
 
   .shot img {
     width: 100%;
+    height: auto;
     display: block;
     background: var(--bg-1);
   }
@@ -328,5 +334,14 @@
     font-size: 1.3rem;
     color: var(--text);
     letter-spacing: -0.025em;
+  }
+  .inline-link {
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+  }
+  .shot-caption {
+    margin: 0.75rem 0 0;
+    font-size: 0.85rem;
+    color: var(--text-3);
   }
 </style>

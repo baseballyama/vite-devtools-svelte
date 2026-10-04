@@ -10,14 +10,25 @@ import type {
   ProjectInfo,
   RouteInfo,
   ComponentRelation,
+  CaptureInfoMap,
+  ReactiveGraphRequest,
+  ReactiveGraphResult,
+  ReactiveSummary,
+  ReactiveSummaryRequest,
+  StateTimelineDelta,
 } from '../types.js'
-import { SessionStore } from './sessions.js'
+import { SessionStore, SESSION_ID_PATTERN } from './sessions.js'
 import { listPerformanceIssues, summarizeReactiveProblems, type IssueThresholds } from './issues.js'
 
 export interface McpDeps {
   getProject: () => ProjectInfo
   getRoutes: () => RouteInfo[]
   getLiveComponents: () => ComponentInstance[]
+  /**
+   * The served page load's components with its epoch, read together
+   * (`get_live_components` with `includeMeta`).
+   */
+  getLiveSnapshot?: () => { epoch: string | null; total: number; components: ComponentInstance[] }
   getComponentRelations: () => ComponentRelation[]
   getRenderProfiles: () => RenderProfile[]
   /** Resolves with the current reactive graph after refreshing from the browser. */
@@ -25,7 +36,36 @@ export interface McpDeps {
   getLoadProfiles: () => LoadProfile[]
   getFpsSamples: () => FpsSample[]
   sessions: SessionStore
+  // Bounded reactivity tools (docs/devframe-migration.md §6.7); registered only when provided.
+  getReactiveSummary?: (req: ReactiveSummaryRequest) => Promise<ReactiveSummary>
+  getReactiveScope?: (req: ReactiveGraphRequest) => Promise<ReactiveGraphResult>
+  getStateTimelineDelta?: (since?: number) => StateTimelineDelta
+  getCaptureInfo?: () => CaptureInfoMap
 }
+
+/** Most timeline entries one `get_state_timeline` call returns. */
+export const MCP_TIMELINE_LIMIT = 500
+/** Default / largest JSON size of one old/new value in `get_state_timeline` output. */
+export const MCP_VALUE_CHARS = { default: 2048, max: 32768 } as const
+
+/** A state value for MCP output: as is when small, otherwise a size summary. */
+function capValue(value: unknown, maxChars: number): unknown {
+  let json: string | undefined
+  try {
+    json = JSON.stringify(value)
+  } catch {
+    return { omitted: 'not serializable' }
+  }
+  if (json === undefined || json.length <= maxChars) return value
+  return {
+    omitted: 'too large',
+    chars: json.length,
+    preview: json.slice(0, Math.min(200, maxChars)),
+  }
+}
+
+/** Session ids as issued by `start_session`; anything else is rejected before the store. */
+const sessionId = z.string().max(64).regex(SESSION_ID_PATTERN, 'not a session id')
 
 const TEXT = (value: unknown) => ({
   content: [
@@ -221,10 +261,28 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     {
       title: 'Currently mounted components',
       description:
-        'Component instances with file, parent, mounted status as currently mounted in the browser.',
-      inputSchema: {},
+        'Component instances with file, parent, mounted status as currently mounted in the browser (an array, parents first). With `includeMeta: true` the answer is `{ epoch, total, captured, truncated, components }` instead, limited to `limit` (default 1000): component ids are only valid within that `epoch` (one page load), so pass both to get_reactive_scope.',
+      inputSchema: {
+        includeMeta: z.boolean().optional(),
+        limit: z.number().int().min(1).max(50000).optional(),
+      },
     },
-    async () => TEXT(deps.getLiveComponents()),
+    async ({ includeMeta, limit }) => {
+      if (!includeMeta || !deps.getLiveSnapshot) {
+        // Unchanged default: the bare array older clients expect (`limit` only when given).
+        const all = deps.getLiveComponents()
+        return TEXT(limit === undefined ? all : all.slice(0, limit))
+      }
+      const snap = deps.getLiveSnapshot()
+      const max = limit ?? 1000
+      return TEXT({
+        epoch: snap.epoch,
+        total: snap.total,
+        captured: snap.components.length,
+        truncated: snap.total > snap.components.length || snap.components.length > max,
+        components: snap.components.slice(0, max),
+      })
+    },
   )
 
   server.registerTool(
@@ -236,6 +294,99 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     },
     async () => TEXT(deps.getComponentRelations()),
   )
+
+  // --- bounded reactivity tools (read only; every answer says what it covers) ---
+
+  if (deps.getReactiveSummary) {
+    const getSummary = deps.getReactiveSummary
+    server.registerTool(
+      'get_reactive_summary',
+      {
+        title: 'Reactive overview (top components)',
+        description:
+          'Busiest component instances from runtime counters over all instances, without capturing the graph. Counts are sampled state changes (at most one per state per 200 ms) and renders within the window, not rates. Only state created during component init is tracked. `rows` + `other` add up to the totals; null means unknown. Use get_reactive_scope with a componentId to look at one instance. The same request is answered from a cache for up to 1 s; `window.until` says when the answer was computed.',
+        inputSchema: {
+          topK: z.number().int().min(1).max(200).optional(),
+          windowMs: z.number().int().min(1000).max(60000).optional(),
+        },
+      },
+      async ({ topK, windowMs }) => TEXT(await getSummary({ topK, windowMs })),
+    )
+  }
+
+  if (deps.getReactiveScope) {
+    const getScope = deps.getReactiveScope
+    server.registerTool(
+      'get_reactive_scope',
+      {
+        title: 'Reactive graph of one component',
+        description:
+          "$state/$derived/$effect nodes of one component instance and their direct neighbours, built in the app within the caps. Edges mean 'can affect' (current dependencies), not a recorded cause. `componentId` requires the `epoch` it came from (get_live_components with includeMeta): after a reload the answer is empty with staleReason 'epoch-changed' instead of another instance. Omit componentId only for the whole-app graph (capped; see total/truncated). The same request may be answered from a cache for up to 1 s; `computedAt` says when the app built the graph (null when unknown or for an empty fallback). `stale: true` only marks a fallback after the app did not answer (an earlier answer with its own computedAt, or empty).",
+        inputSchema: {
+          componentId: z.number().int().nonnegative().optional(),
+          epoch: z.string().max(200).optional(),
+          maxNodes: z.number().int().min(1).max(5000).optional(),
+          maxEdges: z.number().int().min(1).max(20000).optional(),
+        },
+      },
+      async ({ componentId, epoch, maxNodes, maxEdges }) => {
+        if (componentId !== undefined && epoch === undefined)
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: 'componentId requires epoch (from get_live_components with includeMeta: true)',
+              },
+            ],
+            isError: true,
+          }
+        return TEXT(await getScope({ componentId, epoch, maxNodes, maxEdges }))
+      },
+    )
+  }
+
+  if (deps.getStateTimelineDelta) {
+    const getDelta = deps.getStateTimelineDelta
+    server.registerTool(
+      'get_state_timeline',
+      {
+        title: 'State changes since a cursor',
+        description:
+          'Sampled $state changes (200 ms) after `since` (the cursor from the previous call). Contains values of state in the running app. `reset: true` means the cursor was stale and this is the whole buffer. At most `limit` newest entries are returned; `omitted` counts older ones in the range that were left out. Values larger than `maxValueChars` (JSON) are replaced by a size summary. Timestamps are detection times, so order within about a second is not causal.',
+        inputSchema: {
+          since: z.number().int().nonnegative().optional(),
+          limit: z.number().int().min(1).max(MCP_TIMELINE_LIMIT).optional(),
+          maxValueChars: z.number().int().min(16).max(MCP_VALUE_CHARS.max).optional(),
+        },
+      },
+      async ({ since, limit, maxValueChars }) => {
+        const delta = getDelta(since)
+        const max = limit ?? 100
+        const valueChars = maxValueChars ?? MCP_VALUE_CHARS.default
+        const omitted = Math.max(0, delta.changes.length - max)
+        const changes = delta.changes.slice(omitted).map(c => ({
+          ...c,
+          oldValue: capValue(c.oldValue, valueChars),
+          newValue: capValue(c.newValue, valueChars),
+        }))
+        return TEXT({ ...delta, changes, omitted, maxValueChars: valueChars })
+      },
+    )
+  }
+
+  if (deps.getCaptureInfo) {
+    const getInfo = deps.getCaptureInfo
+    server.registerTool(
+      'get_capture_info',
+      {
+        title: 'What the DevTools hold versus what the app reported',
+        description:
+          'Per dataset: captured count, total (null = unknown), truncated, selection policy and dropped counts by reason. Read this before drawing conclusions from capped data.',
+        inputSchema: {},
+      },
+      async () => TEXT(getInfo()),
+    )
+  }
 
   // --- session tools ---
 
@@ -286,7 +437,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
       title: 'Compare two sessions',
       description:
         'Diff render / load / fps metrics between two ended sessions. Each section carries `verdict`: improved | regressed | unchanged.',
-      inputSchema: { a: z.string(), b: z.string() },
+      inputSchema: { a: sessionId, b: sessionId },
     },
     async ({ a, b }) => TEXT(deps.sessions.compare(a, b)),
   )
@@ -306,7 +457,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     {
       title: 'Load a session by id',
       description: 'Returns the full session record (including delta if ended) by id.',
-      inputSchema: { id: z.string() },
+      inputSchema: { id: sessionId },
     },
     async ({ id }) => {
       const rec = deps.sessions.get(id)
@@ -321,7 +472,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     {
       title: 'Delete a session',
       description: 'Removes a session from memory and disk.',
-      inputSchema: { id: z.string() },
+      inputSchema: { id: sessionId },
     },
     async ({ id }) => TEXT({ deleted: deps.sessions.delete(id) }),
   )

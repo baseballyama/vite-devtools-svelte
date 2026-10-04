@@ -115,6 +115,18 @@ function classify(
   return diff > 0 ? 'improved' : 'regressed'
 }
 
+/**
+ * The only id shape `start()` issues: `s_<Date.now() base36>_<6 hex>`. Ids
+ * reach the store from MCP clients and become file names, so anything else
+ * (path separators, `..`, absolute paths) is rejected before touching disk
+ * (review C-7).
+ */
+export const SESSION_ID_PATTERN = /^s_[0-9a-z]{1,16}_[0-9a-f]{6}$/
+
+export function isSessionId(id: unknown): id is string {
+  return typeof id === 'string' && SESSION_ID_PATTERN.test(id)
+}
+
 export interface SessionStoreOptions {
   persistDir: string
   getters: MetricGetters
@@ -127,7 +139,7 @@ export class SessionStore {
   private readonly getters: MetricGetters
 
   constructor(opts: SessionStoreOptions) {
-    this.persistDir = opts.persistDir
+    this.persistDir = path.resolve(opts.persistDir)
     this.getters = opts.getters
   }
 
@@ -183,6 +195,7 @@ export class SessionStore {
   }
 
   get(id: string): SessionRecord | undefined {
+    if (!isSessionId(id)) return undefined
     const inMem = this.sessions.get(id)
     if (inMem) return inMem
     return this.loadFromDisk(id)
@@ -221,9 +234,11 @@ export class SessionStore {
         for (const name of fs.readdirSync(this.persistDir)) {
           if (!name.endsWith('.json')) continue
           const id = name.slice(0, -5)
-          if (seen.has(id)) continue
+          if (!isSessionId(id) || seen.has(id)) continue
           try {
-            const rec = JSON.parse(fs.readFileSync(path.join(this.persistDir, name), 'utf-8'))
+            const rec = JSON.parse(fs.readFileSync(this.pathFor(id), 'utf-8'))
+            // A file whose content claims another id is not listed under it.
+            if (rec?.id !== id) continue
             out.push({
               id: rec.id,
               label: rec.label,
@@ -244,6 +259,7 @@ export class SessionStore {
   }
 
   delete(id: string): boolean {
+    if (!isSessionId(id)) return false
     const had = this.sessions.delete(id)
     let onDisk = false
     try {
@@ -336,8 +352,12 @@ export class SessionStore {
     }
   }
 
+  /** The session's file, guaranteed to be a direct child of `persistDir`. */
   private pathFor(id: string): string {
-    return path.join(this.persistDir, `${id}.json`)
+    if (!isSessionId(id)) throw new Error('Invalid session id')
+    const file = path.resolve(this.persistDir, `${id}.json`)
+    if (path.dirname(file) !== this.persistDir) throw new Error('Invalid session id')
+    return file
   }
 
   private persistToDisk(rec: SessionRecord): void {
@@ -352,7 +372,8 @@ export class SessionStore {
   private loadFromDisk(id: string): SessionRecord | undefined {
     try {
       const raw = fs.readFileSync(this.pathFor(id), 'utf-8')
-      return JSON.parse(raw)
+      const rec = JSON.parse(raw)
+      return rec?.id === id ? rec : undefined
     } catch {
       return undefined
     }

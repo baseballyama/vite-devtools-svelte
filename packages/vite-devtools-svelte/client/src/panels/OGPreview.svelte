@@ -1,125 +1,258 @@
 <script lang="ts">
-  import type { OGPreview } from '../lib/types.js'
   import { getOGPreview, getRoutes } from '../lib/rpc.js'
-  import { onMount } from 'svelte'
-  import PanelContainer from '../components/PanelContainer.svelte'
-  import Card from '../components/Card.svelte'
+  import type { OGPreview } from '../lib/types.js'
+  import { resource } from '../lib/resource.svelte.js'
+  import Panel from '../components/Panel.svelte'
+  import Button from '../components/Button.svelte'
   import Badge from '../components/Badge.svelte'
-  import ActionButton from '../components/ActionButton.svelte'
+  import Icon from '../components/Icon.svelte'
+  import EmptyState from '../components/EmptyState.svelte'
 
-  let routes = $state<string[]>([])
-  let selectedRoute = $state('/')
-  let customUrl = $state('')
-  let preview = $state<OGPreview | null>(null)
+  const routes = resource(async () => (await getRoutes()).filter((r) => r.hasPage && r.params.length === 0).map((r) => r.path), {
+    initial: [] as string[],
+  })
+
+  let path = $state('/')
+  let custom = $state('')
   let loading = $state(false)
+  let preview = $state<OGPreview | null>(null)
+  let error = $state<string | null>(null)
 
-  async function fetchPreview() {
-    const url = customUrl || `${window.location.origin}${selectedRoute}`
+  const target = $derived(custom.trim() || new URL(path, location.origin).href)
+
+  async function run() {
     loading = true
-    try { preview = await getOGPreview(url) } catch { preview = null }
-    loading = false
+    error = null
+    try {
+      preview = await getOGPreview(target)
+    } catch (e) {
+      preview = null
+      error = e instanceof Error ? e.message : String(e)
+    } finally {
+      loading = false
+    }
   }
 
-  onMount(async () => {
+  const host = $derived.by(() => {
     try {
-      const r = await getRoutes()
-      routes = r.filter(r => r.hasPage).map(r => r.path)
-    } catch { /* ignore */ }
+      return new URL(preview?.url ?? target).host
+    } catch {
+      return ''
+    }
   })
+
+  const twitterCard = $derived(preview?.tags.find((t) => t.property === 'twitter:card')?.content ?? 'summary')
 </script>
 
-<PanelContainer summary="See how each route's social card looks across X, Discord, Slack, and link unfurlers.">
-  <div class="controls">
-    <select class="route-select" bind:value={selectedRoute}>
-      {#each routes as route}
-        <option value={route}>{route}</option>
-      {/each}
-    </select>
-    <span class="or">or</span>
-    <input class="url-input" type="text" bind:value={customUrl} placeholder="Custom URL" />
-    <ActionButton onclick={fetchPreview}>{loading ? '...' : 'Preview'}</ActionButton>
-  </div>
+<Panel title="Social preview" scroll>
+  {#snippet toolbar()}
+    <form
+      class="bar"
+      onsubmit={(e) => {
+        e.preventDefault()
+        run()
+      }}
+    >
+      <select class="select" bind:value={path} aria-label="Route" disabled={!!custom.trim()}>
+        {#each routes.data.length ? routes.data : ['/'] as r (r)}<option value={r}>{r}</option>{/each}
+      </select>
+      <input class="input mono url" bind:value={custom} placeholder="…or any URL" aria-label="Custom URL" spellcheck="false" />
+      <Button type="submit" variant="primary" icon="search" disabled={loading}>{loading ? 'Fetching…' : 'Preview'}</Button>
+    </form>
+  {/snippet}
 
-  {#if preview}
-    <div class="preview-layout">
-      <!-- Twitter/Social Card Preview -->
-      <Card title="Social Card Preview">
-        <div class="social-card">
-          {#if preview.image}
-            <div class="card-image">
-              <img src={preview.image} alt={preview.title || ''} />
-            </div>
+  {#if error}
+    <EmptyState icon="errors" tone="error" title="Could not fetch the page"><p class="mono">{error}</p></EmptyState>
+  {:else if !preview}
+    <EmptyState icon="og" title="Check how a page unfurls">
+      <p>Pick a route and press <strong>Preview</strong> to read its Open Graph and Twitter tags.</p>
+      <Button variant="primary" icon="search" onclick={run} disabled={loading}>Preview {path}</Button>
+    </EmptyState>
+  {:else}
+    <div class="wrap">
+      <section class="cards" aria-label="Card previews">
+        <figure class="card large">
+          <span class="label">X / Twitter · {twitterCard}</span>
+          <div class="img">
+            {#if preview.image}<img src={preview.image} alt="" />{:else}<span><Icon name="assets" size={22} />no og:image</span>{/if}
+          </div>
+          <figcaption>
+            <span class="host">{host}</span>
+            <strong class="t">{preview.title || 'Untitled page'}</strong>
+            <span class="d">{preview.description || 'No description'}</span>
+          </figcaption>
+        </figure>
+        <figure class="card slack">
+          <div class="bar-accent"></div>
+          <div>
+            <span class="site">{host}</span>
+            <strong class="t link">{preview.title || 'Untitled page'}</strong>
+            <span class="d">{preview.description || 'No description'}</span>
+            {#if preview.image}<img class="thumb" src={preview.image} alt="" />{/if}
+          </div>
+          <span class="label">Slack / Discord</span>
+        </figure>
+      </section>
+
+      <section class="side">
+        <h3 class="section-title">
+          Checks
+          {#if preview.issues.length}<Badge tone="yellow">{preview.issues.length}</Badge>{:else}<Badge tone="green">all good</Badge>{/if}
+        </h3>
+        <ul class="issues">
+          {#each preview.issues as issue (issue)}
+            <li><Icon name="warning" size={14} />{issue}</li>
           {:else}
-            <div class="card-image no-image">No og:image</div>
-          {/if}
-          <div class="card-body">
-            <div class="card-title">{preview.title || 'No title'}</div>
-            <div class="card-desc">{preview.description || 'No description'}</div>
-            <div class="card-url">{preview.url}</div>
-          </div>
-        </div>
-      </Card>
-
-      <!-- Meta Tags -->
-      <Card title="Meta Tags ({preview.tags.length})">
-        {#if preview.tags.length === 0}
-          <p class="empty">No meta tags found</p>
-        {:else}
-          <div class="tag-list">
-            {#each preview.tags as tag}
-              <div class="tag-row">
-                <code class="tag-prop">{tag.property}</code>
-                <span class="tag-content">{tag.content}</span>
-              </div>
-            {/each}
-          </div>
-        {/if}
-      </Card>
-
-      <!-- Issues -->
-      {#if preview.issues.length > 0}
-        <Card title="Issues ({preview.issues.length})">
-          <div class="issue-list">
-            {#each preview.issues as issue}
-              <div class="issue-item">
-                <Badge variant="warning">missing</Badge>
-                <span>{issue}</span>
-              </div>
-            {/each}
-          </div>
-        </Card>
-      {/if}
+            <li class="ok"><Icon name="check" size={14} />Title, description and image are present.</li>
+          {/each}
+        </ul>
+        <h3 class="section-title">Tags <span class="num">{preview.tags.length}</span></h3>
+        <dl class="kv tags">
+          {#each preview.tags as t, i (i)}
+            <dt class="mono">{t.property}</dt>
+            <dd>{t.content}</dd>
+          {:else}
+            <dt class="faint">none</dt><dd></dd>
+          {/each}
+        </dl>
+      </section>
     </div>
-  {:else if !loading}
-    <Card><p class="empty">Select a route and click Preview to check Open Graph tags.</p></Card>
   {/if}
-</PanelContainer>
+</Panel>
 
 <style>
-  .empty { color: var(--color-text-muted); font-size: var(--text-sm); }
-
-  .controls { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }
-  .route-select, .url-input { padding: var(--space-1) var(--space-2); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text); font-size: var(--text-sm); font-family: var(--font-mono); }
-  .url-input { flex: 1; }
-  .url-input:focus, .route-select:focus { outline: none; border-color: var(--color-accent-500); }
-  .or { color: var(--color-text-subtle); font-size: var(--text-xs); }
-
-  .preview-layout { display: flex; flex-direction: column; gap: var(--space-3); }
-
-  .social-card { border: 1px solid var(--color-border); border-radius: var(--radius-md); overflow: hidden; max-width: 500px; }
-  .card-image { height: 200px; background: var(--color-surface); display: flex; align-items: center; justify-content: center; overflow: hidden; }
-  .card-image img { width: 100%; height: 100%; object-fit: cover; }
-  .card-image.no-image { color: var(--color-text-subtle); font-size: var(--text-sm); }
-  .card-body { padding: var(--space-2) var(--space-3); }
-  .card-title { font-weight: 600; font-size: var(--text-sm); color: var(--color-text); margin-bottom: 4px; }
-  .card-desc { font-size: var(--text-xs); color: var(--color-text-muted); margin-bottom: 4px; line-height: 1.4; }
-  .card-url { font-size: 10px; color: var(--color-text-subtle); font-family: var(--font-mono); }
-
-  .tag-list { display: flex; flex-direction: column; gap: 2px; }
-  .tag-row { display: flex; gap: var(--space-2); padding: var(--space-1) 0; border-bottom: 1px dashed var(--color-border); font-size: var(--text-xs); }
-  .tag-prop { color: var(--color-accent-400); min-width: 140px; flex-shrink: 0; }
-  .tag-content { color: var(--color-text); word-break: break-all; }
-
-  .issue-list { display: flex; flex-direction: column; gap: var(--space-1); }
-  .issue-item { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--color-text); }
+  .bar {
+    display: flex;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+  }
+  .url {
+    flex: 1;
+    min-width: 140px;
+  }
+  .wrap {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 20px;
+    padding: 16px;
+    max-width: 1200px;
+  }
+  .cards {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+  .card {
+    position: relative;
+    margin: 0;
+  }
+  .label {
+    position: absolute;
+    top: -18px;
+    left: 0;
+    font-size: var(--fs-2xs);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--fg-faint);
+  }
+  .large {
+    margin-top: 18px;
+    border: 1px solid var(--border-strong);
+    border-radius: 14px;
+    overflow: hidden;
+    background: var(--bg-elevated);
+  }
+  .img {
+    aspect-ratio: 1.91 / 1;
+    display: grid;
+    place-items: center;
+    background: var(--bg-inset);
+    color: var(--fg-faint);
+    font-size: var(--fs-sm);
+  }
+  .img span {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+  .img img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .large figcaption {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px 12px;
+    border-top: 1px solid var(--border);
+  }
+  .host,
+  .site {
+    font-size: var(--fs-xs);
+    color: var(--fg-faint);
+  }
+  .t {
+    font-weight: 600;
+  }
+  .t.link {
+    color: var(--blue);
+  }
+  .d {
+    color: var(--fg-muted);
+    font-size: var(--fs-sm);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .slack {
+    display: flex;
+    gap: 10px;
+    padding: 4px 0;
+  }
+  .slack > div:last-of-type {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .bar-accent {
+    width: 4px;
+    border-radius: 2px;
+    background: var(--border-strong);
+    flex-shrink: 0;
+  }
+  .thumb {
+    margin-top: 6px;
+    max-width: 360px;
+    border-radius: 8px;
+  }
+  .side .section-title {
+    padding-left: 0;
+  }
+  .issues {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: var(--fs-sm);
+  }
+  .issues li {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    color: var(--yellow);
+  }
+  .issues li.ok {
+    color: var(--green);
+  }
+  .tags {
+    padding: 0;
+  }
 </style>

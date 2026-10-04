@@ -1,54 +1,8 @@
-import { describe, it, expect } from 'vitest'
-import net from 'node:net'
+import { describe, it, expect, vi } from 'vitest'
+import { assertOutboundUrl, isPrivateIP, validateExternalUrl } from '../security.js'
 
-// Mirrors the logic in plugin.ts's validateExternalUrl and isPrivateIP for unit testing.
-// We copy these here because they are not exported from plugin.ts.
-
-function isPrivateIP(ip: string): boolean {
-  const parts = ip.split('.').map(Number)
-  if (parts.length === 4) {
-    if (parts[0] === 127) return true
-    if (parts[0] === 10) return true
-    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true
-    if (parts[0] === 192 && parts[1] === 168) return true
-    if (parts[0] === 169 && parts[1] === 254) return true
-    if (parts.every(p => p === 0)) return true
-  }
-  return false
-}
-
-function validateExternalUrl(urlStr: string): void {
-  let parsed: URL
-  try {
-    parsed = new URL(urlStr)
-  } catch {
-    throw new Error(`Invalid URL: ${urlStr}`)
-  }
-
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    throw new Error(`Blocked URL scheme: ${parsed.protocol}`)
-  }
-
-  const hostname = parsed.hostname
-  if (hostname === '::1' || hostname === '[::1]') {
-    throw new Error('Blocked: loopback address')
-  }
-
-  if (net.isIP(hostname)) {
-    if (isPrivateIP(hostname)) {
-      throw new Error(`Blocked: private IP address ${hostname}`)
-    }
-  } else {
-    const lower = hostname.toLowerCase()
-    if (lower === 'localhost' || lower.endsWith('.local') || lower.endsWith('.internal')) {
-      throw new Error(`Blocked: internal hostname ${hostname}`)
-    }
-  }
-}
-
-// =====================================================================
-// isPrivateIP
-// =====================================================================
+const lookup = vi.hoisted(() => vi.fn(async () => [{ address: '93.184.215.14', family: 4 }]))
+vi.mock('node:dns/promises', () => ({ default: { lookup } }))
 
 describe('isPrivateIP', () => {
   it('should block 127.x.x.x (loopback)', () => {
@@ -105,10 +59,13 @@ describe('isPrivateIP', () => {
     expect(isPrivateIP('198.51.100.1')).toBe(false)
   })
 
-  it('should not crash on non-IPv4 strings', () => {
+  it('should not crash on non-IP strings', () => {
     expect(isPrivateIP('')).toBe(false)
     expect(isPrivateIP('not-an-ip')).toBe(false)
-    expect(isPrivateIP('::1')).toBe(false) // IPv6 handled separately
+  })
+
+  it('treats IPv6 loopback as private (IPv6 is covered since review H4)', () => {
+    expect(isPrivateIP('::1')).toBe(true)
   })
 })
 
@@ -248,5 +205,62 @@ describe('SSRF protection via API request', () => {
     for (const url of blockedSchemes) {
       expect(() => validateExternalUrl(url)).toThrow(/blocked|disallowed|not allowed/i)
     }
+  })
+})
+
+describe('isPrivateIP (IPv6)', () => {
+  it('blocks loopback, unspecified, unique-local, link-local and mapped private IPv4', () => {
+    const ips = [
+      '::1',
+      '::',
+      'fc00::1',
+      'fd12:3456::1',
+      'fe80::1',
+      'febf::1',
+      '::ffff:127.0.0.1',
+      '::ffff:10.0.0.1',
+    ]
+    expect(ips.filter(ip => !isPrivateIP(ip))).toEqual([])
+  })
+
+  it('allows public IPv6 and mapped public IPv4', () => {
+    expect(['2606:4700::1111', '::ffff:8.8.8.8'].filter(ip => isPrivateIP(ip))).toEqual([])
+  })
+})
+
+describe('assertOutboundUrl', () => {
+  it('allows the dev server origin exactly (API playground calling the app)', async () => {
+    const allowedOrigins = ['http://localhost:5173']
+    await expect(
+      assertOutboundUrl('http://localhost:5173/api/hello', { allowedOrigins }),
+    ).resolves.toBeInstanceOf(URL)
+    // other ports / hosts on loopback stay blocked
+    await expect(assertOutboundUrl('http://localhost:6379/', { allowedOrigins })).rejects.toThrow(
+      /Blocked/,
+    )
+    await expect(assertOutboundUrl('http://127.0.0.1:5173/', { allowedOrigins })).rejects.toThrow(
+      /Blocked/,
+    )
+  })
+
+  it('rejects hostnames that resolve to private addresses (DNS rebinding / internal names)', async () => {
+    lookup.mockResolvedValueOnce([{ address: '10.0.0.5', family: 4 }])
+    await expect(assertOutboundUrl('https://intranet.example.com/')).rejects.toThrow(
+      /resolves to private/,
+    )
+    lookup.mockResolvedValueOnce([{ address: 'fd00::5', family: 6 }])
+    await expect(assertOutboundUrl('https://v6.example.com/')).rejects.toThrow(
+      /resolves to private/,
+    )
+  })
+
+  it('accepts hostnames that resolve to public addresses', async () => {
+    await expect(assertOutboundUrl('https://example.com/')).resolves.toBeInstanceOf(URL)
+  })
+
+  it('still rejects bad schemes and literal private IPs', async () => {
+    await expect(assertOutboundUrl('file:///etc/passwd')).rejects.toThrow(/scheme/)
+    await expect(assertOutboundUrl('http://[::1]:80/')).rejects.toThrow(/Blocked/)
+    await expect(assertOutboundUrl('http://169.254.169.254/latest')).rejects.toThrow(/Blocked/)
   })
 })

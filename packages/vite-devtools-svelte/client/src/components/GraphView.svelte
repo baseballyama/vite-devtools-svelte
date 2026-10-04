@@ -6,10 +6,11 @@
     edges: ReactiveEdge[]
     onSelectNode?: (node: ReactiveNode | null) => void
     changedNodeIds?: Set<string>
+    /** Selected node id, bindable so lists and the graph stay in sync. */
+    selectedNodeId?: string | null
   }
 
-  let { nodes, edges, onSelectNode, changedNodeIds = new Set() }: Props = $props()
-  let selectedNodeId = $state<string | null>(null)
+  let { nodes, edges, onSelectNode, changedNodeIds = new Set(), selectedNodeId = $bindable(null) }: Props = $props()
 
   // --- viewBox-based pan & zoom (always sharp, no CSS transform) ---
   // viewBox = (vbX, vbY, vbW, vbH)

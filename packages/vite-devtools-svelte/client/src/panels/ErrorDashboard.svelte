@@ -1,131 +1,261 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { datasetVersion } from '../lib/versions.js'
+  import { getCompilerWarnings, getRuntimeErrors, clearErrors, openInEditor } from '../lib/rpc.js'
   import type { CompilerWarning, RuntimeError } from '../lib/types.js'
-  import { getCompilerWarnings, getRuntimeErrors, clearErrors } from '../lib/rpc.js'
-  import { shortPath } from '../lib/format.js'
-  import PanelContainer from '../components/PanelContainer.svelte'
-  import Card from '../components/Card.svelte'
+  import { resource } from '../lib/resource.svelte.js'
+  import { matcher } from '../lib/match.js'
+  import { formatClock, shortPath } from '../lib/format.js'
+  import Panel from '../components/Panel.svelte'
+  import SplitView from '../components/SplitView.svelte'
+  import VirtualList from '../components/VirtualList.svelte'
+  import Inspector from '../components/Inspector.svelte'
+  import SearchField from '../components/SearchField.svelte'
+  import Segmented from '../components/Segmented.svelte'
+  import Button from '../components/Button.svelte'
   import Badge from '../components/Badge.svelte'
-  import ActionButton from '../components/ActionButton.svelte'
+  import Icon from '../components/Icon.svelte'
+  import Highlight from '../components/Highlight.svelte'
+  import EmptyState from '../components/EmptyState.svelte'
+  import LiveControls from '../components/LiveControls.svelte'
+  import CaptureNotice from '../components/CaptureNotice.svelte'
+  import { captureInfo } from '../lib/capture.svelte.js'
 
-  let warnings = $state<CompilerWarning[]>([])
-  let errors = $state<RuntimeError[]>([])
-  let activeTab = $state<'warnings' | 'errors'>('warnings')
-  let pollTimer: ReturnType<typeof setInterval> | null = null
-
-  function formatTime(ts: number): string {
-    return new Date(ts).toLocaleTimeString()
+  interface Problem {
+    key: string
+    kind: 'error' | 'warning'
+    message: string
+    code?: string
+    file?: string
+    line?: number
+    column?: number
+    stack?: string
+    timestamp?: number
   }
 
-  async function refresh() {
-    try {
-      [warnings, errors] = await Promise.all([getCompilerWarnings(), getRuntimeErrors()])
-    } catch { /* ignore */ }
+  const problems = resource(
+    async () => {
+      const [warnings, errors] = await Promise.all([getCompilerWarnings(), getRuntimeErrors()])
+      return { warnings, errors }
+    },
+    { initial: { warnings: [] as CompilerWarning[], errors: [] as RuntimeError[] }, interval: 3000, version: datasetVersion('errors') },
+  )
+
+  const capture = captureInfo(3000)
+  let kind = $state<'all' | 'error' | 'warning'>('all')
+  let query = $state('')
+  let selected = $state<string | null>(null)
+
+  const all = $derived.by<Problem[]>(() => {
+    const errs: Problem[] = [...problems.data.errors]
+      .reverse()
+      .map((e, i) => ({ key: `e:${e.timestamp}:${i}`, kind: 'error', message: e.message, file: e.file, line: e.line, column: e.column, stack: e.stack, timestamp: e.timestamp }))
+    const warns: Problem[] = problems.data.warnings.map((w, i) => ({
+      key: `w:${w.file}:${w.line ?? 0}:${w.column ?? 0}:${w.code}:${i}`,
+      kind: 'warning',
+      message: w.message,
+      code: w.code,
+      file: w.file,
+      line: w.line,
+      column: w.column,
+    }))
+    return [...errs, ...warns]
+  })
+
+  const rows = $derived.by(() => {
+    const m = matcher(query)
+    return all.filter((p) => (kind === 'all' || p.kind === kind) && (!m || m(p.message, p.code, p.file)))
+  })
+
+  const current = $derived(selected ? (all.find((p) => p.key === selected) ?? null) : null)
+
+  // Most frequent warning codes — a quick way to triage a noisy project.
+  const topCodes = $derived.by(() => {
+    const c = new Map<string, number>()
+    for (const w of problems.data.warnings) c.set(w.code, (c.get(w.code) ?? 0) + 1)
+    return [...c].sort((a, b) => b[1] - a[1]).slice(0, 4)
+  })
+
+  function open(p: Problem) {
+    if (p.file) openInEditor(p.file, p.line).catch(() => {})
   }
 
   async function clear() {
-    await clearErrors()
-    warnings = []
-    errors = []
+    await clearErrors().catch(() => {})
+    problems.set({ warnings: [], errors: [] })
+    selected = null
   }
 
-  onMount(() => {
-    refresh()
-    pollTimer = setInterval(refresh, 3000)
-    return () => { if (pollTimer) clearInterval(pollTimer) }
-  })
+  const loc = (p: Problem) => (p.file ? `${shortPath(p.file, 3)}${p.line ? `:${p.line}` : ''}${p.column ? `:${p.column}` : ''}` : '')
 </script>
 
-<PanelContainer summary="Compiler warnings from svelte-check and runtime errors caught during dev — switch tabs to filter.">
+<Panel title="Problems" count={all.length}>
+  {#snippet toolbar()}
+    <Segmented
+      label="Severity"
+      bind:value={kind}
+      options={[
+        { value: 'all', label: 'All', count: all.length },
+        { value: 'error', label: 'Errors', count: problems.data.errors.length },
+        { value: 'warning', label: 'Warnings', count: problems.data.warnings.length },
+      ]}
+    />
+    <SearchField bind:value={query} placeholder="Filter by message, code or file…" count={rows.length} />
+    <CaptureNotice info={capture.data.runtimeErrors} noun="runtime errors" />
+    <CaptureNotice info={capture.data.compilerWarnings} noun="warnings" />
+    {#each topCodes as [code, n] (code)}
+      <button class="chip" class:on={query === code} onclick={() => (query = query === code ? '' : code)} title="Filter by {code}">
+        {code}<span class="num">{n}</span>
+      </button>
+    {/each}
+  {/snippet}
   {#snippet actions()}
-    <div class="tab-buttons">
-      <button class="tab-btn" class:active={activeTab === 'warnings'} onclick={() => activeTab = 'warnings'}>
-        Warnings <Badge variant="warning">{warnings.length}</Badge>
-      </button>
-      <button class="tab-btn" class:active={activeTab === 'errors'} onclick={() => activeTab = 'errors'}>
-        Errors <Badge variant="error">{errors.length}</Badge>
-      </button>
-    </div>
-    <ActionButton onclick={refresh}>Refresh</ActionButton>
-    <ActionButton onclick={clear}>Clear</ActionButton>
+    <LiveControls res={problems} onclear={clear} />
   {/snippet}
 
-  {#if activeTab === 'warnings'}
-    {#if warnings.length === 0}
-      <Card><p class="empty">No compiler warnings. Your code is clean!</p></Card>
-    {:else}
-      <div class="list">
-        {#each warnings as warning}
-          <div class="item warning-item">
-            <div class="item-header">
-              <Badge variant="warning">{warning.code}</Badge>
-              {#if warning.file}
-                <span class="item-file">{shortPath(warning.file)}{warning.line ? `:${warning.line}` : ''}</span>
-              {/if}
-            </div>
-            <p class="item-message">{warning.message}</p>
-          </div>
-        {/each}
-      </div>
-    {/if}
-  {:else}
-    {#if errors.length === 0}
-      <Card><p class="empty">No runtime errors captured.</p></Card>
-    {:else}
-      <div class="list">
-        {#each [...errors].reverse() as error}
-          <div class="item error-item">
-            <div class="item-header">
-              <Badge variant="error">error</Badge>
-              <span class="item-time">{formatTime(error.timestamp)}</span>
-              {#if error.file}
-                <span class="item-file">{shortPath(error.file)}{error.line ? `:${error.line}` : ''}</span>
-              {/if}
-            </div>
-            <p class="item-message">{error.message}</p>
-            {#if error.stack}
-              <details class="stack-details">
-                <summary>Stack trace</summary>
-                <pre class="stack-trace">{error.stack}</pre>
-              </details>
-            {/if}
-          </div>
-        {/each}
-      </div>
-    {/if}
-  {/if}
-</PanelContainer>
+  <SplitView id="problems" open={!!current}>
+    <VirtualList items={rows} getKey={(p) => p.key} bind:selected rowHeight={44} label="Problems" onactivate={open}>
+      {#snippet row(p)}
+        <span class="sev {p.kind}"><Icon name={p.kind === 'error' ? 'errors' : 'warning'} size={14} /></span>
+        <span class="text">
+          <span class="msg truncate"><Highlight text={p.message} {query} /></span>
+          <span class="meta">
+            {#if p.code}<span class="code mono"><Highlight text={p.code} {query} /></span>{/if}
+            {#if p.file}<span class="loc mono truncate"><Highlight text={loc(p)} {query} /></span>{/if}
+            {#if p.timestamp}<span class="faint num">{formatClock(p.timestamp)}</span>{/if}
+          </span>
+        </span>
+        {#if p.file}
+          <button class="open" tabindex="-1" title="Open in editor" onclick={(e) => (e.stopPropagation(), open(p))}><Icon name="editor" size={13} /></button>
+        {/if}
+      {/snippet}
+      {#snippet empty()}
+        {#if problems.loading}
+          <EmptyState title="Collecting diagnostics…" />
+        {:else if all.length === 0}
+          <EmptyState icon="check" title="No problems">
+            <p>Compiler warnings and runtime errors from your app show up here as they happen.</p>
+          </EmptyState>
+        {:else}
+          <EmptyState icon="search" title="No problems match" />
+        {/if}
+      {/snippet}
+    </VirtualList>
+    {#snippet aside()}
+      {#if current}
+        <Inspector title={current.kind === 'error' ? 'Runtime error' : (current.code ?? 'Warning')} subtitle={loc(current)} onclose={() => (selected = null)}>
+          {#snippet badges()}
+            <Badge tone={current.kind === 'error' ? 'red' : 'yellow'}>{current.kind}</Badge>
+            {#if current.timestamp}<Badge>{formatClock(current.timestamp, true)}</Badge>{/if}
+          {/snippet}
+          {#snippet actions()}
+            {#if current.file}<Button icon="editor" onclick={() => open(current)}>Open {current.line ? `line ${current.line}` : 'file'}</Button>{/if}
+          {/snippet}
+          <h3 class="section-title">Message</h3>
+          <p class="message">{current.message}</p>
+          {#if current.stack}
+            <h3 class="section-title">Stack</h3>
+            <pre class="code-block">{current.stack}</pre>
+          {/if}
+          {#if current.code}
+            <h3 class="section-title">Reference</h3>
+            <p class="message">
+              <a href="https://svelte.dev/docs/svelte/compiler-warnings#{current.code}" target="_blank" rel="noopener noreferrer">svelte.dev — {current.code}</a>
+            </p>
+          {/if}
+        </Inspector>
+      {/if}
+    {/snippet}
+  </SplitView>
+</Panel>
 
 <style>
-  .empty { color: var(--color-text-muted); font-size: var(--text-sm); }
-
-  .tab-buttons { display: flex; gap: 2px; background: var(--color-surface); border-radius: var(--radius-md); padding: 2px; }
-  .tab-btn {
-    display: flex; align-items: center; gap: var(--space-1); padding: var(--space-1) var(--space-2);
-    background: none; border: none; border-radius: var(--radius-sm); color: var(--color-text-muted);
-    font-family: var(--font-sans); font-size: var(--text-xs); cursor: pointer;
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 22px;
+    padding: 0 7px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    background: none;
+    color: var(--fg-muted);
+    font-family: var(--font-mono);
+    font-size: var(--fs-2xs);
+    max-width: 220px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
-  .tab-btn.active { background: var(--color-surface-active); color: var(--color-text); }
-
-  .list { display: flex; flex-direction: column; gap: var(--space-2); max-height: 70vh; overflow-y: auto; }
-
-  .item {
-    padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border);
-    border-radius: var(--radius-md); background: var(--color-surface);
+  .chip:hover,
+  .chip.on {
+    border-color: var(--yellow);
+    color: var(--yellow);
   }
-  .warning-item { border-left: 3px solid var(--color-warning); }
-  .error-item { border-left: 3px solid var(--color-error); }
-
-  .item-header { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-1); }
-  .item-file { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-subtle); }
-  .item-time { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-subtle); }
-  .item-message { font-size: var(--text-sm); color: var(--color-text); margin: 0; line-height: 1.4; word-break: break-word; }
-
-  .stack-details { margin-top: var(--space-1); }
-  .stack-details summary { font-size: var(--text-xs); color: var(--color-text-muted); cursor: pointer; }
-  .stack-trace {
-    margin: var(--space-1) 0 0; padding: var(--space-2); background: var(--color-base);
-    border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: 10px;
-    color: var(--color-text-subtle); overflow-x: auto; white-space: pre-wrap; max-height: 200px; overflow-y: auto;
+  .chip .num {
+    color: var(--fg-faint);
+  }
+  .sev {
+    display: grid;
+    place-items: center;
+    align-self: flex-start;
+    margin-top: 6px;
+  }
+  .sev.error {
+    color: var(--red);
+  }
+  .sev.warning {
+    color: var(--yellow);
+  }
+  .text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    flex: 1;
+    min-width: 0;
+  }
+  .msg {
+    color: var(--fg);
+  }
+  .meta {
+    display: flex;
+    gap: 10px;
+    font-size: var(--fs-xs);
+    min-width: 0;
+  }
+  .code {
+    color: var(--yellow);
+    white-space: nowrap;
+  }
+  .loc {
+    color: var(--fg-muted);
+  }
+  .open {
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--fg-faint);
+    opacity: 0;
+  }
+  :global([role='option']:hover) .open,
+  :global([role='option'][aria-selected='true']) .open {
+    opacity: 1;
+  }
+  .open:hover {
+    background: var(--bg-active);
+    color: var(--fg);
+  }
+  .message {
+    margin: 0;
+    padding: 0 14px;
+    font-size: var(--fs-sm);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .message a {
+    color: var(--accent-fg);
   }
 </style>

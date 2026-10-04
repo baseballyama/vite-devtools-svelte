@@ -10,3 +10,4 @@ minimumReleaseAgeExclude:
   - '@vitejs/devtools-kit'
   - '@vitejs/devtools-rolldown'
   - 'devframe'
+  - '@devframes/*'

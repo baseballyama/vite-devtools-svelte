@@ -4,203 +4,194 @@ export type Panel = {
   tagline: string
   description: string
   highlights: string[]
+  /** Screenshots of the current UI (1200×750), in `static/images/`. */
   images: string[]
+  /** Shown under the screenshots when the data needs explaining. */
+  caption?: string
 }
 
+// Copy describes what the current UI does; screenshots are taken from it with
+// synthetic demo data. A panel without a current screenshot has none rather
+// than an outdated one.
 export const panels: Panel[] = [
   {
     slug: 'overview',
     title: 'Overview',
-    tagline: 'Project summary at a glance',
+    tagline: 'Your project at a glance',
     description:
-      'A single dashboard that shows your project metadata: Svelte and SvelteKit versions, plugin versions, dependency counts, and quick links to the rest of DevTools.',
+      'Project name, Svelte / SvelteKit / Vite versions and dependencies, with tiles that count routes, live components, modules, assets and problems — each one opens the matching panel.',
     highlights: [
-      'Svelte / SvelteKit / Vite versions',
-      'Dependency and devDependency counts',
-      'Entry points to other panels',
+      'Stack versions and dependency list with a filter',
+      'Clickable health tiles for routes, components, modules, assets and problems',
     ],
-    images: ['panel-overview.png'],
+    images: ['v2-panel-overview.jpg'],
   },
   {
     slug: 'components',
-    title: 'Component Inspector',
-    tagline: 'Tree, props, state, and reactives in real time',
+    title: 'Components',
+    tagline: 'The live component tree, and how files relate',
     description:
-      'Walk the component tree of your running app. Inspect props, local state, and reactive values resolved at runtime — including derived values and effects.',
+      'Walk the tree of mounted component instances in your running app. Filter it, move through it with the keyboard and open an inspector with ancestors, children and imports. The Files view lists every component file with what it imports, what uses it and how many instances are mounted.',
     highlights: [
-      'Hierarchical component tree',
-      'Live props and `$state` values',
-      'Identifies the source file for each component',
+      'Virtualized tree that stays responsive on large apps',
+      'Shows when only part of a very large tree was captured',
+      'Selection and expansion survive live updates and HMR',
+      'Files view: imports, used-by and mounted counts',
     ],
-    images: ['panel-components.png'],
+    images: ['v2-panel-components.jpg', 'v2-panel-components-files.jpg'],
   },
   {
     slug: 'reactive',
-    title: 'Reactive Graph',
-    tagline: 'See how `$state`, `$derived`, and `$effect` connect',
+    title: 'Reactivity',
+    tagline: 'How `$state`, `$derived` and `$effect` connect',
     description:
-      'Render the dependency graph of Svelte 5 runes as a DAG. Find unexpected fan-out, missing memoization, or accidental coupling between unrelated components.',
+      'See the dependency graph of Svelte 5 runes, scoped to one component when the app is large, or as a sortable list. Values that change flash, and every signal links to what it depends on and what it triggers.',
     highlights: [
-      'Force-directed graph layout',
-      'Edges show derivation and effect dependencies',
-      'Click a node to jump to its source',
+      'Graph or list view, limited to one component on demand',
+      'Depends-on / triggers links between signals',
+      'Go to the definition in your editor',
     ],
-    images: ['panel-reactive.png'],
+    images: ['v2-panel-reactive.jpg'],
   },
   {
     slug: 'profiler',
-    title: 'Render Profiler',
-    tagline: 'Find the components that re-render too much',
+    title: 'Render',
+    tagline: 'Which components cost the most',
     description:
-      'Track render count, total time, and per-render duration for every component. Sort by hotspot, expand to see the call stack of reactive triggers.',
-    highlights: [
-      'Render counts and timings per component',
-      'Sortable by total time, mean time, or count',
-      'Highlights regressions during a session',
-    ],
-    images: ['panel-profiler.png'],
+      'Init time, render count and average / total render time per component or per instance, sortable, with the most expensive rows highlighted.',
+    highlights: ['Group by component or by instance', 'Sort by renders, average or total time'],
+    images: ['v2-panel-profiler.jpg'],
   },
   {
     slug: 'routes',
-    title: 'Route Viewer',
-    tagline: 'SvelteKit file-based routing, visualized',
+    title: 'Routes',
+    tagline: 'SvelteKit routes, read from the filesystem',
     description:
-      'See every route in your SvelteKit app, including dynamic parameters, layouts, and server endpoints — derived directly from the filesystem.',
+      'Every route as a tree of segments, marked as page, layout, server or endpoint, with an inspector for the pattern, parameters and route files, and a link to open the page.',
     highlights: [
-      'Dynamic and rest parameters detected',
-      'Layout group structure',
-      '`+page` / `+server` / `+layout` annotations',
+      'Dynamic, optional and rest parameters',
+      'Route groups and layouts',
+      'Open a page or a route file from the inspector',
     ],
-    images: ['panel-routes.png'],
+    images: ['v2-panel-routes.jpg'],
   },
   {
     slug: 'loads',
-    title: 'Load Profiler',
-    tagline: 'Waterfall for SvelteKit `load` functions',
+    title: 'Load functions',
+    tagline: 'How long your `load` functions take',
     description:
-      'Visualize the timing of every `load` function — server, universal, and layout — as a waterfall. Identify serial loads that should be parallel.',
-    highlights: [
-      'Per-route waterfall timing',
-      'Distinguishes server vs. universal loads',
-      'Captures parent-child load chains',
-    ],
-    images: ['panel-loads.png'],
+      'Every server and universal `load` call with its duration and data size, plus average, p50, p95 and max for what is currently shown.',
+    highlights: ['Server vs. universal filter', 'Slow-call filter', 'Average, p50, p95 and max'],
+    images: ['v2-panel-loads.jpg'],
   },
   {
     slug: 'timeline',
-    title: 'State Timeline',
-    tagline: 'Record and replay state changes',
+    title: 'State timeline',
+    tagline: 'Recent `$state` changes, newest first',
     description:
-      'Capture a session of state mutations across `$state` runes. Scrub backward and forward to reproduce bugs without re-running the user flow.',
-    highlights: [
-      'Time-travel scrubber',
-      'Per-rune mutation log',
-      'Source-mapped to the call site that mutated state',
-    ],
-    images: ['panel-timeline.png'],
+      'Recent `$state` writes with the value before and after each change, filterable by signal, component or value. The log is bounded: it keeps the latest entries, not the whole session.',
+    highlights: ['Before / after values in the inspector', 'Go to the signal definition'],
+    images: ['v2-panel-timeline.jpg'],
   },
   {
     slug: 'api',
-    title: 'API Playground',
-    tagline: 'Test `+server.ts` endpoints from DevTools',
+    title: 'API',
+    tagline: 'Call your `+server` endpoints',
     description:
-      'Call any SvelteKit server endpoint directly from the panel — set method, headers, and body, and see the response without leaving the IDE.',
+      'Pick an endpoint found in your routes, set the method, headers and body, and read the formatted response with its status, timing and headers.',
     highlights: [
-      'Auto-detects endpoints from the route tree',
-      'Method/header/body editor',
-      'Response body and headers inspector',
+      'Endpoints detected from the route tree',
+      'Method, headers and body editor',
+      'Formatted response with status, time and headers',
     ],
-    images: ['panel-api.png'],
+    images: ['v2-panel-api.jpg'],
   },
   {
     slug: 'errors',
-    title: 'Errors & Warnings',
-    tagline: 'Compiler and runtime issues in one place',
+    title: 'Problems',
+    tagline: 'Compiler warnings and runtime errors in one list',
     description:
-      'A unified inbox for Svelte compiler warnings, Vite errors, and runtime exceptions. Each entry links back to the offending file and line.',
+      'Svelte compiler warnings and runtime errors from your app, filterable by severity and warning code, each linking to the file and line and to the Svelte documentation for its code.',
     highlights: [
-      'Compiler warnings (a11y, deprecations)',
-      'Runtime errors with stack traces',
-      'Click-to-open in your editor',
+      'Severity filter and most frequent warning codes',
+      'Stack traces for runtime errors',
+      'Open the file and line in your editor',
     ],
-    images: ['panel-errors.png'],
+    images: ['v2-panel-errors.jpg'],
   },
   {
     slug: 'inspect',
-    title: 'Code Inspector',
-    tagline: 'See the compiled output for any Svelte file',
+    title: 'Compiled output',
+    tagline: 'Your `.svelte` file next to its compiled JavaScript',
     description:
-      'Compare your `.svelte` source side-by-side with the compiled JavaScript. Source maps connect every line, so you can trace runes to the generated reactive scaffolding.',
+      'Pick any `.svelte` file and read its source beside the compiled JavaScript. Source-map lines connect the two, so you can see what a rune turns into.',
     highlights: [
-      'Side-by-side source / output',
-      'Bidirectional source-map navigation',
-      'Syntax-highlighted with Shiki',
+      'Side-by-side source and compiled output',
+      'Source-map connections in both directions',
     ],
-    images: ['panel-inspect.png', 'panel-inspect-detail.png'],
+    images: ['v2-panel-inspect.jpg'],
   },
   {
     slug: 'modules',
-    title: 'Module Graph',
-    tagline: 'Dependency graph and circular import detection',
+    title: 'Modules',
+    tagline: 'Imports between modules, and circular ones',
     description:
-      'See how your modules import each other. Spot circular imports, oversized barrel files, and unexpected dependencies on heavy libraries.',
+      'Every module with its imports, importers and size, filterable by type, with a switch for modules that are part of a circular import.',
     highlights: [
-      'Interactive force-directed graph',
-      'Circular dependency detection',
-      'Filter by file pattern',
+      'Circular-import filter',
+      'Jump between importers and imports',
+      'Sort by imports, importers or size',
     ],
-    images: ['panel-modules.png'],
+    images: ['v2-panel-modules.jpg'],
   },
   {
     slug: 'og',
-    title: 'OG Preview',
-    tagline: 'Validate Open Graph metadata for SEO',
+    title: 'Social preview',
+    tagline: 'How a page unfurls when shared',
     description:
-      'Preview how each route renders on social platforms. The panel scrapes meta tags from your dev server and shows Twitter/X, Facebook, and LinkedIn cards.',
+      'Fetch a route or any URL and see its Open Graph and Twitter tags as an X / Twitter card and a chat-style link preview, with a list of missing or problematic tags.',
     highlights: [
-      'Per-route OG card preview',
-      'Twitter, Facebook, LinkedIn layouts',
-      'Warns when required tags are missing',
+      'Card previews built from the page’s tags',
+      'Checks for missing tags',
+      'All tags in a table',
     ],
-    images: ['panel-og.png'],
+    images: ['v2-panel-og.jpg'],
+    caption:
+      'Shown on a generated SvelteKit test app (route /section-16/g-163). The page sets only og:title, so the panel previews the card and lists the four missing tags.',
   },
   {
     slug: 'build',
-    title: 'Build Analysis',
-    tagline: 'Bundle composition without leaving DevTools',
+    title: 'Build',
+    tagline: 'What your production build contains',
     description:
-      'Analyze chunks and module sizes directly from a production build, similar to rollup-plugin-visualizer — but stays in your dev workflow.',
-    highlights: [
-      'Treemap of chunk sizes',
-      'Per-module gzip size',
-      'Highlights duplicated dependencies',
-    ],
-    images: ['panel-build.png'],
+      'Chunks of the last production build with their sizes and share of the total, a composition bar by type, and the modules inside each chunk.',
+    highlights: ['JS / CSS / other composition', 'Chunk inspector with its modules'],
+    images: ['v2-panel-build.jpg'],
   },
   {
     slug: 'fps',
-    title: 'FPS Monitor',
-    tagline: 'Real-time frame rate with history',
+    title: 'Frame rate',
+    tagline: 'Live FPS of your app',
     description:
-      'A continuous frame rate graph for your app. Spot dropped frames during interactions, animations, or long tasks — useful for animation-heavy SvelteKit apps.',
+      'A live frame-rate chart over the last 15, 30 or 60 seconds with average, minimum and 1% low, and a recording mode to measure one interaction.',
     highlights: [
-      'Live FPS gauge and history',
-      'Markers for long tasks',
-      'Lightweight: only runs in dev',
+      '15 / 30 / 60 second windows',
+      'Average, minimum and 1% low',
+      'Record a window to measure an interaction',
     ],
-    images: ['panel-fps.png'],
+    images: ['v2-panel-fps.jpg'],
   },
   {
     slug: 'assets',
-    title: 'Asset Browser',
-    tagline: 'Browse static assets with metadata',
+    title: 'Assets',
+    tagline: 'Everything under `static/`',
     description:
-      'Explore everything under `static/`. Preview images, fonts, and audio with size and dimension metadata — useful for finding oversized assets.',
+      'Static files by category with size bars, sorting by size or date, and a preview of the selected file.',
     highlights: [
-      'Preview for images, fonts, audio',
-      'File size and image dimensions',
-      'Filter by directory and type',
+      'Image, font, video, audio and text categories',
+      'Sort by size or modification date',
+      'Preview the selected asset',
     ],
-    images: ['panel-assets.png'],
+    images: ['v2-panel-assets.jpg'],
   },
 ]

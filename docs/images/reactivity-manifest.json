@@ -1,0 +1,35 @@
+{
+  "app": "examples/sample-app (SvelteKit 2, vite.standalone.config.ts) — synthetic demo app, real runtime",
+  "commit": "623e27a927ebfb09e1225c45ca1877366c9566d3",
+  "clientTree": "25725c20e95b6f0104b9e02291d7750d04ffce8d",
+  "runner": "linux x64, Node v22.23.3",
+  "viewport": "1440x900 @2x",
+  "theme": "dark",
+  "shots": [
+    {
+      "case": 1,
+      "file": "21-reactivity-overview.png",
+      "caption": "Reactivity → Overview (default, no graph fetched): what the counts cover (window, 200 ms sampling, coverage, active of registered, features not available yet) and the most active components with sampled changes and renders.",
+      "result": "saved"
+    },
+    {
+      "case": 3,
+      "file": "23-reactivity-states.png",
+      "caption": "Reactivity → Overview → States: $state signals by sampled changes in the timeline buffer, with last value and time; the footer states the buffer age and that counts are not totals or rates.",
+      "result": "saved"
+    },
+    {
+      "case": 2,
+      "file": "22-reactivity-component.png",
+      "caption": "Reactivity → one component (ReactivePriceChart, /cart with one item added) and the $state / $derived / $effect signals it is directly linked to (taxRate selected). Edges mean \"can affect\" (current dependencies, not a recorded cause); the inspector shows the current value and \"Cause: Not recorded\".",
+      "result": "saved"
+    },
+    {
+      "case": 4,
+      "file": "24-reactivity-epoch.png",
+      "caption": "After the app page reloads, a selected component id may belong to another instance: Reactivity says so instead of showing data from the wrong instance.",
+      "result": "saved"
+    }
+  ],
+  "errors": []
+}

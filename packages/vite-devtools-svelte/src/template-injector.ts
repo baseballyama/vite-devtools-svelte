@@ -1,4 +1,5 @@
 /// <reference types="@vitejs/devtools-kit" />
+import { DEVTOOLS_MOUNT_PATH } from '@vitejs/devtools-kit/constants'
 import type { Plugin } from 'vite'
 
 /**
@@ -28,11 +29,28 @@ import type { Plugin } from 'vite'
 
 export const SVELTEKIT_INTERNAL_SUFFIX = '.svelte-kit/generated/server/internal.js'
 
+/**
+ * SvelteKit 3 writes the same `templates: { app: … }` server module to
+ * `generated/dev/server.js` while serving (and `generated/build/server.js`
+ * for builds, which this dev-only plugin never sees).
+ */
+export const SVELTEKIT3_DEV_SERVER_SUFFIX = '.svelte-kit/generated/dev/server.js'
+
+const GENERATED_SERVER_SUFFIXES = [SVELTEKIT_INTERNAL_SUFFIX, SVELTEKIT3_DEV_SERVER_SUFFIX]
+
 /** Marker that the `templates.app` literal in SvelteKit's generated server. */
 export const TEMPLATE_APP_MARKER = 'templates: {'
 
-/** Where to inject the inject script — escaped because we're editing a JS string literal. */
-const INJECT_SCRIPT_URL = '/@id/@vitejs/devtools/client/inject'
+/**
+ * The dock bootstrap the Vite DevTools hub serves itself (`@vitejs/devtools`
+ * >= 0.7.6 injects the same `<mount>embedded.js` through `transformIndexHtml`;
+ * the old `@vitejs/devtools/client/inject` module no longer exists). The hub's
+ * middleware answers this URL before Vite's transform pipeline, and SvelteKit
+ * HTML never goes through Vite's HTML processing, so a plain static `src` is
+ * enough — and, unlike an inline loader, works under a strict `script-src 'self'`.
+ */
+const INJECT_SCRIPT_URL = `${DEVTOOLS_MOUNT_PATH}embedded.js`
+/** The tag, escaped because we're editing a JS string literal. */
 const INJECT_TAG = `<script type=\\"module\\" src=\\"${INJECT_SCRIPT_URL}\\"></script>`
 
 /**
@@ -70,17 +88,24 @@ export function injectIntoSvelteKitInternal(code: string): string | null {
 }
 
 /**
- * Vite plugin: inject `@vitejs/devtools/client/inject` into SvelteKit's
+ * Vite plugin: inject the Vite DevTools dock bootstrap into SvelteKit's
  * dev-only generated server template. Dev-only by construction.
+ *
+ * Only when the Vite DevTools hub is actually present: standalone has no
+ * hub serving `/__devtools/embedded.js`, so the tag would fail to load.
+ * `isHosted` is read in `transform` rather than `apply` because `apply` runs
+ * while the plugin list is still being resolved; every `configResolved` hook
+ * has finished before the server transforms its first module.
  */
-export function sveltekitTemplateInjector(): Plugin {
+export function sveltekitTemplateInjector(isHosted: () => boolean): Plugin {
   return {
     name: 'vite-devtools-svelte:sveltekit-template-injector',
     enforce: 'post',
     apply: (_userConfig, env) => env.command === 'serve' && !env.isSsrBuild,
 
     transform(code, id) {
-      if (!id.endsWith(SVELTEKIT_INTERNAL_SUFFIX)) return
+      if (!GENERATED_SERVER_SUFFIXES.some(suffix => id.endsWith(suffix))) return
+      if (!isHosted()) return
       const next = injectIntoSvelteKitInternal(code)
       if (next === null) return
       return { code: next, map: null }

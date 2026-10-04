@@ -1,3 +1,5 @@
+import { connectDevframe } from 'devframe/client'
+import type { DevframeConnectionStatus, DevframeRpcClient } from 'devframe/client'
 import type {
   RouteInfo,
   AssetInfo,
@@ -6,7 +8,11 @@ import type {
   ComponentInstance,
   RenderProfile,
   LoadProfile,
-  ReactiveGraph,
+  ReactiveGraphRequest,
+  ReactiveGraphResult,
+  ReactiveSummary,
+  ReactiveSummaryRequest,
+  CaptureInfoMap,
   StateChange,
   ApiEndpoint,
   ApiResponse,
@@ -17,106 +23,221 @@ import type {
   OGPreview,
   BuildAnalysis,
   FpsSample,
+  StateTimelineDelta,
+  DatasetVersions,
+  LiveComponentsMeta,
 } from './types.js'
 
-interface RpcClient {
-  call(method: string, ...args: unknown[]): Promise<unknown>
+// The same SPA runs standalone (`/.svelte-devtools/` on the app's dev
+// server) and inside the Vite DevTools dock. `connectDevframe()` discovers
+// the backend through `./__connection.json` in both cases, so nothing here
+// is host-specific.
+
+const NAMESPACE = 'svelte-devtools'
+
+export type ConnectionStatus = DevframeConnectionStatus
+
+export interface ConnectionState {
+  status: ConnectionStatus
+  host: 'standalone' | 'vite-devtools' | 'unknown'
+  error?: string
 }
 
-let rpcClient: RpcClient | null = null
-// Cache the in-flight client-resolution Promise so concurrent callers
-// (e.g. Promise.all of several RPC calls during initial mount) do not each
-// trigger a fresh DevTools Kit dynamic import. Without this, two callers can
-// both observe `rpcClient === null` and race the kit import twice.
-let clientPromise: Promise<RpcClient> | null = null
+const RECONNECT_MIN_DELAY = 500
+const RECONNECT_MAX_DELAY = 10_000
 
-function readDevtoolsToken(): string | null {
-  const meta = document.querySelector('meta[name="svelte-devtools-token"]')
-  return meta?.getAttribute('content') ?? null
+let client: DevframeRpcClient | null = null
+// In-flight connection, shared so concurrent first calls (e.g. a Promise.all
+// during mount) do not each open a socket.
+let connecting: Promise<DevframeRpcClient> | null = null
+let reconnectTimer: ReturnType<typeof setTimeout> | undefined
+let reconnectDelay = RECONNECT_MIN_DELAY
+let state: ConnectionState = { status: 'connecting', host: 'unknown' }
+const listeners = new Set<(s: ConnectionState) => void>()
+
+function setState(next: Partial<ConnectionState>): void {
+  state = { ...state, ...next }
+  if (next.status && next.status !== 'error') state.error = next.error
+  for (const listener of listeners) listener(state)
+  syncActivity()
 }
 
-function createHttpClient(): RpcClient {
-  // Same-origin only — the dev iframe lives on the Vite server origin.
-  const baseUrl = window.location.origin
-  const token = readDevtoolsToken()
-  return {
-    async call(method: string, ...args: unknown[]) {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-      if (token) headers['x-svelte-devtools-token'] = token
-      const res = await fetch(`${baseUrl}/__svelte-devtools/rpc`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ method, args }),
-      })
-      if (!res.ok) {
-        const body = await res.text().catch(() => '')
-        throw new Error(
-          `RPC ${method} failed: ${res.status} ${res.statusText}${body ? ` — ${body}` : ''}`,
-        )
-      }
-      return res.json()
-    },
+// --- Activity lease ---
+// The injected runtime only polls state / samples FPS while some consumer
+// holds a lease (docs/devframe-migration.md §6.3). This tab holds one while
+// it is connected and visible, renewing well inside the server's 15 s TTL.
+
+const HEARTBEAT_INTERVAL = 5_000
+const CLIENT_ID = Math.random().toString(36).slice(2, 12)
+let heartbeat: ReturnType<typeof setInterval> | undefined
+
+function sendActive(active: boolean): void {
+  const c = client
+  if (!c || c.status !== 'connected') return
+  c.scope(NAMESPACE)
+    .rpc.call('set-active', { client: CLIENT_ID, active })
+    .catch(() => {})
+}
+
+function syncActivity(): void {
+  const wanted =
+    state.status === 'connected' &&
+    typeof document !== 'undefined' &&
+    document.visibilityState === 'visible'
+  if (wanted && !heartbeat) {
+    sendActive(true)
+    heartbeat = setInterval(() => sendActive(true), HEARTBEAT_INTERVAL)
+  } else if (!wanted && heartbeat) {
+    clearInterval(heartbeat)
+    heartbeat = undefined
+    sendActive(false)
   }
 }
 
-async function getClient(): Promise<RpcClient> {
-  if (rpcClient) return rpcClient
-  if (clientPromise) return clientPromise
-
-  clientPromise = (async () => {
-    let timer: ReturnType<typeof setTimeout> | undefined
-    try {
-      const kitClient = await Promise.race([
-        (async () => {
-          const { getDevToolsRpcClient } = await import('@vitejs/devtools-kit/client')
-          return await getDevToolsRpcClient()
-        })(),
-        new Promise<never>((_, reject) => {
-          // 2s is the discovery timeout for DevTools Kit's WebSocket handshake.
-          // If the kit isn't reachable by then, fall back to HTTP RPC.
-          timer = setTimeout(() => reject(new Error('devtools-kit timeout')), 2000)
-        }),
-      ])
-      return kitClient
-    } catch {
-      return createHttpClient()
-    } finally {
-      if (timer) clearTimeout(timer)
-    }
-  })()
-
-  rpcClient = await clientPromise
-  return rpcClient
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', syncActivity)
+  window.addEventListener('pagehide', () => {
+    if (heartbeat) clearInterval(heartbeat)
+    heartbeat = undefined
+    sendActive(false)
+  })
 }
 
-export async function getProject(): Promise<ProjectInfo> {
-  const client = await getClient()
-  return client.call('svelte-devtools:get-project') as Promise<ProjectInfo>
+function detectHost(c: DevframeRpcClient): ConnectionState['host'] {
+  // Vite DevTools serves every mounted devframe through its hub, which
+  // advertises hub UI configs in the connection meta.
+  return c.connectionMeta?.configs ? 'vite-devtools' : 'standalone'
 }
 
-export async function getRoutes(): Promise<RouteInfo[]> {
-  const client = await getClient()
-  return client.call('svelte-devtools:get-routes') as Promise<RouteInfo[]>
+/**
+ * A devframe client is final once its socket closes (no built-in
+ * reconnect), so a dev-server restart leaves it `disconnected` for good.
+ * Drop it and dial again with exponential backoff; the persisted bearer
+ * token re-trusts the new connection without asking for a code again.
+ */
+function scheduleReconnect(): void {
+  if (reconnectTimer) return
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = undefined
+    getClient().catch(() => {})
+  }, reconnectDelay)
+  reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX_DELAY)
 }
 
-export async function getAssets(): Promise<AssetInfo[]> {
-  const client = await getClient()
-  return client.call('svelte-devtools:get-assets') as Promise<AssetInfo[]>
+function discard(c: DevframeRpcClient): void {
+  if (client !== c) return
+  client = null
+  try {
+    c.close?.()
+  } catch {
+    /* already closed */
+  }
 }
 
-export async function getComponentRelations(): Promise<ComponentRelation[]> {
-  const client = await getClient()
-  return client.call('svelte-devtools:get-component-relations') as Promise<ComponentRelation[]>
+async function getClient(): Promise<DevframeRpcClient> {
+  if (client) return client
+  if (connecting) return connecting
+
+  setState({ status: 'connecting' })
+  // The shell renders its own code-entry gate; devframe's fallback
+  // `window.prompt()` would block the main thread on every reconnect.
+  connecting = connectDevframe({ simpleAuth: false })
+    .then(c => {
+      client = c
+      setState({ status: c.status, host: detectHost(c) })
+      c.events.on('connection:status', status => {
+        if (client !== c) return
+        if (status === 'connected') reconnectDelay = RECONNECT_MIN_DELAY
+        setState({ status, error: c.connectionError?.message })
+        if (status === 'disconnected' || status === 'error') {
+          discard(c)
+          scheduleReconnect()
+        }
+      })
+      return c
+    })
+    .catch((e: unknown) => {
+      // `__connection.json` unreachable (server down / restarting).
+      setState({ status: 'error', error: e instanceof Error ? e.message : String(e) })
+      scheduleReconnect()
+      throw e
+    })
+    .finally(() => {
+      connecting = null
+    })
+  return connecting
 }
 
-export async function getLiveComponents(): Promise<ComponentInstance[]> {
-  const client = await getClient()
-  return client.call('svelte-devtools:get-live-components') as Promise<ComponentInstance[]>
+async function call<T>(method: string, ...args: unknown[]): Promise<T> {
+  try {
+    const c = await getClient()
+    // The scoped view prefixes `svelte-devtools:` and accepts our untyped ids.
+    return (await c.scope(NAMESPACE).rpc.call(method, ...args)) as T
+  } catch (e) {
+    throw new Error(`RPC ${method} failed: ${e instanceof Error ? e.message : String(e)}`, {
+      cause: e,
+    })
+  }
+}
+
+// --- Connection state (for the shell's connection / auth UI) ---
+
+export function getConnectionState(): ConnectionState {
+  return state
+}
+
+/** Subscribe to connection changes; returns an unsubscribe function. Starts connecting. */
+export function onConnectionState(cb: (s: ConnectionState) => void): () => void {
+  listeners.add(cb)
+  cb(state)
+  getClient().catch(() => {})
+  return () => listeners.delete(cb)
+}
+
+/**
+ * Ask the dev server to print the one-time auth code in its terminal.
+ * devframe prints each code at most once, so a "print a new code" action must
+ * pass `reissue: true` to rotate the code and get it printed again.
+ */
+export async function requestAuthCode(options: { reissue?: boolean } = {}): Promise<void> {
+  const c = await getClient()
+  await c.requestAuthCode(options.reissue ? { reissue: true } : {})
+}
+
+/** Exchange the code printed in the terminal for a persisted token. */
+export async function submitAuthCode(code: string): Promise<boolean> {
+  const c = await getClient()
+  return c.requestTrustWithCode(code.trim())
+}
+
+// --- Project / static analysis ---
+
+export function getProject(): Promise<ProjectInfo> {
+  return call('get-project')
+}
+
+export function getRoutes(): Promise<RouteInfo[]> {
+  return call('get-routes')
+}
+
+export function getAssets(): Promise<AssetInfo[]> {
+  return call('get-assets')
+}
+
+export function getComponentRelations(): Promise<ComponentRelation[]> {
+  return call('get-component-relations')
+}
+
+export function getLiveComponents(): Promise<ComponentInstance[]> {
+  return call('get-live-components')
+}
+
+export function getLiveComponentsMeta(): Promise<LiveComponentsMeta> {
+  return call('get-live-components-meta')
 }
 
 export async function openInEditor(filePath: string, line?: number): Promise<void> {
-  const client = await getClient()
-  await client.call('svelte-devtools:open-in-editor', filePath, line ?? 0)
+  await call('open-in-editor', { file: filePath, line: line && line > 0 ? line : undefined })
 }
 
 export async function openReactiveInEditor(
@@ -124,117 +245,116 @@ export async function openReactiveInEditor(
   name: string,
   type: string,
 ): Promise<void> {
-  const client = await getClient()
-  await client.call('svelte-devtools:open-reactive-in-editor', file, name, type)
+  await call('open-reactive-in-editor', { file, name, type })
 }
 
-// Phase 2: Performance Analysis
+// --- Performance ---
 
-export async function getReactiveGraph(): Promise<ReactiveGraph> {
-  const client = await getClient()
-  return client.call('svelte-devtools:get-reactive-graph') as Promise<ReactiveGraph>
+/**
+ * Reactive graph of one component instance (`componentId`, within the served
+ * page load) or, without it, the whole app — built by the runtime within the
+ * caps. `total`/`truncated`/`stale` say what the answer covers (§6.7 A).
+ */
+export function getReactiveGraph(req?: ReactiveGraphRequest): Promise<ReactiveGraphResult> {
+  return req ? call('get-reactive-graph', req) : call('get-reactive-graph')
 }
 
-export async function getRenderProfiles(): Promise<RenderProfile[]> {
-  const client = await getClient()
-  return client.call('svelte-devtools:get-render-profiles') as Promise<RenderProfile[]>
+/** Overview aggregate from runtime counters; never captures the graph (§6.7 I). */
+export function getReactiveSummary(req?: ReactiveSummaryRequest): Promise<ReactiveSummary> {
+  return req ? call('get-reactive-summary', req) : call('get-reactive-summary')
 }
 
-export async function getLoadProfiles(): Promise<LoadProfile[]> {
-  const client = await getClient()
-  return client.call('svelte-devtools:get-load-profiles') as Promise<LoadProfile[]>
+/** Captured vs reported counts, truncation and drop reasons per dataset (§6.7 B). */
+export function getCaptureInfo(): Promise<CaptureInfoMap> {
+  return call('get-capture-info')
+}
+
+export function getRenderProfiles(): Promise<RenderProfile[]> {
+  return call('get-render-profiles')
+}
+
+export function getLoadProfiles(): Promise<LoadProfile[]> {
+  return call('get-load-profiles')
 }
 
 export async function clearLoadProfiles(): Promise<void> {
-  const client = await getClient()
-  await client.call('svelte-devtools:clear-load-profiles')
+  await call('clear-load-profiles')
 }
 
-// Phase 3: Debug & Developer Experience
+// --- Debug ---
 
-export async function getStateTimeline(): Promise<StateChange[]> {
-  const client = await getClient()
-  return client.call('svelte-devtools:get-state-timeline') as Promise<StateChange[]>
+export function getStateTimeline(): Promise<StateChange[]> {
+  return call('get-state-timeline')
+}
+
+/**
+ * Timeline changes after `since` (the previous `cursor`); `reset: true` means
+ * replace the local list. Cheap to poll: answered from the server buffer.
+ */
+export function getStateTimelineDelta(since?: number): Promise<StateTimelineDelta> {
+  return call('get-state-timeline-delta', { since })
+}
+
+/** Change counters per dataset; poll this and refetch only what moved. */
+export function getVersions(): Promise<DatasetVersions> {
+  return call('get-versions')
 }
 
 export async function clearStateTimeline(): Promise<void> {
-  const client = await getClient()
-  await client.call('svelte-devtools:clear-state-timeline')
+  await call('clear-state-timeline')
 }
 
-export async function getApiEndpoints(): Promise<ApiEndpoint[]> {
-  const client = await getClient()
-  return client.call('svelte-devtools:get-api-endpoints') as Promise<ApiEndpoint[]>
+export function getApiEndpoints(): Promise<ApiEndpoint[]> {
+  return call('get-api-endpoints')
 }
 
-export async function sendApiRequest(
+export function sendApiRequest(
   url: string,
   method: string,
   headers: string,
   body: string,
 ): Promise<ApiResponse> {
-  const client = await getClient()
-  return client.call(
-    'svelte-devtools:send-api-request',
-    url,
-    method,
-    headers,
-    body,
-  ) as Promise<ApiResponse>
+  return call('send-api-request', { url, method, headers, body })
 }
 
-export async function getCompilerWarnings(): Promise<CompilerWarning[]> {
-  const client = await getClient()
-  return client.call('svelte-devtools:get-compiler-warnings') as Promise<CompilerWarning[]>
+export function getCompilerWarnings(): Promise<CompilerWarning[]> {
+  return call('get-compiler-warnings')
 }
 
-export async function getRuntimeErrors(): Promise<RuntimeError[]> {
-  const client = await getClient()
-  return client.call('svelte-devtools:get-runtime-errors') as Promise<RuntimeError[]>
+export function getRuntimeErrors(): Promise<RuntimeError[]> {
+  return call('get-runtime-errors')
 }
 
 export async function clearErrors(): Promise<void> {
-  const client = await getClient()
-  await client.call('svelte-devtools:clear-errors')
+  await call('clear-errors')
 }
 
-export async function getSvelteFiles(): Promise<{ file: string; name: string }[]> {
-  const client = await getClient()
-  return client.call('svelte-devtools:get-svelte-files') as Promise<
-    { file: string; name: string }[]
-  >
+export function getSvelteFiles(): Promise<{ file: string; name: string }[]> {
+  return call('get-svelte-files')
 }
 
-export async function inspectFile(filePath: string): Promise<InspectResult> {
-  const client = await getClient()
-  return client.call('svelte-devtools:inspect-file', filePath) as Promise<InspectResult>
+export function inspectFile(filePath: string): Promise<InspectResult> {
+  return call('inspect-file', { file: filePath })
 }
 
-// Phase 4: Advanced Features
+// --- Advanced ---
 
-export async function getModuleGraph(): Promise<ModuleGraphData> {
-  const client = await getClient()
-  return client.call('svelte-devtools:get-module-graph') as Promise<ModuleGraphData>
+export function getModuleGraph(): Promise<ModuleGraphData> {
+  return call('get-module-graph')
 }
 
-export async function getOGPreview(url: string): Promise<OGPreview> {
-  const client = await getClient()
-  return client.call('svelte-devtools:get-og-preview', url) as Promise<OGPreview>
+export function getOGPreview(url: string): Promise<OGPreview> {
+  return call('get-og-preview', { url })
 }
 
-export async function getBuildAnalysis(): Promise<BuildAnalysis> {
-  const client = await getClient()
-  return client.call('svelte-devtools:get-build-analysis') as Promise<BuildAnalysis>
+export function getBuildAnalysis(): Promise<BuildAnalysis> {
+  return call('get-build-analysis')
 }
 
-// FPS Monitoring
-
-export async function getFps(): Promise<FpsSample[]> {
-  const client = await getClient()
-  return client.call('svelte-devtools:get-fps') as Promise<FpsSample[]>
+export function getFps(): Promise<FpsSample[]> {
+  return call('get-fps')
 }
 
 export async function clearFps(): Promise<void> {
-  const client = await getClient()
-  await client.call('svelte-devtools:clear-fps')
+  await call('clear-fps')
 }

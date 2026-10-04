@@ -30,22 +30,28 @@ export const MIME_TYPES: Record<string, string> = {
   '.html': 'text/html',
 }
 
-export function analyzeAssets(staticDir: string): AssetInfo[] {
+/**
+ * List files in the static directory. `publicBase` is the dev server's
+ * public base (Vite `base`); static files are served under it, so each asset
+ * gets a previewable `url` without a dedicated file-serving endpoint.
+ */
+export function analyzeAssets(staticDir: string, publicBase = '/'): AssetInfo[] {
   if (!fs.existsSync(staticDir)) return []
 
   const assets: AssetInfo[] = []
-  scanDir(staticDir, staticDir, assets)
+  const base = publicBase.endsWith('/') ? publicBase : `${publicBase}/`
+  scanDir(staticDir, staticDir, base, assets)
   return assets.sort((a, b) => a.relativePath.localeCompare(b.relativePath))
 }
 
-function scanDir(dir: string, rootDir: string, assets: AssetInfo[]): void {
+function scanDir(dir: string, rootDir: string, base: string, assets: AssetInfo[]): void {
   const entries = fs.readdirSync(dir, { withFileTypes: true })
 
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name)
 
     if (entry.isDirectory()) {
-      scanDir(fullPath, rootDir, assets)
+      scanDir(fullPath, rootDir, base, assets)
       continue
     }
 
@@ -55,10 +61,12 @@ function scanDir(dir: string, rootDir: string, assets: AssetInfo[]): void {
     const stat = fs.statSync(fullPath)
     const ext = path.extname(entry.name).toLowerCase()
 
+    const relativePath = path.relative(rootDir, fullPath)
     assets.push({
       name: entry.name,
       path: fullPath,
-      relativePath: path.relative(rootDir, fullPath),
+      relativePath,
+      url: base + relativePath.split(path.sep).map(encodeURIComponent).join('/'),
       size: stat.size,
       type: MIME_TYPES[ext] || 'application/octet-stream',
       mtime: stat.mtimeMs,

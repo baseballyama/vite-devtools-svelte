@@ -253,7 +253,8 @@ describe('runtime code structure', () => {
   })
 
   it('should limit state timeline to 500 entries', () => {
-    expect(runtimeCode).toContain('_stateTimeline.length >= 500')
+    // ring: at most 500 entries (plus a byte budget), oldest removed first
+    expect(runtimeCode).toContain('all.length - cut > 500')
   })
 
   it('should purge all per-component maps on unmount via _cleanupComponent', () => {

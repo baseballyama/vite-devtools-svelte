@@ -35,7 +35,7 @@ html[data-theme='dark'] {
   --line-faint: #14182a;
   --text: #f1efea;
   --text-2: #b6b8c5;
-  --text-3: #75788c;
+  --text-3: #8a8da0;
   --text-4: #41455a;
   --link: var(--brand-soft);
   --code-bg: #0b0d15;
@@ -57,7 +57,7 @@ html[data-theme='light'] {
   --line-faint: #e6e1cf;
   --text: #14141a;
   --text-2: #4a4a55;
-  --text-3: #74746f;
+  --text-3: #62625d;
   --text-4: #aaa898;
   --link: #c33700;
   --code-bg: #f0ecdd;
@@ -259,9 +259,10 @@ kbd {
 }
 
 .btn-primary {
-  background: var(--brand);
+  /* Darker than --brand so white text keeps ≥ 4.5:1 */
+  background: #d63600;
   color: #fff;
-  border-color: var(--brand);
+  border-color: #d63600;
   box-shadow:
     0 0 0 1px var(--brand) inset,
     0 1px 0 rgba(255, 255, 255, 0.15) inset,
@@ -269,8 +270,8 @@ kbd {
 }
 
 .btn-primary:hover {
-  background: #ff5320;
-  border-color: #ff5320;
+  background: #c43400;
+  border-color: #c43400;
   color: #fff;
   box-shadow:
     0 0 0 1px #ff5320 inset,
@@ -497,6 +498,14 @@ kbd {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
   .reveal {
     opacity: 1;
     transform: none;
@@ -505,4 +514,11 @@ kbd {
   .tag-live::before {
     animation: none;
   }
+}
+
+/* Visible keyboard focus everywhere (links, buttons, the theme toggle) */
+:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
 }

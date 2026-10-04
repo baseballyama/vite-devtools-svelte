@@ -23,7 +23,8 @@ export default defineConfig({
     rollupOptions: {
       external: [
         'vite',
-        '@vitejs/devtools-kit',
+        /^@vitejs\/devtools-kit/,
+        /^devframe(\/|$)/,
         /^@modelcontextprotocol\/sdk/,
         'zod',
         /^node:/,

@@ -30,22 +30,22 @@
             <span class="mono dim">// MIT</span>
           </div>
           <p class="muted small">
-            DevTools for Svelte, inside Vite. Open-source, dev-only,
-            zero production overhead.
+            DevTools for Svelte and SvelteKit. Open source; runs only while
+            your Vite dev server is running.
           </p>
         </div>
       </div>
 
       <div class="columns">
         <section>
-          <h4>Docs</h4>
+          <p class="col-title">Docs</p>
           <ul>
             <li><a href="{base}/getting-started">Getting Started</a></li>
             <li><a href="{base}/#panels">All panels</a></li>
           </ul>
         </section>
         <section>
-          <h4>Project</h4>
+          <p class="col-title">Project</p>
           <ul>
             <li>
               <a
@@ -198,7 +198,13 @@
     vertical-align: 1px;
   }
 
-  h4 {
-    margin-bottom: 0.7rem;
+  .col-title {
+    margin: 0 0 0.7rem;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-3);
   }
 </style>
