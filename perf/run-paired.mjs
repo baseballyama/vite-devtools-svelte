@@ -34,6 +34,7 @@ import { ensurePlaygroundSync, generate, DEFAULTS as FIXTURE } from './generate-
 import {
   INIT_SCRIPT,
   checkoutMeta,
+  connectInspector,
   envSnapshot,
   frameStats,
   heapAfterGc,
@@ -69,7 +70,7 @@ function parseArgs(argv) {
     scenarios: 'closed,open',
     port: 5390,
     devtoolsPath: '/.svelte-devtools/',
-    mountReps: 3,
+    mountReps: 5,
     idleMs: 3000,
     idleReps: 2,
     churnMs: 3000,
@@ -99,7 +100,6 @@ function parseArgs(argv) {
   const [load1Max, idleMin] = opts.gate.split(':').map(Number)
   const [memMinMB, psiMemMax] = opts.linuxGate.split(':').map(Number)
   opts.gateSpec = { load1Max, idleMin, memMinMB, psiMemMax }
-  if (opts.cpuProfile) opts.scenarios = 'open'
   opts.scaleList = opts.scales.split(',').map(s => {
     const [rows, tree] = s.split(':')
     const t = tree === 'none' ? null : tree.split('x').map(Number)
@@ -182,9 +182,15 @@ async function measureApp(app, scale, opts) {
     unmounts.push(await page.evaluate(() => window.__bench.clearRows()))
     await sleep(200)
   }
+  // Rep 1 is a warm-up (first mount of this size on a fresh page: cold JIT /
+  // caches) and is reported separately; the steady value is the median of
+  // reps >= 2 (review M3).
+  const steady = xs => (xs.length > 1 ? xs.slice(1) : xs)
   res.rows = {
-    mountMs: r1(median(mounts)),
-    unmountMs: r1(median(unmounts)),
+    mountMs: r1(median(steady(mounts))),
+    unmountMs: r1(median(steady(unmounts))),
+    warmupMountMs: r1(mounts[0]),
+    warmupUnmountMs: r1(unmounts[0]),
     runs: [mounts.map(r1), unmounts.map(r1)],
   }
   res.rows.ws = wsDelta(wsMount, ws.snapshot())
@@ -217,7 +223,7 @@ async function measureApp(app, scale, opts) {
     treeNodes: treeNodes(scale.tree),
     statePerRow: { state: 2, derived: 1, effect: 1 },
     churn: { statesPerFrame: 50, ms: opts.churnMs, framesObserved: res.churn.frames + 1 },
-    input: { clicks: opts.inputReps, statesPerClick: 51 },
+    input: { clicks: opts.inputReps, statesPerClick: scale.rows + 1 },
   }
 
   // heap growth over mount/unmount cycles
@@ -307,13 +313,18 @@ async function uiInteractions(page, query) {
   }, query)
 }
 
-async function measureUi(side, srv, scale, opts, outDir, tag) {
+async function measureUi(side, srv, scale, opts, outDir, tag, server = null) {
   const app = await appScenario(side.appCtx, srv)
   await app.page.evaluate(n => window.__bench.mountRows(n), scale.rows)
   if (scale.tree) await app.page.evaluate(([d, b]) => window.__bench.mountTree(d, b), scale.tree)
   const tab = await openDevtoolsTab(side, srv, opts)
   await sleep(3000)
   const res = { scale: scale.label, panels: {} }
+  // Profiled mode: one window over the operated UI (panel switches + Components
+  // select/search/expand) for the DevTools tab and the dev server; heap/axe and
+  // the idle window are outside it.
+  const targets = opts.cpuProfile ? { ui: tab.cdp, ...(server ? { server } : {}) } : null
+  if (targets) await startProfilers(targets)
   const nav = name =>
     tab.page
       .getByRole('link', { name })
@@ -361,6 +372,14 @@ async function measureUi(side, srv, scale, opts, outDir, tag) {
     await sleep(3000)
     res.componentsRootPresent = (await tab.page.getByText(/\+(page|layout)\b/).count()) > 0
     res.interactions = await uiInteractions(tab.page, 'Row')
+  }
+  if (targets) {
+    res.profiled = true
+    res.cpuProfiles = {
+      'ui-ops': await stopProfilers(targets, path.join(outDir, 'profiles'), `${tag}-ui-ops`),
+    }
+  }
+  if ((await comp.count()) > 0) {
     res.componentsIdle = await idleWindow(tab.page, tab.cdp, opts.idleMs, tab.ws)
   }
   res.heapMB = r1((await heapAfterGc(tab.cdp)) / 1048576)
@@ -379,24 +398,111 @@ async function measureUi(side, srv, scale, opts, outDir, tag) {
 
 // ---------------------------------------------------------------- CPU profiles
 
-async function startProfilers(cdps) {
-  for (const cdp of cdps) {
-    await cdp.send('Profiler.enable')
-    await cdp.send('Profiler.setSamplingInterval', { interval: 500 })
-    await cdp.send('Profiler.start')
+async function startProfilers(targets) {
+  for (const t of Object.values(targets)) {
+    await t.send('Profiler.enable')
+    await t.send('Profiler.setSamplingInterval', { interval: 500 })
+    await t.send('Profiler.start')
   }
 }
 
-/** Stop, write `<tag>-<name>.cpuprofile`, return the self-time summary per page. */
-async function stopProfilers(cdps, dir, tag) {
+/** Stop, write `<tag>-<name>.cpuprofile`, return the self-time summary per target. */
+async function stopProfilers(targets, dir, tag) {
   fs.mkdirSync(dir, { recursive: true })
   const out = {}
-  for (const [name, cdp] of Object.entries(cdps)) {
-    const { profile } = await cdp.send('Profiler.stop')
+  for (const [name, t] of Object.entries(targets)) {
+    const { profile } = await t.send('Profiler.stop')
     fs.writeFileSync(path.join(dir, `${tag}-${name}.cpuprofile`), JSON.stringify(profile))
     out[name] = summarizeProfile(profile)
   }
   return out
+}
+
+/**
+ * Profiled mode (review M2): one profile per window and target, with the
+ * workload of that window only — steady idle, input clicks, churn. No forced
+ * GC, no mount/unmount cycles inside a window. Same windows for CLOSED (the
+ * reference) and OPEN. Timings here carry profiler overhead: never compared.
+ */
+async function profileApp(app, scale, opts, targets, dir, tag) {
+  const { page } = app
+  await page.evaluate(n => window.__bench.mountRows(n), scale.rows)
+  if (scale.tree) await page.evaluate(([d, b]) => window.__bench.mountTree(d, b), scale.tree)
+  await sleep(1500)
+  const windows = {
+    idle: () => sleep(opts.idleMs),
+    input: () => inputToPaint(page, '[data-bench="input"]', opts.inputReps),
+    churn: () => page.evaluate(ms => window.__bench.churn(50, ms), opts.churnMs),
+  }
+  const out = {}
+  for (const [name, run] of Object.entries(windows)) {
+    await startProfilers(targets)
+    const t0 = performance.now()
+    await run()
+    const ms = r1(performance.now() - t0)
+    out[name] = { ms, ...(await stopProfilers(targets, dir, `${tag}-${name}`)) }
+  }
+  return out
+}
+
+// ---------------------------------------------------------------- validity
+
+/**
+ * Per-run validity with reasons. Invalid runs stay in the item JSON but are
+ * excluded from the summary. `n/a (always on)` is the baseline runtime that has
+ * no subscription (§6.3): its CLOSED is still active — recorded as a note.
+ */
+function validateRun(r, scenario) {
+  const reasons = []
+  const notes = []
+  if (r.errors?.length) reasons.push(`page errors (${r.errors.length})`)
+  const rt = r.runtime
+  if (scenario === 'plugin-off') {
+    if (rt) reasons.push('runtime present with the plugin off')
+  } else if (!rt) reasons.push('runtime missing with the plugin on')
+  else {
+    const want = scenario === 'open'
+    if (rt.active === 'n/a (always on)') {
+      if (!want) notes.push('baseline runtime has no subscription: CLOSED is still active')
+    } else {
+      if (rt.active !== want) reasons.push(`runtime active ${rt.active}, expected ${want}`)
+      if (rt.sampling !== 'n/a' && rt.sampling !== want)
+        reasons.push(`sampling ${rt.sampling}, expected ${want}`)
+    }
+    if (r.lease?.timeout) reasons.push('lease state not reached in time')
+    // runtime counts the app root as one extra instance
+    if (want && rt.instances !== r.groundTruth.instancesMounted + 1)
+      reasons.push(
+        `runtime instances ${rt.instances} != ground truth ${r.groundTruth.instancesMounted} + 1`,
+      )
+  }
+  for (const [k, v] of [
+    ['input clicks', r.input?.clickToFrameMs?.n],
+    ['mount', r.rows?.mountMs],
+  ])
+    if (v === null || v === undefined || Number.isNaN(v)) reasons.push(`${k} missing`)
+  if (r.input && r.input.clickToFrameMs.n !== r.groundTruth.input.clicks)
+    reasons.push(`input frames ${r.input.clickToFrameMs.n} of ${r.groundTruth.input.clicks} clicks`)
+  return { valid: reasons.length === 0, reasons, notes }
+}
+
+function validateUi(ui) {
+  const reasons = []
+  const notes = []
+  const i = ui.interactions
+  if (!i) reasons.push('interactions not run')
+  else if (i.error) reasons.push(`interactions: ${i.error}`)
+  else {
+    if (typeof i.selectMs !== 'number') reasons.push('select not completed')
+    if (typeof i.searchMs !== 'number') reasons.push('search not completed')
+    // the query "Row" matches every mounted bench row
+    if (i.searchHits === '0' || i.searchHits === null)
+      reasons.push(`search hits ${i.searchHits} for a known match`)
+    if (i.expandMs === 'no collapsed row') notes.push('expand not measured (no collapsed row)')
+    else if (typeof i.expandMs !== 'number') reasons.push('expand not completed')
+  }
+  if (!ui.componentsRootPresent) reasons.push('route root not in the Components tree')
+  return { valid: reasons.length === 0, reasons, notes }
 }
 
 // ---------------------------------------------------------------- main
@@ -501,10 +607,27 @@ async function main() {
       item.skipped = `gate failed: ${gate.reasons.join('; ')}`
       log(`item ${n} ${side} skipped — ${item.skipped}`)
     } else {
-      await fn(item)
+      try {
+        await fn(item)
+      } catch (e) {
+        // keep what was measured (review M4); the run stops after writing it
+        item.error = String(e?.stack ?? e).slice(0, 2000)
+      }
       item.envAfter = envSnapshot()
     }
     item.notes.push(...sides[side].notes.splice(0))
+    for (const r of item.app ?? []) Object.assign(r, { validity: validateRun(r, r.scenario) })
+    if (item.ui) item.ui.validity = validateUi(item.ui)
+    const runs = [...(item.app ?? []).map(r => r.validity), item.ui?.validity].filter(Boolean)
+    item.valid = !item.skipped && !item.error && runs.length > 0 && runs.every(v => v.valid)
+    item.invalidReasons = [
+      ...(item.skipped ? [item.skipped] : []),
+      ...(item.error ? ['item error'] : []),
+      ...(item.app ?? []).flatMap(r =>
+        r.validity.reasons.map(x => `${r.scale} ${r.scenario}: ${x}`),
+      ),
+      ...(item.ui?.validity.reasons.map(x => `ui: ${x}`) ?? []),
+    ]
     items.push(item)
     fs.writeFileSync(
       path.join(
@@ -514,6 +637,8 @@ async function main() {
       ),
       JSON.stringify(item, null, 2) + '\n',
     )
+    if (item.error)
+      throw new Error(`item ${n} ${side} failed (recorded): ${item.error.split('\n')[0]}`)
   }
 
   try {
@@ -528,35 +653,68 @@ async function main() {
             port: opts.port,
             withDevtools: true,
             home: path.join(homeRoot, side),
-            cpuProfDir: opts.cpuProfile
-              ? path.join(outDir, 'profiles', `${n}-${side}-server`)
-              : null,
+            inspect: !!opts.cpuProfile,
           })
           item.server = { pid: srv.pid, coldMs: r1(srv.coldMs) }
+          item.mode = opts.cpuProfile ? 'profiled' : 'latency'
           log(
             `item ${n} ${side}: server pid ${srv.pid} ready in ${Math.round(srv.coldMs)} ms (cold, not compared)`,
           )
+          const server = opts.cpuProfile ? await connectInspector(srv) : null
+          const profDir = path.join(outDir, 'profiles')
           try {
+            // One discarded page load per server (review M3): client module
+            // transforms and the browser HTTP cache are warm before any state.
+            // In profiled mode this is the server's "cold load" window.
+            if (server) await startProfilers({ server })
+            const t0 = performance.now()
+            const warm = await appScenario(sides[side].appCtx, srv)
+            await warm.page.evaluate(() => window.__bench.mountRows(200))
+            await warm.page.evaluate(() => window.__bench.clearRows())
+            await warm.page.close()
+            item.warmupLoadMs = r1(performance.now() - t0)
+            if (server)
+              item.serverColdLoad = await stopProfilers(
+                { server },
+                profDir,
+                `${n}-${side}-coldload`,
+              )
+            // State order alternates per item (n odd: as given, n even:
+            // reversed), so with BFFB each side runs each order once.
+            const scenarios = n % 2 ? plan.scenarios : [...plan.scenarios].reverse()
+            item.scenarioOrder = scenarios
             item.app = []
             for (const scale of opts.scaleList) {
-              for (const scenario of plan.scenarios) {
+              for (const scenario of scenarios) {
                 const tab =
                   scenario === 'open' ? await openDevtoolsTab(sides[side], srv, opts) : null
                 const app = await appScenario(sides[side].appCtx, srv)
                 const lease = await waitForActive(app.page, scenario === 'open')
-                const profiling = opts.cpuProfile && tab
-                if (profiling) await startProfilers([app.cdp, tab.cdp])
-                const r = await measureApp(app, scale, opts)
+                let r
+                if (opts.cpuProfile) {
+                  const targets = { app: app.cdp, ...(tab ? { ui: tab.cdp } : {}), server }
+                  r = {
+                    scale: scale.label,
+                    profiled: true,
+                    windows: await profileApp(
+                      app,
+                      scale,
+                      opts,
+                      targets,
+                      profDir,
+                      `${n}-${side}-${scale.label}-${scenario}`,
+                    ),
+                    instances: scale.rows + treeNodes(scale.tree) + 2,
+                    runtime: await runtimeState(app.page),
+                    errors: app.errors,
+                  }
+                  r.groundTruth = {
+                    instancesMounted: r.instances,
+                    input: { clicks: opts.inputReps, statesPerClick: scale.rows + 1 },
+                  }
+                } else r = await measureApp(app, scale, opts)
                 r.scenario = scenario
                 r.lease = lease
-                if (profiling) {
-                  r.profiled = true
-                  r.cpuProfiles = await stopProfilers(
-                    { app: app.cdp, ui: tab.cdp },
-                    path.join(outDir, 'profiles'),
-                    `${n}-${side}-${scale.label}-open`,
-                  )
-                }
                 if (tab) {
                   r.uiTabWs = tab.ws.snapshot()
                   await tab.page.close()
@@ -564,22 +722,13 @@ async function main() {
                 await app.page.close()
                 item.app.push(r)
                 log(
-                  `  ${side} ${scale.label} ${scenario}: idle ${r.idle.map(i => i.taskMs).join('/')} ms, lease ${JSON.stringify(lease)}`,
+                  `  ${side} ${scale.label} ${scenario}: ${r.idle ? `idle ${r.idle.map(i => i.taskMs).join('/')} ms` : 'profiled'}, lease ${JSON.stringify(lease)}`,
                 )
               }
             }
           } finally {
+            server?.close()
             await stopServer(srv)
-          }
-          if (opts.cpuProfile) {
-            const dir = path.join(outDir, 'profiles', `${n}-${side}-server`)
-            const files = fs.existsSync(dir) ? fs.readdirSync(dir) : []
-            item.serverProfiles = files.map(f => {
-              const prof = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'))
-              return { file: f, top: summarizeProfile(prof) }
-            })
-            if (files.length === 0)
-              item.notes.push('server --cpu-prof wrote no profile (non-graceful exit)')
           }
         })
       }
@@ -615,15 +764,27 @@ async function main() {
         if (uiPart)
           await runItem(side, ++n, async item => {
             item.part = 'ui'
+            item.mode = opts.cpuProfile ? 'profiled' : 'latency'
             const srv = await ownServer({
               appDir: fixtures[side].appDir,
               port: opts.port,
               withDevtools: true,
               home: path.join(homeRoot, side),
+              inspect: !!opts.cpuProfile,
             })
+            const server = opts.cpuProfile ? await connectInspector(srv) : null
             try {
-              item.ui = await measureUi(sides[side], srv, largest, opts, outDir, `${n}-${side}`)
+              item.ui = await measureUi(
+                sides[side],
+                srv,
+                largest,
+                opts,
+                outDir,
+                `${n}-${side}`,
+                server,
+              )
             } finally {
+              server?.close()
               await stopServer(srv)
             }
           })

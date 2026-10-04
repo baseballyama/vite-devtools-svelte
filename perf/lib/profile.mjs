@@ -15,16 +15,43 @@ const shortUrl = url => {
   return s.replace(/\?.*$/, '').split('/').slice(-3).join('/')
 }
 
+/**
+ * Origin of a profiled function. Rules look at the package that owns the file
+ * (the segment after the last `/node_modules/`) or at a path relative to the
+ * workspace, never at the absolute URL: the runner checkout itself lives in a
+ * directory named `vite-devtools-svelte`, which must not mark everything as
+ * plugin code (review M1), and B/F sides in other directories must bucket alike.
+ */
 export function bucketOf(name, url) {
   if (!url) return name.startsWith('(') ? name : '(native)'
-  if (url.includes('/.svelte-devtools/')) return 'devtools-ui'
-  if (url.includes('vite-devtools-svelte')) return 'plugin'
-  if (url.includes('@vitejs/devtools') || url.includes('devframe')) return 'devframe'
-  if (/\/svelte\/src\/|\/node_modules\/svelte\//.test(url)) return 'svelte'
-  if (url.includes('@sveltejs/kit')) return 'kit'
-  if (/\/node_modules\/vite\/|\/@vite\/client/.test(url)) return 'vite'
-  if (url.includes('large-app') || url.includes('reactive-app')) return 'app'
-  if (url.startsWith('node:')) return 'node'
+  // Node internals: `node:…` or bare internal module ids (`modules/esm/utils`)
+  if (!/^(file|https?):\/\//.test(url)) return 'node'
+  const u = url.replace(/[?#].*$/, '')
+  if (u.includes('virtual:svelte-devtools-runtime') || u.includes('svelte-devtools-runtime'))
+    return 'plugin-runtime'
+  if (u.includes('/.svelte-devtools/')) return 'devtools-ui'
+  const nm = u.lastIndexOf('/node_modules/')
+  if (nm >= 0) {
+    const rest = u.slice(nm + '/node_modules/'.length)
+    // Vite's prebundled deps of the app page (svelte's client runtime chunks)
+    if (rest.startsWith('.vite/deps/')) return 'svelte-prebundled'
+    const parts = rest.split('/')
+    const pkg = parts[0].startsWith('@') ? `${parts[0]}/${parts[1]}` : parts[0]
+    if (pkg === 'vite-devtools-svelte') return 'plugin'
+    if (pkg === 'svelte') return 'svelte'
+    if (pkg === '@sveltejs/kit') return 'kit'
+    if (pkg === '@sveltejs/vite-plugin-svelte') return 'vite-plugin-svelte'
+    if (pkg === '@vitejs/devtools' || pkg.includes('devframe')) return 'devframe'
+    if (pkg === 'vite' || pkg === 'rolldown' || pkg.startsWith('@rolldown/')) return 'vite'
+    return 'deps'
+  }
+  // workspace file (realpath of the linked plugin, the fixture, Vite's /@fs/)
+  if (u.includes('/packages/vite-devtools-svelte/client/')) return 'devtools-ui'
+  if (u.includes('/packages/vite-devtools-svelte/')) return 'plugin'
+  if (u.includes('/.temp/large-app/') || u.includes('/.temp/reactive-app/')) return 'app'
+  // the fixture is the dev server root: /src/… is app code, /@vite/… Vite's client
+  if (/^https?:\/\/[^/]+\/src\//.test(u)) return 'app'
+  if (/^https?:\/\/[^/]+\/@vite\//.test(u)) return 'vite'
   return 'other'
 }
 

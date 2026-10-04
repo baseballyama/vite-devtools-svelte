@@ -327,13 +327,14 @@ const ANSI = /\x1b\[[0-9;]*m/g // oxlint-disable-line no-control-regex -- strip 
  * its trusted tokens in `$HOME/.svelte-devtools`), and constant per checkout
  * so one authorization survives server restarts within a paired run.
  */
-export async function startServer({ appDir, port, withDevtools, home, cpuProfDir = null }) {
+export async function startServer({ appDir, port, withDevtools, home, inspect = false }) {
   const viteBin = path.join(appDir, '../../node_modules/vite/bin/vite.js')
   fs.mkdirSync(home, { recursive: true })
   const t0 = performance.now()
-  // `--cpu-prof` writes the profile when the process exits normally (Vite
-  // closes and exits on SIGTERM).
-  const nodeArgs = cpuProfDir ? ['--cpu-prof', `--cpu-prof-dir=${cpuProfDir}`] : []
+  // `inspect`: the dev server's own V8 profiler is driven per window through
+  // the inspector (connectInspector), so cold load and steady-state collector
+  // work are profiled separately (`--cpu-prof` could only cover the whole life).
+  const nodeArgs = inspect ? ['--inspect=127.0.0.1:0'] : []
   const child = spawn(
     process.execPath,
     [...nodeArgs, viteBin, 'dev', '--port', String(port), '--strictPort'],
@@ -351,9 +352,11 @@ export async function startServer({ appDir, port, withDevtools, home, cpuProfDir
   let log = ''
   child.stdout.on('data', d => (log += d))
   child.stderr.on('data', d => (log += d))
+  // The inspector URL carries a per-process UUID: keep it out of any message.
+  const clean = () => log.replace(ANSI, '').replace(/ws:\/\/\S+/g, 'ws://<redacted>')
   const base = `http://localhost:${port}`
   for (let i = 0; i < 1800; i++) {
-    if (child.exitCode !== null) throw new Error(`vite exited early:\n${log.replace(ANSI, '')}`)
+    if (child.exitCode !== null) throw new Error(`vite exited early:\n${clean()}`)
     try {
       const res = await fetch(`${base}/bench`)
       if (res.ok) {
@@ -363,7 +366,8 @@ export async function startServer({ appDir, port, withDevtools, home, cpuProfDir
           pid: child.pid,
           base,
           coldMs: performance.now() - t0,
-          log: () => log.replace(ANSI, ''),
+          log: clean,
+          inspectorUrl: () => /Debugger listening on (ws:\/\/\S+)/.exec(log)?.[1] ?? null,
         }
       }
     } catch {
@@ -372,7 +376,44 @@ export async function startServer({ appDir, port, withDevtools, home, cpuProfDir
     await sleep(100)
   }
   await stopServer({ child })
-  throw new Error(`vite did not become ready:\n${log.replace(ANSI, '')}`)
+  throw new Error(`vite did not become ready:\n${clean()}`)
+}
+
+/**
+ * Minimal client for the dev server's Node inspector (global WebSocket,
+ * Node >= 22). Same `send(method, params)` shape as a CDP session, so the
+ * profiler helpers drive both.
+ */
+export async function connectInspector(srv) {
+  let url = null
+  for (let i = 0; i < 100 && !url; i++) {
+    url = srv.inspectorUrl()
+    if (!url) await sleep(100)
+  }
+  if (!url) throw new Error('dev server inspector URL not found')
+  const ws = new WebSocket(url)
+  await new Promise((resolve, reject) => {
+    ws.onopen = resolve
+    ws.onerror = () => reject(new Error('dev server inspector connection failed'))
+  })
+  let id = 0
+  const pending = new Map()
+  ws.onmessage = e => {
+    const m = JSON.parse(String(e.data))
+    const p = m.id && pending.get(m.id)
+    if (!p) return
+    pending.delete(m.id)
+    if (m.error) p.reject(new Error(m.error.message))
+    else p.resolve(m.result)
+  }
+  return {
+    send: (method, params = {}) =>
+      new Promise((resolve, reject) => {
+        pending.set(++id, { resolve, reject })
+        ws.send(JSON.stringify({ id, method, params }))
+      }),
+    close: () => ws.close(),
+  }
 }
 
 /** Stops only the child we spawned (graceful, then forced). */
@@ -631,6 +672,39 @@ export async function runtimeState(page) {
       timeline: size(dt._stateTimeline),
       stateSnapshots: size(dt._stateSnapshots),
       sampling: dt._sampling ? true : dt._sampling === null ? false : 'n/a',
+    }
+  })
+}
+
+/**
+ * Breakdown of what the runtime tracks, so a mismatch with the fixture's
+ * ground truth can be explained (review M6): reactive nodes by meta.type
+ * (proxies are type 'state' and also in `_reactiveProxies`), and instances /
+ * nodes per component file (basename). Read-only.
+ */
+export async function runtimeBreakdown(page) {
+  return page.evaluate(() => {
+    const key = Object.keys(window).find(k => k.startsWith('__SVELTE_') && k.endsWith('DEVTOOLS__'))
+    const dt = key ? window[key] : null
+    if (!dt) return null
+    const base = f =>
+      String(f ?? '?')
+        .split('/')
+        .pop()
+    const inc = (o, k) => (o[k] = (o[k] ?? 0) + 1)
+    const nodesByType = {}
+    const nodesByFile = {}
+    for (const e of dt._reactiveNodes?.values?.() ?? []) {
+      inc(nodesByType, e.meta?.type ?? '?')
+      inc(nodesByFile, `${base(e.meta?.componentFile)} ${e.meta?.type ?? '?'}`)
+    }
+    const instancesByFile = {}
+    for (const c of dt._instances?.values?.() ?? []) inc(instancesByFile, base(c.file))
+    return {
+      nodesByType,
+      proxies: dt._reactiveProxies?.size ?? null,
+      nodesByFile,
+      instancesByFile,
     }
   })
 }
