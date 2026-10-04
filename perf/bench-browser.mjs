@@ -29,6 +29,8 @@ import {
   generate,
   ensurePlaygroundSync,
   DEFAULTS as FIXTURE_DEFAULTS,
+  fixtureShape,
+  kitShape,
 } from './generate-large-app.mjs'
 
 const perfDir = path.dirname(fileURLToPath(import.meta.url))
@@ -591,7 +593,8 @@ async function main() {
   const opts = parseArgs(process.argv.slice(2))
   const appDir = path.join(opts.repo, 'playground/.temp/large-app')
   ensurePlaygroundSync(opts.repo)
-  if (opts.regen || !fs.existsSync(path.join(appDir, 'package.json'))) {
+  // Regenerate when missing or generated for another Kit major.
+  if (opts.regen || fixtureShape(appDir) !== kitShape(appDir)) {
     generate({ ...FIXTURE_DEFAULTS, out: appDir })
   }
   const outDir = path.join(perfDir, 'results', opts.label)

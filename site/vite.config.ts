@@ -24,7 +24,8 @@ export default defineConfig({
         strict: true,
       }),
       paths: {
-        base,
+        // Kit validates the value; the type is narrower than process.env's.
+        base: base as '' | `/${string}`,
       },
       prerender: {
         handleHttpError: 'warn',
