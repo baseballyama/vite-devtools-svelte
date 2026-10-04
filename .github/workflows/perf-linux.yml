@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PERF_PHASE: scale
+  PERF_PHASE: reactive
   # improve: the pushed candidate commit measured against 71a9992
   PERF_CANDIDATE: fd676f0e5f8f68c08acc6c0e4d3975b5cf4f02df
 

@@ -128,24 +128,57 @@ async function measureState(browser, state) {
     res.groundTruth.countsAtEnd = await page.evaluate(() => window.__reactive.counts())
     res.heapEndMB = r1((await heapAfterGc(cdp)) / 1048576)
     res.runtime = await runtimeState(page)
-    // Ground truth vs runtime by kind (review M6). Expected counts cover the
-    // generated cells/groups only; probes (module state, class items, causal
-    // rows) show up per file in the breakdown. Unexplained differences are
-    // flagged, and node totals are not used as an axis until explained.
+    // Count contract (review M6): expected() vs runtime by kind, per file and
+    // per name, 0 tolerance. A mismatch is recorded (not retried) and the node
+    // axis stays unusable for this run.
     res.runtimeBreakdown = await runtimeBreakdown(page)
     if (res.runtimeBreakdown) {
-      const exp = res.groundTruth.expected.nodes
-      const got = res.runtimeBreakdown.nodesByType
-      const proxies = res.runtimeBreakdown.proxies ?? 0
-      res.kindCompare = {
-        state: { expected: exp.state, runtime: (got.state ?? 0) - proxies },
-        proxy: { expected: exp.proxy, runtime: proxies },
-        derived: { expected: exp.derived, runtime: got.derived ?? 0 },
-        effect: { expected: exp.effect, runtime: got.effect ?? 0 },
+      const exp = res.groundTruth.expected
+      const rt = res.runtimeBreakdown
+      const rows = res.groundTruth.countsAtEnd.rows
+      const mismatch = []
+      const check = (where, e, r) => {
+        if (e !== r) mismatch.push(`${where}: expected ${e}, runtime ${r}`)
       }
-      res.kindMismatch = Object.entries(res.kindCompare)
-        .filter(([, v]) => v.expected !== v.runtime)
-        .map(([k, v]) => `${k}: expected ${v.expected}, runtime ${v.runtime}`)
+      res.kindCompare = {
+        state: { expected: exp.nodes.state, runtime: rt.nodesByType.state ?? 0 },
+        derived: { expected: exp.nodes.derived, runtime: rt.nodesByType.derived ?? 0 },
+        effect: { expected: exp.nodes.effect, runtime: rt.nodesByType.effect ?? 0 },
+        proxies: { expected: exp.proxies, runtime: rt.proxies ?? 0 },
+      }
+      for (const [k, v] of Object.entries(res.kindCompare)) check(k, v.expected, v.runtime)
+      const runtimeFiles = new Set([
+        ...Object.keys(rt.nodesByFile).map(k => k.slice(0, k.lastIndexOf(' '))),
+        ...Object.keys(rt.instancesByFile),
+      ])
+      res.fileCompare = {}
+      let expectedInstances = 0
+      for (const file of new Set([...Object.keys(exp.byFile), ...runtimeFiles])) {
+        const e = exp.byFile[file]
+        if (!e) mismatch.push(`unexpected file ${file}`)
+        const instances = e && (e.instances ?? rows)
+        expectedInstances += instances ?? 0
+        const names = {}
+        for (const [k, n] of Object.entries(rt.nodesByFileName))
+          if (k.startsWith(`${file} `)) names[k.slice(file.length + 1)] = n
+        const c = (res.fileCompare[file] = {
+          instances: { expected: instances ?? 0, runtime: rt.instancesByFile[file] ?? 0 },
+          state: { expected: e?.state ?? 0, runtime: rt.nodesByFile[`${file} state`] ?? 0 },
+          derived: { expected: e?.derived ?? 0, runtime: rt.nodesByFile[`${file} derived`] ?? 0 },
+          effect: { expected: e?.effect ?? 0, runtime: rt.nodesByFile[`${file} effect`] ?? 0 },
+          proxies: { expected: e?.proxies ?? 0, runtime: rt.proxiesByFile[file] ?? 0 },
+        })
+        for (const [k, v] of Object.entries(c)) check(`${file} ${k}`, v.expected, v.runtime)
+        c.names = {}
+        for (const name of new Set([...Object.keys(e?.names ?? {}), ...Object.keys(names)])) {
+          c.names[name] = { expected: e?.names[name] ?? 0, runtime: names[name] ?? 0 }
+          check(`${file} ${name}`, c.names[name].expected, c.names[name].runtime)
+        }
+      }
+      check('total instances', expectedInstances, res.runtime?.instances)
+      for (const b of rt.ambiguousBasenames) mismatch.push(`ambiguous basename ${b}`)
+      res.contractMismatch = mismatch
+      res.contractOk = mismatch.length === 0
     }
     res.wsSentByEvent = ws.sentByEvent()
     res.errors = errors
@@ -214,8 +247,13 @@ async function main() {
         JSON.stringify({ ...header, items, complete: false }, null, 2) + '\n',
       )
       if (r.error) throw new Error(`reactive ${state} failed (recorded)`)
+      const contract = !r.contractMismatch
+        ? 'contract n/a'
+        : r.contractOk
+          ? 'contract ok'
+          : `contract MISMATCH (${r.contractMismatch.length})`
       log(
-        `${state}: noise task ${r.noiseWindow.taskMs} ms / ${opts.noiseMs} ms, runtime nodes ${r.runtime?.reactiveNodes ?? 'n/a'} of ${r.groundTruth.expected.total} expected`,
+        `${state}: noise task ${r.noiseWindow.taskMs} ms / ${opts.noiseMs} ms, runtime nodes ${r.runtime?.reactiveNodes ?? 'n/a'} of ${r.groundTruth.expected.total} expected, ${contract}`,
       )
     }
   } finally {

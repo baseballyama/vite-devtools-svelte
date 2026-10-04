@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 // Deterministic reactive-STATE stress fixture (50k+ tracked reactive nodes).
+// expected() is a count contract: unique runtime node IDs per file / kind /
+// name (0 tolerance), name collisions reported as tagged vs unique, the Kit
+// root counted as environment, not fixture.
 //
 // Builds on generate-large-app.mjs (same package.json / vite.config.js with
 // PERF_DEVTOOLS=0|1 / forwardConsole off, same resolution from playground/),
@@ -21,7 +24,7 @@
 //
 // window.__reactive drives updates (all writes carry a monotonically
 // increasing sequence number so recorded vs. written can be compared):
-//   expected()                      static node/edge counts by type
+//   expected()                      count contract: nodes by kind / file / name, edges
 //   writePrimitives(k)              k distinct primitive states, one batch
 //   burstSame(n)                    one state written n times in one task
 //   cascade(groups)                 bump shared state of `groups` groups
@@ -75,32 +78,90 @@ function parseArgs(argv) {
 export const payloadClass = i => (i % 100 === 99 ? 2 : i % 100 >= 90 ? 1 : 0)
 export const derivedDepth = (i, max) => 1 + (i % max)
 
-/** Static expectation of what the runtime should track (tagged nodes only). */
+/**
+ * Count contract (review M6): the unique runtime node IDs (componentId:name)
+ * the fixture's components create during init, by kind, per file and per
+ * name, with 0 tolerance. Facts of the dev compiler this relies on: a
+ * never-reassigned $state primitive is a plain value (no node), $state(obj)
+ * that is reassigned is one state node, {@const} is a tagged derived, a class
+ * field $state counts for the component whose init constructs it (Items),
+ * module-level $state is untracked. Names tagged more than once per instance
+ * collapse to one ID: `collisions` reports tagged vs unique, so the run never
+ * claims full capture of tagged signals. Effect names are normalised
+ * (effect_N → effect). Row instances are dynamic (null: read from the DOM).
+ * The Kit root is environment, not fixture, and is not counted here (Kit 2's
+ * generated root.svelte adds 3 state / 2 derived / 2 effect; Kit 3's lives in
+ * node_modules and is not instrumented).
+ */
 export function expected(o = DEFAULTS) {
   const groups = 2 ** (o.treeDepth + 1) - 1
   const cells = groups * o.nodesPerGroup
-  let derived = 0
+  let cellDerived = 0
   const payload = [0, 0, 0]
+  const byFile = {}
+  const file = (name, instances) =>
+    (byFile[name] = { instances, state: 0, derived: 0, effect: 0, proxies: 0, names: {} })
+  const add = (e, type, name, n, proxy = false) => {
+    if (!n) return
+    e[type] += n
+    if (proxy) e.proxies += n
+    e.names[`${type} ${name}`] = (e.names[`${type} ${name}`] ?? 0) + n
+  }
+  for (let d = 1; d <= o.maxDerivedDepth; d++) file(`CellD${d}.svelte`, 0)
   for (let i = 0; i < cells; i++) {
-    derived += derivedDepth(i, o.maxDerivedDepth)
+    cellDerived += derivedDepth(i, o.maxDerivedDepth)
     payload[payloadClass(i)]++
+    byFile[`CellD${derivedDepth(i, o.maxDerivedDepth)}.svelte`].instances++
   }
-  const nodes = {
-    state: groups /* shared */ + cells * o.primitives,
-    proxy: cells /* object state */,
-    derived,
-    effect: cells * o.effects,
+  for (let d = 1; d <= o.maxDerivedDepth; d++) {
+    const e = byFile[`CellD${d}.svelte`]
+    for (let p = 0; p < o.primitives; p++) add(e, 'state', `p${p}`, e.instances)
+    add(e, 'state', 'obj', e.instances)
+    for (let k = 0; k < d; k++) add(e, 'derived', `d${k}`, e.instances)
+    add(e, 'effect', 'effect', e.instances * o.effects)
   }
-  const total = Object.values(nodes).reduce((a, b) => a + b, 0)
+  const group = file('Group.svelte', groups)
+  add(group, 'state', 'shared', groups)
+  add(group, 'derived', 'index', groups)
+  add(group, 'derived', 'C', groups)
+  const page = file('+page.svelte', 1)
+  add(page, 'state', 'mounted', 1)
+  add(page, 'effect', 'effect', 1)
+  const causal = file('Causal.svelte', 1)
+  add(causal, 'state', 'filter', 1)
+  add(causal, 'state', 'threshold', 1)
+  add(file('List.svelte', 1), 'derived', 'visible', 1)
+  add(file('Counter.svelte', 1), 'state', 'box', 1, true)
+  add(file('Items.svelte', 1), 'state', 'Item.done', o.classItems > 0 ? 1 : 0)
+  file('+layout.svelte', 1)
+  file('Row.svelte', null)
+  const nodes = { state: 0, derived: 0, effect: 0 }
+  let proxies = 0
+  for (const e of Object.values(byFile)) {
+    for (const k of Object.keys(nodes)) nodes[k] += e[k]
+    proxies += e.proxies
+  }
+  const total = nodes.state + nodes.derived + nodes.effect
   // dependency edges between tracked nodes (direct reads):
   //   shared → first derived (fan-out), each chain link → next, chain end → effects,
   //   first derived also reads primitive 0
-  const edges = cells * 2 + (derived - cells) + cells * o.effects
+  const edges = cells * 2 + (cellDerived - cells) + cells * o.effects
   return {
     groups,
     cells,
     nodes,
+    proxies,
     total,
+    byFile,
+    collisions: {
+      'Group.svelte': { names: ['index', 'C'], tagged: cells * 2, unique: groups * 2 },
+      'Items.svelte': {
+        names: ['Item.done'],
+        tagged: o.classItems,
+        unique: o.classItems > 0 ? 1 : 0,
+      },
+    },
+    untracked: ['rt.svelte.js moduleState (module-level $state)'],
     edges,
     payloadCells: { small: payload[0], medium: payload[1], large: payload[2] },
     fanoutPerShared: o.nodesPerGroup,
@@ -192,6 +253,11 @@ function cellSource(o) {
   const prims = Array.from({ length: o.primitives }, (_, p) =>
     p % 2 ? `  let p${p} = $state('s' + index)` : `  let p${p} = $state(index + ${p})`,
   ).join('\n')
+  // every primitive is reassigned somewhere, so each one is a state node
+  const branches = Array.from({ length: o.primitives }, (_, p) =>
+    p < o.primitives - 1 ? `k === ${p} ? (p${p} = v) : ` : `(p${p} = v)`,
+  ).join('')
+  const setPrim = o.primitives > 1 ? `(${branches})` : branches
   // A fixed-length chain cannot vary per instance in source, so each Cell
   // declares maxDerivedDepth links but only the first `depth` read upstream;
   // the rest are constants-free passthroughs gated off (not created) via a
@@ -213,7 +279,7 @@ ${chain.join('\n')}
   const sink = []
 ${effects}
   register(index, {
-    setPrim: (k, v) => (k === 0 ? (p0 = v) : ${o.primitives > 1 ? '(p1 = v)' : '(p0 = v)'}),
+    setPrim: (k, v) => ${setPrim},
     setObj: v => (obj = v),
     pushDeep: v => obj.list.push(v),
   })
@@ -381,7 +447,12 @@ ${Array.from({ length: o.maxDerivedDepth }, (_, d) => `  import CellD${d + 1} fr
     ready: false,
     expected: () => EXPECTED,
     scenarios: () => SCENARIOS,
-    counts: () => ({ cellsRegistered: cellCount(), groups: groups.size, seq }),
+    counts: () => ({
+      cellsRegistered: cellCount(),
+      groups: groups.size,
+      rows: document.querySelectorAll('[data-row]').length,
+      seq,
+    }),
     writePrimitives(k) {
       for (const i of nextCells(k)) cell(i)?.setPrim(0, ++seq)
       return seq

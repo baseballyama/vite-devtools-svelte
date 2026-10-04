@@ -681,10 +681,13 @@ export async function runtimeState(page) {
 }
 
 /**
- * Breakdown of what the runtime tracks, so a mismatch with the fixture's
- * ground truth can be explained (review M6): reactive nodes by meta.type
- * (proxies are type 'state' and also in `_reactiveProxies`), and instances /
- * nodes per component file (basename). Read-only.
+ * Breakdown of what the runtime tracks, compared with the fixture's count
+ * contract (review M6): reactive nodes by meta.type (proxies are type 'state'
+ * and also in `_reactiveProxies`), instances / nodes per component file
+ * (basename), nodes per `basename type name` (effect_N → effect, effect_pre_N
+ * → effect_pre), proxies per file, and the basenames that stand for more than
+ * one full file path (the comparison by basename is only valid when this is
+ * empty). Only basenames are emitted, never paths or component ids. Read-only.
  */
 export async function runtimeBreakdown(page) {
   return page.evaluate(() => {
@@ -696,19 +699,38 @@ export async function runtimeBreakdown(page) {
         .split('/')
         .pop()
     const inc = (o, k) => (o[k] = (o[k] ?? 0) + 1)
+    const paths = new Map()
+    const seen = f => {
+      const b = base(f)
+      if (!paths.has(b)) paths.set(b, new Set())
+      paths.get(b).add(String(f ?? '?'))
+      return b
+    }
     const nodesByType = {}
     const nodesByFile = {}
+    const nodesByFileName = {}
     for (const e of dt._reactiveNodes?.values?.() ?? []) {
-      inc(nodesByType, e.meta?.type ?? '?')
-      inc(nodesByFile, `${base(e.meta?.componentFile)} ${e.meta?.type ?? '?'}`)
+      const type = e.meta?.type ?? '?'
+      const file = seen(e.meta?.componentFile)
+      const name = String(e.meta?.name ?? '?')
+      const norm = type === 'effect' ? name.replace(/_\d+$/, '') : name
+      inc(nodesByType, type)
+      inc(nodesByFile, `${file} ${type}`)
+      inc(nodesByFileName, `${file} ${type} ${norm}`)
     }
+    const proxiesByFile = {}
+    for (const id of dt._reactiveProxies?.keys?.() ?? [])
+      inc(proxiesByFile, base(dt._reactiveNodes?.get?.(id)?.meta?.componentFile))
     const instancesByFile = {}
-    for (const c of dt._instances?.values?.() ?? []) inc(instancesByFile, base(c.file))
+    for (const c of dt._instances?.values?.() ?? []) inc(instancesByFile, seen(c.file))
     return {
       nodesByType,
       proxies: dt._reactiveProxies?.size ?? null,
       nodesByFile,
+      nodesByFileName,
+      proxiesByFile,
       instancesByFile,
+      ambiguousBasenames: [...paths].filter(([, s]) => s.size > 1).map(([b]) => b),
     }
   })
 }
