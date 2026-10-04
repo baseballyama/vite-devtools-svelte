@@ -1,42 +1,56 @@
 <script lang="ts">
   import { base } from '$app/paths'
-  import { panels } from '$lib/panels'
+  import { panels, taglineParts } from '$lib/panels'
+  import { MCP_TOOL_COUNT } from '$lib/mcp-tools'
+  import InstallTabs from '$lib/InstallTabs.svelte'
 
-  const install = 'npm install -D vite-devtools-svelte'
-  let copied = $state(false)
+  const repo = 'https://github.com/baseballyama/vite-devtools-svelte'
 
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(install)
-      copied = true
-      setTimeout(() => (copied = false), 1600)
-    } catch {
-      /* clipboard unavailable — the command stays selectable */
-    }
-  }
-
-  // Each row: one task, one sentence, one real screenshot of the current UI.
-  const workflows = [
+  const features = [
     {
-      kicker: 'Reactivity',
-      title: 'Follow a value through its runes.',
-      body: 'See which $derived and $effect depend on a $state, scoped to one component, and jump to the definition.',
-      img: 'home-reactivity',
-      alt: 'Reactivity panel showing a dependency graph of $state, $derived and $effect for one component',
+      slug: 'components',
+      title: 'Components',
+      body: 'The live tree of mounted instances, virtualized for large apps, with an inspector for ancestors, children and imports.',
     },
     {
-      kicker: 'State timeline',
+      slug: 'reactive',
+      title: 'Reactivity',
+      body: 'Which $state, $derived and $effect connect inside one component. Edges mean “can affect”, not a recorded cause.',
+    },
+    {
+      slug: 'timeline',
+      title: 'State timeline',
+      body: 'Sampled $state changes, newest first, with the value before and after.',
+    },
+    {
+      slug: 'inspect',
+      title: 'Compiled output',
+      body: 'Your component next to the JavaScript the compiler wrote, linked line by line through the source map.',
+    },
+    {
+      slug: 'routes',
+      title: 'Routes and load functions',
+      body: 'The SvelteKit routes tree from your files, and how long each load function takes.',
+    },
+    {
+      slug: 'profiler',
+      title: 'Render',
+      body: 'Which components render most and take the longest, per instance.',
+    },
+  ]
+
+  const showcase = [
+    {
+      img: 'home-timeline.jpg',
+      alt: 'State timeline panel listing state changes with an inspector showing before and after values',
       title: 'Know what changed, and when.',
       body: 'Recent $state writes, newest first, with the value before and after. The log keeps the latest entries, not the whole session.',
-      img: 'home-timeline',
-      alt: 'State timeline panel listing state changes with an inspector showing before and after values',
     },
     {
-      kicker: 'Compiled output',
+      img: 'home-compiled.jpg',
+      alt: 'Compiled output panel with Svelte source and compiled JavaScript side by side, connected by source-map lines',
       title: 'Read what the compiler wrote.',
       body: 'Your component next to its compiled JavaScript, linked line by line through the source map.',
-      img: 'home-compiled',
-      alt: 'Compiled output panel with Svelte source and compiled JavaScript side by side, connected by source-map lines',
     },
   ]
 </script>
@@ -45,37 +59,46 @@
   <title>vite-devtools-svelte — DevTools for Svelte and SvelteKit</title>
 </svelte:head>
 
-<section class="hero">
-  <div class="container">
-    <p class="kicker mono">Svelte 5 · SvelteKit · Vite</p>
-    <h1>See inside<br />your Svelte app.</h1>
-    <p class="sub">
-      Components, reactivity, routes and compiled output — in one DevTools UI served by your
-      Vite dev server.
-    </p>
-    <div class="actions">
-      <a class="btn btn-primary" href="{base}/getting-started">Get started <span aria-hidden="true">→</span></a>
-      <a class="btn btn-ghost" href="https://github.com/baseballyama/vite-devtools-svelte" target="_blank" rel="noreferrer noopener">GitHub</a>
+<section class="band no-border hero">
+  <div class="hero-grid">
+    <div class="hero-copy">
+      <p class="eyebrow">Svelte 5 · SvelteKit · Vite</p>
+      <h1>See inside your Svelte app.</h1>
+      <p class="lead">
+        Components, reactivity, routes and compiled output in one DevTools UI, served by your Vite
+        dev server.
+      </p>
+      <div class="actions">
+        <a class="btn btn-primary" href="{base}/getting-started">Get started</a>
+        <a class="btn btn-secondary" href={repo} target="_blank" rel="noreferrer noopener">
+          View on GitHub
+        </a>
+      </div>
     </div>
-    <div class="install">
-      <code class="mono">{install}</code>
-      <button type="button" class="copy" onclick={copy} aria-label="Copy install command">
-        {copied ? 'Copied' : 'Copy'}
-      </button>
-      <span class="sr-only" aria-live="polite">{copied ? 'Install command copied' : ''}</span>
+    <div class="hero-install">
+      <InstallTabs />
+      <ol class="next-steps">
+        <li>Add <code>svelteDevtools()</code> before <code>sveltekit()</code> in <code>vite.config.ts</code>.</li>
+        <li>Run your dev server.</li>
+        <li>Open <code>/.svelte-devtools/</code>.</li>
+      </ol>
     </div>
   </div>
+  <p class="note release">
+    Requires <strong>vite-devtools-svelte ≥ 0.4.0</strong> (not yet published; 0.3.0 is documented to
+    run inside <code>@vitejs/devtools</code>).
+  </p>
+</section>
 
-  <!-- The theme is set before first paint; the hidden variant is display:none and lazy, so only
-       the image for the active theme is fetched. -->
-  <figure class="shot hero-shot container">
+<section class="band flush showcase-hero" aria-label="Components panel">
+  <figure class="hero-shot">
+    <!-- The theme is set before first paint; the hidden variant is display:none. -->
     <img
       class="only-dark"
       src="{base}/images/home-components-dark.jpg"
       width="1600"
       height="1000"
       alt="Components panel: a filtered live component tree of a large app with an inspector showing ancestors, children and imports"
-      loading="lazy"
       fetchpriority="high"
     />
     <img
@@ -85,325 +108,460 @@
       height="1000"
       alt="Components panel in the light theme with the component inspector open"
       loading="lazy"
-      fetchpriority="high"
     />
     <figcaption>
-      Components: the live tree stays virtualized on large apps and tells you when only part of
-      it was captured.
+      Components: the live tree stays virtualized on large apps and tells you when only part of it
+      was captured. Captured from the UI in dev-mock mode with synthetic data, before the
+      reactivity update.
     </figcaption>
   </figure>
 </section>
 
-<section class="workflows" aria-label="Workflows">
-  {#each workflows as w, i (w.img)}
-    <article class="row container" class:flip={i % 2 === 1}>
-      <div class="copy-col">
-        <p class="kicker mono">{w.kicker}</p>
-        <h2>{w.title}</h2>
-        <p class="body">{w.body}</p>
-      </div>
-      <figure class="shot">
-        <img src="{base}/images/{w.img}.jpg" width="1200" height="750" alt={w.alt} loading="lazy" decoding="async" />
-      </figure>
-    </article>
-  {/each}
+<section class="band" aria-labelledby="features-title">
+  <div class="band-head">
+    <p class="eyebrow">What you can see</p>
+    <h2 id="features-title">Your running app, panel by panel.</h2>
+    <p>The panels read your running app and your project while the dev server runs. Production builds are unaffected.</p>
+  </div>
+  <ul class="features">
+    {#each features as f (f.slug)}
+      <li>
+        <h3>{f.title}</h3>
+        <p>{f.body}</p>
+        <a href="{base}/panels/{f.slug}" aria-label="{f.title} panel">Panel details <span aria-hidden="true">→</span></a>
+      </li>
+    {/each}
+  </ul>
 </section>
 
-<section class="modes container" aria-labelledby="modes-title">
-  <h2 id="modes-title">Two ways to open it.</h2>
-  <div class="mode-grid">
-    <div class="mode">
-      <p class="kicker mono">Standalone</p>
-      <h3>Any Vite dev server</h3>
-      <p>
-        Add the plugin and open <code class="mono">/.svelte-devtools/</code>. The first visit asks for
-        the one-time code printed in your terminal; after that the browser is trusted.
+<section class="band split" aria-labelledby="large-title">
+  <div class="split-copy">
+    <p class="eyebrow">Reactivity in large apps</p>
+    <h2 id="large-title">Start from the busiest components, then zoom in.</h2>
+    <p>
+      The overview counts sampled state changes and renders per component without building the
+      whole graph. Pick one instance to see its signals and what can affect what.
+    </p>
+    <ul class="checks">
+      <li>Every view says what it covers: window, 200 ms sampling, caps.</li>
+      <li>Edges mean “can affect”. Which write changed a value is not recorded.</li>
+      <li>After a page reload, old component ids are refused instead of guessed.</li>
+    </ul>
+    <a class="more" href="{base}/panels/reactive">The Reactivity panel <span aria-hidden="true">→</span></a>
+  </div>
+  <figure class="split-shot shot">
+    <img
+      src="{base}/images/reactivity-component.png"
+      width="1440"
+      height="900"
+      alt="Local graph of ReactivePriceChart with taxRate selected; the inspector says Cause: Not recorded"
+      loading="lazy"
+      decoding="async"
+    />
+    <figcaption>Real runtime on the synthetic example app, captured in CI.</figcaption>
+  </figure>
+</section>
+
+<section class="band" aria-label="More panels">
+  <div class="pair">
+    {#each showcase as s (s.img)}
+      <article>
+        <figure class="shot">
+          <img src="{base}/images/{s.img}" width="1200" height="750" alt={s.alt} loading="lazy" decoding="async" />
+        </figure>
+        <h3>{s.title}</h3>
+        <p class="muted">{s.body}</p>
+        <p class="provenance">Dev-mock mode with synthetic data, before the reactivity update.</p>
+      </article>
+    {/each}
+  </div>
+</section>
+
+<section class="band split agents" aria-labelledby="mcp-title">
+  <div class="split-copy">
+    <p class="eyebrow">For AI agents</p>
+    <h2 id="mcp-title">Your coding agent can read it too.</h2>
+    <p>
+      The dev server also serves an MCP endpoint with {MCP_TOOL_COUNT} read tools. Claude Code and
+      other MCP clients get the same data as the panels, and every answer says what it covers.
+    </p>
+    <a class="btn btn-secondary" href="{base}/mcp">Read the MCP guide</a>
+  </div>
+  <div class="terminal" role="img" aria-label="Terminal output: the dev server prints a claude mcp add command with the URL and a token">
+    <p class="t-dim">$ npm run dev</p>
+    <p class="t-dim">…</p>
+    <p>svelte-devtools MCP ready — register with Claude Code:</p>
+    <p class="t-cmd">claude mcp add --transport http svelte http://localhost:5173/__svelte-devtools/mcp --header x-svelte-devtools-token:&lt;token&gt;</p>
+  </div>
+</section>
+
+<section class="band" aria-labelledby="modes-title">
+  <div class="band-head">
+    <p class="eyebrow">Two ways to open it</p>
+    <h2 id="modes-title">Standalone, or inside Vite DevTools.</h2>
+  </div>
+  <div class="modes">
+    <div>
+      <h3>Standalone</h3>
+      <p class="muted">
+        Add the plugin and open <code>/.svelte-devtools/</code>. The first visit asks for the one-time
+        code printed in your terminal; after that the browser is trusted.
       </p>
     </div>
-    <div class="mode">
-      <p class="kicker mono">Vite DevTools</p>
-      <h3>Inside the dock</h3>
-      <p>
-        Install <code class="mono">@vitejs/devtools</code> ≥ 0.7.6 and add <code class="mono">DevTools()</code>
-        to your Vite config: the same panels open as an entry in the Vite DevTools dock.
+    <div>
+      <h3>Vite DevTools dock</h3>
+      <p class="muted">
+        Install <code>@vitejs/devtools</code> ≥ 0.7.6 and add <code>DevTools()</code> to your Vite
+        config: the same panels open as an entry in the Vite DevTools dock.
       </p>
     </div>
   </div>
-  <p class="note">
-    Both modes require <strong>vite-devtools-svelte ≥ 0.4.0</strong> (not yet published; 0.3.0 is
-    documented to run inside <code class="mono">@vitejs/devtools</code>). The plugin only runs while the dev server is running.
-  </p>
 </section>
 
-<section class="panels container" id="panels" aria-labelledby="panels-title">
-  <div class="panels-head">
+<section class="band" id="panels" aria-labelledby="panels-title">
+  <div class="band-head">
+    <p class="eyebrow">{panels.length} panels</p>
     <h2 id="panels-title">Every panel.</h2>
-    <p class="body">{panels.length} panels, each with its own page.</p>
   </div>
   <ul class="panel-list">
     {#each panels as p (p.slug)}
       <li>
         <a href="{base}/panels/{p.slug}">
           <span class="p-title">{p.title}</span>
-          <span class="p-tag">{p.tagline}</span>
+          <span class="p-tag">
+            {#each taglineParts(p.tagline) as part, i (i)}{#if part.code}<code>{part.text}</code>{:else}{part.text}{/if}{/each}
+          </span>
         </a>
       </li>
     {/each}
   </ul>
 </section>
 
-<section class="closing container">
+<section class="band closing">
   <h2>Try it in your dev server.</h2>
   <div class="actions">
-    <a class="btn btn-primary" href="{base}/getting-started">Get started <span aria-hidden="true">→</span></a>
-    <a class="btn btn-ghost" href="https://github.com/baseballyama/vite-devtools-svelte" target="_blank" rel="noreferrer noopener">GitHub</a>
+    <a class="btn btn-primary" href="{base}/getting-started">Get started</a>
+    <a class="btn btn-secondary" href={repo} target="_blank" rel="noreferrer noopener">View on GitHub</a>
   </div>
 </section>
 
 <style>
   .hero {
-    padding: clamp(4rem, 10vw, 8rem) 0 0;
+    padding-top: calc(var(--band-y) * 1.1);
   }
-  .kicker {
-    margin: 0 0 1rem;
-    font-size: 0.78rem;
-    letter-spacing: 0.04em;
-    color: var(--text-3);
+
+  /* Two columns split by a hairline, like the frame. */
+  .hero-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    align-items: center;
   }
-  h1 {
-    margin: 0;
-    font-family: var(--font-sans);
-    font-size: clamp(2.75rem, 8vw, 6.25rem);
-    font-weight: 600;
-    line-height: 0.98;
-    letter-spacing: -0.045em;
-    color: var(--text);
+
+  .hero-copy {
+    padding-right: 4rem;
   }
-  .sub {
-    max-width: 34rem;
-    margin: 1.75rem 0 0;
+
+  .hero-install {
+    padding-left: 4rem;
+    border-left: 1px solid var(--line);
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  @media (max-width: 960px) {
+    .hero-grid {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 2.5rem;
+    }
+    .hero-copy {
+      padding-right: 0;
+    }
+    .hero-install {
+      padding-left: 0;
+      border-left: 0;
+    }
+  }
+
+  .lead {
     font-size: clamp(1.05rem, 1.6vw, 1.25rem);
-    line-height: 1.55;
     color: var(--text-2);
+    max-width: 34rem;
+    margin-bottom: 2rem;
   }
+
   .actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.75rem;
-    margin-top: 2.25rem;
-  }
-  .install {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.75rem;
-    max-width: 100%;
-    margin-top: 1.5rem;
-    padding: 0.55rem 0.55rem 0.55rem 1rem;
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    background: var(--paper);
-  }
-  .install code {
-    overflow-x: auto;
-    white-space: nowrap;
-    font-size: 0.88rem;
-    color: var(--text);
-  }
-  .copy {
-    flex-shrink: 0;
-    padding: 0.3rem 0.7rem;
-    border: 1px solid var(--line);
-    border-radius: var(--radius-sm);
-    background: none;
-    color: var(--text-2);
-    font: inherit;
-    font-size: 0.8rem;
-    cursor: pointer;
-  }
-  .copy:hover {
-    color: var(--text);
-    border-color: var(--line-strong);
+    gap: 0.85rem;
   }
 
-  .shot {
-    margin: 0;
+  .next-steps {
+    margin: 1.25rem 0 0;
+    padding-left: 1.25rem;
+    color: var(--text-2);
+    font-size: 0.92rem;
   }
-  /* .shot resets figure margins; the hero figure is also a .container and must stay centred. */
-  .hero-shot {
-    margin-inline: auto;
+
+  .next-steps li + li {
+    margin-top: 0.35rem;
   }
-  .shot img {
-    width: 100%;
-    height: auto;
-    border: 1px solid var(--line);
-    border-radius: var(--radius-lg);
-    background: var(--paper);
+
+  .release {
+    margin: 3rem 0 0;
+    max-width: 44rem;
   }
-  .hero-shot {
-    margin-top: clamp(3rem, 7vw, 5rem);
+
+  .showcase-hero {
+    padding: 0 var(--pad-x) var(--band-y);
+    border-top: 0;
   }
-  .hero-shot img {
-    box-shadow: var(--shadow-lg);
-  }
-  figcaption {
-    margin-top: 1rem;
-    font-size: 0.9rem;
-    color: var(--text-3);
-  }
-  :global(html[data-theme='dark']) .only-light,
-  :global(html[data-theme='light']) .only-dark {
+
+  .showcase-hero::before,
+  .showcase-hero::after {
     display: none;
   }
 
-  .workflows {
-    display: grid;
-    gap: clamp(5rem, 12vw, 9rem);
-    padding: clamp(6rem, 14vw, 11rem) 0;
+  .hero-shot img {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
   }
-  .row {
+
+  figcaption {
+    margin-top: 0.75rem;
+    font-size: 0.88rem;
+    color: var(--text-3);
+  }
+
+  .features {
+    list-style: none;
+    margin: 0 calc(-1 * var(--pad-x)) calc(-1 * var(--band-y));
+    padding: 0;
     display: grid;
-    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-    gap: clamp(2rem, 5vw, 4.5rem);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    border-top: 1px solid var(--line);
+  }
+
+  .features li {
+    padding: 2rem var(--pad-x) 2.25rem;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .features li:not(:nth-child(3n)) {
+    border-right: 1px solid var(--line);
+  }
+
+  .features li:nth-last-child(-n + 3) {
+    border-bottom: 0;
+  }
+
+  @media (max-width: 960px) {
+    .features {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .features li:not(:nth-child(3n)) {
+      border-right: 0;
+    }
+    .features li:nth-child(odd) {
+      border-right: 1px solid var(--line);
+    }
+    .features li:nth-last-child(-n + 3) {
+      border-bottom: 1px solid var(--line);
+    }
+    .features li:nth-last-child(-n + 2) {
+      border-bottom: 0;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .features {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .features li:nth-child(odd) {
+      border-right: 0;
+    }
+    .features li:nth-last-child(-n + 2) {
+      border-bottom: 1px solid var(--line);
+    }
+    .features li:last-child {
+      border-bottom: 0;
+    }
+  }
+
+  .features p {
+    color: var(--text-2);
+    font-size: 0.95rem;
+  }
+
+  .features a,
+  .more {
+    font-size: 0.92rem;
+    font-weight: 500;
+  }
+
+  .split {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    gap: 4rem;
     align-items: center;
   }
-  .row.flip .copy-col {
-    order: 2;
+
+  @media (max-width: 960px) {
+    .split {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 2.5rem;
+    }
   }
-  h2 {
-    margin: 0;
-    font-family: var(--font-sans);
-    font-size: clamp(1.9rem, 4vw, 3.1rem);
-    font-weight: 600;
-    line-height: 1.05;
-    letter-spacing: -0.035em;
-    color: var(--text);
-  }
-  .body {
-    margin: 1.25rem 0 0;
-    max-width: 28rem;
-    font-size: 1.05rem;
+
+  .split-copy p {
     color: var(--text-2);
+  }
+
+  .checks {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 1.5rem;
+  }
+
+  .checks li {
+    position: relative;
+    padding-left: 1.5rem;
+    margin-bottom: 0.6rem;
+    color: var(--text-2);
+  }
+
+  .checks li::before {
+    content: '';
+    position: absolute;
+    left: 0.15rem;
+    top: 0.6em;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 2px;
+    background: var(--brand);
+  }
+
+  .split-shot img {
+    width: 100%;
+  }
+
+  .pair {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 3rem;
+  }
+
+  @media (max-width: 760px) {
+    .pair {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  .pair figure {
+    margin: 0 0 1.25rem;
+  }
+
+  .provenance {
+    font-size: 0.85rem;
+    color: var(--text-3);
+  }
+
+  .terminal {
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    line-height: 1.6;
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem 1.4rem;
+    overflow-wrap: anywhere;
+  }
+
+  .terminal p {
+    margin: 0;
+  }
+
+  .t-dim {
+    color: var(--text-3);
+  }
+
+  .t-cmd {
+    color: var(--text);
+    margin-top: 0.4rem !important;
+    padding-left: 1rem;
   }
 
   .modes {
-    padding-bottom: clamp(6rem, 14vw, 10rem);
-  }
-  .mode-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1px;
-    margin-top: 2.5rem;
-    border: 1px solid var(--line);
-    border-radius: var(--radius-lg);
-    background: var(--line);
-    overflow: hidden;
-  }
-  .mode {
-    padding: clamp(1.5rem, 3vw, 2.5rem);
-    background: var(--bg);
-  }
-  .mode h3 {
-    margin: 0;
-    font-family: var(--font-sans);
-    font-size: 1.35rem;
-    font-weight: 600;
-    letter-spacing: -0.02em;
-  }
-  .mode p:not(.kicker) {
-    margin: 0.75rem 0 0;
-    color: var(--text-2);
-  }
-  .mode code,
-  .install code {
-    font-size: 0.9em;
-  }
-  .note {
-    margin: 1.25rem 0 0;
-    font-size: 0.9rem;
-    color: var(--text-3);
+    gap: 1.5rem;
   }
 
-  .panels {
-    padding-bottom: clamp(6rem, 14vw, 10rem);
-  }
-  .panels-head {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 1rem;
-  }
-  .panels-head .body {
-    margin: 0;
-  }
-  .panel-list {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    margin: 2.5rem 0 0;
-    padding: 0;
-    list-style: none;
-    border-top: 1px solid var(--line);
-  }
-  .panel-list li {
-    border-bottom: 1px solid var(--line);
-  }
-  .panel-list a {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    height: 100%;
-    padding: 1.1rem 1rem 1.1rem 0;
-    color: var(--text);
-  }
-  .panel-list a:hover .p-title,
-  .panel-list a:focus-visible .p-title {
-    color: var(--link);
-  }
-  .p-title {
-    font-weight: 600;
-    letter-spacing: -0.01em;
-  }
-  .p-tag {
-    font-size: 0.9rem;
-    color: var(--text-3);
-  }
-
-  .closing {
-    padding-bottom: clamp(6rem, 14vw, 10rem);
-  }
-
-  .sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-
-  @media (max-width: 860px) {
-    .row,
-    .mode-grid {
+  @media (max-width: 760px) {
+    .modes {
       grid-template-columns: minmax(0, 1fr);
     }
-    .row.flip .copy-col {
-      order: 0;
-    }
+  }
+
+  .modes > div {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    padding: 1.75rem;
+    background: var(--paper);
+  }
+
+  .panel-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    column-gap: 2rem;
+    border-top: 1px solid var(--line);
+  }
+
+  @media (max-width: 960px) {
     .panel-list {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
   }
-  @media (max-width: 520px) {
+
+  @media (max-width: 640px) {
     .panel-list {
       grid-template-columns: minmax(0, 1fr);
     }
-    .install {
-      display: flex;
-    }
-    /* Wrap at spaces instead of scrolling, so the command never reads as truncated. */
-    .install code {
-      white-space: normal;
-      overflow-x: visible;
-    }
+  }
+
+  .panel-list a {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 1.1rem 0.25rem 1.1rem 0;
+    border-bottom: 1px solid var(--line);
+    height: 100%;
+  }
+
+  .p-title {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  .p-tag {
+    color: var(--text-2);
+    font-size: 0.92rem;
+  }
+
+  .panel-list a:hover .p-title {
+    color: var(--link);
+  }
+
+  .closing {
+    text-align: center;
+  }
+
+  .closing .actions {
+    justify-content: center;
   }
 </style>

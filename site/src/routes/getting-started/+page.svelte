@@ -46,9 +46,8 @@ export default defineConfig({
   <title>Getting Started — vite-devtools-svelte</title>
 </svelte:head>
 
-<section class="hero">
-  <div class="grid-bg" aria-hidden="true"></div>
-  <div class="container narrow">
+<section class="band no-border hero">
+  <div class="container">
     <div class="head-meta">
       <span class="eyebrow"><span class="eyebrow-num">§ setup</span> · getting started</span>
       <span class="mono dim">~3 minutes</span>
@@ -92,8 +91,8 @@ export default defineConfig({
   </div>
 </section>
 
-<section class="section-sm">
-  <div class="container narrow doc">
+<section class="band">
+  <div class="container doc">
     <nav class="toc" aria-label="Table of contents">
       <span class="toc-label mono">contents</span>
       <ol>
@@ -205,14 +204,12 @@ export default defineConfig({
 
 <style>
   .hero {
-    position: relative;
-    padding: 4rem 0 3rem;
-    border-bottom: 1px solid var(--line);
-    overflow: hidden;
+    padding-bottom: 3.5rem;
   }
 
   .head-meta {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 1rem;
     margin-bottom: 1rem;
@@ -221,7 +218,7 @@ export default defineConfig({
 
   .head-meta::after {
     content: '';
-    flex: 1;
+    flex: 1 1 4rem;
     height: 1px;
     background: var(--line);
   }
@@ -266,7 +263,7 @@ export default defineConfig({
 
   @media (max-width: 600px) {
     dl {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 
@@ -300,7 +297,7 @@ export default defineConfig({
 
   @media (max-width: 820px) {
     .doc {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
       gap: 1.5rem;
     }
   }
@@ -361,6 +358,10 @@ export default defineConfig({
   .toc-num {
     color: var(--text-3);
     font-size: 0.72rem;
+  }
+
+  .content {
+    min-width: 0;
   }
 
   .step {

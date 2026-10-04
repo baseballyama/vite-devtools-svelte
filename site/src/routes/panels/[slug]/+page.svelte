@@ -1,6 +1,6 @@
 <script lang="ts">
   import { base } from '$app/paths'
-  import { panels } from '$lib/panels'
+  import { panels, taglineParts, taglineText } from '$lib/panels'
   import type { PageProps } from './$types'
 
   let { data }: PageProps = $props()
@@ -12,10 +12,10 @@
 
 <svelte:head>
   <title>{panel.title} — vite-devtools-svelte</title>
-  <meta name="description" content={panel.tagline} />
+  <meta name="description" content={taglineText(panel.tagline)} />
 </svelte:head>
 
-<article class="panel-article">
+<article class="band no-border panel-article">
   <div class="container">
     <a class="back" href="{base}/#panels">
       <span class="back-arrow" aria-hidden="true">←</span>
@@ -32,7 +32,7 @@
       </div>
 
       <h1>{panel.title}</h1>
-      <p class="tagline">{panel.tagline}</p>
+      <p class="tagline">{#each taglineParts(panel.tagline) as part, i (i)}{#if part.code}<code>{part.text}</code>{:else}{part.text}{/if}{/each}</p>
     </header>
 
     <hr class="divider" />
@@ -63,9 +63,6 @@
         {#each panel.images as src, i (src)}
           <figure class="shot">
             <div class="shot-chrome mono">
-              <span class="shot-dot"></span>
-              <span class="shot-dot"></span>
-              <span class="shot-dot"></span>
               <span class="shot-title">{panel.slug}{panel.images.length > 1 ? ` · ${i + 1}` : ''}</span>
             </div>
             <img
@@ -79,6 +76,10 @@
         {/each}
         {#if panel.caption}
           <p class="shot-caption">{panel.caption}</p>
+        {:else if panel.images.length}
+          <p class="shot-caption">
+            Captured from the UI in dev-mock mode with synthetic data, before the reactivity update.
+          </p>
         {/if}
       </aside>
     </div>
@@ -98,7 +99,7 @@
 
 <style>
   .panel-article {
-    padding: 3.5rem 0 5rem;
+    padding-top: 3.5rem;
   }
 
   .back {
@@ -131,6 +132,7 @@
 
   .head-meta {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 1rem;
     margin-bottom: 1rem;
@@ -139,7 +141,7 @@
 
   .head-meta::after {
     content: '';
-    flex: 1;
+    flex: 1 1 4rem;
     height: 1px;
     background: var(--line);
   }
@@ -152,7 +154,6 @@
   .tagline {
     font-family: var(--font-display);
     font-variation-settings: 'opsz' 144, 'SOFT' 80;
-    font-style: italic;
     font-weight: 350;
     font-size: clamp(1.15rem, 1.6vw, 1.5rem);
     color: var(--text-2);
@@ -173,7 +174,7 @@
 
   @media (max-width: 920px) {
     .layout {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
       gap: 2rem;
     }
   }
@@ -212,7 +213,7 @@
   }
 
   .bullet {
-    color: var(--brand);
+    color: var(--link);
     font-size: 0.78rem;
     padding-top: 0.18rem;
     flex-shrink: 0;
@@ -252,23 +253,6 @@
     color: var(--text-3);
   }
 
-  .shot-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--bg-3);
-  }
-
-  .shot-dot:nth-child(1) {
-    background: #ff5f57;
-  }
-  .shot-dot:nth-child(2) {
-    background: #ffbd2e;
-  }
-  .shot-dot:nth-child(3) {
-    background: #27c93f;
-  }
-
   .shot-title {
     margin-left: 0.4rem;
   }
@@ -291,7 +275,7 @@
 
   @media (max-width: 600px) {
     .pager {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 

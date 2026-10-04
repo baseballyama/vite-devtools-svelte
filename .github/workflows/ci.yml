@@ -100,6 +100,24 @@ jobs:
           pnpm -C site exec svelte-kit sync
           pnpm -C examples/sample-app exec svelte-check --workspace ../../site --tsconfig ./tsconfig.json
 
+      # Screenshots of the built site (desktop / mobile, dark / light) with
+      # QA: links and anchors, overflow, contrast, one h1, alt text, focus
+      # styles, reduced motion, copy buttons, privacy. Any problem on the
+      # built site fails the step. The live site ('before') and vite.dev
+      # ('reference') are captured best effort for comparison only.
+      - name: Install Chromium (workspace playwright-core)
+        run: pnpm exec playwright-core install --with-deps chromium
+
+      - name: Site screenshots + QA
+        run: node site/scripts/capture.mjs --out=site-shots --build=site/build
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: site-shots
+          path: site-shots/
+          retention-days: 7
+
   build-playground:
     name: Playground production build
     runs-on: ubuntu-latest

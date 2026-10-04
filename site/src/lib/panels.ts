@@ -195,3 +195,10 @@ export const panels: Panel[] = [
     images: ['v2-panel-assets.jpg'],
   },
 ]
+
+/** A tagline split at its `code` spans, for rendering without HTML. */
+export const taglineParts = (s: string) =>
+  s.split('`').map((text, i) => ({ text, code: i % 2 === 1 }))
+
+/** The tagline as plain text (for meta tags). */
+export const taglineText = (s: string) => s.replaceAll('`', '')

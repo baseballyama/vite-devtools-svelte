@@ -19,11 +19,6 @@
 
 <div class="codeblock">
   <header class="codeblock-head">
-    <span class="dots" aria-hidden="true">
-      <span></span>
-      <span></span>
-      <span></span>
-    </span>
     {#if filename}
       <span class="filename mono">{filename}</span>
     {:else}
@@ -73,7 +68,7 @@
   .codeblock {
     position: relative;
     margin: 0 0 1.5rem;
-    border-radius: var(--radius);
+    border-radius: var(--radius-lg);
     border: 1px solid var(--line);
     overflow: hidden;
     background: var(--code-bg);
@@ -88,32 +83,9 @@
     background: var(--paper-2);
   }
 
-  .dots {
-    display: inline-flex;
-    gap: 5px;
-  }
-
-  .dots span {
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    background: var(--bg-3);
-  }
-
-  .dots span:nth-child(1) {
-    background: #ff5f57;
-  }
-  .dots span:nth-child(2) {
-    background: #ffbd2e;
-  }
-  .dots span:nth-child(3) {
-    background: #27c93f;
-  }
-
   .filename {
     font-size: 0.78rem;
     color: var(--text-2);
-    margin-left: 0.4rem;
     flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
