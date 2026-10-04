@@ -1354,7 +1354,8 @@ async function tier2(p, getSrv, restart, app) {
           timeout: 15_000,
         })
       } catch (e) {
-        throw new Error(`HMR revert not applied: ${e.message} ${JSON.stringify(how())}`)
+        const latest = { vite: app.viteLog.slice(-5), navigations: app.navigations() - navFrom }
+        throw new Error(`HMR revert not applied: ${e.message} ${JSON.stringify(latest)}`)
       }
       return result
     },
