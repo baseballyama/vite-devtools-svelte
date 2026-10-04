@@ -669,7 +669,9 @@ export async function runtimeState(page) {
       instances: size(dt._instances),
       reactiveNodes: size(dt._reactiveNodes),
       profiles: size(dt._profiles),
-      timeline: size(dt._stateTimeline),
+      // raw buffer, not the ring a reader sees (bulk-trimmed runtimes hold up
+      // to 2 x 500 between reads): diagnostic only, not a metric
+      timelineRaw: size(dt._stateTimeline),
       stateSnapshots: size(dt._stateSnapshots),
       // `_sampling` is null/false when off and an object when on; only a
       // runtime without the field at all reports 'n/a'
