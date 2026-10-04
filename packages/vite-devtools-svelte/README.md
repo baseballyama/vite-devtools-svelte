@@ -2,7 +2,7 @@
 
 Svelte DevTools for Vite, built on [Devframe](https://devfra.me/). Provides 15 specialized panels for debugging, profiling, and inspecting Svelte/SvelteKit applications. The same tool runs **standalone** at `/.svelte-devtools/` on your dev server, or **inside the [Vite DevTools](https://devtools.vite.dev/) dock** when `@vitejs/devtools` is installed.
 
-> **Status:** Early development. APIs may change. This README describes the **upcoming release** (Devframe host; not yet published — see the repository's `.changeset/`). The latest version on npm, **0.3.0**, still renders only inside `@vitejs/devtools`; see [Upgrading from 0.3.x](#upgrading-from-03x).
+> **Status:** Early development. APIs may change. This README describes **0.4.0** (Devframe host: standalone or inside the Vite DevTools dock). 0.3.x rendered only inside `@vitejs/devtools`; see [Upgrading from 0.3.x](#upgrading-from-03x).
 
 ## Features
 
@@ -222,7 +222,7 @@ The plugin is **development-only** — every sub-plugin is `apply: 'serve'`, so 
 
 The public API is unchanged — still `svelteDevtools({ componentTracking })`, and the same 15 panels. MCP keeps every existing tool and adds four reactivity tools (see [AI access](#ai-access-mcp)). What changed is how the UI is hosted and how it talks to the dev server:
 
-|           | 0.3.x                                                                                   | upcoming release                                                                                                     |
+|           | 0.3.x                                                                                   | 0.4.0                                                                                                                |
 | --------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | Host      | panels only rendered inside `@vitejs/devtools` (required)                               | standalone at `/.svelte-devtools/`, or inside the Vite DevTools dock when `@vitejs/devtools` is installed (optional) |
 | Transport | DevTools Kit RPC + HTTP fallback (`/__svelte-devtools/rpc`, `/__svelte-devtools/asset`) | one Devframe WebSocket RPC (SSE in Vite middleware mode); the HTTP endpoints are removed                             |
@@ -237,7 +237,7 @@ Static assets in the Assets panel are now served by Vite itself (their public UR
 - **Deep in-place mutations of very large `$state` values** are detected after about 1 s (reassignments and primitive changes are picked up on the next 200 ms tick).
 - **Several app tabs:** the panels show the tab that pushed most recently (up to 4 page loads are tracked); there is no per-tab selector yet.
 - **Components tree selection** follows the same instance while the page stays loaded; after a reload, or when an instance is replaced (e.g. `{#key}`, HMR), it is matched by its position in the tree instead. Instances beyond the 50 000 cap are counted but cannot be selected.
-- **Components added after the first render** (e.g. new `{#each}` rows) are placed under their parent using Svelte internals verified on Svelte 5.56.8; with a different internal layout they would appear as separate top-level entries instead.
+- **Components added after the first render** (e.g. new `{#each}` rows) are placed under their parent using Svelte internals (checked in a browser on Svelte 5.56.8; the CI compatibility profiles run Svelte 5.57.1); with a different internal layout they would appear as separate top-level entries instead.
 - **Reactivity:** which write changed a state is not recorded (the panel says "Cause: Not recorded"); full value inspection and per-signal history are not available (values are shown as bounded summaries; sampled changes are in the State timeline). Only state created during component init is tracked — module-level `.svelte.ts` state is not. A component's top-level `$effect` is deferred by Svelte until mount, so it appears as a node without dependencies (and may disappear after garbage collection): the graph shows what the runtime observed, not every dependency. Render profiles are still sent as a bounded full tail rather than deltas, and behaviour at very large scale (tens of thousands of components) has not been measured.
 - **Restarts in Vite middleware mode** dispose the DevTools via Vite's `closeServer` hook, which is why `vite ^8.3.2` is required.
 
