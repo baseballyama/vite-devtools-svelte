@@ -47,4 +47,3 @@ export function captureInfo(interval?: number, when?: () => boolean) {
     when,
   })
 }
-

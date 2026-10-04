@@ -4,7 +4,7 @@
  */
 import { panels, type PanelId } from './panels.js'
 
-const ids = new Set<string>(panels.map((p) => p.id))
+const ids = new Set<string>(panels.map(p => p.id))
 
 function parse(): PanelId {
   const id = location.hash.replace(/^#\/?/, '').split(/[/?]/)[0]

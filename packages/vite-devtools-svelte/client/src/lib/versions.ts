@@ -25,10 +25,12 @@ function fetchVersions(): Promise<DatasetVersions | null> {
 }
 
 /** Version getter for `resource({ version })`; `undefined` = unknown, always refetch. */
-export function datasetVersion(...keys: DatasetKey[]): (() => Promise<string | undefined>) | undefined {
+export function datasetVersion(
+  ...keys: DatasetKey[]
+): (() => Promise<string | undefined>) | undefined {
   if (!versionsSupported) return undefined
   return async () => {
     const v = await fetchVersions()
-    return v ? keys.map((k) => v[k]).join(':') : undefined
+    return v ? keys.map(k => v[k]).join(':') : undefined
   }
 }

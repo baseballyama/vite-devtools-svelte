@@ -40,7 +40,7 @@ const idOf = (n: Node) => n.c.id
 const keyOf = (n: Node) => n.key
 const app = (rowIds: number[], extra: Inst[] = []): Inst[] => [
   { id: 1, name: 'App', parentId: null },
-  ...rowIds.map((id) => ({ id, name: 'Row', parentId: 1 })),
+  ...rowIds.map(id => ({ id, name: 'Row', parentId: 1 })),
   ...extra,
 ]
 const remap1 = (key: string, prev: AnchorIndex<Node>, next: AnchorIndex<Node>) =>
@@ -73,7 +73,10 @@ describe('tree anchors (review U4b)', () => {
   })
 
   it('HMR remount (all ids fresh, same order) falls back to the same path', () => {
-    const next = snapshot([{ id: 2, name: 'App', parentId: null }, ...[20, 21, 22, 23, 24].map((id) => ({ id, name: 'Row', parentId: 2 }))])
+    const next = snapshot([
+      { id: 2, name: 'App', parentId: null },
+      ...[20, 21, 22, 23, 24].map(id => ({ id, name: 'Row', parentId: 2 })),
+    ])
     const key = remap1(selected, prev, next)
     expect(key).toBe(selected)
     expect(next.byKey.get(key!)!.c.id).toBe(23)
@@ -98,7 +101,11 @@ describe('tree anchors (review U4b)', () => {
 
     // earlier sibling removed → same instances, shifted paths
     const shifted = snapshot(withKids([11, 12, 13, 14]))
-    expect(remapKeys(expanded, p, shifted, idOf, keyOf)).toEqual(['App#0', 'App#0/Row#0', 'App#0/Row#2'])
+    expect(remapKeys(expanded, p, shifted, idOf, keyOf)).toEqual([
+      'App#0',
+      'App#0/Row#0',
+      'App#0/Row#2',
+    ])
 
     // expanded instance 13 removed → dropped; 14 (shifted into Row#3) stays collapsed
     const removed = snapshot(withKids([10, 11, 12, 14], true))
@@ -107,7 +114,7 @@ describe('tree anchors (review U4b)', () => {
     // HMR: fresh ids, same structure → same paths
     const hmr = snapshot([
       { id: 2, name: 'App', parentId: null },
-      ...[20, 21, 22, 23, 24].map((id) => ({ id, name: 'Row', parentId: 2 })),
+      ...[20, 21, 22, 23, 24].map(id => ({ id, name: 'Row', parentId: 2 })),
       { id: 211, name: 'Cell', parentId: 21 },
       { id: 231, name: 'Cell', parentId: 23 },
     ])
@@ -116,7 +123,10 @@ describe('tree anchors (review U4b)', () => {
 })
 
 describe('tree anchors across app page loads (review U4b epoch)', () => {
-  const at = (epoch: string | null, list: Inst[]): EpochIndex<Node> => ({ ...snapshot(list), epoch })
+  const at = (epoch: string | null, list: Inst[]): EpochIndex<Node> => ({
+    ...snapshot(list),
+    epoch,
+  })
   const across = (key: string, prev: EpochIndex<Node>, next: EpochIndex<Node>) =>
     remapAcross([key], prev, next, idOf, keyOf)[0] ?? null
   const selected = 'App#0/Row#3' // id 13 in epoch A

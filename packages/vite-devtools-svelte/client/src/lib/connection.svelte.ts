@@ -7,7 +7,12 @@
  */
 import * as rpc from './rpc.js'
 
-export type ConnectionStatus = 'connecting' | 'connected' | 'unauthorized' | 'disconnected' | 'error'
+export type ConnectionStatus =
+  | 'connecting'
+  | 'connected'
+  | 'unauthorized'
+  | 'disconnected'
+  | 'error'
 export interface ConnectionState {
   status: ConnectionStatus
   host: 'standalone' | 'vite-devtools' | 'unknown'
@@ -25,10 +30,12 @@ const api = rpc as unknown as ConnectionApi
 
 export const connectionSupported = typeof api.onConnectionState === 'function'
 
-let state = $state<ConnectionState>(api.getConnectionState?.() ?? { status: 'connected', host: 'unknown' })
+let state = $state<ConnectionState>(
+  api.getConnectionState?.() ?? { status: 'connected', host: 'unknown' },
+)
 
 if (connectionSupported) {
-  api.onConnectionState!((s) => {
+  api.onConnectionState!(s => {
     state = s
   })
 }

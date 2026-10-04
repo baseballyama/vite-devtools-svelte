@@ -37,7 +37,17 @@ export function flattenTree<N>(
         const key = access.key(node)
         const kids = access.children(node)
         const isOpen = kids.length > 0 && expanded.has(key)
-        out.push({ node, key, depth, parentKey, hasChildren: kids.length > 0, expanded: isOpen, match: false, posinset: 0, setsize: 0 })
+        out.push({
+          node,
+          key,
+          depth,
+          parentKey,
+          hasChildren: kids.length > 0,
+          expanded: isOpen,
+          match: false,
+          posinset: 0,
+          setsize: 0,
+        })
         if (isOpen) walk(kids, depth + 1, key)
       }
     }
@@ -53,7 +63,17 @@ export function flattenTree<N>(
     const kids = access.children(node)
     const self = filter(node)
     const at = out.length
-    const row: TreeRow<N> = { node, key, depth, parentKey, hasChildren: kids.length > 0, expanded: false, match: self, posinset: 0, setsize: 0 }
+    const row: TreeRow<N> = {
+      node,
+      key,
+      depth,
+      parentKey,
+      hasChildren: kids.length > 0,
+      expanded: false,
+      match: self,
+      posinset: 0,
+      setsize: 0,
+    }
     out.push(row)
     let any = false
     for (const k of kids) if (visit(k, depth + 1, key)) any = true

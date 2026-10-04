@@ -91,7 +91,13 @@ export function resource<T>(fetcher: () => Promise<T>, opts: ResourceOptions<T>)
         const next = await fetcher()
         lastVersion = version
         if (opts.equals) {
-          if (!opts.equals(untrack(() => data), next)) data = next
+          if (
+            !opts.equals(
+              untrack(() => data),
+              next,
+            )
+          )
+            data = next
         } else {
           const key = contentKey(next)
           if (key === null || key !== lastKey) {

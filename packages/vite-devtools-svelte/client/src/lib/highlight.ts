@@ -5,7 +5,9 @@
 type Tok = { t: string; c?: string }
 
 const JS_KW = new Set(
-  'const,let,var,function,return,if,else,for,while,do,switch,case,break,continue,new,this,typeof,instanceof,void,delete,throw,try,catch,finally,class,extends,super,import,export,from,default,async,await,yield,of,in'.split(','),
+  'const,let,var,function,return,if,else,for,while,do,switch,case,break,continue,new,this,typeof,instanceof,void,delete,throw,try,catch,finally,class,extends,super,import,export,from,default,async,await,yield,of,in'.split(
+    ',',
+  ),
 )
 const JS_LIT = new Set('true,false,null,undefined,NaN,Infinity'.split(','))
 const RUNES = new Set(['$state', '$derived', '$effect', '$props', '$inspect', '$bindable', '$host'])
@@ -142,7 +144,14 @@ function tokCSS(code: string): Tok[] {
   const tr = code.trimStart()
   const ind = code.slice(0, code.length - tr.length)
   const pm = tr.match(/^([\w-]+)(\s*:\s*)(.+?)(;?\s*)$/)
-  if (pm) return [{ t: ind }, { t: pm[1], c: 'hl-cp' }, { t: pm[2] }, { t: pm[3], c: 'hl-cv' }, { t: pm[4] }]
+  if (pm)
+    return [
+      { t: ind },
+      { t: pm[1], c: 'hl-cp' },
+      { t: pm[2] },
+      { t: pm[3], c: 'hl-cv' },
+      { t: pm[4] },
+    ]
   const sm = tr.match(/^([^{]+)(\s*\{)\s*$/)
   if (sm) return [{ t: ind }, { t: sm[1], c: 'hl-cs' }, { t: sm[2] }]
   return [{ t: code }]
@@ -157,7 +166,7 @@ function render(toks: Tok[]): string {
 /** Highlight a .svelte file line by line, tracking <script>/<style> blocks. */
 export function highlightSvelte(lines: string[]): string[] {
   let sec: 'template' | 'script' | 'style' = 'template'
-  return lines.map((line) => {
+  return lines.map(line => {
     const tr = line.trim()
     if (tr.startsWith('<script')) {
       if (!tr.includes('</script>')) sec = 'script'
@@ -182,5 +191,5 @@ export function highlightSvelte(lines: string[]): string[] {
 }
 
 export function highlightJS(lines: string[]): string[] {
-  return lines.map((l) => render(tokJS(l)))
+  return lines.map(l => render(tokJS(l)))
 }

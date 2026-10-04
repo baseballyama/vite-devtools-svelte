@@ -1,11 +1,13 @@
 /** Case-insensitive substring matcher shared by every search field. */
-export function matcher(query: string): ((...fields: (string | undefined | null)[]) => boolean) | null {
+export function matcher(
+  query: string,
+): ((...fields: (string | undefined | null)[]) => boolean) | null {
   const q = query.trim().toLowerCase()
   if (!q) return null
   const terms = q.split(/\s+/)
   return (...fields) => {
     const hay = fields.filter(Boolean).join('\n').toLowerCase()
-    return terms.every((t) => hay.includes(t))
+    return terms.every(t => hay.includes(t))
   }
 }
 

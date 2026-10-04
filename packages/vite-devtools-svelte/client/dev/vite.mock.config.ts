@@ -43,7 +43,7 @@ function mockBackend(scale: number): Plugin {
 
   const http: Connect.NextHandleFunction = (req, res) => {
     let body = ''
-    req.on('data', (c) => (body += c))
+    req.on('data', c => (body += c))
     req.on('end', async () => {
       try {
         const { method, args } = JSON.parse(body || '{}')
@@ -74,7 +74,9 @@ function mockBackend(scale: number): Plugin {
       importMetaUrl: import.meta.url,
       setup(ctx) {
         for (const [name, handler] of Object.entries(handlers)) {
-          ctx.rpc.register(defineRpcFunction({ name, type: rpcType(name), jsonSerializable: true, handler }))
+          ctx.rpc.register(
+            defineRpcFunction({ name, type: rpcType(name), jsonSerializable: true, handler }),
+          )
         }
       },
     })
