@@ -8,6 +8,7 @@
 #           + DevTools UI latencies. Harness check; n = 1, no effect conclusions.
 #   profile e0d1e51 OPEN with CDP + node CPU profiles (mode "profiled"; its
 #           timings are not compared with latency runs)
+#   reactive reduced reactive fixture (separate axis), OFF / CLOSED / OPEN, n = 1
 #   pairA   ee3a716 vs dc60aa2 (code delta, same deps)    — later run
 #   pairB   dc60aa2 vs e0d1e51 (deps delta, same source)  — later run
 set -euo pipefail
@@ -81,6 +82,14 @@ case "$PHASE" in
     node perf/run-paired.mjs --order=F --parts=A --scales=1000:none --cpu-profile=1 \
       --label=profile-S1k-open $GATE --max-min=6 2>&1 | tee "$OUT/profile.log"
     step "profiled OPEN item done (mode profiled)"
+    ;;
+  reactive)
+    # Separate axis: reduced reactive-state fixture (treeDepth 3 ~ 6 000 tracked
+    # nodes, not the 50 800-node default), OFF / CLOSED / OPEN, n = 1.
+    manifest "$ROOT" e0d1e51-branch
+    node perf/reactive-smoke.mjs --treeDepth=3 --gate=$(nproc):50 --linux-gate=2048:10 \
+      --gate-wait=180 --max-min=9 2>&1 | tee "$OUT/reactive.log"
+    step "reactive smoke done (mode latency)"
     ;;
   *)
     echo "phase $PHASE not enabled in this run" >&2
