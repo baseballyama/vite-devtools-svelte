@@ -115,11 +115,12 @@ function routeSegments(i, rand) {
 }
 
 // Files under playground/.temp resolve playground/tsconfig.json, which extends
-// playground/.svelte-kit/tsconfig.json — absent in a fresh checkout. Generate
-// it (gitignored) the same way `svelte-kit sync` does in a normal dev flow.
+// playground/node_modules/$app/tsconfig.json — absent in a fresh checkout.
+// Generate it (gitignored) the same way `svelte-kit sync` does in a normal dev
+// flow.
 export function ensurePlaygroundSync(repo = repoRoot) {
   const playground = path.join(repo, 'playground')
-  if (fs.existsSync(path.join(playground, '.svelte-kit/tsconfig.json'))) return false
+  if (fs.existsSync(path.join(playground, 'node_modules/$app/tsconfig.json'))) return false
   const res = spawnSync(
     process.execPath,
     [path.join(playground, 'node_modules/@sveltejs/kit/svelte-kit.js'), 'sync'],
@@ -143,6 +144,7 @@ export function generate(opts = DEFAULTS) {
         name: 'perf-large-app',
         private: true,
         type: 'module',
+        imports: { '#lib/*': './src/lib/*' },
         devDependencies: Object.fromEntries(
           [
             '@sveltejs/kit',
@@ -182,19 +184,13 @@ export default defineConfig({
     path.join(out, 'tsconfig.json'),
     JSON.stringify(
       {
-        extends: './.svelte-kit/tsconfig.json',
-        compilerOptions: { strict: true, skipLibCheck: true, moduleResolution: 'bundler' },
+        extends: '$app/tsconfig',
+        include: ['src', '*'],
+        compilerOptions: { strict: true },
       },
       null,
       2,
     ) + '\n',
-  )
-
-  write(
-    path.join(out, 'svelte.config.js'),
-    `/** @type {import('@sveltejs/kit').Config} */
-export default { kit: {} }
-`,
   )
 
   write(
@@ -292,7 +288,7 @@ export default { kit: {} }
   write(
     path.join(out, 'src/routes/+page.svelte'),
     `<script lang="ts">
-  import C0000 from '$lib/components/gen/C0000.svelte'
+  import C0000 from '#lib/components/gen/C0000.svelte'
 </script>
 
 <h1>perf large app</h1>
@@ -306,8 +302,8 @@ export default { kit: {} }
     path.join(out, 'src/routes/bench/+page.svelte'),
     `<script lang="ts">
   import { tick } from 'svelte'
-  import Row from '$lib/bench/Row.svelte'
-  import Tree from '$lib/bench/Tree.svelte'
+  import Row from '#lib/bench/Row.svelte'
+  import Tree from '#lib/bench/Tree.svelte'
 
   let rows = $state<{ id: number; value: number }[]>([])
   let tree = $state<{ depth: number; breadth: number } | null>(null)
@@ -404,7 +400,7 @@ export default { kit: {} }
     write(
       path.join(dir, '+page.svelte'),
       `<script lang="ts">
-  import C from '$lib/components/gen/C${pad(comp)}.svelte'
+  import C from '#lib/components/gen/C${pad(comp)}.svelte'
   let { data } = $props()
 </script>
 

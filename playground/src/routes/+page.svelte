@@ -1,11 +1,11 @@
 <script>
-  import Counter from '$lib/components/Counter.svelte'
-  import TodoList from '$lib/components/TodoList.svelte'
-  import Timer from '$lib/components/Timer.svelte'
-  import TemperatureConverter from '$lib/components/TemperatureConverter.svelte'
-  import UserSearch from '$lib/components/UserSearch.svelte'
-  import DynamicList from '$lib/components/DynamicList.svelte'
-  import ThemeSwitcher from '$lib/components/ThemeSwitcher.svelte'
+  import Counter from '#lib/components/Counter.svelte'
+  import TodoList from '#lib/components/TodoList.svelte'
+  import Timer from '#lib/components/Timer.svelte'
+  import TemperatureConverter from '#lib/components/TemperatureConverter.svelte'
+  import UserSearch from '#lib/components/UserSearch.svelte'
+  import DynamicList from '#lib/components/DynamicList.svelte'
+  import ThemeSwitcher from '#lib/components/ThemeSwitcher.svelte'
 
   let showTimer = $state(true)
   let showDynamic = $state(true)

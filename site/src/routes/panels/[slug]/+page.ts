@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit'
-import { panels } from '$lib/panels'
+import { panels } from '#lib/panels.ts'
 import type { PageLoad } from './$types'
 
 export const prerender = true

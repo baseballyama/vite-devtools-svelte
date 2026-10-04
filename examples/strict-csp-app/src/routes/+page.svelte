@@ -26,7 +26,7 @@
 
   <h2>適用されている CSP</h2>
   <p>
-    詳しくは <code>svelte.config.js</code> を参照。<code>script-src 'self'</code>{' '}
+    詳しくは <code>vite.config.ts</code> の <code>csp</code> オプションを参照。<code>script-src 'self'</code>{' '}
     で nonce のない外部 script は全て弾かれ、<code>img-src 'self' data:</code>{' '}
     で外部画像取得もブロックされる。
   </p>

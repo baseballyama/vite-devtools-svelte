@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { browser, dev } from '$app/environment'
+  import { browser, dev } from '$app/env'
 
   if (dev && browser) {
     // Issue #51 で報告者が必要と書いていたワークアラウンド。

@@ -1,26 +1,27 @@
 <script lang="ts">
-  import { base } from '$app/paths'
+  import { resolve } from '$app/paths'
   import { page } from '$app/state'
   import SvelteMark from './SvelteMark.svelte'
   import ThemeToggle from './ThemeToggle.svelte'
   import { pkgVersion } from './version'
 
+  // `route` is the route ID used for the active state (null: in-page anchor).
   const links = [
-    { href: '/getting-started', label: 'Get started' },
-    { href: '/mcp', label: 'MCP' },
-    { href: '/#panels', label: 'Panels' },
+    { route: '/getting-started', href: resolve('/getting-started'), label: 'Get started' },
+    { route: '/mcp', href: resolve('/mcp'), label: 'MCP' },
+    { route: null, href: resolve('/#panels'), label: 'Panels' },
   ]
 
-  function isActive(href: string): boolean {
-    if (href.includes('#')) return false
-    const path = page.url.pathname.replace(base, '') || '/'
-    return path === href || path.startsWith(href + '/')
+  function isActive(route: string | null): boolean {
+    if (!route) return false
+    const id = page.route.id ?? ''
+    return id === route || id.startsWith(route + '/')
   }
 </script>
 
 <header class="site-header">
   <div class="row">
-    <a class="brand" href="{base}/" aria-label="vite-devtools-svelte home">
+    <a class="brand" href={resolve('/')} aria-label="vite-devtools-svelte home">
       <SvelteMark size={26} />
       <span class="brand-name">vite-devtools-svelte</span>
       <span class="version mono">v{pkgVersion}</span>
@@ -31,9 +32,9 @@
         {#each links as link (link.href)}
           <li>
             <a
-              href="{base}{link.href}"
-              class:active={isActive(link.href)}
-              aria-current={isActive(link.href) ? 'page' : undefined}
+              href={link.href}
+              class:active={isActive(link.route)}
+              aria-current={isActive(link.route) ? 'page' : undefined}
             >
               {link.label}
             </a>

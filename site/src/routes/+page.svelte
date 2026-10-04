@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { base } from '$app/paths'
-  import { panels, taglineParts } from '$lib/panels'
-  import { MCP_TOOL_COUNT } from '$lib/mcp-tools'
-  import InstallTabs from '$lib/InstallTabs.svelte'
+  import { asset, resolve } from '$app/paths'
+  import { image } from '#lib/paths.ts'
+  import { panels, taglineParts } from '#lib/panels.ts'
+  import { MCP_TOOL_COUNT } from '#lib/mcp-tools.ts'
+  import InstallTabs from '#lib/InstallTabs.svelte'
 
   const repo = 'https://github.com/baseballyama/vite-devtools-svelte'
 
@@ -69,7 +70,7 @@
         dev server.
       </p>
       <div class="actions">
-        <a class="btn btn-primary" href="{base}/getting-started">Get started</a>
+        <a class="btn btn-primary" href={resolve('/getting-started')}>Get started</a>
         <a class="btn btn-secondary" href={repo} target="_blank" rel="noreferrer noopener">
           View on GitHub
         </a>
@@ -95,7 +96,7 @@
     <!-- The theme is set before first paint; the hidden variant is display:none. -->
     <img
       class="only-dark"
-      src="{base}/images/home-components-dark.jpg"
+      src={asset('images/home-components-dark.jpg')}
       width="1600"
       height="1000"
       alt="Components panel: a filtered live component tree of a large app with an inspector showing ancestors, children and imports"
@@ -103,7 +104,7 @@
     />
     <img
       class="only-light"
-      src="{base}/images/home-components-light.jpg"
+      src={asset('images/home-components-light.jpg')}
       width="1600"
       height="1000"
       alt="Components panel in the light theme with the component inspector open"
@@ -128,7 +129,7 @@
       <li>
         <h3>{f.title}</h3>
         <p>{f.body}</p>
-        <a href="{base}/panels/{f.slug}" aria-label="{f.title} panel">Panel details <span aria-hidden="true">→</span></a>
+        <a href={resolve('/panels/[slug]', { slug: f.slug })} aria-label="{f.title} panel">Panel details <span aria-hidden="true">→</span></a>
       </li>
     {/each}
   </ul>
@@ -147,11 +148,11 @@
       <li>Edges mean “can affect”. Which write changed a value is not recorded.</li>
       <li>After a page reload, old component ids are refused instead of guessed.</li>
     </ul>
-    <a class="more" href="{base}/panels/reactive">The Reactivity panel <span aria-hidden="true">→</span></a>
+    <a class="more" href={resolve('/panels/[slug]', { slug: 'reactive' })}>The Reactivity panel <span aria-hidden="true">→</span></a>
   </div>
   <figure class="split-shot shot">
     <img
-      src="{base}/images/reactivity-component.png"
+      src={asset('images/reactivity-component.png')}
       width="1440"
       height="900"
       alt="Local graph of ReactivePriceChart with taxRate selected; the inspector says Cause: Not recorded"
@@ -167,7 +168,7 @@
     {#each showcase as s (s.img)}
       <article>
         <figure class="shot">
-          <img src="{base}/images/{s.img}" width="1200" height="750" alt={s.alt} loading="lazy" decoding="async" />
+          <img src={image(s.img)} width="1200" height="750" alt={s.alt} loading="lazy" decoding="async" />
         </figure>
         <h3>{s.title}</h3>
         <p class="muted">{s.body}</p>
@@ -185,7 +186,7 @@
       The dev server also serves an MCP endpoint with {MCP_TOOL_COUNT} read tools. Claude Code and
       other MCP clients get the same data as the panels, and every answer says what it covers.
     </p>
-    <a class="btn btn-secondary" href="{base}/mcp">Read the MCP guide</a>
+    <a class="btn btn-secondary" href={resolve('/mcp')}>Read the MCP guide</a>
   </div>
   <div class="terminal" role="img" aria-label="Terminal output: the dev server prints a claude mcp add command with the URL and a token">
     <p class="t-dim">$ npm run dev</p>
@@ -226,7 +227,7 @@
   <ul class="panel-list">
     {#each panels as p (p.slug)}
       <li>
-        <a href="{base}/panels/{p.slug}">
+        <a href={resolve('/panels/[slug]', { slug: p.slug })}>
           <span class="p-title">{p.title}</span>
           <span class="p-tag">
             {#each taglineParts(p.tagline) as part, i (i)}{#if part.code}<code>{part.text}</code>{:else}{part.text}{/if}{/each}
@@ -240,7 +241,7 @@
 <section class="band closing">
   <h2>Try it in your dev server.</h2>
   <div class="actions">
-    <a class="btn btn-primary" href="{base}/getting-started">Get started</a>
+    <a class="btn btn-primary" href={resolve('/getting-started')}>Get started</a>
     <a class="btn btn-secondary" href={repo} target="_blank" rel="noreferrer noopener">View on GitHub</a>
   </div>
 </section>

@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { base } from '$app/paths'
-  import { panels, taglineParts, taglineText } from '$lib/panels'
+  import { resolve } from '$app/paths'
+  import { image } from '#lib/paths.ts'
+  import { panels, taglineParts, taglineText } from '#lib/panels.ts'
   import type { PageProps } from './$types'
 
   let { data }: PageProps = $props()
@@ -17,7 +18,7 @@
 
 <article class="band no-border panel-article">
   <div class="container">
-    <a class="back" href="{base}/#panels">
+    <a class="back" href={resolve('/#panels')}>
       <span class="back-arrow" aria-hidden="true">←</span>
       All panels
     </a>
@@ -54,7 +55,7 @@
         <h2 class="content-h2">Try it</h2>
         <p>
           Add the plugin to your project
-          (<a class="inline-link" href="{base}/getting-started">Getting Started</a>)
+          (<a class="inline-link" href={resolve('/getting-started')}>Getting Started</a>)
           to use this panel in your own dev server.
         </p>
       </section>
@@ -66,7 +67,7 @@
               <span class="shot-title">{panel.slug}{panel.images.length > 1 ? ` · ${i + 1}` : ''}</span>
             </div>
             <img
-              src="{base}/images/{src}"
+              src={image(src)}
               alt={`${panel.title} screenshot ${i + 1}`}
               width="1200"
               height="750"
@@ -85,11 +86,11 @@
     </div>
 
     <nav class="pager" aria-label="Panel navigation">
-      <a class="pager-btn" href="{base}/panels/{prev.slug}">
+      <a class="pager-btn" href={resolve('/panels/[slug]', { slug: prev.slug })}>
         <span class="pager-label mono">← previous</span>
         <span class="pager-title">{prev.title}</span>
       </a>
-      <a class="pager-btn right" href="{base}/panels/{next.slug}">
+      <a class="pager-btn right" href={resolve('/panels/[slug]', { slug: next.slug })}>
         <span class="pager-label mono">next →</span>
         <span class="pager-title">{next.title}</span>
       </a>
