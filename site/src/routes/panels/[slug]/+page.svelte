@@ -76,6 +76,10 @@
         {/each}
         {#if panel.caption}
           <p class="shot-caption">{panel.caption}</p>
+        {:else if panel.images.length}
+          <p class="shot-caption">
+            Captured from the UI in dev-mock mode with synthetic data, before the reactivity update.
+          </p>
         {/if}
       </aside>
     </div>

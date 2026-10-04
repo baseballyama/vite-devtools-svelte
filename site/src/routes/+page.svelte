@@ -111,7 +111,8 @@
     />
     <figcaption>
       Components: the live tree stays virtualized on large apps and tells you when only part of it
-      was captured.
+      was captured. Captured from the UI in dev-mock mode with synthetic data, before the
+      reactivity update.
     </figcaption>
   </figure>
 </section>
@@ -170,6 +171,7 @@
         </figure>
         <h3>{s.title}</h3>
         <p class="muted">{s.body}</p>
+        <p class="provenance">Dev-mock mode with synthetic data, before the reactivity update.</p>
       </article>
     {/each}
   </div>
@@ -459,6 +461,11 @@
 
   .pair figure {
     margin: 0 0 1.25rem;
+  }
+
+  .provenance {
+    font-size: 0.85rem;
+    color: var(--text-3);
   }
 
   .terminal {

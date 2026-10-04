@@ -92,6 +92,7 @@
 
   .cmd {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 1rem;
     padding: 1.1rem 1.25rem;
@@ -105,8 +106,9 @@
     padding: 0;
     font-size: 0.92rem;
     color: var(--text);
-    overflow-x: auto;
-    white-space: nowrap;
+    /* Wrap at spaces on narrow screens; never clip the command. */
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   .prompt {

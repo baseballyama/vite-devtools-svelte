@@ -257,6 +257,18 @@ const inPageChecks = () => {
     anchors,
     ids: [...document.querySelectorAll('[id]')].map(e => e.id),
     imagesWithoutAlt: [...document.images].filter(i => !i.hasAttribute('alt')).length,
+    // Code that is cut off: wider than its box without a scroll container of its own.
+    clipped: [...document.querySelectorAll('code, pre, kbd, input')]
+      .filter(e => {
+        if (!e.checkVisibility?.() || e.clientWidth === 0) return false
+        if (e.scrollWidth <= e.clientWidth + 1) return false
+        const ox = getComputedStyle(e).overflowX
+        if (ox === 'auto' || ox === 'scroll') return false
+        const pre = e.closest('pre')
+        return !(pre && pre !== e && ['auto', 'scroll'].includes(getComputedStyle(pre).overflowX))
+      })
+      .slice(0, 8)
+      .map(e => `${e.tagName.toLowerCase()}: ${e.textContent.trim().slice(0, 40)}`),
     text: document.body.innerText + '\n' + [...document.images].map(i => i.alt).join('\n'),
     h1: document.querySelectorAll('h1').length,
   }
@@ -294,9 +306,63 @@ try {
       for (const theme of ['dark', 'light']) {
         const { ctx, page } = await newPage(size, theme)
         const url = origin + BASE + (p.path === '/' ? '/' : p.path)
+        // Broken assets and errors: same-origin responses >= 400, console
+        // errors and uncaught page errors.
+        const badResponses = []
+        const errors = []
+        page.on('response', resp => {
+          if (resp.url().startsWith(origin) && resp.status() >= 400)
+            badResponses.push(`${resp.status()} ${resp.url().slice(origin.length)}`)
+        })
+        page.on('requestfailed', req => {
+          if (req.url().startsWith(origin))
+            badResponses.push(`failed ${req.url().slice(origin.length)}`)
+        })
+        page.on('console', m => m.type() === 'error' && errors.push(scrub(m.text()).slice(0, 160)))
+        page.on('pageerror', e => errors.push(scrub(e.message).slice(0, 160)))
         const res = await page.goto(url, { waitUntil: 'load', timeout: 30_000 })
         await page.evaluate(() => document.fonts.ready)
+        // Scroll through the page so lazy images load, then wait for them.
+        await page.evaluate(async () => {
+          document.documentElement.style.scrollBehavior = 'auto'
+          for (let y = 0; y < document.documentElement.scrollHeight; y += window.innerHeight / 2) {
+            window.scrollTo(0, y)
+            await new Promise(r => setTimeout(r, 60))
+          }
+          const settled = i =>
+            new Promise(r => {
+              i.addEventListener('load', r, { once: true })
+              i.addEventListener('error', r, { once: true })
+            })
+          await Promise.race([
+            Promise.all([...document.images].filter(i => !i.complete).map(settled)),
+            new Promise(r => setTimeout(r, 10_000)),
+          ])
+          window.scrollTo(0, 0)
+        })
+        const brokenImages = await page.evaluate(() =>
+          [...document.images]
+            .filter(
+              i => getComputedStyle(i).display !== 'none' && i.complete && i.naturalWidth === 0,
+            )
+            .map(i => i.getAttribute('src')),
+        )
+        // Icons the head points at must exist too.
+        const icons = await page.evaluate(() =>
+          [...document.querySelectorAll('link[rel~="icon"], link[rel="apple-touch-icon"]')].map(
+            l => l.href,
+          ),
+        )
+        for (const href of icons) {
+          const u = new URL(href)
+          if (u.origin === origin && !resolveFile(u.pathname))
+            badResponses.push(`missing icon ${u.pathname}`)
+        }
         const r = { page: p.id, width: size.w, theme, status: res?.status() ?? null, problems: [] }
+        if (badResponses.length)
+          r.problems.push(`broken assets: ${[...new Set(badResponses)].join(', ')}`)
+        if (brokenImages.length)
+          r.problems.push(`images that did not load: ${brokenImages.join(', ')}`)
         const c = await page.evaluate(inPageChecks)
         pagesByPath.set(p.path, c.ids)
         const privacy = SENSITIVE.filter(re => re.test(c.text)).map(String)
@@ -306,6 +372,7 @@ try {
         if (c.lowContrastCount)
           r.problems.push(`${c.lowContrastCount} low-contrast text element(s)`)
         if (c.imagesWithoutAlt) r.problems.push(`${c.imagesWithoutAlt} image(s) without alt`)
+        if (c.clipped.length) r.problems.push(`clipped code: ${c.clipped.join(' | ')}`)
         if (c.h1 !== 1) r.problems.push(`${c.h1} h1 element(s)`)
         r.lowContrast = c.lowContrast
         r.overflowing = c.overflowing
@@ -326,6 +393,7 @@ try {
             if (!clip) r.problems.push('copy button copied nothing')
           }
         }
+        if (errors.length) r.problems.push(`console/page errors: ${errors.slice(0, 5).join(' | ')}`)
         failures += r.problems.length
         qa.push(r)
         await ctx.close()

@@ -15,10 +15,13 @@ claude mcp add --transport http svelte http://localhost:5173/__svelte-devtools/m
     "svelte": {
       "type": "http",
       "url": "http://localhost:5173/__svelte-devtools/mcp",
-      "headers": { "x-svelte-devtools-token": "<token>" }
+      "headers": { "x-svelte-devtools-token": "\${SVELTE_DEVTOOLS_TOKEN}" }
     }
   }
 }`
+
+  const envCode = `export SVELTE_DEVTOOLS_TOKEN=<token from the printed line>
+claude`
 
   const curlCode = `curl -s http://localhost:5173/__svelte-devtools/mcp \\
   -H 'content-type: application/json' \\
@@ -173,8 +176,11 @@ and what changed when I edited the tax rate.`
           change.
         </p>
         <p>
-          The tools read; none of them changes your app. Runtime data comes from the app
-          page open in a browser, so keep the app open while the agent works.
+          No tool changes your app's code or state. Two things do happen: a call keeps the
+          runtime in the page sampling for about a minute, and the session tools keep
+          measurement sessions (in memory; on disk only when asked, and
+          <code>delete_session</code> removes them). Runtime data comes from the app page
+          open in a browser, so keep the app open while the agent works.
         </p>
       </section>
 
@@ -201,10 +207,15 @@ and what changed when I edited the tax rate.`
         <CodeBlock code={reRegisterCode} lang="bash" />
         <h3 class="content-h2">Project file instead of the command</h3>
         <p>
-          The same server as a Claude Code <code>.mcp.json</code> entry. It holds the
-          token, so keep it out of version control:
+          <code>claude mcp add</code> registers the server for you only (local scope). A
+          <code>.mcp.json</code> file in the project is shared with everyone who opens the
+          project (project scope), so never write the token into it. Claude Code expands
+          environment variables in that file, so read the token from one:
         </p>
         <CodeBlock code={mcpJsonCode} lang="json" filename=".mcp.json" />
+        <p>Set it from the line the dev server printed, then start Claude Code:</p>
+        <CodeBlock code={envCode} lang="bash" />
+        <p>The port in the URL must match your dev server.</p>
         <h3 class="content-h2">Ask</h3>
         <p>For example, with the cart page of your app open:</p>
         <CodeBlock code={promptCode} lang="text" filename="prompt" />
@@ -375,8 +386,9 @@ and what changed when I edited the tax rate.`
         </div>
         <p class="provenance">
           Captured by <code>scripts/screenshots/reactivity.mjs</code> in CI run 37193781813
-          (Linux, headless Chromium, 1440×900) at commit a42a9e4, on
-          <code>examples/sample-app</code> with the real runtime.
+          (Linux, headless Chromium, 1440×900) on the PR merge commit 623e27a, whose client
+          sources are those of a42a9e4, on <code>examples/sample-app</code> (a synthetic demo
+          app) with the real runtime.
         </p>
       </section>
 
