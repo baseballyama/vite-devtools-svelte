@@ -206,7 +206,7 @@ The plugin is **development-only** — every sub-plugin is `apply: 'serve'`, so 
 
 ## Upgrading from 0.3.x
 
-The public API is unchanged — still `svelteDevtools({ componentTracking })`, and the same 15 panels and MCP tools. What changed is how the UI is hosted and how it talks to the dev server:
+The public API is unchanged — still `svelteDevtools({ componentTracking })`, and the same 15 panels. MCP keeps every existing tool and adds four reactivity tools (see [AI access](#ai-access-mcp)). What changed is how the UI is hosted and how it talks to the dev server:
 
 |           | 0.3.x                                                                                   | upcoming release                                                                                                     |
 | --------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
@@ -239,18 +239,26 @@ svelte-devtools MCP ready — register with Claude Code:
 
 The endpoint is gated by a per-process random token (MCP clients are local processes, not browser tabs, so they don't use the browser login). The token rotates every dev-server start, so you'll re-register after a restart.
 
+The endpoint is served wherever your Vite dev server listens. With the default (`localhost`) only local processes can reach it; with `server.host` set to `true` or `0.0.0.0`, other machines on your network can reach it too and only the token protects it. There is no separate Host/Origin check.
+
 ### Tools exposed
 
-| Tool                                               | Purpose                                                                                                                                                     |
-| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `list_performance_issues`                          | Cross-cuts render / reactive / load / fps and returns ranked issues with `suggestedTool` for drill-down. Entry point.                                       |
-| `get_component_hotspots`                           | Top components by total render time.                                                                                                                        |
-| `get_reactive_graph_problems`                      | Classified reactive-graph issues (over-connected effects, orphan deriveds, isolated nodes).                                                                 |
-| `get_load_waterfall`                               | SvelteKit `load` timings grouped by route.                                                                                                                  |
-| `get_fps_drops`                                    | FPS samples below threshold.                                                                                                                                |
-| `get_render_profile`                               | Render profile entries for a specific file.                                                                                                                 |
-| `start_session`, `end_session`, `compare_sessions` | Bracket a measurement window so the agent can diff before/after a fix. `persist:true` writes the session to `node_modules/.vite-devtools-svelte/sessions/`. |
-| `list_sessions`, `load_session`, `delete_session`  | Session inspection / cleanup. The agent owns disposal — the plugin never auto-persists.                                                                     |
+| Tool                                               | Purpose                                                                                                                                                                                                                                                                                                                                                 |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list_performance_issues`                          | Cross-cuts render / reactive / load / fps and returns ranked issues with `suggestedTool` for drill-down. Entry point.                                                                                                                                                                                                                                   |
+| `get_component_hotspots`                           | Top components by total render time.                                                                                                                                                                                                                                                                                                                    |
+| `get_reactive_graph_problems`                      | Classified reactive-graph issues (over-connected effects, orphan deriveds, isolated nodes).                                                                                                                                                                                                                                                             |
+| `get_load_waterfall`                               | SvelteKit `load` timings grouped by route.                                                                                                                                                                                                                                                                                                              |
+| `get_fps_drops`                                    | FPS samples below threshold.                                                                                                                                                                                                                                                                                                                            |
+| `get_render_profile`                               | Render profile entries for a specific file.                                                                                                                                                                                                                                                                                                             |
+| `get_project_info`, `get_routes`                   | Package and framework versions; the SvelteKit routes tree (static analysis).                                                                                                                                                                                                                                                                            |
+| `get_live_components`, `get_component_relations`   | Mounted component instances (`includeMeta: true` adds the page-load epoch the ids belong to, totals and a limit); static import relations between components.                                                                                                                                                                                           |
+| `get_reactive_summary`                             | Busiest component instances from runtime counters (sampled changes and renders in a time window), with totals; does not capture the whole graph. Repeated identical requests may get the same answer for up to 1 s; `window.until` says when it was computed. `stale: true` means the app did not answer and an earlier (or empty) answer was returned. |
+| `get_reactive_scope`                               | `$state` / `$derived` / `$effect` nodes of one component instance and their direct neighbours. Edges mean "can affect", not a recorded cause. Repeated identical requests may get the same answer for up to 1 s; `computedAt` says when the app built it.                                                                                               |
+| `get_state_timeline`                               | Sampled `$state` changes after a cursor, at most 500 per call, with large values replaced by a size summary.                                                                                                                                                                                                                                            |
+| `get_capture_info`                                 | What is held versus what the app reported, per dataset (totals, truncation, dropped counts).                                                                                                                                                                                                                                                            |
+| `start_session`, `end_session`, `compare_sessions` | Bracket a measurement window so the agent can diff before/after a fix. `persist:true` writes the session to `node_modules/.vite-devtools-svelte/sessions/`.                                                                                                                                                                                             |
+| `list_sessions`, `load_session`, `delete_session`  | Session inspection / cleanup. The agent owns disposal — the plugin never auto-persists.                                                                                                                                                                                                                                                                 |
 
 ### Skills
 
@@ -269,6 +277,8 @@ cp -r node_modules/vite-devtools-svelte/skills/* .claude/skills/
 ```
 
 ### Scope
+
+**What an agent can see:** `get_state_timeline` and `get_reactive_scope` return values of `$state` in your running app (each timeline value capped, large ones summarised). Treat the token like any credential that grants read access to your app's state in development.
 
 The MCP server is **read + measure only** — it never edits files. Editing is left to the agent's own tools (Claude Code's `Edit`/`Write`), which keeps the permission boundary clean and lets `git` own rollback.
 

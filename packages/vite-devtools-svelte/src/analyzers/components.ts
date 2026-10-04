@@ -42,7 +42,7 @@ function extractSvelteImports(content: string, filePath: string): string[] {
   const dir = path.dirname(filePath)
 
   // Match: import X from './Component.svelte'
-  // Match: import X from '$lib/Component.svelte'
+  // Match: import X from '$lib/Component.svelte' (SvelteKit 2) or '#lib/…' (SvelteKit 3)
   const importRegex = /import\s+[\w{}\s,*]+\s+from\s+['"]([^'"]+\.svelte)['"]/g
   let match: RegExpExecArray | null
 
@@ -56,8 +56,9 @@ function extractSvelteImports(content: string, filePath: string): string[] {
 }
 
 function resolveImportPath(importPath: string, dir: string, fromFile: string): string | null {
-  // Handle $lib alias
-  if (importPath.startsWith('$lib/')) {
+  // $lib alias (SvelteKit 2) or the `#lib/*` subpath import SvelteKit 3 uses
+  // instead, both conventionally mapped to src/lib
+  if (importPath.startsWith('$lib/') || importPath.startsWith('#lib/')) {
     const root = findProjectRoot(fromFile)
     if (root) {
       const libPath = path.join(root, 'src', 'lib', importPath.slice(5))

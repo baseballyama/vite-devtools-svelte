@@ -8,7 +8,11 @@ import type {
   ComponentInstance,
   RenderProfile,
   LoadProfile,
-  ReactiveGraph,
+  ReactiveGraphRequest,
+  ReactiveGraphResult,
+  ReactiveSummary,
+  ReactiveSummaryRequest,
+  CaptureInfoMap,
   StateChange,
   ApiEndpoint,
   ApiResponse,
@@ -246,8 +250,23 @@ export async function openReactiveInEditor(
 
 // --- Performance ---
 
-export function getReactiveGraph(): Promise<ReactiveGraph> {
-  return call('get-reactive-graph')
+/**
+ * Reactive graph of one component instance (`componentId`, within the served
+ * page load) or, without it, the whole app — built by the runtime within the
+ * caps. `total`/`truncated`/`stale` say what the answer covers (§6.7 A).
+ */
+export function getReactiveGraph(req?: ReactiveGraphRequest): Promise<ReactiveGraphResult> {
+  return req ? call('get-reactive-graph', req) : call('get-reactive-graph')
+}
+
+/** Overview aggregate from runtime counters; never captures the graph (§6.7 I). */
+export function getReactiveSummary(req?: ReactiveSummaryRequest): Promise<ReactiveSummary> {
+  return req ? call('get-reactive-summary', req) : call('get-reactive-summary')
+}
+
+/** Captured vs reported counts, truncation and drop reasons per dataset (§6.7 B). */
+export function getCaptureInfo(): Promise<CaptureInfoMap> {
+  return call('get-capture-info')
 }
 
 export function getRenderProfiles(): Promise<RenderProfile[]> {

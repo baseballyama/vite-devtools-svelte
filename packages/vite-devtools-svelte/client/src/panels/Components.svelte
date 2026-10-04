@@ -22,6 +22,8 @@
   import CaptureNotice from '../components/CaptureNotice.svelte'
   import type { CaptureInfo } from '../lib/capture.svelte.js'
   import { datasetVersion } from '../lib/versions.js'
+  import { router } from '../lib/router.svelte.js'
+  import { reactiveScope } from '../lib/reactive-selection.svelte.js'
 
   type Mode = 'tree' | 'files'
   const mode = persisted<Mode>('components:mode', 'tree')
@@ -210,6 +212,23 @@
     { id: 'live', label: 'Mounted', width: '72px', align: 'end', descFirst: true, minWidth: 520, sort: (a, b) => (instancesPerFile.get(a.file) ?? 0) - (instancesPerFile.get(b.file) ?? 0) },
   ]
 
+  /**
+   * The page load this snapshot's ids belong to: set only when the meta read
+   * before and after the list agree (`live.data.epoch`). `null` means the
+   * served page load changed in between; the snapshot is refetched.
+   */
+  const liveEpoch = $derived(live.data.epoch || null)
+  $effect(() => {
+    if (live.data.epoch === null) untrack(() => live.refresh())
+  })
+
+  /** Scope Reactivity to this instance (§6.7 A) with the validated page load its id belongs to. */
+  function showReactivity(c: ComponentInstance) {
+    if (!liveEpoch) return
+    reactiveScope.set({ componentId: c.id, epoch: liveEpoch, label: `<${c.name}>`, file: c.file })
+    router.go('reactive')
+  }
+
   function open(file: string) {
     openInEditor(file).catch(() => {})
   }
@@ -307,6 +326,11 @@
             {/snippet}
             {#snippet actions()}
               <Button icon="editor" onclick={() => open(c.file)}>Open in editor</Button>
+              {#if c.mounted}
+                <Button icon="reactive" disabled={!liveEpoch} onclick={() => showReactivity(c)}>
+                  {liveEpoch ? 'Show reactivity' : 'Show reactivity (waiting for a consistent snapshot)'}
+                </Button>
+              {/if}
             {/snippet}
 
             {#if ancestors.length}

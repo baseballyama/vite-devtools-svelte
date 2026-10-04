@@ -6,6 +6,7 @@ import {
   LIMITS,
   RUNTIME_REQUEST_TIMEOUT,
   MAX_EPOCHS,
+  PULL_FRESHNESS,
   STATE_TIMELINE_BYTES,
 } from '../collector.js'
 import type { HotChannel, HotClient } from '../collector.js'
@@ -55,12 +56,26 @@ describe('Collector ingestion caps', () => {
     expect(c.renderProfiles).toHaveLength(LIMITS.renderProfiles)
     expect((c.renderProfiles.at(-1) as any).i).toBe(5999)
 
+    // Edges are kept only between kept nodes, then capped (§6.7 A).
     c.ingestReactiveGraph({
       nodes: Array.from({ length: 6000 }, (_, i) => ({ id: String(i) })) as any,
-      edges: Array.from({ length: 25000 }, () => ({ from: 'a', to: 'b' })) as any,
+      edges: Array.from({ length: 25000 }, (_, i) => ({
+        from: String(i % 4000),
+        to: String((i + 1) % 4000),
+      })) as any,
     })
     expect(c.reactiveGraph.nodes).toHaveLength(LIMITS.reactiveNodes)
     expect(c.reactiveGraph.edges).toHaveLength(LIMITS.reactiveEdges)
+    expect(c.getCaptureInfo().reactiveNodes).toMatchObject({
+      captured: LIMITS.reactiveNodes,
+      total: 6000,
+      truncated: true,
+    })
+    expect(c.getCaptureInfo().reactiveEdges).toMatchObject({
+      captured: LIMITS.reactiveEdges,
+      total: 25000,
+      truncated: true,
+    })
 
     for (let i = 0; i < 1300; i++) c.ingestFps({ fps: i } as any)
     expect(c.fpsSamples).toHaveLength(LIMITS.fpsSamples)
@@ -308,9 +323,20 @@ describe('Collector pulls', () => {
   beforeEach(() => vi.useFakeTimers())
   afterEach(() => vi.useRealTimers())
 
-  it('answers from cache without a hot channel', async () => {
+  it('answers without a hot channel with an empty graph marked stale', async () => {
     const c = new Collector()
-    await expect(c.requestReactiveGraph()).resolves.toEqual({ nodes: [], edges: [] })
+    await expect(c.requestReactiveGraph()).resolves.toEqual({
+      nodes: [],
+      edges: [],
+      scope: null,
+      epoch: null,
+      total: null,
+      truncated: false,
+      edgesOmitted: 0,
+      policy: 'global-head',
+      stale: true,
+      staleReason: 'no-runtime',
+    })
   })
 
   it('resolves with the runtime reply', async () => {
@@ -319,8 +345,18 @@ describe('Collector pulls', () => {
     c.attach(h.hot)
     const p = c.requestReactiveGraph()
     expect(h.sent.at(-1)?.event).toBe(HOT_EVENTS.requestReactiveGraph)
+    // an older runtime: no requestId echo → whole-app graph
     h.emit(HOT_EVENTS.reactiveGraph, { nodes: [{ id: 'a' }], edges: [] })
-    await expect(p).resolves.toEqual({ nodes: [{ id: 'a' }], edges: [] })
+    await expect(p).resolves.toEqual({
+      nodes: [{ id: 'a' }],
+      edges: [],
+      scope: null,
+      epoch: null,
+      total: { nodes: 1, nodesKind: 'sent', edges: 0 },
+      truncated: false,
+      edgesOmitted: 0,
+      policy: 'global-head',
+    })
   })
 
   it('falls back to cache after the timeout and removes the resolver', async () => {
@@ -355,7 +391,13 @@ describe('Collector pulls', () => {
     c.attach(h.hot)
     const p = c.requestReactiveGraph()
     c.detach()
-    await expect(p).resolves.toEqual({ nodes: [], edges: [] })
+    await expect(p).resolves.toMatchObject({
+      nodes: [],
+      edges: [],
+      stale: true,
+      staleReason: 'no-runtime',
+    })
+    expect((c as any).pulls.size).toBe(0)
   })
 })
 
@@ -514,5 +556,424 @@ describe('Collector activity leases (runtime subscription)', () => {
       active: true,
       componentDeltas: true,
     })
+  })
+})
+
+describe('Collector scoped graph pulls (§6.7 A, review G5/M1)', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  /** A collector with a served epoch 'e1' (a full component snapshot). */
+  function served() {
+    const c = new Collector()
+    const h = fakeHot()
+    c.attach(h.hot)
+    c.ingestComponents({ epoch: 'e1', components: [{ id: 1, parentId: null } as any] })
+    return { c, h }
+  }
+  const requests = (h: ReturnType<typeof fakeHot>) =>
+    h.sent.filter(s => s.event === HOT_EVENTS.requestReactiveGraph).map(s => s.payload as any)
+
+  it('forwards componentId, caps, epoch and a requestId to the runtime', () => {
+    const { c, h } = served()
+    void c.requestReactiveGraph({ componentId: 7, maxNodes: 100, maxEdges: 200 })
+    expect(requests(h)).toEqual([
+      { requestId: expect.any(String), epoch: 'e1', componentId: 7, maxNodes: 100, maxEdges: 200 },
+    ])
+  })
+
+  it('clamps caps to the collector limits and ignores invalid component ids', () => {
+    const { c, h } = served()
+    void c.requestReactiveGraph({ componentId: -1, maxNodes: 1e9, maxEdges: 0 })
+    expect(requests(h)[0]).toEqual({
+      requestId: expect.any(String),
+      epoch: 'e1',
+      maxNodes: LIMITS.reactiveNodes,
+      maxEdges: 1,
+    })
+  })
+
+  it('keeps separate in-flight pulls per scope and resolves each only with its own reply', async () => {
+    const { c, h } = served()
+    const a = c.requestReactiveGraph({ componentId: 1 })
+    const b = c.requestReactiveGraph({ componentId: 2 })
+    const [ra, rb] = requests(h)
+    expect(ra.requestId).not.toBe(rb.requestId)
+    h.emit(HOT_EVENTS.reactiveGraph, {
+      requestId: rb.requestId,
+      epoch: 'e1',
+      scope: 2,
+      nodes: [{ id: '2:x', componentId: 2 }],
+      edges: [],
+      total: { nodes: 10, nodesKind: 'registered', edges: null },
+      policy: 'scoped',
+    })
+    h.emit(HOT_EVENTS.reactiveGraph, {
+      requestId: ra.requestId,
+      epoch: 'e1',
+      scope: 1,
+      nodes: [{ id: '1:y', componentId: 1 }],
+      edges: [],
+      total: { nodes: 10, nodesKind: 'registered', edges: null },
+      policy: 'scoped',
+    })
+    expect((await a).nodes.map(n => n.id)).toEqual(['1:y'])
+    expect((await b).nodes.map(n => n.id)).toEqual(['2:x'])
+    expect((await a).total).toEqual({ nodes: 10, nodesKind: 'registered', edges: null })
+  })
+
+  it('ignores a reply from another page load (epoch mismatch) and an unknown requestId', async () => {
+    const { c, h } = served()
+    const p = c.requestReactiveGraph({ componentId: 1 })
+    const [r] = requests(h)
+    h.emit(HOT_EVENTS.reactiveGraph, {
+      requestId: r.requestId,
+      epoch: 'other',
+      nodes: [{ id: 'z' }],
+      edges: [],
+    })
+    h.emit(HOT_EVENTS.reactiveGraph, {
+      requestId: 'nobody',
+      epoch: 'e1',
+      nodes: [{ id: 'z' }],
+      edges: [],
+    })
+    vi.advanceTimersByTime(RUNTIME_REQUEST_TIMEOUT + 1)
+    await expect(p).resolves.toMatchObject({
+      nodes: [],
+      stale: true,
+      staleReason: 'timeout',
+      scope: 1,
+    })
+  })
+
+  it("falls back to the same scope's last result, marked stale, on timeout", async () => {
+    const { c, h } = served()
+    const first = c.requestReactiveGraph({ componentId: 1 })
+    h.emit(HOT_EVENTS.reactiveGraph, {
+      requestId: requests(h)[0].requestId,
+      epoch: 'e1',
+      nodes: [{ id: '1:a', componentId: 1 }],
+      edges: [],
+    })
+    await first
+    vi.advanceTimersByTime(PULL_FRESHNESS + 1)
+    const second = c.requestReactiveGraph({ componentId: 1 })
+    vi.advanceTimersByTime(RUNTIME_REQUEST_TIMEOUT + 1)
+    await expect(second).resolves.toMatchObject({
+      nodes: [{ id: '1:a' }],
+      stale: true,
+      staleReason: 'timeout',
+    })
+    // another scope never sees it
+    const other = c.requestReactiveGraph({ componentId: 2 })
+    vi.advanceTimersByTime(RUNTIME_REQUEST_TIMEOUT + 1)
+    await expect(other).resolves.toMatchObject({ nodes: [], stale: true })
+  })
+
+  it('keeps the app computedAt on a cache hit and a stale fallback; null when empty or unreported', async () => {
+    const { c, h } = served()
+    const first = c.requestReactiveGraph({ componentId: 1 })
+    h.emit(HOT_EVENTS.reactiveGraph, {
+      requestId: requests(h)[0].requestId,
+      epoch: 'e1',
+      computedAt: 1234,
+      nodes: [{ id: '1:a', componentId: 1 }],
+      edges: [],
+    })
+    await expect(first).resolves.toMatchObject({ computedAt: 1234 })
+    // cache hit within the freshness window: same answer, same time, not stale
+    const cached = await c.requestReactiveGraph({ componentId: 1 })
+    expect(requests(h)).toHaveLength(1)
+    expect(cached).toMatchObject({ computedAt: 1234 })
+    expect(cached.stale).toBeUndefined()
+    // after the window the app does not answer: earlier answer, its own time, stale
+    vi.advanceTimersByTime(PULL_FRESHNESS + 1)
+    const late = c.requestReactiveGraph({ componentId: 1 })
+    vi.advanceTimersByTime(RUNTIME_REQUEST_TIMEOUT + 1)
+    await expect(late).resolves.toMatchObject({
+      computedAt: 1234,
+      stale: true,
+      staleReason: 'timeout',
+    })
+    // nothing cached for this scope: empty fallback has no time
+    const empty = c.requestReactiveGraph({ componentId: 2 })
+    vi.advanceTimersByTime(RUNTIME_REQUEST_TIMEOUT + 1)
+    await expect(empty).resolves.toMatchObject({ nodes: [], computedAt: null, stale: true })
+    // a runtime that does not report it
+    const unreported = c.requestReactiveGraph({ componentId: 3 })
+    h.emit(HOT_EVENTS.reactiveGraph, {
+      requestId: requests(h).at(-1)!.requestId,
+      epoch: 'e1',
+      nodes: [],
+      edges: [],
+    })
+    await expect(unreported).resolves.toMatchObject({ computedAt: null })
+  })
+
+  it("scopes an older runtime's whole-app reply on the server and does not claim totals", async () => {
+    const { c, h } = served()
+    const p = c.requestReactiveGraph({ componentId: 1 })
+    h.emit(HOT_EVENTS.reactiveGraph, {
+      nodes: [
+        { id: '1:a', componentId: 1 },
+        { id: '2:b', componentId: 2 },
+        { id: '3:c', componentId: 3 },
+      ],
+      edges: [
+        { from: '2:b', to: '1:a' },
+        { from: '3:c', to: '2:b' },
+      ],
+    })
+    const r = await p
+    expect(r.nodes.map(n => n.id).sort()).toEqual(['1:a', '2:b'])
+    expect(r.edges).toEqual([{ from: '2:b', to: '1:a' }])
+    expect(r).toMatchObject({ policy: 'server-filter', total: null, scope: 1 })
+  })
+})
+
+describe('Collector capture info (§6.7 B)', () => {
+  it('reports runtime and server timeline losses by reason, monotonic until clear', () => {
+    const c = new Collector()
+    c.ingestStateTimeline({
+      epoch: 'e1',
+      changes: [change(1)],
+      dropped: [
+        { reason: 'runtime-count', count: 3 },
+        { reason: 'server-count', count: 99 }, // server reasons are not accepted from the runtime
+      ],
+      valueTooLarge: 2,
+    })
+    c.ingestStateTimeline({
+      epoch: 'e1',
+      changes: [],
+      dropped: [{ reason: 'runtime-bytes', count: 1 }],
+    })
+    expect(c.getCaptureInfo().stateTimeline).toEqual({
+      captured: 1,
+      total: null,
+      truncated: true,
+      policy: 'sampled-200ms',
+      dropped: [
+        { reason: 'runtime-count', count: 3 },
+        { reason: 'runtime-bytes', count: 1 },
+      ],
+      valueTooLarge: 2,
+    })
+    c.clearStateTimeline()
+    expect(c.getCaptureInfo().stateTimeline).toEqual({
+      captured: 0,
+      total: null,
+      truncated: false,
+      policy: 'sampled-200ms',
+    })
+  })
+
+  it('counts entries the server trims by count', () => {
+    const c = new Collector()
+    c.ingestStateTimeline({
+      epoch: 'e1',
+      changes: Array.from({ length: LIMITS.stateTimeline }, (_, i) => change(i)),
+    })
+    c.ingestStateTimeline({ epoch: 'e1', changes: [change(9000), change(9001)] })
+    expect(c.getCaptureInfo().stateTimeline?.dropped).toEqual([
+      { reason: 'server-count', count: 2 },
+    ])
+  })
+
+  it('reports render profiles as newest-mounted with the runtime total, unknown without it', () => {
+    const c = new Collector()
+    c.ingestProfiles({ epoch: 'e1', profiles: [{ i: 1 }, { i: 2 }] })
+    expect(c.getCaptureInfo().renderProfiles).toMatchObject({
+      captured: 2,
+      total: null,
+      truncated: false,
+      policy: 'newest-mounted',
+    })
+    c.ingestProfiles({ epoch: 'e1', profiles: [{ i: 1 }, { i: 2 }], total: 7000 })
+    expect(c.getCaptureInfo().renderProfiles).toMatchObject({
+      captured: 2,
+      total: 7000,
+      truncated: true,
+    })
+  })
+
+  it('reports ring datasets as received versus held, reset by clear', () => {
+    const c = new Collector()
+    for (let i = 0; i < LIMITS.fpsSamples + 5; i++) c.ingestFps({ fps: i } as any)
+    expect(c.getCaptureInfo().fpsSamples).toEqual({
+      captured: LIMITS.fpsSamples,
+      total: LIMITS.fpsSamples + 5,
+      truncated: true,
+      policy: 'tail',
+    })
+    c.clearFps()
+    expect(c.getCaptureInfo().fpsSamples).toMatchObject({ captured: 0, total: 0, truncated: false })
+  })
+})
+
+describe('Collector reactive summary pulls (§6.7 I)', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  it('clamps topK/windowMs, correlates by requestId and never assumes capabilities', async () => {
+    const c = new Collector()
+    const h = fakeHot()
+    c.attach(h.hot)
+    const p = c.requestReactiveSummary({ topK: 9999, windowMs: 1 })
+    const req = h.sent.find(s => s.event === HOT_EVENTS.requestReactiveSummary)!.payload as any
+    expect(req).toEqual({ requestId: expect.any(String), topK: 200, windowMs: 1000 })
+    h.emit(HOT_EVENTS.reactiveSummary, { requestId: 'nobody', rows: [] })
+    h.emit(HOT_EVENTS.reactiveSummary, {
+      requestId: req.requestId,
+      window: { ms: 1000, since: 1, until: 1001, sampledActiveMs: 800 },
+      components: { total: 50000, withActivity: 3 },
+      rows: [
+        {
+          componentId: 4,
+          file: '/A.svelte',
+          nodes: { state: 2, derived: 1, effect: 0 },
+          changes: 5,
+          renders: 2,
+          renderMs: 1.5,
+        },
+      ],
+      other: { components: 49999, nodes: 120000 },
+      truncated: true,
+      capabilities: { valueInspection: 'yes' },
+    })
+    await expect(p).resolves.toMatchObject({
+      components: { total: 50000, withActivity: 3 },
+      rows: [{ componentId: 4, changes: 5, renders: 2 }],
+      other: { components: 49999, nodes: 120000 },
+      truncated: true,
+      policy: 'sampled-200ms',
+      coverage: 'component-init',
+      capabilities: { valueInspection: false, signalHistory: false, writeCause: false },
+    })
+  })
+
+  it('answers stale and empty when the runtime does not reply', async () => {
+    const c = new Collector()
+    const h = fakeHot()
+    c.attach(h.hot)
+    const p = c.requestReactiveSummary()
+    vi.advanceTimersByTime(RUNTIME_REQUEST_TIMEOUT + 1)
+    await expect(p).resolves.toMatchObject({
+      rows: [],
+      components: { total: null },
+      stale: true,
+      staleReason: 'timeout',
+    })
+  })
+})
+
+describe('Collector live snapshot epoch (two app tabs, review M1)', () => {
+  it("pairs the served page load's components with that page load's epoch, never merged", () => {
+    const c = new Collector()
+    c.ingestComponents({
+      epoch: 'tab-a',
+      components: [{ id: 1, parentId: null, file: '/A.svelte' } as any],
+    })
+    c.ingestComponents({
+      epoch: 'tab-b',
+      components: [{ id: 1, parentId: null, file: '/B.svelte' } as any],
+    })
+    let snap = c.liveSnapshot
+    expect(snap.epoch).toBe('tab-b')
+    expect(snap.components.map(x => x.file)).toEqual(['/B.svelte'])
+    // tab A pushes again: it becomes the served one, with only its own tree
+    c.ingestComponents({
+      epoch: 'tab-a',
+      components: [{ id: 1, parentId: null, file: '/A.svelte' } as any],
+    })
+    snap = c.liveSnapshot
+    expect(snap.epoch).toBe('tab-a')
+    expect(snap.components.map(x => x.file)).toEqual(['/A.svelte'])
+  })
+
+  it('reports no epoch before any page load sent a tree', () => {
+    expect(new Collector().liveSnapshot).toEqual({ epoch: null, total: 0, components: [] })
+  })
+
+  it('a scoped graph for an id taken from the other tab is answered epoch-changed', async () => {
+    const c = new Collector()
+    const h = fakeHot()
+    c.attach(h.hot)
+    c.ingestComponents({ epoch: 'tab-a', components: [{ id: 1, parentId: null } as any] })
+    const fromA = c.liveSnapshot
+    c.ingestComponents({ epoch: 'tab-b', components: [{ id: 1, parentId: null } as any] })
+    await expect(
+      c.requestReactiveGraph({ componentId: fromA.components[0].id, epoch: fromA.epoch! }),
+    ).resolves.toMatchObject({ stale: true, staleReason: 'epoch-changed', epoch: 'tab-b' })
+    expect(h.sent.filter(s => s.event === HOT_EVENTS.requestReactiveGraph)).toHaveLength(0)
+  })
+})
+
+describe('Collector scoped graph before any page load (review MUST-1)', () => {
+  it('fails closed without asking the runtime, with or without a caller epoch', async () => {
+    const c = new Collector()
+    const h = fakeHot()
+    c.attach(h.hot)
+    await expect(c.requestReactiveGraph({ componentId: 1 })).resolves.toMatchObject({
+      nodes: [],
+      scope: 1,
+      epoch: null,
+      stale: true,
+      staleReason: 'no-runtime',
+    })
+    await expect(c.requestReactiveGraph({ componentId: 1, epoch: 'old' })).resolves.toMatchObject({
+      stale: true,
+      staleReason: 'no-runtime',
+    })
+    expect(h.sent.filter(s => s.event === HOT_EVENTS.requestReactiveGraph)).toHaveLength(0)
+  })
+})
+
+describe('Collector state timeline baseline disclosure (review B1/B2)', () => {
+  it('exposes the served page load baseline in capture info, validated', () => {
+    const c = new Collector()
+    c.ingestComponents({ epoch: 'e1', components: [{ id: 1, parentId: null } as any] })
+    c.ingestStateTimeline({
+      epoch: 'e1',
+      reset: true,
+      changes: [],
+      baseline: { complete: false, pendingNodes: 7 },
+    } as any)
+    expect(c.getCaptureInfo().stateTimeline?.baseline).toEqual({ complete: false, pendingNodes: 7 })
+    expect(c.getCaptureInfo().stateTimeline?.captured).toBe(0)
+    c.ingestStateTimeline({
+      epoch: 'e1',
+      changes: [],
+      baseline: { complete: true, pendingNodes: 0 },
+    } as any)
+    expect(c.getCaptureInfo().stateTimeline?.baseline).toEqual({ complete: true, pendingNodes: 0 })
+    // malformed values are ignored, the last valid one is kept
+    c.ingestStateTimeline({
+      epoch: 'e1',
+      changes: [],
+      baseline: { complete: 'yes', pendingNodes: -1 },
+    } as any)
+    expect(c.getCaptureInfo().stateTimeline?.baseline).toEqual({ complete: true, pendingNodes: 0 })
+  })
+
+  it('omits baseline when the runtime never sent one (older runtime)', () => {
+    const c = new Collector()
+    c.ingestComponents({ epoch: 'e1', components: [{ id: 1, parentId: null } as any] })
+    c.ingestStateTimeline({ epoch: 'e1', reset: true, changes: [] } as any)
+    expect(c.getCaptureInfo().stateTimeline).not.toHaveProperty('baseline')
+  })
+
+  it('passes a valid summary baseline through, drops a malformed one', () => {
+    const c = new Collector() as any
+    expect(
+      c.normalizeSummary({ baseline: { complete: false, pendingNodes: 3 } }, 'e').baseline,
+    ).toEqual({
+      complete: false,
+      pendingNodes: 3,
+    })
+    expect(
+      c.normalizeSummary({ baseline: { complete: 1, pendingNodes: 3 } }, 'e'),
+    ).not.toHaveProperty('baseline')
   })
 })

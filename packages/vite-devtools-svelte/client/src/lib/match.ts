@@ -11,6 +11,23 @@ export function matcher(
   }
 }
 
+/**
+ * Same matching as {@link matcher}, for callers that precompute one
+ * lowercase haystack per item (fields joined with '\n') so a keystroke
+ * costs only `includes` per item.
+ */
+export function haystackMatcher(query: string): ((hay: string) => boolean) | null {
+  const q = query.trim().toLowerCase()
+  if (!q) return null
+  const terms = q.split(/\s+/)
+  return hay => terms.every(t => hay.includes(t))
+}
+
+/** Lowercase haystack for {@link haystackMatcher}; empty fields are skipped like in {@link matcher}. */
+export function haystack(...fields: (string | undefined | null)[]): string {
+  return fields.filter(Boolean).join('\n').toLowerCase()
+}
+
 /** Split `text` into plain / highlighted segments for `<Highlight>`. */
 export function highlightParts(text: string, query: string): { t: string; m: boolean }[] {
   const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean)

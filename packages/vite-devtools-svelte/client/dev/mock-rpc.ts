@@ -400,6 +400,7 @@ export function createMockBackend(scale = 5000) {
     versions.reactiveGraph++
     versions.fps++
   }
+  const MOCK_EPOCH = 'mock-epoch-1'
   const info = (total: number, n = CAP) => ({
     captured: n > 0 ? Math.min(total, n) : total,
     total,
@@ -456,12 +457,90 @@ export function createMockBackend(scale = 5000) {
     'svelte-devtools:get-component-relations': () => relations,
     'svelte-devtools:get-live-components': () => headCapped(live),
     'svelte-devtools:get-render-profiles': () => capped(profiles()),
-    'svelte-devtools:get-reactive-graph': () => ({
-      nodes: rnodes.map(n =>
-        n.type === 'effect' || r() > 0.1 ? n : { ...n, value: Math.floor(r() * 100) },
-      ),
-      edges: redges,
-    }),
+    // §6.7 A: scoped to one instance (its nodes + direct neighbours) or the
+    // whole app within maxNodes / maxEdges, with totals and truncation.
+    'svelte-devtools:get-reactive-graph': (args?: {
+      componentId?: number
+      maxNodes?: number
+      maxEdges?: number
+    }) => {
+      const maxNodes = args?.maxNodes ?? 5000
+      const maxEdges = args?.maxEdges ?? 20000
+      const scope = args?.componentId ?? null
+      let pool = rnodes
+      let edgePool = redges
+      if (scope !== null) {
+        const own = new Set(rnodes.filter(n => n.componentId === scope).map(n => n.id))
+        edgePool = redges.filter(e => own.has(e.from) || own.has(e.to))
+        const ids = new Set(own)
+        for (const e of edgePool) ids.add(e.from).add(e.to)
+        pool = rnodes.filter(n => ids.has(n.id))
+      }
+      const nodes = pool
+        .slice(0, maxNodes)
+        .map(n => (n.type === 'effect' || r() > 0.1 ? n : { ...n, value: Math.floor(r() * 100) }))
+      const kept = new Set(nodes.map(n => n.id))
+      const inside = edgePool.filter(e => kept.has(e.from) && kept.has(e.to))
+      const edges = inside.slice(0, maxEdges)
+      return {
+        nodes,
+        edges,
+        scope,
+        epoch: MOCK_EPOCH,
+        total: { nodes: pool.length, nodesKind: 'registered', edges: edgePool.length },
+        truncated: pool.length > nodes.length || inside.length > edges.length,
+        edgesOmitted: edgePool.length - edges.length,
+        policy: scope === null ? 'global-head' : 'scoped',
+        computedAt: Date.now(),
+      }
+    },
+    // §6.7 I: per-instance counters over a window, top-K + the rest as `other`.
+    'svelte-devtools:get-reactive-summary': (args?: { topK?: number; windowMs?: number }) => {
+      const topK = args?.topK ?? 50
+      const windowMs = args?.windowMs ?? 10000
+      const byComponent = new Map<
+        number,
+        { file: string; state: number; derived: number; effect: number }
+      >()
+      for (const n of rnodes) {
+        const c = byComponent.get(n.componentId) ?? {
+          file: n.componentFile,
+          state: 0,
+          derived: 0,
+          effect: 0,
+        }
+        c[n.type]++
+        byComponent.set(n.componentId, c)
+      }
+      const all = [...byComponent].map(([componentId, c]) => ({
+        componentId,
+        file: c.file,
+        nodes: { state: c.state, derived: c.derived, effect: c.effect },
+        changes: componentId % 7 === 0 ? 0 : Math.floor(r() * 40),
+        renders: Math.floor(r() * 30),
+        renderMs: Math.round(r() * 4000) / 100,
+      }))
+      const active = all.filter(x => x.changes > 0 || x.renders > 0)
+      active.sort((a, b) => b.changes - a.changes || b.renders - a.renders)
+      const rows = active.slice(0, topK)
+      const listed = new Set(rows.map(x => x.componentId))
+      const rest = all.filter(x => !listed.has(x.componentId))
+      const until = Date.now()
+      return {
+        epoch: MOCK_EPOCH,
+        window: { ms: windowMs, since: until - windowMs, until, sampledActiveMs: windowMs },
+        policy: 'sampled-200ms',
+        coverage: 'component-init',
+        components: { total: all.length, withActivity: active.length },
+        rows,
+        other: {
+          components: rest.length,
+          nodes: rest.reduce((s, x) => s + x.nodes.state + x.nodes.derived + x.nodes.effect, 0),
+        },
+        truncated: active.length > rows.length,
+        capabilities: { valueInspection: false, signalHistory: false, writeCause: false },
+      }
+    },
     'svelte-devtools:get-load-profiles': () => capped(loads, CAP ? 200 : 0),
     'svelte-devtools:clear-load-profiles': () => ((loads.length = 0), versions.loadProfiles++),
     'svelte-devtools:get-state-timeline': () => (tick(), timeline),

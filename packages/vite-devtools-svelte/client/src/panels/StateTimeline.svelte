@@ -3,7 +3,7 @@
   import type { StateChange, StateTimelineEntry } from '../lib/types.js'
   import { datasetVersion } from '../lib/versions.js'
   import { resource } from '../lib/resource.svelte.js'
-  import { matcher } from '../lib/match.js'
+  import { haystack, haystackMatcher } from '../lib/match.js'
   import { componentName, formatClock, formatValue, prettyValue } from '../lib/format.js'
   import Panel from '../components/Panel.svelte'
   import SplitView from '../components/SplitView.svelte'
@@ -17,6 +17,7 @@
   import LiveControls from '../components/LiveControls.svelte'
   import CaptureNotice from '../components/CaptureNotice.svelte'
   import { captureInfo } from '../lib/capture.svelte.js'
+  import { baselineNotice } from '../lib/reactive.js'
 
   /** Mirrors the server buffer (docs/devframe-migration.md §6.4). */
   const MAX_ENTRIES = 500
@@ -76,13 +77,34 @@
     c: StateChange
   }
 
+  // Values are snapshots of up to 32 KB; stringify each entry once, not on
+  // every keystroke and row render. Entries are immutable once received.
+  interface Preview {
+    old: string
+    next: string
+    hay: string
+  }
+  const previews = new WeakMap<StateChange, Preview>()
+  function preview(c: StateChange): Preview {
+    let p = previews.get(c)
+    if (!p) {
+      p = {
+        old: c.oldValue === null ? '' : formatValue(c.oldValue, 40),
+        next: formatValue(c.newValue, 80),
+        hay: haystack(c.name, c.componentFile, formatValue(c.newValue, 200)),
+      }
+      previews.set(c, p)
+    }
+    return p
+  }
+
   const entries = $derived.by(() => {
     const out: Entry[] = []
-    const m = matcher(query)
+    const m = haystackMatcher(query)
     const data = timeline.data
     for (let i = data.length - 1; i >= 0; i--) {
       const c = data[i]
-      if (m && !m(c.name, c.componentFile, formatValue(c.newValue, 200))) continue
+      if (m && !m(preview(c).hay)) continue
       out.push({ key: String(c.seq), c })
     }
     return out
@@ -108,7 +130,16 @@
   {#snippet toolbar()}
     <SearchField bind:value={query} placeholder="Filter by signal, component or value…" count={entries.length} />
     <CaptureNotice info={capture.data.stateTimeline} noun="changes" />
+    {#if baselineNotice(capture.data.stateTimeline?.baseline)}
+      <span class="baseline" role="status">{baselineNotice(capture.data.stateTimeline?.baseline)}</span>
+    {/if}
     <span class="summary">{signals} signal{signals === 1 ? '' : 's'}</span>
+    <span
+      class="summary"
+      title="The app checks $state every 200 ms: several writes within one check are one entry, and times are when a change was detected. The dev server keeps the latest {MAX_ENTRIES} changes across all signals."
+    >
+      sampled every 200 ms · latest {MAX_ENTRIES}
+    </span>
   {/snippet}
   {#snippet actions()}
     <LiveControls res={timeline} onclear={clear} />
@@ -131,9 +162,9 @@
               {#if c.oldValue === null}
                 <Badge tone="green">init</Badge>
               {:else}
-                <span class="old">{formatValue(c.oldValue, 40)}</span><span class="arrow">→</span>
+                <span class="old">{preview(c).old}</span><span class="arrow">→</span>
               {/if}
-              <span class="new"><Highlight text={formatValue(c.newValue, 80)} {query} /></span>
+              <span class="new"><Highlight text={preview(c).next} {query} /></span>
             </span>
           {/snippet}
           {#snippet empty()}
@@ -191,6 +222,10 @@
   .body {
     flex: 1;
     min-height: 0;
+  }
+  .baseline {
+    font-size: var(--fs-xs);
+    color: var(--yellow);
   }
   .summary {
     color: var(--fg-faint);

@@ -6,6 +6,7 @@ import {
   injectIntoSvelteKitInternal,
   sveltekitTemplateInjector,
   SVELTEKIT_INTERNAL_SUFFIX,
+  SVELTEKIT3_DEV_SERVER_SUFFIX,
   TEMPLATE_APP_MARKER,
 } from '../template-injector.js'
 
@@ -98,6 +99,25 @@ describe('sveltekitTemplateInjector plugin', () => {
     expect(result).toBeDefined()
     expect(result!.code).toContain(INJECT_URL)
     expect(result!.code).not.toContain(REMOVED_INJECT_URL)
+  })
+
+  it('matches the SvelteKit 3 dev server module and rewrites it', () => {
+    const transform = plugin.transform as (
+      this: unknown,
+      code: string,
+      id: string,
+    ) => { code: string; map: null } | undefined
+    const result = transform.call(
+      {},
+      FAKE_INTERNAL_JS,
+      `/abs/project/${SVELTEKIT3_DEV_SERVER_SUFFIX}`,
+    )
+    expect(result).toBeDefined()
+    expect(result!.code).toContain(INJECT_URL)
+    // the build-time module is never a dev target
+    expect(
+      transform.call({}, FAKE_INTERNAL_JS, '/abs/project/.svelte-kit/generated/build/server.js'),
+    ).toBeUndefined()
   })
 
   it('leaves the template untouched when the Vite DevTools hub is not present (standalone)', () => {

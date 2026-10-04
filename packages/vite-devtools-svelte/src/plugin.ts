@@ -145,12 +145,17 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
           getProject: () => analyzeProject(root),
           getRoutes: () => analyzeRoutes(analyzeProject(root).routesDir),
           getLiveComponents: () => collector.liveComponents,
+          getLiveSnapshot: () => collector.liveSnapshot,
           getComponentRelations: () => analyzeComponents(root),
           getRenderProfiles: () => collector.renderProfiles,
           getReactiveGraph: () => collector.requestReactiveGraph(),
           getLoadProfiles: () => collector.loadProfiles,
           getFpsSamples: () => collector.fpsSamples,
           sessions: getSessions(),
+          getReactiveSummary: req => collector.requestReactiveSummary(req),
+          getReactiveScope: req => collector.requestReactiveGraph(req),
+          getStateTimelineDelta: since => collector.getStateTimelineDelta(since),
+          getCaptureInfo: () => collector.getCaptureInfo(),
         })
 
       // Print a one-line `claude mcp add` snippet once the dev server is

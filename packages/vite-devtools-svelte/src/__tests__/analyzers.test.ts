@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import path from 'node:path'
 import fs from 'node:fs'
+import os from 'node:os'
 import { analyzeRoutes } from '../analyzers/routes.js'
 import { analyzeAssets, MIME_TYPES } from '../analyzers/assets.js'
 import { analyzeProject } from '../analyzers/project.js'
@@ -449,6 +450,27 @@ describe('analyzeComponents', () => {
     expect(withLib).toBeDefined()
     expect(withLib!.imports.length).toBeGreaterThan(0)
     expect(withLib!.imports.some(i => i.includes('Counter.svelte'))).toBe(true)
+  })
+
+  it('should detect components with #lib subpath imports (SvelteKit 3)', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sdt-hashlib-'))
+    try {
+      fs.writeFileSync(
+        path.join(root, 'package.json'),
+        JSON.stringify({ name: 'k3', imports: { '#lib/*': './src/lib/*' } }),
+      )
+      fs.mkdirSync(path.join(root, 'src', 'lib'), { recursive: true })
+      fs.mkdirSync(path.join(root, 'src', 'routes'), { recursive: true })
+      fs.writeFileSync(path.join(root, 'src', 'lib', 'Counter.svelte'), '<p>c</p>')
+      fs.writeFileSync(
+        path.join(root, 'src', 'routes', '+page.svelte'),
+        "<script>\n  import Counter from '#lib/Counter.svelte'\n</script>\n<Counter />",
+      )
+      const page = analyzeComponents(root).find(c => c.file === 'src/routes/+page.svelte')
+      expect(page?.imports.some(i => i.includes('Counter.svelte'))).toBe(true)
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+    }
   })
 
   it('should return relative file paths', () => {

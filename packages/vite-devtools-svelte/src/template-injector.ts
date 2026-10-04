@@ -29,6 +29,15 @@ import type { Plugin } from 'vite'
 
 export const SVELTEKIT_INTERNAL_SUFFIX = '.svelte-kit/generated/server/internal.js'
 
+/**
+ * SvelteKit 3 writes the same `templates: { app: … }` server module to
+ * `generated/dev/server.js` while serving (and `generated/build/server.js`
+ * for builds, which this dev-only plugin never sees).
+ */
+export const SVELTEKIT3_DEV_SERVER_SUFFIX = '.svelte-kit/generated/dev/server.js'
+
+const GENERATED_SERVER_SUFFIXES = [SVELTEKIT_INTERNAL_SUFFIX, SVELTEKIT3_DEV_SERVER_SUFFIX]
+
 /** Marker that the `templates.app` literal in SvelteKit's generated server. */
 export const TEMPLATE_APP_MARKER = 'templates: {'
 
@@ -95,7 +104,7 @@ export function sveltekitTemplateInjector(isHosted: () => boolean): Plugin {
     apply: (_userConfig, env) => env.command === 'serve' && !env.isSsrBuild,
 
     transform(code, id) {
-      if (!id.endsWith(SVELTEKIT_INTERNAL_SUFFIX)) return
+      if (!GENERATED_SERVER_SUFFIXES.some(suffix => id.endsWith(suffix))) return
       if (!isHosted()) return
       const next = injectIntoSvelteKitInternal(code)
       if (next === null) return

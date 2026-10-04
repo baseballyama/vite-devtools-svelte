@@ -121,3 +121,54 @@ jobs:
             echo "::error::Devtools virtual modules leaked into production build"
             exit 1
           fi
+
+  # Compatibility smoke tests (compat/README.md): the plugin in a plain
+  # Svelte + Vite app, the existing SvelteKit 2 sample and a SvelteKit 3
+  # fixture, each standalone and inside the Vite DevTools dock. One profile
+  # at a time; every step is bounded.
+  compat:
+    name: Compat (${{ matrix.profile }}, ${{ matrix.mode }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: compat-${{ github.ref }}-${{ matrix.profile }}-${{ matrix.mode }}
+      cancel-in-progress: true
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        profile: [plain-svelte, kit2, kit3]
+        mode: [standalone, dock]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          # SvelteKit 3 needs Node >= 22.17; `22` resolves to the newest 22.x.
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build plugin and client UI
+        run: pnpm build
+
+      - name: Prepare profile
+        run: node scripts/compat/prepare.mjs ${{ matrix.profile }}
+
+      - name: Install Chromium (workspace playwright-core)
+        run: pnpm exec playwright-core install --with-deps chromium
+
+      - name: Smoke test
+        run: node scripts/compat/smoke.mjs ${{ matrix.profile }} ${{ matrix.mode == 'dock' && '--dock' || '' }} --tier=2
+
+      # The smoke test must leave the repo as it found it: the workspace
+      # lockfile and the existing examples untouched. (compat/kit3's own
+      # lockfile entry for the freshly packed plugin tarball is expected to
+      # change in CI and is not checked here.)
+      - name: Repo unchanged
+        if: always()
+        run: git diff --exit-code -- pnpm-lock.yaml examples/ playground/ packages/

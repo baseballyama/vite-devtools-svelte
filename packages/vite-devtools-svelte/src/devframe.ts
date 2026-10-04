@@ -19,8 +19,11 @@ import { resolveWithinRoot } from './security.js'
 import type { Collector } from './collector.js'
 import type {
   ApiResponse,
+  CaptureInfoMap,
   InspectResult,
   OGPreview,
+  ReactiveGraphResult,
+  ReactiveSummary,
   StateTimelineDelta,
   LiveComponentsMeta,
 } from './types.js'
@@ -166,7 +169,42 @@ export function createRpcFunctions(host: SvelteDevtoolsHost) {
       name: 'get-reactive-graph',
       type: 'query',
       jsonSerializable: true,
-      handler: () => collector.requestReactiveGraph(),
+      // Omitted = whole app (older clients). Scoped requests are built by the
+      // runtime within the caps (docs/devframe-migration.md §6.7 A).
+      args: [
+        z
+          .object({
+            componentId: z.number().int().nonnegative().optional(),
+            epoch: z.string().max(200).optional(),
+            maxNodes: z.number().int().positive().optional(),
+            maxEdges: z.number().int().positive().optional(),
+          })
+          .optional(),
+      ],
+      returns: z.custom<ReactiveGraphResult>(),
+      handler: req => collector.requestReactiveGraph(req ?? {}),
+    }),
+    defineRpcFunction({
+      name: 'get-reactive-summary',
+      type: 'query',
+      jsonSerializable: true,
+      // Overview aggregate from runtime counters; never captures the graph (§6.7 I).
+      args: [
+        z
+          .object({
+            topK: z.number().int().positive().optional(),
+            windowMs: z.number().int().positive().optional(),
+          })
+          .optional(),
+      ],
+      returns: z.custom<ReactiveSummary>(),
+      handler: req => collector.requestReactiveSummary(req ?? {}),
+    }),
+    defineRpcFunction({
+      name: 'get-capture-info',
+      type: 'query',
+      jsonSerializable: true,
+      handler: (): CaptureInfoMap => collector.getCaptureInfo(),
     }),
     defineRpcFunction({
       name: 'get-load-profiles',

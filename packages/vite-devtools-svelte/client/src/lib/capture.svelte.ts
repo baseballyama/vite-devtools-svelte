@@ -3,35 +3,16 @@
  * `LIMITS`), so a huge app may be shown partially.
  * - Live components: `getLiveComponentsMeta()` (arch, parents-first capture),
  *   read together with the list in Components.svelte (it also carries the epoch).
- * - Other datasets: generic `getCaptureInfo()` as proposed in
- *   docs/ui-status.md U-A3 — not implemented server-side yet, so those
- *   notices stay hidden. Everything is feature-detected.
+ * - Other datasets: `getCaptureInfo()` (docs/devframe-migration.md §6.7 B).
+ *   Feature-detected: against an older server the notices stay hidden.
  */
 import * as rpc from './rpc.js'
 import { resource } from './resource.svelte.js'
+import type { CaptureInfoMap } from './types.js'
 
-export type CaptureKey =
-  | 'liveComponents'
-  | 'renderProfiles'
-  | 'stateTimeline'
-  | 'reactiveNodes'
-  | 'reactiveEdges'
-  | 'fpsSamples'
-  | 'runtimeErrors'
-  | 'loadProfiles'
-  | 'compilerWarnings'
-
-export interface CaptureInfo {
-  /** Items held by the server (what the RPC returns). */
-  captured: number
-  /** Items the app reported before the cap (>= captured). */
-  total: number
-  truncated: boolean
-  /** How the subset was chosen, e.g. 'tail' (newest) or 'roots-first'. */
-  policy?: string
-}
-
-type CaptureMap = Partial<Record<CaptureKey, CaptureInfo>>
+// Shapes are the server's (§6.7 B); `total: null` means unknown.
+export type { CaptureKey, CaptureInfo, CaptureInfoMap } from './types.js'
+type CaptureMap = CaptureInfoMap
 
 const api = rpc as unknown as {
   getCaptureInfo?: () => Promise<CaptureMap>
