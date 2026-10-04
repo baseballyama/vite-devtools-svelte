@@ -34,8 +34,8 @@
         }
       },
       "status": {
-        "state": "written-not-run",
-        "evidence": null
+        "state": "verified",
+        "evidence": "CI run 37193781813 (head a42a9e4), 2026-10-04: standalone and dock cells passed"
       }
     },
     {
@@ -82,8 +82,8 @@
         }
       },
       "status": {
-        "state": "written-not-run",
-        "evidence": null
+        "state": "verified",
+        "evidence": "CI run 37193781813 (head a42a9e4), 2026-10-04: standalone and dock cells passed"
       }
     },
     {
@@ -129,8 +129,8 @@
         }
       },
       "status": {
-        "state": "written-not-run",
-        "evidence": null
+        "state": "verified",
+        "evidence": "CI run 37193781813 (head a42a9e4), 2026-10-04: standalone and dock cells passed"
       }
     }
   ],

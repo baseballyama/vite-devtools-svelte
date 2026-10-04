@@ -24,7 +24,7 @@ Svelte DevTools for Vite, built on [Devframe](https://devfra.me/). Provides 15 s
 
 ### Screenshots
 
-Captured from the current UI with synthetic demo data (Social preview: a generated SvelteKit test app).
+Panel shots: captured from the UI in dev-mock mode with synthetic data, before the reactivity update (Social preview: a generated SvelteKit test app). Reactivity shots: captured in CI from the real runtime, against the synthetic demo app in `examples/sample-app`.
 
 <details>
 <summary>Overview</summary>
@@ -64,7 +64,21 @@ Captured from the current UI with synthetic demo data (Social preview: a generat
 <details>
 <summary>Reactivity</summary>
 
-![Reactivity](docs/images/ui-reactive.png)
+Overview: what the counts cover and the most active components:
+
+![Reactivity overview](docs/images/reactivity-overview.png)
+
+One component (ReactivePriceChart) and the signals it is directly linked to; edges mean "can affect", not a recorded cause:
+
+![Reactivity, one component](docs/images/reactivity-component.png)
+
+$state signals by sampled changes in the timeline buffer:
+
+![Reactivity, states](docs/images/reactivity-states.png)
+
+After the app page reloads, a selected component id may belong to another instance, and the panel says so:
+
+![Reactivity after a page reload](docs/images/reactivity-epoch.png)
 
 </details>
 
