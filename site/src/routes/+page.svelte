@@ -85,8 +85,8 @@
     </div>
   </div>
   <p class="note release">
-    Requires <strong>vite-devtools-svelte ≥ 0.4.0</strong> (not yet published; 0.3.0 is documented to
-    run inside <code>@vitejs/devtools</code>).
+    Requires <strong>vite-devtools-svelte ≥ 0.4.0</strong>. Versions up to 0.3.x are documented to
+    run inside <code>@vitejs/devtools</code>.
   </p>
 </section>
 
