@@ -6,16 +6,16 @@
 # perf/ci/sanitize-artifact.mjs scrubs before upload. Console output is
 # redacted on the way to the public job log as well.
 #
-# Kit 3 stack: the baseline is main 0a93356 (SvelteKit 3 playground, kit3
+# Kit 3 stack: the baseline is main bff1a9d (SvelteKit 3 playground, kit3
 # fixture shape). Numbers from the pre-Kit-3 branch (perf/linux-bench-smoke,
 # e0d1e51 / kit2 shape) are never compared with these.
 #
-#   smoke            0a93356 only, S1k: OFF / CLOSED / OPEN + DevTools UI. n = 1.
+#   smoke            bff1a9d only, S1k: OFF / CLOSED / OPEN + DevTools UI. n = 1.
 #   reactive         reduced reactive fixture (separate axis), OFF / CLOSED / OPEN, n = 1.
-#   profile          0a93356, mode "profiled": per-window CPU profiles (mount / idle /
+#   profile          bff1a9d, mode "profiled": per-window CPU profiles (mount / idle /
 #                    input / churn) for CLOSED and OPEN, server cold load vs steady
 #                    windows, DevTools UI operations. Never compared with latency runs.
-#   improve          B 0a93356 vs F $PERF_CANDIDATE (plugin code delta, same lockfile
+#   improve          B bff1a9d vs F $PERF_CANDIDATE (plugin code delta, same lockfile
 #                    and deps), order BFFBBFFB (n = 4 per side), mode latency.
 set -euo pipefail
 
@@ -126,17 +126,17 @@ trap finish EXIT
 spec
 step "start"
 GATE="--gate=$(nproc):50 --linux-gate=2048:10 --gate-wait=180 --gate-policy=skip"
-BASE=0a93356c8d7f8135751775ac1cfd721d44b1e7aa
+BASE=bff1a9d95366ddf6e58963ebf48c4e5db9f4ce74
 
 same_as_base() {
-  # This branch changes only perf/ and .github/ relative to 0a93356.
+  # This branch changes only perf/ and .github/ relative to bff1a9d.
   if git diff --quiet "$BASE" HEAD -- packages playground pnpm-lock.yaml; then
-    echo "plugin/playground/lockfile identical to 0a93356" >> "$OUT/spec.txt"
+    echo "plugin/playground/lockfile identical to bff1a9d" >> "$OUT/spec.txt"
   else
-    echo "plugin/playground/lockfile DIFFERS from 0a93356" | tee -a "$OUT/spec.txt"
+    echo "plugin/playground/lockfile DIFFERS from bff1a9d" | tee -a "$OUT/spec.txt"
     exit 2
   fi
-  manifest "$ROOT" 0a93356-branch
+  manifest "$ROOT" bff1a9d-branch
 }
 
 case "$PHASE" in
