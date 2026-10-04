@@ -6,14 +6,29 @@
   let { children } = $props()
 </script>
 
-<Header />
-<main>
-  {@render children()}
-</main>
-<Footer />
+<a class="skip" href="#main">Skip to content</a>
+<div class="frame">
+  <Header />
+  <main id="main">
+    {@render children()}
+  </main>
+  <Footer />
+</div>
 
 <style>
-  main {
-    min-height: calc(100vh - 200px);
+  .skip {
+    position: absolute;
+    left: 1rem;
+    top: -4rem;
+    z-index: 100;
+    padding: 0.6rem 1rem;
+    border-radius: var(--radius);
+    background: var(--paper);
+    border: 1px solid var(--line-strong);
+    color: var(--text);
+  }
+
+  .skip:focus {
+    top: 1rem;
   }
 </style>

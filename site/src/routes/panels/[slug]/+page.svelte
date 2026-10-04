@@ -15,7 +15,7 @@
   <meta name="description" content={panel.tagline} />
 </svelte:head>
 
-<article class="panel-article">
+<article class="band no-border panel-article">
   <div class="container">
     <a class="back" href="{base}/#panels">
       <span class="back-arrow" aria-hidden="true">←</span>
@@ -98,7 +98,7 @@
 
 <style>
   .panel-article {
-    padding: 3.5rem 0 5rem;
+    padding-top: 3.5rem;
   }
 
   .back {

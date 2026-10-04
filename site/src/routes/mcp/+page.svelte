@@ -123,8 +123,8 @@ and what changed when I edited the tax rate.`
   />
 </svelte:head>
 
-<section class="hero">
-  <div class="container narrow">
+<section class="band no-border hero">
+  <div class="container">
     <div class="head-meta">
       <span class="eyebrow"><span class="eyebrow-num">§ mcp</span> · for AI agents</span>
       <span class="mono dim">{MCP_TOOL_COUNT} tools</span>
@@ -142,8 +142,8 @@ and what changed when I edited the tax rate.`
   </div>
 </section>
 
-<section class="section-sm">
-  <div class="container narrow doc">
+<section class="band">
+  <div class="container doc">
     <nav class="toc" aria-label="Table of contents">
       <span class="toc-label mono">contents</span>
       <ol>
@@ -503,10 +503,7 @@ and what changed when I edited the tax rate.`
 
 <style>
   .hero {
-    position: relative;
-    padding: 4rem 0 3rem;
-    border-bottom: 1px solid var(--line);
-    overflow: hidden;
+    padding-bottom: 3.5rem;
   }
 
   .head-meta {
