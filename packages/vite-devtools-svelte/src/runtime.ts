@@ -1341,9 +1341,21 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       // sampled change count (§6.7 J IA2): independent of the ring
       this._activityRow(entry.meta.componentId).changes++;
       this._stateSnapshots.set(nodeId, newValue);
-      // Ring: at most 500 entries and TIMELINE_BYTES (the newest entry is
-      // always kept). Removed entries that were never pushed are disclosed
-      // as dropped (§6.7 C); pushed ones are already on the server.
+      // The ring (_trimTimeline) is applied in bulk, not with one splice per
+      // change (a poll tick can record thousands): before every read (each
+      // push, i.e. at least every 200 changes while active), and here once
+      // 1000 entries are held or the byte budget is exceeded.
+      if (this._stateTimeline.length > 1000 || this._timelineBytes > TIMELINE_BYTES) {
+        this._trimTimeline();
+      }
+      this._scheduleTimelineUpdate();
+    },
+
+    // Ring: at most 500 entries and TIMELINE_BYTES (the newest entry is
+    // always kept). Removed entries that were never pushed are disclosed
+    // as dropped (§6.7 C); pushed ones are already on the server.
+    _trimTimeline() {
+      const TIMELINE_BYTES = 4 * 1024 * 1024;
       const all = this._stateTimeline;
       let cut = 0;
       let bytesLeft = this._timelineBytes;
@@ -1358,7 +1370,6 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
         all.splice(0, cut);
         this._timelineBytes = bytesLeft;
       }
-      this._scheduleTimelineUpdate();
     },
 
     // Push (§6.7 C): a throttle, not a debounce — a pending timer is never
@@ -1427,6 +1438,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     // epoch; reset after clearStateTimeline(). A message with no changes is
     // still sent when there is something to disclose (all unsent dropped).
     _timelineDeltas() {
+      this._trimTimeline();
       const all = this._stateTimeline;
       let start = all.length;
       while (start > 0 && this._entryInfo.get(all[start - 1]).seq > this._pushedSeq) start--;
@@ -1450,6 +1462,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     // server's own buffer budget, so nothing is sent that it would drop.
     _timelineFull() {
       const TIMELINE_BYTES = 4 * 1024 * 1024;
+      this._trimTimeline();
       const all = this._stateTimeline;
       let start = all.length;
       let bytes = 0;
@@ -1465,6 +1478,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     },
 
     getStateTimeline() {
+      this._trimTimeline();
       return this._stateTimeline;
     },
 

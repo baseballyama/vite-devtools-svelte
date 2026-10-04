@@ -252,7 +252,7 @@ describe('§6.7 C: timeline throttle + disclosure', () => {
     poll() // seeds
     for (const sig of sigs) sig.v += 1000
     poll()
-    expect(h.dt._stateTimeline.length).toBe(500)
+    expect(h.dt.getStateTimeline().length).toBe(500)
     h.sent.length = 0 // drop the activation snapshot sent at boot
     h.dt._active = true
     h.dt._flushTimeline()
