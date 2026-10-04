@@ -43,6 +43,12 @@
       "pinDigests": true
     },
     {
+      "description": "compat/kit3 depends on the packed tarball (compat/.pack), which does not exist in Renovate's checkout, so its lockfile cannot be regenerated from scratch. Skip lock file maintenance there only; dependency updates still apply. Refresh it by hand (compat/README.md).",
+      "matchFileNames": ["compat/kit3/package.json"],
+      "matchUpdateTypes": ["lockFileMaintenance"],
+      "enabled": false
+    },
+    {
       "description": "Pin Node engine: support all active LTS lines, no auto-bumps",
       "matchDepNames": ["node"],
       "enabled": false
