@@ -186,10 +186,8 @@
     .links {
       order: 3;
       flex-basis: 100%;
-      gap: 1.25rem;
-      border-top: 1px solid var(--line);
-      margin: 0.5rem calc(-1 * var(--pad-x)) 0;
-      padding: 0.35rem var(--pad-x);
+      gap: 1.5rem;
+      padding: 0.25rem 0 0.15rem;
     }
 
     .links a {

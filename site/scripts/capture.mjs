@@ -184,6 +184,11 @@ async function newPage({ w, h }, theme, reducedMotion = 'no-preference') {
 
 async function shoot(page, dir, name) {
   mkdirSync(path.join(outDir, dir), { recursive: true })
+  await page.evaluate(() => {
+    document.activeElement?.blur?.()
+    document.documentElement.style.scrollBehavior = 'auto'
+    window.scrollTo(0, 0)
+  })
   await page.screenshot({ path: path.join(outDir, dir, `${name}.png`) })
   await page.screenshot({ path: path.join(outDir, dir, `${name}-full.png`), fullPage: true })
   manifest.shots.push(`${dir}/${name}.png`)
@@ -234,6 +239,19 @@ const inPageChecks = () => {
   const anchors = [...document.querySelectorAll('a[href]')].map(a => a.getAttribute('href'))
   return {
     overflowX: document.scrollingElement.scrollWidth > window.innerWidth + 1,
+    // The outermost elements that stick out past the viewport, for fixing.
+    overflowing: [...document.querySelectorAll('body *')]
+      .filter(e => {
+        const r = e.getBoundingClientRect()
+        if (r.width === 0 || r.right <= window.innerWidth + 1) return false
+        const p = e.parentElement?.getBoundingClientRect()
+        return !p || p.right <= window.innerWidth + 1
+      })
+      .slice(0, 8)
+      .map(
+        e =>
+          `${e.tagName.toLowerCase()}.${[...e.classList].join('.')} right=${Math.round(e.getBoundingClientRect().right)}`,
+      ),
     lowContrast: lowContrast.slice(0, 20),
     lowContrastCount: lowContrast.length,
     anchors,
@@ -290,7 +308,10 @@ try {
         if (c.imagesWithoutAlt) r.problems.push(`${c.imagesWithoutAlt} image(s) without alt`)
         if (c.h1 !== 1) r.problems.push(`${c.h1} h1 element(s)`)
         r.lowContrast = c.lowContrast
+        r.overflowing = c.overflowing
         r.anchors = c.anchors
+        // Screenshots first, before Tab / copy move focus or scroll the page.
+        if (!privacy.length) await shoot(page, 'after', `${p.id}-${size.w}-${theme}`)
         if (size.w === 1440) {
           r.focus = await focusCheck(page)
           if (r.focus.some(f => f.tag !== 'body' && !f.visible))
@@ -305,7 +326,6 @@ try {
             if (!clip) r.problems.push('copy button copied nothing')
           }
         }
-        if (!privacy.length) await shoot(page, 'after', `${p.id}-${size.w}-${theme}`)
         failures += r.problems.length
         qa.push(r)
         await ctx.close()

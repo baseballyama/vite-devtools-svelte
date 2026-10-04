@@ -46,7 +46,7 @@
     {/each}
   </div>
   <div class="cmd" id="pm-panel" role="tabpanel" aria-labelledby="pm-tab-{managers[active].id}">
-    <code><span class="prompt" aria-hidden="true">$ </span>{managers[active].cmd}</code>
+    <code><span class="prompt" aria-hidden="true">$</span>{managers[active].cmd}</code>
     <button type="button" class="copy" onclick={copy} aria-label="Copy install command">
       {copied ? 'Copied' : 'Copy'}
     </button>
@@ -100,6 +100,9 @@
   code {
     flex: 1;
     min-width: 0;
+    background: none;
+    border: 0;
+    padding: 0;
     font-size: 0.92rem;
     color: var(--text);
     overflow-x: auto;
@@ -107,6 +110,7 @@
   }
 
   .prompt {
+    margin-right: 0.75ch;
     color: var(--text-3);
     user-select: none;
     -webkit-user-select: none;
@@ -119,7 +123,7 @@
     color: var(--text-2);
     background: transparent;
     border: 1px solid var(--line-strong);
-    border-radius: 999px;
+    border-radius: var(--radius);
     padding: 0.35rem 0.85rem;
     cursor: pointer;
   }

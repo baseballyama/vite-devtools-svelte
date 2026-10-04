@@ -1,13 +1,10 @@
 <script lang="ts">
   import { base } from '$app/paths'
-  import { panels } from '$lib/panels'
+  import { panels, taglineParts } from '$lib/panels'
   import { MCP_TOOL_COUNT } from '$lib/mcp-tools'
   import InstallTabs from '$lib/InstallTabs.svelte'
 
   const repo = 'https://github.com/baseballyama/vite-devtools-svelte'
-
-  /** `code` spans in panel taglines, as text parts. */
-  const parts = (s: string) => s.split('`').map((text, i) => ({ text, code: i % 2 === 1 }))
 
   const features = [
     {
@@ -230,7 +227,7 @@
         <a href="{base}/panels/{p.slug}">
           <span class="p-title">{p.title}</span>
           <span class="p-tag">
-            {#each parts(p.tagline) as part, i (i)}{#if part.code}<code>{part.text}</code>{:else}{part.text}{/if}{/each}
+            {#each taglineParts(p.tagline) as part, i (i)}{#if part.code}<code>{part.text}</code>{:else}{part.text}{/if}{/each}
           </span>
         </a>
       </li>
@@ -251,17 +248,37 @@
     padding-top: calc(var(--band-y) * 1.1);
   }
 
+  /* Two columns split by a hairline, like the frame. */
   .hero-grid {
     display: grid;
     grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
-    gap: 4rem;
     align-items: center;
+  }
+
+  .hero-copy {
+    padding-right: 4rem;
+  }
+
+  .hero-install {
+    padding-left: 4rem;
+    border-left: 1px solid var(--line);
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
   }
 
   @media (max-width: 960px) {
     .hero-grid {
       grid-template-columns: minmax(0, 1fr);
       gap: 2.5rem;
+    }
+    .hero-copy {
+      padding-right: 0;
+    }
+    .hero-install {
+      padding-left: 0;
+      border-left: 0;
     }
   }
 

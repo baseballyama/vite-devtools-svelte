@@ -209,6 +209,7 @@ export default defineConfig({
 
   .head-meta {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 1rem;
     margin-bottom: 1rem;
@@ -217,7 +218,7 @@ export default defineConfig({
 
   .head-meta::after {
     content: '';
-    flex: 1;
+    flex: 1 1 4rem;
     height: 1px;
     background: var(--line);
   }
@@ -262,7 +263,7 @@ export default defineConfig({
 
   @media (max-width: 600px) {
     dl {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 
@@ -296,7 +297,7 @@ export default defineConfig({
 
   @media (max-width: 820px) {
     .doc {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
       gap: 1.5rem;
     }
   }
@@ -357,6 +358,10 @@ export default defineConfig({
   .toc-num {
     color: var(--text-3);
     font-size: 0.72rem;
+  }
+
+  .content {
+    min-width: 0;
   }
 
   .step {

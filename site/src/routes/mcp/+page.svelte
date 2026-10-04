@@ -508,6 +508,7 @@ and what changed when I edited the tax rate.`
 
   .head-meta {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 1rem;
     margin-bottom: 1rem;
@@ -516,7 +517,7 @@ and what changed when I edited the tax rate.`
 
   .head-meta::after {
     content: '';
-    flex: 1;
+    flex: 1 1 4rem;
     height: 1px;
     background: var(--line);
   }
@@ -551,7 +552,7 @@ and what changed when I edited the tax rate.`
 
   @media (max-width: 820px) {
     .doc {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
       gap: 1.5rem;
     }
   }
@@ -684,7 +685,7 @@ and what changed when I edited the tax rate.`
 
   @media (max-width: 700px) {
     .tool {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 
@@ -747,7 +748,7 @@ and what changed when I edited the tax rate.`
 
   @media (max-width: 700px) {
     .shots {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 
