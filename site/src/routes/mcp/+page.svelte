@@ -57,37 +57,37 @@ and what changed when I edited the tax rate.`
     {
       id: 'summary',
       title: 'Find where the activity is',
-      text: 'Counters over all instances, without capturing the graph. The answer says what it covers: the window, 200 ms sampling, component-init coverage, and how many of the registered components were active.',
+      text: 'Counters over all instances, without capturing the graph. The answer says what it covers: here 2 of 5 registered components were active, and sampledActiveMs shows that sampling ran for only 5 s of the 30 s window (the runtime samples only while a panel or an agent is reading). The price chart has not changed yet, so it is not listed.',
     },
     {
       id: 'live',
       title: 'Get instance ids with their page load',
-      text: 'Component ids restart on every page load, so ask for the epoch together with the ids.',
+      text: 'Component ids restart on every page load, so ask for the epoch together with the ids. ReactivePriceChart is instance 14 here.',
     },
     {
       id: 'scope',
       title: 'Look at one instance',
-      text: 'Nodes of that instance and their direct neighbours. An edge means the source can affect the target (a current dependency), not that it caused a change.',
+      text: 'Nodes of that instance and their direct neighbours. An edge means the source can affect the target (a current dependency), not that it caused a change. Note that the  has no edges although it reads grandTotal (see What the answers cover).',
     },
     {
       id: 'timeline-first',
       title: 'Read the change timeline',
-      text: 'Keep the returned cursor. Old and new values are included; larger ones are replaced by a size summary.',
+      text: 'The first call has no cursor, so reset is true and the answer holds the newest entries of the buffer. Keep the returned cursor. Old and new values are included; larger ones are replaced by a size summary.',
     },
     {
       id: 'timeline-next',
       title: 'Edit, then read only what is new',
-      text: 'After changing the tax rate in the app, pass the cursor as since.',
+      text: 'After changing the tax rate in the app from 0.1 to 0.08, pass the cursor as since: only that change comes back.',
     },
     {
       id: 'capture',
       title: 'Check how complete the data is',
-      text: 'What the DevTools hold versus what the app reported, per dataset. Read it before drawing conclusions from capped data.',
+      text: 'What the DevTools hold versus what the app reported, per dataset, with the selection policy. A total of null means unknown. Read it before drawing conclusions from capped data.',
     },
     {
       id: 'stale',
       title: 'After a reload, ids are refused, not guessed',
-      text: 'The same componentId with the old epoch returns an empty graph with staleReason "epoch-changed" instead of another instance.',
+      text: 'After reloading the app page, the same componentId with the old epoch returns an empty graph with staleReason "epoch-changed" instead of another instance.',
     },
   ]
 
@@ -295,7 +295,7 @@ and what changed when I edited the tax rate.`
         </header>
         <p>
           Start a session, use the app, end it; do the same after your change, then
-          compare. Each section of the comparison has a verdict.
+          compare. Each section of the comparison has a verdict. In this run nothing heavy changed between the two sessions, so every verdict is unchanged.
         </p>
         {#each ['session-start', 'session-compare'] as id (id)}
           {@const e = ex(id)}
