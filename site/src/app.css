@@ -343,6 +343,11 @@ kbd {
 
 /* ---------- small elements ---------- */
 
+/* In a page's meta row the eyebrow sits on the row's centre line. */
+.head-meta > .eyebrow {
+  margin: 0;
+}
+
 .eyebrow {
   display: inline-flex;
   align-items: center;
