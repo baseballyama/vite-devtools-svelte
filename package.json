@@ -22,6 +22,7 @@
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.1",
     "@changesets/cli": "^3.0.3",
+    "@typescript/native": "npm:typescript@^7.0.2",
     "axe-core": "^4.11.0",
     "oxfmt": "^0.71.0",
     "oxlint": "^1.67.0",

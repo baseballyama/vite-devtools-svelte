@@ -42,6 +42,17 @@ jobs:
       - name: Plugin typecheck (tsc)
         run: pnpm -C packages/vite-devtools-svelte exec tsc --noEmit -p tsconfig.json
 
+      # Additive TypeScript 7 check (plugin + client only). The packages keep
+      # typescript ^6.0.3 for peers and API consumers; the TS 7 native compiler
+      # is the root @typescript/native alias, which svelte-check finds via --tsgo.
+      - name: Client typecheck (svelte-check --tsgo, TypeScript 7, additive)
+        run: |
+          node node_modules/@typescript/native/bin/tsc -v
+          pnpm -C examples/sample-app exec svelte-check --tsgo --workspace ../../packages/vite-devtools-svelte/client --tsconfig ./tsconfig.json
+
+      - name: Plugin typecheck (tsc, TypeScript 7, additive)
+        run: node node_modules/@typescript/native/bin/tsc --noEmit -p packages/vite-devtools-svelte/tsconfig.json
+
   test:
     name: Plugin tests + build
     runs-on: ubuntu-latest
