@@ -1,0 +1,61 @@
+name: Perf (Linux, manual phases)
+
+# Read-only measurement runs on a GitHub-hosted runner. Started only by a push
+# to a `perf/linux-bench-*` branch (never main, never a PR), one phase per
+# push, chosen by PERF_PHASE below. No secrets, no write permissions, no
+# persisted git credentials; the artifact is scrubbed and withheld if any
+# token or absolute path survives (perf/ci/sanitize-artifact.mjs).
+on:
+  push:
+    branches: ['perf/linux-bench-*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: perf-linux
+  cancel-in-progress: false
+
+env:
+  PERF_PHASE: smoke
+
+jobs:
+  measure:
+    name: Perf phase
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install + build (this branch)
+        run: pnpm install --frozen-lockfile && pnpm build
+
+      - name: Install Chromium (workspace playwright-core)
+        run: pnpm exec playwright-core install --with-deps chromium
+
+      - name: Measure (${{ env.PERF_PHASE }})
+        timeout-minutes: 14
+        run: bash perf/ci/run-phase.sh "$PERF_PHASE"
+
+      - name: Sanitize artifact (fail closed)
+        id: sanitize
+        if: always()
+        run: node perf/ci/sanitize-artifact.mjs perf-out --out=perf-artifact
+
+      - name: Upload artifact
+        if: always() && steps.sanitize.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: perf-${{ env.PERF_PHASE }}-${{ github.run_id }}
+          path: perf-artifact
+          retention-days: 14

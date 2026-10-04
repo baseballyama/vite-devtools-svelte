@@ -386,6 +386,14 @@ export default { kit: {} }
   }
 </script>
 
+<!-- App input -> paint probe (perf/run-paired.mjs): one click writes 50 row
+     states and the ticker, i.e. a user input that fans out into many components. -->
+<button
+  data-bench="input"
+  onclick={() => {
+    for (let k = 0; k < 50; k++) rowRefs[k]?.bump()
+    ticker++
+  }}>bump 50</button>
 <p>ticker {ticker} / big {big.length}</p>
 {#if tree}
   <Tree depth={tree.depth} breadth={tree.breadth} />
