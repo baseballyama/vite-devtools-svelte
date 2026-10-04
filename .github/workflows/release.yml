@@ -45,7 +45,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
 
       # Use Node 24 here, not 22. `changeset publish` shells out to
       # `npm publish`, and OIDC Trusted Publishers require npm CLI >= 11.5.1.
