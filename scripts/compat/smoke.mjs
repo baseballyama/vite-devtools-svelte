@@ -769,6 +769,32 @@ async function dockUi(page, srv, p) {
   }
 }
 
+// Text-only dump of the standalone UI tab for a failure message: hash route,
+// connection status text, gate presence/visibility, active nav, first 300
+// chars of the body text (masked by the caller). No inputs, no screenshots.
+async function uiDump(ui) {
+  return ui
+    .evaluate(() => {
+      const visible = el => {
+        if (!el) return false
+        const r = el.getBoundingClientRect()
+        return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden'
+      }
+      const conn = document.querySelector('span.conn[role=status]')
+      const gate = [...document.querySelectorAll('[role=dialog]')].find(d =>
+        /Authorize this browser/.test(d.getAttribute('aria-label') ?? d.textContent ?? ''),
+      )
+      return {
+        hash: location.hash,
+        connection: conn ? (conn.textContent ?? '').trim() : null,
+        gate: gate ? (visible(gate) ? 'visible' : 'present, hidden') : 'absent',
+        nav: document.querySelector('nav [aria-current=page]')?.textContent?.trim() ?? null,
+        body: (document.body?.innerText ?? '').replace(/\b\d{6}\b/g, '<code>').slice(0, 300),
+      }
+    })
+    .catch(e => ({ dumpError: String(e?.message ?? e).slice(0, 120) }))
+}
+
 // Served = real content, not status alone: Vite's SPA fallback answers any
 // path with index.html (200, text/html) when Accept is */*.
 async function hubServed(srv) {
@@ -1241,25 +1267,45 @@ async function tier2(p, getSrv, restart, app) {
     'T2 restart: same browser reconnects (app + UI), runtime resyncs',
     120_000,
     async () => {
+      const tRestart = Date.now()
       await restart()
+      const restartMs = Date.now() - tRestart
+      const restartedAt = Date.now()
       // Vite's client reloads the app page once the server is back (new page load = new epoch).
       await page.waitForFunction(hasRuntime, null, { timeout: 45_000 })
       const facts = await fixtureComponentsListed(p, getSrv(), 45_000)
       const epochAfter = (await tool(getSrv(), 'get_reactive_summary'))?.epoch ?? null
       let uiState = 'not open'
       if (ui) {
-        // same UI tab: reconnects with the auth kept in the isolated HOME, or asks again
-        const asked = await ui
-          .getByRole('dialog', { name: 'Authorize this browser' })
-          .waitFor({ timeout: 5_000 })
-          .then(
-            () => true,
-            () => false,
+        // Same UI tab. Its reconnect backoff is 0.5 → 10 s (rpc.ts
+        // RECONNECT_MAX_DELAY), so first wait ≤ 30 s until it settles: the
+        // status (App.svelte span.conn[role=status]) shows 'connected', or
+        // the gate asks again. Only then judge gate vs fixture.
+        try {
+          const settled = await poll(
+            () =>
+              ui.evaluate(() => {
+                const conn = document.querySelector('span.conn[role=status]')
+                const gate = [...document.querySelectorAll('[role=dialog]')].some(
+                  d =>
+                    d.getAttribute('aria-label') === 'Authorize this browser' ||
+                    /Authorize this browser/.test(d.textContent ?? ''),
+                )
+                return { connected: !!conn?.classList.contains('connected'), gate }
+              }),
+            x => x.connected || x.gate,
+            30_000,
           )
-        if (asked) uiState = 'asked for a new code'
-        else {
-          await uiShowsFixture(ui, p)
-          uiState = 'reconnected, fixture components shown'
+          const uiConnectedMs = Date.now() - restartedAt
+          if (settled.gate) uiState = `asked for a new code (after ${uiConnectedMs} ms)`
+          else {
+            await uiShowsFixture(ui, p)
+            uiState = `reconnected after ${uiConnectedMs} ms, fixture components shown`
+          }
+        } catch (e) {
+          throw new Error(
+            `${String(e?.message ?? e).slice(0, 600)} | restartMs ${restartMs}, since restart ${Date.now() - restartedAt} ms | ui: ${JSON.stringify(await uiDump(ui))}`,
+          )
         }
       } else if (mode === 'dock') {
         // The app page reloaded; the hub keeps its trust (localStorage) and
