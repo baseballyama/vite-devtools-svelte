@@ -65,6 +65,9 @@ manifest() { # <dir> <label>
   } > "$f"
 }
 
+# Side dirs must have equal-length names on both sides: the plugin embeds
+# absolute module ids in its WS payloads, so a longer path inflates one side's
+# byte counts (p4 MUST-H3: base/candidate added +5 B per path on F).
 side() { # <sha> <label>: pristine worktree, its own pnpm, build
   local sha="$1" dir="$SIDES/$2"
   git cat-file -e "$sha^{commit}" || { echo "commit $sha not available" >&2; exit 2; }
@@ -165,11 +168,11 @@ case "$PHASE" in
     # Pristine detached worktrees, each installed with its own pnpm and built;
     # the harness and Chromium come from this branch. The candidate is a
     # pushed commit (checkout fetch-depth 0 brings every branch).
-    side "$BASE" base
-    side "${PERF_CANDIDATE:?PERF_CANDIDATE}" candidate
+    side "$BASE" B
+    side "${PERF_CANDIDATE:?PERF_CANDIDATE}" F
     # plugin code delta only: same lockfile and resolved deps on both sides
-    assert_same base candidate '(pnpm-lock\.yaml$|^dep )' 'lockfile + resolved deps'
-    node perf/run-paired.mjs --baseline="$SIDES/base" --final="$SIDES/candidate" \
+    assert_same B F '(pnpm-lock\.yaml$|^dep )' 'lockfile + resolved deps'
+    node perf/run-paired.mjs --baseline="$SIDES/B" --final="$SIDES/F" \
       --order=BFFBBFFB --parts=A,OFF,UI --scales="${PAIR_SCALES:-3000:4x5}" \
       --label=improve $GATE --max-min=14 2>&1 | redact | tee "$OUT/improve.log"
     step "improve BFFBBFFB done (mode latency)"
@@ -189,10 +192,10 @@ case "$PHASE" in
       echo "scale point above 10 000 instances is not allowed" >&2
       exit 2
     fi
-    side "$BASE" base
-    side "${PERF_CANDIDATE:?PERF_CANDIDATE}" candidate
-    assert_same base candidate '(pnpm-lock\.yaml$|^dep )' 'lockfile + resolved deps'
-    node perf/run-paired.mjs --baseline="$SIDES/base" --final="$SIDES/candidate" \
+    side "$BASE" B
+    side "${PERF_CANDIDATE:?PERF_CANDIDATE}" F
+    assert_same B F '(pnpm-lock\.yaml$|^dep )' 'lockfile + resolved deps'
+    node perf/run-paired.mjs --baseline="$SIDES/B" --final="$SIDES/F" \
       --order=BFFB --parts=A --scales="$SCALE_POINT" \
       --label=scale $GATE --max-min=14 2>&1 | redact | tee "$OUT/scale.log"
     step "scale $SCALE_POINT BFFB done (mode latency)"
