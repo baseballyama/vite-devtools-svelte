@@ -333,6 +333,8 @@ describe('Collector pulls', () => {
       total: null,
       truncated: false,
       edgesOmitted: 0,
+      // nothing was built by the app
+      computedAt: null,
       policy: 'global-head',
       stale: true,
       staleReason: 'no-runtime',
@@ -355,6 +357,8 @@ describe('Collector pulls', () => {
       total: { nodes: 1, nodesKind: 'sent', edges: 0 },
       truncated: false,
       edgesOmitted: 0,
+      // an older runtime does not report when it built the graph
+      computedAt: null,
       policy: 'global-head',
     })
   })
