@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PERF_PHASE: pairA
+  PERF_PHASE: profile
 
 jobs:
   measure:
