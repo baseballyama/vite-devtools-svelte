@@ -5,7 +5,7 @@
   import { resource } from '../lib/resource.svelte.js'
   import { persisted } from '../lib/persisted.svelte.js'
   import { haystack, haystackMatcher } from '../lib/match.js'
-  import { componentName, formatClock, formatMs, formatValue, prettyValue } from '../lib/format.js'
+  import { componentName, formatClock, formatMs, formatValue, prettyValue, shortPath } from '../lib/format.js'
   import { EMPTY_GRAPH, baselineNotice, fetchGraph, fetchSummary, groupByFile, isEpochChanged, isValueSummary, nodeCount, nodeValueText, sameGraph, sameValue } from '../lib/reactive.js'
   import { reactiveScope } from '../lib/reactive-selection.svelte.js'
   import { router } from '../lib/router.svelte.js'
@@ -484,7 +484,7 @@
           </DataTable>
           {#snippet aside()}
             {#if overviewCurrent}
-              <Inspector title="<{componentName(overviewCurrent.file)}>" subtitle={overviewCurrent.file} onclose={() => (summarySelected = null)}>
+              <Inspector title="<{componentName(overviewCurrent.file)}>" subtitle={shortPath(overviewCurrent.file, 3)} onclose={() => (summarySelected = null)}>
                 <h3 class="section-title">Listed instances <span class="num">{overviewCurrent.instances.length}</span></h3>
                 <ul class="link-list">
                   {#each overviewCurrent.instances as r (r.componentId)}
@@ -606,7 +606,7 @@
     </div>
     {#snippet aside()}
       {#if current}
-        <Inspector title={current.name} subtitle={current.componentFile} onclose={() => (selected = null)}>
+        <Inspector title={current.name} subtitle={shortPath(current.componentFile, 3)} onclose={() => (selected = null)}>
           {#snippet badges()}
             <Badge tone={tones[current.type]}>${current.type}</Badge>
             <Badge>component #{current.componentId}</Badge>

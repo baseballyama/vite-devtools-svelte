@@ -235,15 +235,34 @@ const host = '.host:not([hidden])'
 async function shot(file, kase, caption) {
   await ui.waitForTimeout(700)
   const text = await ui.evaluate(() => document.body.innerText)
-  const hits =
-    SENSITIVE.filter(re => re.test(text)).length + [...secrets].filter(s => text.includes(s)).length
+  const patternHits = SENSITIVE.flatMap((re, i) => (re.test(text) ? [i] : []))
+  const hits = patternHits.length + [...secrets].filter(s => text.includes(s)).length
   if (hits) {
     failed++
+    // Where the hits are, for diagnosis: pattern index + the element's tag and
+    // class only. The matched text itself is never read back.
+    const where = await ui.evaluate(
+      pats => {
+        const out = new Set()
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
+        for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+          const el = n.parentElement
+          if (!el || !el.checkVisibility?.()) continue
+          for (const { i, source, flags } of pats)
+            if (new RegExp(source, flags).test(n.data))
+              out.add(`#${i} ${el.tagName.toLowerCase()}.${[...el.classList].join('.')}`)
+        }
+        return [...out].slice(0, 10)
+      },
+      patternHits.map(i => ({ i, source: SENSITIVE[i].source, flags: SENSITIVE[i].flags })),
+    )
     manifest.shots.push({
       case: kase,
       file: null,
       caption,
       result: `NOT SAVED: ${hits} sensitive pattern hit(s) in the page text`,
+      hitPatterns: patternHits,
+      hitElements: where,
     })
     console.log(`case ${kase}: NOT SAVED (sensitive text)`)
     return
