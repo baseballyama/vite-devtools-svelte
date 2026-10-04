@@ -129,7 +129,9 @@ export function createMockBackend(scale = 5000) {
   const cycles: string[][] = []
   for (let c = 0; c < 4; c++) {
     const a = pick(modules), b = pick(modules), d = pick(modules)
-    a.imports.push(b.id), b.imports.push(d.id), d.imports.push(a.id)
+    a.imports.push(b.id)
+    b.imports.push(d.id)
+    d.imports.push(a.id)
     a.isCyclic = b.isCyclic = d.isCyclic = true
     cycles.push([a.id, b.id, d.id, a.id])
   }
@@ -170,7 +172,7 @@ export function createMockBackend(scale = 5000) {
     const n = pick(stateNodes)
     timeline.push({ seq: ++seq, id: n.id, name: n.name, componentFile: n.componentFile, oldValue: i % 50 === 0 ? null : Math.floor(r() * 100), newValue: r() < 0.2 ? { items: [1, 2, 3], filter: pick(WORDS), nested: { open: r() < 0.5 } } : Math.floor(r() * 100), timestamp: t0 - (500 - i) * 120 })
   }
-  const warnings = Array.from({ length: 120 }, (_, i) => ({ code: pick(['a11y_click_events_have_key_events', 'a11y_missing_attribute', 'css_unused_selector', 'state_referenced_locally', 'non_reactive_update']), message: pick(['Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler.', 'Unused CSS selector ".active"', '`<img>` element should have an alt attribute', 'This reference only captures the initial value of `count`. Did you mean to reference it inside a closure instead?']), file: pick(files).file, line: 1 + Math.floor(r() * 200), column: 1 + Math.floor(r() * 40) + i * 0 }))
+  const warnings = Array.from({ length: 120 }, () => ({ code: pick(['a11y_click_events_have_key_events', 'a11y_missing_attribute', 'css_unused_selector', 'state_referenced_locally', 'non_reactive_update']), message: pick(['Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler.', 'Unused CSS selector ".active"', '`<img>` element should have an alt attribute', 'This reference only captures the initial value of `count`. Did you mean to reference it inside a closure instead?']), file: pick(files).file, line: 1 + Math.floor(r() * 200), column: 1 + Math.floor(r() * 40) }))
   const errors = Array.from({ length: 24 }, () => ({ message: pick(["TypeError: Cannot read properties of undefined (reading 'map')", 'Error: Failed to fetch /api/cart', 'ReferenceError: user is not defined']), file: pick(files).file, line: 1 + Math.floor(r() * 120), stack: 'at render (Cart.svelte:42:13)\n  at update (runtime.js:120:5)\n  at flush (scheduler.js:88:9)', timestamp: Date.now() - Math.floor(r() * 3e6) }))
   const loads = Array.from({ length: 300 }, () => ({ route: pick(routes).id, file: 'src/routes/+page.server.ts', type: pick(['server', 'universal'] as const), duration: r() * r() * 600, dataSize: Math.floor(r() * 80000), timestamp: Date.now() - Math.floor(r() * 6e5) }))
   const chunks = Array.from({ length: 120 }, (_, i) => {
