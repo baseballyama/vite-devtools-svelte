@@ -671,7 +671,9 @@ export async function runtimeState(page) {
       profiles: size(dt._profiles),
       timeline: size(dt._stateTimeline),
       stateSnapshots: size(dt._stateSnapshots),
-      sampling: dt._sampling ? true : dt._sampling === null ? false : 'n/a',
+      // `_sampling` is null/false when off and an object when on; only a
+      // runtime without the field at all reports 'n/a'
+      sampling: dt._sampling === undefined ? 'n/a' : !!dt._sampling,
     }
   })
 }

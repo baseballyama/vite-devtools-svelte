@@ -120,6 +120,22 @@ export function summarize(items) {
       md.push(`| ${name} | ${fmt(c.b)} | ${fmt(c.f)} | ${c.verdict} |`)
     }
   }
+  // Observed runtime state per side and scenario (labels the comparison: a
+  // CLOSED side that is still active would not be a same-state comparison).
+  const states = new Map()
+  for (const item of items)
+    for (const run of item.app ?? []) {
+      const rt = run.runtime
+      const label = rt ? `active ${rt.active}, sampling ${rt.sampling}` : 'no runtime'
+      const key = `${item.side} ${run.scenario}`
+      states.set(key, new Set([...(states.get(key) ?? []), label]))
+    }
+  out.observedStates = Object.fromEntries([...states].map(([k, v]) => [k, [...v]]))
+  md.push(
+    '',
+    'Observed runtime state:',
+    ...[...states].map(([k, v]) => `- ${k}: ${[...v].join(' | ')}`),
+  )
   if (excluded.length)
     md.push('', `Excluded samples (${excluded.length}):`, ...excluded.map(e => `- ${e}`))
   return { table: out, excluded, markdown: md.join('\n') }

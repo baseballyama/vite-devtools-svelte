@@ -281,8 +281,22 @@ async function uiInteractions(page, query) {
       await twoFrames()
       out.selectMs = ok ? Math.round((performance.now() - t0) * 10) / 10 : null
     }
-    // expand: first collapsed row with a twisty
-    const collapsed = rows().find(r => r.getAttribute('aria-expanded') === 'false')
+    // expand: first collapsed row with a twisty. The default expansion can
+    // leave no collapsed row in the viewport; then "Collapse all" first (not
+    // timed) and expand the first root row.
+    let collapsed = rows().find(r => r.getAttribute('aria-expanded') === 'false')
+    if (!collapsed) {
+      const btn = [...panel.querySelectorAll('button')].find(
+        b => (b.getAttribute('aria-label') ?? b.textContent ?? '').trim() === 'Collapse all',
+      )
+      if (btn) {
+        btn.click()
+        await until(() => rows().some(r => r.getAttribute('aria-expanded') === 'false'), 5000)
+        await twoFrames()
+        collapsed = rows().find(r => r.getAttribute('aria-expanded') === 'false')
+        out.expandAfterCollapseAll = true
+      }
+    }
     if (collapsed) {
       const id = collapsed.id
       const t0 = performance.now()
