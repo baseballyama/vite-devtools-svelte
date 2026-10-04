@@ -16,6 +16,13 @@
 //     [--gate=10:50] [--gate-wait=180] [--gate-policy=skip|record]
 //     [--smoke=1]            # 500 rows, F only, both scenarios + UI, ~3 min
 //     [--dry-run=1]          # metadata + plan only: no fixture, server or browser
+//     [--linux-gate=2048:10] # Linux runner: MemAvailable MB min : PSI memory some avg10 max
+//     [--cpu-profile=1]      # part A, open only: CDP CPU profile of the app page and the
+//                            # DevTools tab + `node --cpu-prof` of the dev server.
+//                            # Profiled items are for attribution, never compared.
+//
+// Parts: A (plugin on: closed/open), OFF (plugin-off reference), UI (DevTools
+// UI at the largest scale incl. select/search/expand latency); B = OFF + UI.
 //
 // Output (gitignored): <final>/playground/.temp/perf-results/<label>/
 //   items/<n>-<B|F>.json, summary.json, summary.md, screenshots.
@@ -47,6 +54,7 @@ import {
   wsAccounting,
   wsDelta,
 } from './lib/harness.mjs'
+import { summarizeProfile } from './lib/profile.mjs'
 import { summarize } from './lib/summary.mjs'
 
 function parseArgs(argv) {
@@ -66,10 +74,13 @@ function parseArgs(argv) {
     churnMs: 3000,
     cycles: 8,
     gate: '10:50',
+    linuxGate: '2048:10',
+    cpuProfile: 0,
     gateWait: 180,
     gatePolicy: 'skip',
     smoke: 0,
     dryRun: 0,
+    inputReps: 10,
     maxMin: 25,
     headed: 0,
   }
@@ -80,11 +91,14 @@ function parseArgs(argv) {
     if (!(key in opts)) throw new Error(`Unknown option --${m[1]}`)
     opts[key] = typeof opts[key] === 'number' ? Number(m[2]) : m[2]
   }
-  if (!opts.baseline && !opts.smoke) throw new Error('--baseline=<pristine checkout> is required')
+  if (!opts.baseline && !opts.smoke && opts.order.includes('B'))
+    throw new Error('--baseline=<pristine checkout> is required (or --order=F)')
   opts.final = path.resolve(opts.final)
   if (opts.baseline) opts.baseline = path.resolve(opts.baseline)
   const [load1Max, idleMin] = opts.gate.split(':').map(Number)
-  opts.gateSpec = { load1Max, idleMin }
+  const [memMinMB, psiMemMax] = opts.linuxGate.split(':').map(Number)
+  opts.gateSpec = { load1Max, idleMin, memMinMB, psiMemMax }
+  if (opts.cpuProfile) opts.scenarios = 'open'
   opts.scaleList = opts.scales.split(',').map(s => {
     const [rows, tree] = s.split(':')
     const t = tree === 'none' ? null : tree.split('x').map(Number)
@@ -246,6 +260,17 @@ async function measureApp(app, scale, opts) {
   res.heapMountedMB = r1((await heapAfterGc(cdp)) / 1048576)
   res.dom = await page.evaluate(() => document.getElementsByTagName('*').length)
   res.runtime = await runtimeState(page)
+  res.input = await inputToPaint(page, opts.inputReps)
+  // Ground truth of the workload, next to what the runtime reports it saw
+  // (`res.runtime.instances`; null without the plugin).
+  res.groundTruth = {
+    instancesMounted: res.instances,
+    rows: scale.rows,
+    treeNodes: treeNodes(scale.tree),
+    statePerRow: { state: 2, derived: 1, effect: 1 },
+    churn: { statesPerFrame: 50, ms: opts.churnMs, framesObserved: res.churn.frames + 1 },
+    input: { clicks: opts.inputReps, statesPerClick: 51 },
+  }
 
   // heap growth over mount/unmount cycles
   if (scale.tree) await page.evaluate(() => window.__bench.clearTree())
@@ -263,7 +288,104 @@ async function measureApp(app, scale, opts) {
   return res
 }
 
+/**
+ * App input -> paint: `reps` real clicks (CDP input) on the fixture's probe
+ * button, 250 ms apart. Reports Event Timing durations (only entries >= 16 ms
+ * exist) and the click -> next frame proxy for every click.
+ */
+async function inputToPaint(page, reps) {
+  await page.evaluate(() => {
+    window.__perf.events.length = 0
+    window.__perf.inputToFrame.length = 0
+  })
+  const btn = page.locator('[data-bench="input"]')
+  for (let i = 0; i < reps; i++) {
+    await btn.click()
+    await sleep(250)
+  }
+  const { events, frames } = await page.evaluate(() => ({
+    events: window.__perf.events.filter(e => e.name === 'click'),
+    frames: window.__perf.inputToFrame.slice(),
+  }))
+  return {
+    clicks: reps,
+    clickToFrameMs: { median: r1(median(frames)), max: r1(Math.max(...frames)), n: frames.length },
+    eventTiming: {
+      over16ms: events.length,
+      medianMs: events.length ? r1(median(events.map(e => e.dur))) : null,
+      maxMs: events.length ? r1(Math.max(...events.map(e => e.dur))) : null,
+    },
+  }
+}
+
 // ---------------------------------------------------------------- UI scenario (part B)
+
+/**
+ * DevTools interaction latency on the Components live tree, measured inside
+ * the DevTools page from the action to the second animation frame after the
+ * expected DOM state (so it includes the RPC round trip when one is needed):
+ * select a row -> inspector shown; search -> hit count / rows settled;
+ * expand a collapsed row -> aria-expanded=true.
+ */
+async function uiInteractions(page, query) {
+  return page.evaluate(async q => {
+    const twoFrames = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))
+    const until = async (pred, ms = 20_000) => {
+      const end = performance.now() + ms
+      while (!pred()) {
+        if (performance.now() > end) return false
+        await new Promise(r => requestAnimationFrame(r))
+      }
+      return true
+    }
+    const rows = () => [...document.querySelectorAll('[role="tree"] [role="treeitem"]')]
+    const out = { treeRows: rows().length }
+    // select
+    const target = rows()[Math.min(3, rows().length - 1)]
+    if (target) {
+      const t0 = performance.now()
+      target.click()
+      const ok = await until(() => !!document.querySelector('aside.inspector'))
+      await twoFrames()
+      out.selectMs = ok ? Math.round((performance.now() - t0) * 10) / 10 : null
+    }
+    // expand: first collapsed row with a twisty
+    const collapsed = rows().find(r => r.getAttribute('aria-expanded') === 'false')
+    if (collapsed) {
+      const id = collapsed.id
+      const t0 = performance.now()
+      collapsed.querySelector('.twisty')?.click()
+      const ok = await until(
+        () => document.getElementById(id)?.getAttribute('aria-expanded') === 'true',
+      )
+      await twoFrames()
+      out.expandMs = ok ? Math.round((performance.now() - t0) * 10) / 10 : null
+    } else out.expandMs = 'no collapsed row'
+    // search
+    const input = document.querySelector('input[data-panel-search]')
+    if (input) {
+      const before = rows()
+        .map(r => r.id)
+        .join()
+      const t0 = performance.now()
+      input.value = q
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      const ok = await until(
+        () =>
+          rows()
+            .map(r => r.id)
+            .join() !== before || !!document.querySelector('.search .hits'),
+      )
+      await twoFrames()
+      out.searchMs = ok ? Math.round((performance.now() - t0) * 10) / 10 : null
+      out.searchRows = rows().length
+      out.searchHits = document.querySelector('.search .hits')?.textContent ?? null
+      input.value = ''
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+    return out
+  }, query)
+}
 
 async function measureUi(side, srv, scale, opts, outDir, tag) {
   const app = await appScenario(side.appCtx, srv)
@@ -318,6 +440,7 @@ async function measureUi(side, srv, scale, opts, outDir, tag) {
     await comp.click()
     await sleep(3000)
     res.componentsRootPresent = (await tab.page.getByText(/\+(page|layout)\b/).count()) > 0
+    res.interactions = await uiInteractions(tab.page, 'Row')
     res.componentsIdle = await idleWindow(tab.page, tab.cdp, opts.idleMs, tab.ws)
   }
   res.heapMB = r1((await heapAfterGc(tab.cdp)) / 1048576)
@@ -332,6 +455,28 @@ async function measureUi(side, srv, scale, opts, outDir, tag) {
   await tab.page.close()
   await app.page.close()
   return res
+}
+
+// ---------------------------------------------------------------- CPU profiles
+
+async function startProfilers(cdps) {
+  for (const cdp of cdps) {
+    await cdp.send('Profiler.enable')
+    await cdp.send('Profiler.setSamplingInterval', { interval: 500 })
+    await cdp.send('Profiler.start')
+  }
+}
+
+/** Stop, write `<tag>-<name>.cpuprofile`, return the self-time summary per page. */
+async function stopProfilers(cdps, dir, tag) {
+  fs.mkdirSync(dir, { recursive: true })
+  const out = {}
+  for (const [name, cdp] of Object.entries(cdps)) {
+    const { profile } = await cdp.send('Profiler.stop')
+    fs.writeFileSync(path.join(dir, `${tag}-${name}.cpuprofile`), JSON.stringify(profile))
+    out[name] = summarizeProfile(profile)
+  }
+  return out
 }
 
 // ---------------------------------------------------------------- main
@@ -371,6 +516,8 @@ async function main() {
     return
   }
 
+  // Linux gate: no OOM kill may happen after this point.
+  opts.gateSpec.oomBase = envSnapshot().oom ?? null
   fs.mkdirSync(path.join(outDir, 'items'), { recursive: true })
   const fixtures = Object.fromEntries(
     Object.entries(checkouts).map(([k, r]) => [k, prepareFixture(r)]),
@@ -421,6 +568,11 @@ async function main() {
     meta,
     fixture: fixtures.F.src,
     fixtureShape: fixtures.F.shape,
+    // 'latency': plain measurement. 'profiled': CDP Profiler on the app page
+    // and the DevTools tab + node --cpu-prof on the dev server were running,
+    // so its timings carry profiler overhead and are never compared with
+    // 'latency' runs.
+    mode: opts.cpuProfile ? 'profiled' : 'latency',
   }
   fs.writeFileSync(path.join(outDir, 'run.json'), JSON.stringify(header, null, 2) + '\n')
   log(
@@ -462,6 +614,9 @@ async function main() {
             port: opts.port,
             withDevtools: true,
             home: path.join(homeRoot, side),
+            cpuProfDir: opts.cpuProfile
+              ? path.join(outDir, 'profiles', `${n}-${side}-server`)
+              : null,
           })
           item.server = { pid: srv.pid, coldMs: r1(srv.coldMs) }
           log(
@@ -475,9 +630,19 @@ async function main() {
                   scenario === 'open' ? await openDevtoolsTab(sides[side], srv, opts) : null
                 const app = await appScenario(sides[side].appCtx, srv)
                 const lease = await waitForActive(app.page, scenario === 'open')
+                const profiling = opts.cpuProfile && tab
+                if (profiling) await startProfilers([app.cdp, tab.cdp])
                 const r = await measureApp(app, scale, opts)
                 r.scenario = scenario
                 r.lease = lease
+                if (profiling) {
+                  r.profiled = true
+                  r.cpuProfiles = await stopProfilers(
+                    { app: app.cdp, ui: tab.cdp },
+                    path.join(outDir, 'profiles'),
+                    `${n}-${side}-${scale.label}-open`,
+                  )
+                }
                 if (tab) {
                   r.uiTabWs = tab.ws.snapshot()
                   await tab.page.close()
@@ -492,13 +657,25 @@ async function main() {
           } finally {
             await stopServer(srv)
           }
+          if (opts.cpuProfile) {
+            const dir = path.join(outDir, 'profiles', `${n}-${side}-server`)
+            const files = fs.existsSync(dir) ? fs.readdirSync(dir) : []
+            item.serverProfiles = files.map(f => {
+              const prof = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'))
+              return { file: f, top: summarizeProfile(prof) }
+            })
+            if (files.length === 0)
+              item.notes.push('server --cpu-prof wrote no profile (non-graceful exit)')
+          }
         })
       }
     }
-    if (plan.parts.includes('B') || plan.parts.includes('UI')) {
+    const offPart = plan.parts.includes('B') || plan.parts.includes('OFF')
+    const uiPart = plan.parts.includes('B') || plan.parts.includes('UI')
+    if (offPart || uiPart) {
       const largest = opts.scaleList.at(-1)
-      for (const side of opts.smoke ? ['F'] : ['B', 'F']) {
-        if (plan.parts.includes('B')) {
+      for (const side of opts.smoke || !opts.baseline ? ['F'] : ['B', 'F']) {
+        if (offPart) {
           await runItem(side, ++n, async item => {
             item.part = 'off'
             const srv = await ownServer({
@@ -521,20 +698,21 @@ async function main() {
             }
           })
         }
-        await runItem(side, ++n, async item => {
-          item.part = 'ui'
-          const srv = await ownServer({
-            appDir: fixtures[side].appDir,
-            port: opts.port,
-            withDevtools: true,
-            home: path.join(homeRoot, side),
+        if (uiPart)
+          await runItem(side, ++n, async item => {
+            item.part = 'ui'
+            const srv = await ownServer({
+              appDir: fixtures[side].appDir,
+              port: opts.port,
+              withDevtools: true,
+              home: path.join(homeRoot, side),
+            })
+            try {
+              item.ui = await measureUi(sides[side], srv, largest, opts, outDir, `${n}-${side}`)
+            } finally {
+              await stopServer(srv)
+            }
           })
-          try {
-            item.ui = await measureUi(sides[side], srv, largest, opts, outDir, `${n}-${side}`)
-          } finally {
-            await stopServer(srv)
-          }
-        })
       }
     }
   } finally {

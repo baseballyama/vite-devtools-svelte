@@ -163,6 +163,7 @@ export function checkoutMeta(repo, label) {
  * Never signals or alters any process.
  */
 export function envSnapshot() {
+  if (process.platform === 'linux') return linuxEnvSnapshot()
   const out = { at: new Date().toISOString(), load: os.loadavg().map(r1), cpus: os.cpus().length }
   try {
     // The first `top -l` sample is not an instantaneous CPU reading; take two
@@ -201,7 +202,100 @@ export function envSnapshot() {
   return out
 }
 
+const readText = file => {
+  try {
+    return fs.readFileSync(file, 'utf8')
+  } catch {
+    return null
+  }
+}
+
+/** Aggregate jiffies of the `cpu` line of /proc/stat: [busy, idle]. */
+function procStatCpu() {
+  const line = readText('/proc/stat')?.split('\n')[0]
+  if (!line?.startsWith('cpu ')) return null
+  const v = line.trim().split(/\s+/).slice(1).map(Number)
+  const idle = v[3] + (v[4] ?? 0) // idle + iowait
+  return { idle, total: v.reduce((a, b) => a + b, 0) }
+}
+
+/** `some avg10` / `full avg10` of a PSI file (Linux >= 4.20). */
+function psi(kind) {
+  const text = readText(`/proc/pressure/${kind}`)
+  if (!text) return null
+  const out = {}
+  for (const m of text.matchAll(/^(some|full) avg10=([\d.]+)/gm)) out[m[1]] = Number(m[2])
+  return out
+}
+
+/** cgroup v2 file of this process's own cgroup (falls back to the root). */
+function cgroupFile(name) {
+  const rel = /^0::(.*)$/m.exec(readText('/proc/self/cgroup') ?? '')?.[1]
+  for (const dir of [rel && path.join('/sys/fs/cgroup', rel), '/sys/fs/cgroup'].filter(Boolean)) {
+    const text = readText(path.join(dir, name))
+    if (text !== null) return text.trim()
+  }
+  return null
+}
+
+/**
+ * Linux runner (GitHub-hosted) equivalent of the macOS snapshot: CPU idle
+ * from two /proc/stat samples 1 s apart, MemAvailable, PSI, and the cgroup's
+ * OOM counters. Read-only; never signals or alters any process.
+ */
+function linuxEnvSnapshot() {
+  const out = {
+    platform: 'linux',
+    at: new Date().toISOString(),
+    load: os.loadavg().map(r1),
+    cpus: os.cpus().length,
+  }
+  const a = procStatCpu()
+  execFileSync('sleep', ['1'])
+  const b = procStatCpu()
+  if (a && b && b.total > a.total)
+    out.cpu = { idle: r1(((b.idle - a.idle) * 100) / (b.total - a.total)) }
+  const mem = readText('/proc/meminfo') ?? ''
+  const kb = key => Number(new RegExp(`^${key}:\\s+(\\d+) kB`, 'm').exec(mem)?.[1] ?? NaN)
+  out.memMB = {
+    total: Math.round(kb('MemTotal') / 1024),
+    available: Math.round(kb('MemAvailable') / 1024),
+    swapFree: Math.round(kb('SwapFree') / 1024),
+  }
+  out.psi = { cpu: psi('cpu'), memory: psi('memory'), io: psi('io') }
+  const events = cgroupFile('memory.events')
+  out.oom = events
+    ? Object.fromEntries(
+        [...events.matchAll(/^(oom|oom_kill)\s+(\d+)/gm)].map(m => [m[1], Number(m[2])]),
+      )
+    : null
+  return out
+}
+
+/**
+ * Gate for a Linux runner (agreed separately from the macOS one, which does
+ * not carry over): load1 <= load1Max, CPU idle >= idleMin, MemAvailable >=
+ * memMinMB, PSI memory `some avg10` <= psiMemMax, and no OOM kill since
+ * `oomBase` (the counters at the start of the run).
+ */
+function linuxGateOk(env, gate) {
+  const reasons = []
+  if (env.load[0] > gate.load1Max) reasons.push(`load1 ${env.load[0]} > ${gate.load1Max}`)
+  if (!env.cpu) reasons.push('cpu idle unknown (/proc/stat)')
+  else if (env.cpu.idle < gate.idleMin) reasons.push(`cpu idle ${env.cpu.idle}% < ${gate.idleMin}%`)
+  if (!(env.memMB.available >= gate.memMinMB))
+    reasons.push(`MemAvailable ${env.memMB.available} MB < ${gate.memMinMB} MB`)
+  const memSome = env.psi.memory?.some
+  if (memSome === undefined) reasons.push('PSI memory unknown')
+  else if (memSome > gate.psiMemMax)
+    reasons.push(`PSI memory some avg10 ${memSome} > ${gate.psiMemMax}`)
+  if (env.oom && gate.oomBase && env.oom.oom_kill > gate.oomBase.oom_kill)
+    reasons.push(`oom_kill ${gate.oomBase.oom_kill} -> ${env.oom.oom_kill} since run start`)
+  return { ok: reasons.length === 0, reasons }
+}
+
 export function gateOk(env, gate) {
+  if (env.platform === 'linux') return linuxGateOk(env, gate)
   const reasons = []
   if (env.load[0] > gate.load1Max) reasons.push(`load1 ${env.load[0]} > ${gate.load1Max}`)
   if (env.cpu && env.cpu.idle < gate.idleMin)
@@ -233,20 +327,27 @@ const ANSI = /\x1b\[[0-9;]*m/g // oxlint-disable-line no-control-regex -- strip 
  * its trusted tokens in `$HOME/.svelte-devtools`), and constant per checkout
  * so one authorization survives server restarts within a paired run.
  */
-export async function startServer({ appDir, port, withDevtools, home }) {
+export async function startServer({ appDir, port, withDevtools, home, cpuProfDir = null }) {
   const viteBin = path.join(appDir, '../../node_modules/vite/bin/vite.js')
   fs.mkdirSync(home, { recursive: true })
   const t0 = performance.now()
-  const child = spawn(process.execPath, [viteBin, 'dev', '--port', String(port), '--strictPort'], {
-    cwd: appDir,
-    env: {
-      ...process.env,
-      HOME: home,
-      PERF_DEVTOOLS: withDevtools ? '1' : '0',
-      PERF_LOG_LEVEL: 'info',
+  // `--cpu-prof` writes the profile when the process exits normally (Vite
+  // closes and exits on SIGTERM).
+  const nodeArgs = cpuProfDir ? ['--cpu-prof', `--cpu-prof-dir=${cpuProfDir}`] : []
+  const child = spawn(
+    process.execPath,
+    [...nodeArgs, viteBin, 'dev', '--port', String(port), '--strictPort'],
+    {
+      cwd: appDir,
+      env: {
+        ...process.env,
+        HOME: home,
+        PERF_DEVTOOLS: withDevtools ? '1' : '0',
+        PERF_LOG_LEVEL: 'info',
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
     },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
+  )
   let log = ''
   child.stdout.on('data', d => (log += d))
   child.stderr.on('data', d => (log += d))
@@ -300,6 +401,23 @@ export const INIT_SCRIPT = `
       for (const e of l.getEntries()) window.__perf.longTasks.push({ start: e.startTime, dur: e.duration });
     }).observe({ type: 'longtask', buffered: true });
   } catch {}
+  // Input -> paint. Event Timing reports only events >= 16 ms (duration is
+  // input -> next paint, 8 ms granularity); inputToFrame is every click's
+  // timeStamp -> the task after the next animation frame (an upper-bound
+  // proxy for "painted", recorded for all clicks).
+  window.__perf.events = [];
+  window.__perf.inputToFrame = [];
+  try {
+    new PerformanceObserver((l) => {
+      for (const e of l.getEntries())
+        if (e.name === 'click' || e.name === 'pointerup' || e.name === 'input' || e.name === 'keydown')
+          window.__perf.events.push({ name: e.name, start: e.startTime, dur: e.duration });
+    }).observe({ type: 'event', durationThreshold: 16, buffered: true });
+  } catch {}
+  addEventListener('click', (e) => {
+    const ts = e.timeStamp;
+    requestAnimationFrame(() => setTimeout(() => window.__perf.inputToFrame.push(performance.now() - ts), 0));
+  }, true);
 })();
 `
 
