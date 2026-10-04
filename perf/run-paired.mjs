@@ -434,28 +434,34 @@ async function stopProfilers(targets, dir, tag) {
 
 /**
  * Profiled mode (review M2): one profile per window and target, with the
- * workload of that window only — steady idle, input clicks, churn. No forced
- * GC, no mount/unmount cycles inside a window. Same windows for CLOSED (the
+ * workload of that window only — rows mount/unmount, steady idle, input
+ * clicks, churn. No forced GC inside a window. Same windows for CLOSED (the
  * reference) and OPEN. Timings here carry profiler overhead: never compared.
  */
 async function profileApp(app, scale, opts, targets, dir, tag) {
   const { page } = app
-  await page.evaluate(n => window.__bench.mountRows(n), scale.rows)
-  if (scale.tree) await page.evaluate(([d, b]) => window.__bench.mountTree(d, b), scale.tree)
-  await sleep(1500)
-  const windows = {
-    idle: () => sleep(opts.idleMs),
-    input: () => inputToPaint(page, '[data-bench="input"]', opts.inputReps),
-    churn: () => page.evaluate(ms => window.__bench.churn(50, ms), opts.churnMs),
-  }
   const out = {}
-  for (const [name, run] of Object.entries(windows)) {
+  const profiled = async (name, run) => {
     await startProfilers(targets)
     const t0 = performance.now()
     await run()
     const ms = r1(performance.now() - t0)
     out[name] = { ms, ...(await stopProfilers(targets, dir, `${tag}-${name}`)) }
   }
+  // mount: rows mount + unmount x2 on the empty page (the CLOSED vs OFF
+  // mount/unmount gap of run 5); the other windows run on the mounted page.
+  await profiled('mount', async () => {
+    for (let i = 0; i < 2; i++) {
+      await page.evaluate(n => window.__bench.mountRows(n), scale.rows)
+      await page.evaluate(() => window.__bench.clearRows())
+    }
+  })
+  await page.evaluate(n => window.__bench.mountRows(n), scale.rows)
+  if (scale.tree) await page.evaluate(([d, b]) => window.__bench.mountTree(d, b), scale.tree)
+  await sleep(1500)
+  await profiled('idle', () => sleep(opts.idleMs))
+  await profiled('input', () => inputToPaint(page, '[data-bench="input"]', opts.inputReps))
+  await profiled('churn', () => page.evaluate(ms => window.__bench.churn(50, ms), opts.churnMs))
   return out
 }
 
