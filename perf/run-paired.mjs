@@ -224,7 +224,13 @@ async function measureApp(app, scale, opts) {
   res.heapMountedMB = r1((await heapAfterGc(cdp)) / 1048576)
   res.dom = await page.evaluate(() => document.getElementsByTagName('*').length)
   res.runtime = await runtimeState(page)
-  const input = await taskMs(() => inputToPaint(page, '[data-bench="input"]', opts.inputReps))
+  // +500 ms after the last click's 250 ms wait: >= 2 more 200 ms poll ticks,
+  // so the recording of the last click falls inside the window (review S3)
+  const input = await taskMs(async () => {
+    const out = await inputToPaint(page, '[data-bench="input"]', opts.inputReps)
+    await sleep(500)
+    return out
+  })
   res.input = { ...input.out, taskMs: input.ms }
   // Ground truth of the workload, next to what the runtime reports it saw
   // (`res.runtime.instances`; null without the plugin).
@@ -483,7 +489,7 @@ async function profileApp(app, scale, opts, targets, dir, tag) {
  * excluded from the summary. `n/a (always on)` is the baseline runtime that has
  * no subscription (§6.3): its CLOSED is still active — recorded as a note.
  */
-function validateRun(r, scenario) {
+function validateRun(r, scenario, shape) {
   const reasons = []
   const notes = []
   if (r.errors?.length) reasons.push(`page errors (${r.errors.length})`)
@@ -501,10 +507,15 @@ function validateRun(r, scenario) {
         reasons.push(`sampling ${rt.sampling}, expected ${want}`)
     }
     if (r.lease?.timeout) reasons.push('lease state not reached in time')
-    // runtime counts the app root as one extra instance
-    if (want && rt.instances !== r.groundTruth.instancesMounted + 1)
+    // Exact count, by Kit major: Kit 2 generates the app root
+    // (.svelte-kit/generated/root.svelte, sync/write_root.js), which the plugin
+    // instruments as one extra instance; Kit 3 imports it from
+    // @sveltejs/kit/src/runtime/components/root.svelte (client.js), and the
+    // plugin skips node_modules components (plugin.ts transform): none.
+    const root = shape === 'kit3' ? 0 : 1
+    if (want && rt.instances !== r.groundTruth.instancesMounted + root)
       reasons.push(
-        `runtime instances ${rt.instances} != ground truth ${r.groundTruth.instancesMounted} + 1`,
+        `runtime instances ${rt.instances} != ground truth ${r.groundTruth.instancesMounted} + ${root}`,
       )
   }
   for (const [k, v] of [
@@ -653,7 +664,8 @@ async function main() {
       item.envAfter = envSnapshot()
     }
     item.notes.push(...sides[side].notes.splice(0))
-    for (const r of item.app ?? []) Object.assign(r, { validity: validateRun(r, r.scenario) })
+    for (const r of item.app ?? [])
+      Object.assign(r, { validity: validateRun(r, r.scenario, fixtures.F.shape) })
     if (item.ui) item.ui.validity = validateUi(item.ui)
     const runs = [...(item.app ?? []).map(r => r.validity), item.ui?.validity].filter(Boolean)
     item.valid = !item.skipped && !item.error && runs.length > 0 && runs.every(v => v.valid)

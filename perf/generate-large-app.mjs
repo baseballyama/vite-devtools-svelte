@@ -259,13 +259,16 @@ export default { kit: {} }
   )
 
   // Kit 3 reads every matcher from one `src/params` module (`export const
-  // params`); Kit 2 from one file per matcher under src/params/.
+  // params`, each returning the value or undefined); Kit 2 from one file per
+  // matcher under src/params/ returning a boolean.
   if (shape === 'kit3') {
     write(
       path.join(out, 'src/params.ts'),
-      `export const params = {
-  integer: (param: string) => /^\\d+$/.test(param),
-}
+      `import { defineParams } from '@sveltejs/kit/params'
+
+export const params = defineParams({
+  integer: (param) => (/^\\d+$/.test(param) ? param : undefined),
+})
 `,
     )
   } else {
