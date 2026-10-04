@@ -725,18 +725,27 @@ async function dockUi(page, srv, p) {
     let clicked = false
     for (;;) {
       if ((await unauthorized.count()) === 0) break
-      const alert = page.getByRole('alert')
-      const text = (await alert.count()) ? ((await alert.first().textContent()) ?? '') : ''
+      // One atomic, non-waiting read of all alerts (evaluateAll resolves to []
+      // when none match): the panel may vanish between a count() and a later
+      // read once the auto-submit succeeds (CI job 111401817183, Node 22).
+      const text = await page
+        .getByRole('alert')
+        .evaluateAll(els => els.map(el => el.textContent ?? '').join(' '))
+        .catch(() => '')
       if (/didn't match|went wrong/i.test(text))
         throw new Error(`hub auth: ${text.trim().slice(0, 120)}`)
       if (
         !clicked &&
         Date.now() > end - 12_000 &&
         (await authorize.count()) &&
-        (await authorize.isEnabled())
+        (await authorize.isEnabled({ timeout: 500 }).catch(() => false))
       ) {
-        await authorize.click({ timeout: 2_500 })
-        clicked = true
+        // the form may vanish (auth done) between the check and the click:
+        // a missed click is not a failure, the loop re-checks 'Unauthorized'
+        clicked = await authorize.click({ timeout: 2_500 }).then(
+          () => true,
+          () => false,
+        )
       }
       if (Date.now() > end) throw new Error('hub auth: still unauthorized 15 s after the 6th digit')
       await sleep(250)
@@ -1256,8 +1265,19 @@ async function tier2(p, getSrv, restart, app) {
         // The app page reloaded; the hub keeps its trust (localStorage) and
         // restores or reopens the Svelte iframe. No new code may be asked
         // for: the hub's 'Unauthorized' button or our own gate = FAIL.
-        if (await page.getByRole('button', { name: 'Unauthorized' }).count())
-          throw new Error('dock asks for authorization again after the restart')
+        // Right after the reload the hub may show 'Unauthorized' briefly until
+        // it re-validates the stored trust over WS (CI job 111402586518): wait
+        // ≤ 10 s for it to go away on its own. No code is entered here, so a
+        // pass still means "same trust, no new code".
+        const t0Auth = Date.now()
+        while ((await page.getByRole('button', { name: 'Unauthorized' }).count()) > 0) {
+          if (Date.now() - t0Auth > 10_000)
+            throw new Error(
+              'dock asks for authorization again after the restart (still after 10 s)',
+            )
+          await sleep(200)
+        }
+        const trustRestoredMs = Date.now() - t0Auth
         const frame = await openDockEntry(page)
         const gate = await frame
           .getByRole('dialog', { name: 'Authorize this browser' })
@@ -1268,7 +1288,7 @@ async function tier2(p, getSrv, restart, app) {
           )
         if (gate) throw new Error('own auth gate shown in the dock iframe after the restart')
         await uiShowsFixture(frame, p)
-        uiState = 'dock iframe (same trust, no new code) shows fixture components'
+        uiState = `dock iframe (same trust, no new code; 'Unauthorized' gone after ${trustRestoredMs} ms) shows fixture components`
       }
       // the restart must reach a new page load (new epoch), not only MCP
       if (!epochBefore || !epochAfter || epochBefore === epochAfter)
