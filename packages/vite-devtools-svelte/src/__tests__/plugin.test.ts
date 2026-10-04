@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
+import { EventEmitter } from 'node:events'
 import { svelteDevtools } from '../plugin.js'
 import {
   RUNTIME_MODULE_ID,
@@ -70,7 +71,12 @@ describe('svelteDevtools factory', () => {
     const plugins = svelteDevtools()
     for (const p of plugins) {
       if (typeof p.configResolved === 'function') {
-        p.configResolved({ command: 'serve', root: '/test', logger: { warn: () => {} } } as any)
+        p.configResolved({
+          command: 'serve',
+          root: '/test',
+          logger: { warn: () => {} },
+          plugins: [],
+        } as any)
       }
     }
     const trackingPlugin = plugins.find(p => p.name === 'vite-devtools-svelte:tracking')!
@@ -95,7 +101,12 @@ describe('mainPlugin virtual module resolution', () => {
     const plugins = svelteDevtools()
     const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
     if (typeof plugin.configResolved === 'function') {
-      plugin.configResolved({ command: 'serve', root: '/test', logger: { warn: () => {} } } as any)
+      plugin.configResolved({
+        command: 'serve',
+        root: '/test',
+        logger: { warn: () => {} },
+        plugins: [],
+      } as any)
     }
     return plugin
   }
@@ -151,7 +162,12 @@ describe('mainPlugin virtual module resolution', () => {
     const plugins = svelteDevtools()
     const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
     if (typeof plugin.configResolved === 'function') {
-      plugin.configResolved({ command: 'build', root: '/test', logger: { warn: () => {} } } as any)
+      plugin.configResolved({
+        command: 'build',
+        root: '/test',
+        logger: { warn: () => {} },
+        plugins: [],
+      } as any)
     }
     const resolved = (plugin.resolveId as Function)!(
       'svelte/internal/client',
@@ -164,7 +180,12 @@ describe('mainPlugin virtual module resolution', () => {
     const plugins = svelteDevtools({ componentTracking: false })
     const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
     if (typeof plugin.configResolved === 'function') {
-      plugin.configResolved({ command: 'serve', root: '/test', logger: { warn: () => {} } } as any)
+      plugin.configResolved({
+        command: 'serve',
+        root: '/test',
+        logger: { warn: () => {} },
+        plugins: [],
+      } as any)
     }
     const resolved = (plugin.resolveId as Function)!(
       'svelte/internal/client',
@@ -195,7 +216,12 @@ describe('mainPlugin transformIndexHtml', () => {
     const plugins = svelteDevtools()
     const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
     if (typeof plugin.configResolved === 'function') {
-      plugin.configResolved({ command: 'serve', root: '/test', logger: { warn: () => {} } } as any)
+      plugin.configResolved({
+        command: 'serve',
+        root: '/test',
+        logger: { warn: () => {} },
+        plugins: [],
+      } as any)
     }
     const result = (plugin.transformIndexHtml as Function)!()
     expect(Array.isArray(result)).toBe(true)
@@ -210,7 +236,12 @@ describe('mainPlugin transformIndexHtml', () => {
     const plugins = svelteDevtools()
     const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
     if (typeof plugin.configResolved === 'function') {
-      plugin.configResolved({ command: 'build', root: '/test', logger: { warn: () => {} } } as any)
+      plugin.configResolved({
+        command: 'build',
+        root: '/test',
+        logger: { warn: () => {} },
+        plugins: [],
+      } as any)
     }
     const result = (plugin.transformIndexHtml as Function)!()
     expect(result).toEqual([])
@@ -218,158 +249,187 @@ describe('mainPlugin transformIndexHtml', () => {
 })
 
 // =====================================================================
-// DevTools setup hook
+// Vite DevTools (hub) integration via the devtools hook
 // =====================================================================
 
-describe('mainPlugin devtools setup', () => {
-  it('should have devtools.setup function', () => {
-    const plugins = svelteDevtools()
-    const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
-    expect(plugin.devtools).toBeDefined()
-    expect(typeof plugin.devtools!.setup).toBe('function')
+const kit = vi.hoisted(() => ({
+  createPluginFromDevframe: vi.fn((def: any, options: any) => ({
+    name: `devframe:${def.id}`,
+    devtools: { setup: (ctx: any) => def.setup(ctx), options },
+  })),
+}))
+vi.mock('@vitejs/devtools-kit/node', () => kit)
+
+// Observe devframe instances without running real transports (host.test.ts covers the real stack).
+const initiate = vi.hoisted(() => ({
+  initDevframe: vi.fn(() => ({ nodeMiddleware: vi.fn(), close: vi.fn(async () => {}) })),
+}))
+vi.mock('devframe/initiate', () => initiate)
+
+const FIXTURES = new URL('fixtures', import.meta.url).pathname
+
+/** Run the hub path: devtools.setup → createPluginFromDevframe → def.setup(ctx). */
+async function hubHandlers(plugins: Plugin[]) {
+  const handlers = new Map<string, Function>()
+  const main = plugins.find(p => p.name === 'vite-devtools-svelte')!
+  await (main.devtools as any).setup({
+    scope: (id: string) => ({
+      rpc: { register: (fn: any) => handlers.set(`${id}:${fn.name}`, fn.handler) },
+    }),
+  })
+  return handlers
+}
+
+function resolve(plugins: Plugin[], config: Record<string, unknown> = {}) {
+  const resolved = {
+    command: 'serve',
+    root: FIXTURES,
+    base: '/',
+    plugins: [],
+    logger: { warn: () => {} },
+    ...config,
+  }
+  for (const p of plugins)
+    if (typeof p.configResolved === 'function') (p.configResolved as Function)(resolved)
+  return resolved
+}
+
+function mockServer() {
+  const middlewares: Function[] = []
+  const httpServer = Object.assign(new EventEmitter(), { address: () => null })
+  return {
+    middlewares,
+    httpServer,
+    server: {
+      hot: { on: vi.fn(), off: vi.fn(), send: vi.fn() },
+      middlewares: { use: (...args: any[]) => middlewares.push(args.at(-1)) },
+      httpServer,
+      config: { server: {}, logger: { info: () => {}, error: () => {} } },
+      environments: {},
+    } as any,
+  }
+}
+
+describe('mainPlugin devtools hook (Vite DevTools)', () => {
+  it('is dev-only and declares no build capability', () => {
+    const main = svelteDevtools().find(p => p.name === 'vite-devtools-svelte')!
+    expect(main.apply).toBe('serve')
+    expect((main.devtools as any).capabilities).toEqual({ dev: true, build: false })
   })
 
-  it('should register devtools dock and RPC handlers', () => {
+  it('mounts the portable devframe through the kit at /.svelte-devtools/', async () => {
     const plugins = svelteDevtools()
-    const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
-    if (typeof plugin.configResolved === 'function') {
-      plugin.configResolved({ command: 'serve', root: '/test', logger: { warn: () => {} } } as any)
-    }
-
-    const registeredRpc: Array<{ name: string; handler: Function }> = []
-    const registeredDocks: any[] = []
-    const hostedPaths: string[] = []
-
-    const mockCtx = {
-      views: { hostStatic: (path: string, _dir: string) => hostedPaths.push(path) },
-      docks: { register: (dock: any) => registeredDocks.push(dock) },
-      rpc: { register: (entry: any) => registeredRpc.push(entry) },
-    }
-
-    plugin.devtools!.setup(mockCtx as any)
-
-    expect(registeredDocks.length).toBe(1)
-    expect(registeredDocks[0].id).toBe('svelte-devtools')
-    expect(hostedPaths).toContain('/.svelte-devtools/')
-
-    const rpcNames = registeredRpc.map(r => r.name)
-    expect(rpcNames).toContain('svelte-devtools:get-project')
-    expect(rpcNames).toContain('svelte-devtools:get-routes')
-    expect(rpcNames).toContain('svelte-devtools:get-assets')
-    expect(rpcNames).toContain('svelte-devtools:get-component-relations')
-    expect(rpcNames).toContain('svelte-devtools:get-live-components')
-    expect(rpcNames).toContain('svelte-devtools:get-render-profiles')
-    expect(rpcNames).toContain('svelte-devtools:get-reactive-graph')
-    expect(rpcNames).toContain('svelte-devtools:get-load-profiles')
-    expect(rpcNames).toContain('svelte-devtools:get-state-timeline')
-    expect(rpcNames).toContain('svelte-devtools:get-api-endpoints')
-    expect(rpcNames).toContain('svelte-devtools:send-api-request')
-    expect(rpcNames).toContain('svelte-devtools:get-module-graph')
-    expect(rpcNames).toContain('svelte-devtools:get-og-preview')
-    expect(rpcNames).toContain('svelte-devtools:get-build-analysis')
+    resolve(plugins)
+    const handlers = await hubHandlers(plugins)
+    expect(kit.createPluginFromDevframe).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'svelte-devtools', basePath: '/.svelte-devtools/' }),
+      { base: '/.svelte-devtools/' },
+    )
+    const expected = [
+      'get-project',
+      'get-routes',
+      'get-live-components',
+      'get-module-graph',
+      'send-api-request',
+    ]
+    expect(expected.filter(name => !handlers.has(`svelte-devtools:${name}`))).toEqual([])
+    expect((await handlers.get('svelte-devtools:get-project')!()).name).toBeTruthy()
   })
 })
 
-// =====================================================================
-// RPC Handler Integration Tests
-// =====================================================================
-
-describe('RPC handlers (via devtools.setup)', () => {
-  let rpcHandlers: Map<string, Function>
-
-  beforeEach(() => {
+describe('mount selection', () => {
+  it('mounts standalone when @vitejs/devtools is absent', () => {
     const plugins = svelteDevtools()
-    const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
-    const fixturesDir = new URL('fixtures', import.meta.url).pathname
-    if (typeof plugin.configResolved === 'function') {
-      plugin.configResolved({
-        command: 'serve',
-        root: fixturesDir,
-        logger: { warn: () => {} },
-      } as any)
-    }
-
-    rpcHandlers = new Map()
-    const mockCtx = {
-      views: { hostStatic: () => {} },
-      docks: { register: () => {} },
-      rpc: {
-        register: ({ name, handler }: { name: string; handler: Function }) =>
-          rpcHandlers.set(name, handler),
-      },
-    }
-    plugin.devtools!.setup(mockCtx as any)
+    resolve(plugins)
+    const m = mockServer()
+    ;(plugins[0].configureServer as Function)(m.server)
+    // [standalone devframe middleware, MCP middleware]
+    expect(m.middlewares).toHaveLength(2)
   })
 
-  it('get-project should return project info', async () => {
-    const result = (await rpcHandlers.get('svelte-devtools:get-project')!()) as any
-    expect(result.name).toBe('test-fixture')
+  it('does not mount standalone when the Vite DevTools hub is present (it calls our devtools hook)', () => {
+    const plugins = svelteDevtools()
+    resolve(plugins, { plugins: [{ name: 'vite:devtools' }] })
+    const m = mockServer()
+    ;(plugins[0].configureServer as Function)(m.server)
+    expect(m.middlewares).toHaveLength(1) // MCP only
   })
 
-  it('get-routes should return route info', async () => {
-    const result = (await rpcHandlers.get('svelte-devtools:get-routes')!()) as any[]
-    expect(result.length).toBeGreaterThan(0)
+  it('standalone answers 503 for the DevTools base before the server listens', () => {
+    const plugins = svelteDevtools()
+    resolve(plugins)
+    const m = mockServer()
+    ;(plugins[0].configureServer as Function)(m.server)
+    const res = { statusCode: 200, end: vi.fn() }
+    const next = vi.fn()
+    m.middlewares[0]({ url: '/.svelte-devtools/' }, res, next)
+    expect(res.statusCode).toBe(503)
+    m.middlewares[0]({ url: '/app' }, { end: vi.fn() }, next)
+    expect(next).toHaveBeenCalledOnce()
   })
 
-  it('get-assets should return asset info', async () => {
-    const result = (await rpcHandlers.get('svelte-devtools:get-assets')!()) as any[]
-    expect(result.length).toBeGreaterThan(0)
+  it('subscribes the collector to the hot channel and unsubscribes on server close', () => {
+    const plugins = svelteDevtools()
+    resolve(plugins)
+    const m = mockServer()
+    ;(plugins[0].configureServer as Function)(m.server)
+    expect(m.server.hot.on).toHaveBeenCalledWith('svelte-devtools:components', expect.any(Function))
+    m.httpServer.emit('close')
+    expect(m.server.hot.off).toHaveBeenCalledWith(
+      'svelte-devtools:components',
+      expect.any(Function),
+    )
+  })
+})
+
+describe('middleware mode disposal (closeServer hook)', () => {
+  function middlewareServer() {
+    const m = mockServer()
+    m.server.httpServer = null
+    return m
+  }
+  const lastInstance = () => initiate.initDevframe.mock.results.at(-1)!.value
+
+  it('config-file restart: the old plugin instance disposes its mount, the new one survives', async () => {
+    const oldInstance = svelteDevtools()
+    resolve(oldInstance)
+    ;(oldInstance[0].configureServer as Function)(middlewareServer().server)
+    const a = lastInstance()
+    const newInstance = svelteDevtools() // config re-evaluated on restart
+    resolve(newInstance)
+    ;(newInstance[0].configureServer as Function)(middlewareServer().server)
+    const b = lastInstance()
+
+    await (oldInstance[0].closeServer as Function)({ reason: 'restart' })
+    expect(a.close).toHaveBeenCalledOnce()
+    expect(b.close).not.toHaveBeenCalled()
+    await (newInstance[0].closeServer as Function)({ reason: 'close' })
+    expect(b.close).toHaveBeenCalledOnce()
   })
 
-  it('get-component-relations should return component relations', async () => {
-    const result = (await rpcHandlers.get('svelte-devtools:get-component-relations')!()) as any[]
-    expect(result.find((c: any) => c.name === 'Counter')).toBeDefined()
+  it('inline restart: the reused plugin instance keeps only the newest mount', async () => {
+    const plugins = svelteDevtools()
+    resolve(plugins)
+    ;(plugins[0].configureServer as Function)(middlewareServer().server)
+    const a = lastInstance()
+    ;(plugins[0].configureServer as Function)(middlewareServer().server)
+    const b = lastInstance()
+    await (plugins[0].closeServer as Function)({ reason: 'restart' })
+    expect(a.close).toHaveBeenCalledOnce()
+    expect(b.close).not.toHaveBeenCalled()
+    await (plugins[0].closeServer as Function)({ reason: 'close' })
+    expect(b.close).toHaveBeenCalledOnce()
   })
 
-  it('get-live-components should return empty array initially', async () => {
-    expect(await rpcHandlers.get('svelte-devtools:get-live-components')!()).toEqual([])
-  })
-
-  it('get-module-graph should return empty graph without server', async () => {
-    expect(await rpcHandlers.get('svelte-devtools:get-module-graph')!()).toEqual({
-      modules: [],
-      cycles: [],
+  it('serves devframe through SSE in middleware mode (no WebSocket server to share)', () => {
+    const plugins = svelteDevtools()
+    resolve(plugins)
+    ;(plugins[0].configureServer as Function)(middlewareServer().server)
+    expect(initiate.initDevframe.mock.calls.at(-1)![1]).toMatchObject({
+      ws: false,
+      sse: true,
+      mcp: false,
     })
-  })
-
-  it('get-build-analysis should handle missing build dir', async () => {
-    const result = (await rpcHandlers.get('svelte-devtools:get-build-analysis')!()) as any
-    expect(result.chunks).toEqual([])
-    expect(result.totalSize).toBe(0)
-  })
-
-  it('get-api-endpoints should detect HTTP methods', async () => {
-    const result = (await rpcHandlers.get('svelte-devtools:get-api-endpoints')!()) as any[]
-    const usersEndpoint = result.find((e: any) => e.path.includes('users'))
-    expect(usersEndpoint).toBeDefined()
-    expect(usersEndpoint.methods).toContain('GET')
-    expect(usersEndpoint.methods).toContain('POST')
-    expect(usersEndpoint.methods).toContain('DELETE')
-  })
-
-  it('send-api-request should reject SSRF attempts', async () => {
-    const result = (await rpcHandlers.get('svelte-devtools:send-api-request')!(
-      'http://169.254.169.254/metadata',
-      'GET',
-      '{}',
-      '',
-    )) as any
-    expect(result.status).toBe(0)
-    expect(result.statusText).toContain('Blocked')
-  })
-
-  it('inspect-file should return source for existing file', async () => {
-    const result = (await rpcHandlers.get('svelte-devtools:inspect-file')!(
-      'src/lib/components/Counter.svelte',
-    )) as any
-    expect(result.source).toContain('$state')
-  })
-
-  it('inspect-file should handle nonexistent file gracefully', async () => {
-    const result = (await rpcHandlers.get('svelte-devtools:inspect-file')!(
-      'nonexistent.svelte',
-    )) as any
-    expect(result.source).toBe('')
   })
 })
 
@@ -378,41 +438,36 @@ describe('RPC handlers (via devtools.setup)', () => {
 // =====================================================================
 
 describe('warningCapturePlugin', () => {
-  it('should intercept Svelte compiler warnings', async () => {
+  it('captures Svelte compiler warnings and still forwards them', async () => {
     const plugins = svelteDevtools()
-    const warningPlugin = plugins.find(p => p.name === 'vite-devtools-svelte:warning-capture')!
-    const mainPlugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
+    const forwarded: string[] = []
+    const logger = { warn: (msg: string) => forwarded.push(msg) }
+    resolve(plugins, { logger })
+    logger.warn('/test/src/lib/Counter.svelte:5:2 (a11y_no_redundant_roles) Warning message')
+    logger.warn('unrelated warning')
+    const warnings = await (
+      await hubHandlers(plugins)
+    ).get('svelte-devtools:get-compiler-warnings')!()
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0]).toMatchObject({ code: 'a11y_no_redundant_roles', line: 5, column: 2 })
+    expect(forwarded).toHaveLength(2)
+  })
 
-    let capturedWarnings: string[] = []
-    const mockConfig = {
-      command: 'serve',
-      root: '/test',
-      logger: { warn: (msg: string) => capturedWarnings.push(msg) },
-    }
-
-    if (typeof mainPlugin.configResolved === 'function')
-      mainPlugin.configResolved(mockConfig as any)
-    if (typeof warningPlugin.configResolved === 'function')
-      warningPlugin.configResolved(mockConfig as any)
-
-    let rpcHandlers = new Map<string, Function>()
-    mainPlugin.devtools!.setup({
-      views: { hostStatic: () => {} },
-      docks: { register: () => {} },
-      rpc: {
-        register: ({ name, handler }: { name: string; handler: Function }) =>
-          rpcHandlers.set(name, handler),
-      },
-    } as any)
-
-    mockConfig.logger.warn(
-      '/test/src/lib/Counter.svelte:5:2 (a11y_no_redundant_roles) Warning message',
-    )
-
-    const warnings = (await rpcHandlers.get('svelte-devtools:get-compiler-warnings')!()) as any[]
-    expect(warnings.length).toBe(1)
-    expect(warnings[0].code).toBe('a11y_no_redundant_roles')
-    expect(capturedWarnings.length).toBe(1)
+  it('does not stack wrappers on a reused customLogger and feeds the newest plugin instance', async () => {
+    const forwarded: string[] = []
+    const logger = { warn: (msg: string) => forwarded.push(msg) }
+    const first = svelteDevtools()
+    resolve(first, { logger })
+    const second = svelteDevtools() // config-file restart: fresh plugin instances, same logger
+    resolve(second, { logger })
+    logger.warn('/a/App.svelte:1:1 (x) w')
+    expect(forwarded).toHaveLength(1)
+    expect(
+      await (await hubHandlers(second)).get('svelte-devtools:get-compiler-warnings')!(),
+    ).toHaveLength(1)
+    expect(
+      await (await hubHandlers(first)).get('svelte-devtools:get-compiler-warnings')!(),
+    ).toHaveLength(0)
   })
 })
 
@@ -421,12 +476,31 @@ describe('warningCapturePlugin', () => {
 // =====================================================================
 
 describe('loadProfileServerPlugin', () => {
-  it('should register global load recording function', () => {
+  it('records load timings from the transformed load wrapper', async () => {
     const plugins = svelteDevtools()
+    resolve(plugins)
     const serverPlugin = plugins.find(p => p.name === 'vite-devtools-svelte:load-profile-server')!
-    if (typeof serverPlugin.configureServer === 'function') {
-      serverPlugin.configureServer({} as any)
-    }
-    expect(typeof (globalThis as any).__svelte_devtools_record_load).toBe('function')
+    ;(serverPlugin.configureServer as Function)({})
+    ;(globalThis as any).__svelte_devtools_record_load('/', '/r/+page.ts', 'universal', 1.234, 10)
+    const loads = await (await hubHandlers(plugins)).get('svelte-devtools:get-load-profiles')!()
+    expect(loads[0]).toMatchObject({ route: '/', duration: 1.23, dataSize: 10, type: 'universal' })
+  })
+})
+
+// =====================================================================
+// Production no-op
+// =====================================================================
+
+describe('production build no-op', () => {
+  it('every plugin is serve-only (absent from vite build)', () => {
+    const appliesToBuild = (p: Plugin) =>
+      typeof p.apply === 'function'
+        ? p.apply({}, { command: 'build', mode: 'production' } as any)
+        : p.apply === undefined || p.apply === 'build'
+    expect(
+      svelteDevtools()
+        .filter(appliesToBuild)
+        .map(p => p.name),
+    ).toEqual([])
   })
 })

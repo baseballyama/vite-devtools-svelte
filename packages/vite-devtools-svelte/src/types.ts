@@ -40,6 +40,8 @@ export interface AssetInfo {
   name: string
   path: string
   relativePath: string
+  /** Public dev-server URL of the file (Vite `base` + path under the static dir). */
+  url: string
   size: number
   type: string
   mtime: number
@@ -121,6 +123,43 @@ export interface StateChange {
   oldValue: unknown
   newValue: unknown
   timestamp: number
+}
+
+/** A timeline entry as served to clients: `seq` is server-assigned and monotonic. */
+export interface StateTimelineEntry extends StateChange {
+  seq: number
+}
+
+/** Cursor-based timeline read (`getStateTimelineDelta`). */
+export interface StateTimelineDelta {
+  /** Pass back as `since` on the next call. */
+  cursor: number
+  /** `true`: `changes` is the complete buffer (replace local copy). `false`: append `changes`. */
+  reset: boolean
+  changes: StateTimelineEntry[]
+}
+
+/** Per-dataset change counters; refetch a dataset only when its counter moved. */
+export interface DatasetVersions {
+  components: number
+  renderProfiles: number
+  loadProfiles: number
+  stateTimeline: number
+  reactiveGraph: number
+  errors: number
+  fps: number
+}
+
+export interface LiveComponentsMeta {
+  /** Instances the app currently has mounted. */
+  total: number
+  /** Instances returned by `getLiveComponents()` (parents first). */
+  kept: number
+  truncated: boolean
+  /** App page load (epoch) being shown; several app tabs → the one that pushed most recently. */
+  epoch?: string
+  /** App page loads currently tracked (≤ 4). */
+  epochs: number
 }
 
 export interface ApiEndpoint {

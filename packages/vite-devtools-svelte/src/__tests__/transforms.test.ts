@@ -10,6 +10,7 @@ function getPlugins(options = {}) {
         command: 'serve',
         root: '/test',
         logger: { warn: () => {} },
+        plugins: [],
       } as any)
     }
   }
@@ -24,6 +25,7 @@ function getBuildPlugins(options = {}) {
         command: 'build',
         root: '/test',
         logger: { warn: () => {} },
+        plugins: [],
       } as any)
     }
   }

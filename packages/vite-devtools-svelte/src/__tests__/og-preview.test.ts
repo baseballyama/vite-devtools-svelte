@@ -1,29 +1,16 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { svelteDevtools } from '../plugin.js'
+import { createTestHost, rpcHandlers } from './helpers.js'
 import path from 'node:path'
+
+// Outbound URLs are DNS-checked against private ranges; keep tests offline.
+vi.mock('node:dns/promises', () => ({
+  default: { lookup: async () => [{ address: '93.184.215.14', family: 4 }] },
+}))
 
 const FIXTURES_DIR = path.resolve(import.meta.dirname, 'fixtures')
 
 function setupWithRpc() {
-  const plugins = svelteDevtools()
-  for (const p of plugins) {
-    if (typeof p.configResolved === 'function') {
-      p.configResolved({ command: 'serve', root: FIXTURES_DIR, logger: { warn: () => {} } } as any)
-    }
-  }
-
-  const mainPlugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
-  const rpcHandlers = new Map<string, Function>()
-  mainPlugin.devtools!.setup({
-    views: { hostStatic: () => {} },
-    docks: { register: () => {} },
-    rpc: {
-      register: ({ name, handler }: { name: string; handler: Function }) =>
-        rpcHandlers.set(name, handler),
-    },
-  } as any)
-
-  return rpcHandlers
+  return rpcHandlers(createTestHost(FIXTURES_DIR))
 }
 
 // =====================================================================
@@ -56,7 +43,7 @@ describe('OG Preview', () => {
 
     const rpcHandlers = setupWithRpc()
     const handler = rpcHandlers.get('svelte-devtools:get-og-preview')!
-    const result = (await handler('https://example.com')) as any
+    const result = (await handler({ url: 'https://example.com' })) as any
 
     expect(result.title).toBe('Test Page')
     expect(result.description).toBe('A test description')
@@ -82,9 +69,9 @@ describe('OG Preview', () => {
     })
 
     const rpcHandlers = setupWithRpc()
-    const result = (await rpcHandlers.get('svelte-devtools:get-og-preview')!(
-      'https://example.com',
-    )) as any
+    const result = (await rpcHandlers.get('svelte-devtools:get-og-preview')!({
+      url: 'https://example.com',
+    })) as any
 
     expect(result.title).toBe('Fallback Title')
     expect(result.issues.length).toBe(0)
@@ -107,9 +94,9 @@ describe('OG Preview', () => {
     })
 
     const rpcHandlers = setupWithRpc()
-    const result = (await rpcHandlers.get('svelte-devtools:get-og-preview')!(
-      'https://example.com',
-    )) as any
+    const result = (await rpcHandlers.get('svelte-devtools:get-og-preview')!({
+      url: 'https://example.com',
+    })) as any
 
     expect(result.description).toBe('Meta description fallback')
     expect(result.issues.length).toBe(0)
@@ -124,9 +111,9 @@ describe('OG Preview', () => {
     })
 
     const rpcHandlers = setupWithRpc()
-    const result = (await rpcHandlers.get('svelte-devtools:get-og-preview')!(
-      'https://example.com',
-    )) as any
+    const result = (await rpcHandlers.get('svelte-devtools:get-og-preview')!({
+      url: 'https://example.com',
+    })) as any
 
     expect(result.issues).toContain('Missing og:title or <title>')
     expect(result.issues).toContain('Missing og:description or meta description')
@@ -139,9 +126,9 @@ describe('OG Preview', () => {
     globalThis.fetch = vi.fn().mockRejectedValue(new Error('Network error'))
 
     const rpcHandlers = setupWithRpc()
-    const result = (await rpcHandlers.get('svelte-devtools:get-og-preview')!(
-      'https://example.com',
-    )) as any
+    const result = (await rpcHandlers.get('svelte-devtools:get-og-preview')!({
+      url: 'https://example.com',
+    })) as any
 
     expect(result.issues.length).toBeGreaterThan(0)
     expect(result.issues[0]).toContain('Failed to fetch')
@@ -150,9 +137,9 @@ describe('OG Preview', () => {
 
   it('should reject SSRF attempts', async () => {
     const rpcHandlers = setupWithRpc()
-    const result = (await rpcHandlers.get('svelte-devtools:get-og-preview')!(
-      'http://169.254.169.254/metadata',
-    )) as any
+    const result = (await rpcHandlers.get('svelte-devtools:get-og-preview')!({
+      url: 'http://169.254.169.254/metadata',
+    })) as any
 
     expect(result.issues.length).toBeGreaterThan(0)
     expect(result.issues[0]).toContain('Blocked')
@@ -160,7 +147,9 @@ describe('OG Preview', () => {
 
   it('should reject invalid URLs', async () => {
     const rpcHandlers = setupWithRpc()
-    const result = (await rpcHandlers.get('svelte-devtools:get-og-preview')!('not-a-url')) as any
+    const result = (await rpcHandlers.get('svelte-devtools:get-og-preview')!({
+      url: 'not-a-url',
+    })) as any
 
     expect(result.issues.length).toBeGreaterThan(0)
     expect(result.issues[0]).toContain('Failed to fetch')
@@ -183,9 +172,9 @@ describe('OG Preview', () => {
     })
 
     const rpcHandlers = setupWithRpc()
-    const result = (await rpcHandlers.get('svelte-devtools:get-og-preview')!(
-      'https://example.com',
-    )) as any
+    const result = (await rpcHandlers.get('svelte-devtools:get-og-preview')!({
+      url: 'https://example.com',
+    })) as any
 
     expect(result.title).toBe('Reversed Title')
     expect(result.description).toBe('Reversed Desc')
@@ -207,9 +196,9 @@ describe('OG Preview', () => {
     })
 
     const rpcHandlers = setupWithRpc()
-    const result = (await rpcHandlers.get('svelte-devtools:get-og-preview')!(
-      'https://example.com',
-    )) as any
+    const result = (await rpcHandlers.get('svelte-devtools:get-og-preview')!({
+      url: 'https://example.com',
+    })) as any
 
     expect(result.title).toBe('Self Close')
   })
@@ -220,9 +209,9 @@ describe('OG Preview', () => {
     })
 
     const rpcHandlers = setupWithRpc()
-    const result = (await rpcHandlers.get('svelte-devtools:get-og-preview')!(
-      'https://example.com/page',
-    )) as any
+    const result = (await rpcHandlers.get('svelte-devtools:get-og-preview')!({
+      url: 'https://example.com/page',
+    })) as any
 
     expect(result.url).toBe('https://example.com/page')
   })

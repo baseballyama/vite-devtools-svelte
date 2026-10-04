@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { svelteDevtools } from '../plugin.js'
+import { createTestHost, rpcHandlers } from './helpers.js'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -10,25 +10,7 @@ import path from 'node:path'
 const FIXTURES_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'svelte-devtools-build-'))
 
 function setupWithRpc(root: string = FIXTURES_DIR) {
-  const plugins = svelteDevtools()
-  for (const p of plugins) {
-    if (typeof p.configResolved === 'function') {
-      p.configResolved({ command: 'serve', root, logger: { warn: () => {} } } as any)
-    }
-  }
-
-  const mainPlugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
-  const rpcHandlers = new Map<string, Function>()
-  mainPlugin.devtools!.setup({
-    views: { hostStatic: () => {} },
-    docks: { register: () => {} },
-    rpc: {
-      register: ({ name, handler }: { name: string; handler: Function }) =>
-        rpcHandlers.set(name, handler),
-    },
-  } as any)
-
-  return rpcHandlers
+  return rpcHandlers(createTestHost(root))
 }
 
 // =====================================================================

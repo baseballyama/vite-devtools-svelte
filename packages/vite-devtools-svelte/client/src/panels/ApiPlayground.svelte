@@ -1,164 +1,315 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { getApiEndpoints, sendApiRequest, openInEditor } from '../lib/rpc.js'
   import type { ApiEndpoint, ApiResponse } from '../lib/types.js'
-  import { getApiEndpoints, sendApiRequest } from '../lib/rpc.js'
-  import PanelContainer from '../components/PanelContainer.svelte'
-  import Card from '../components/Card.svelte'
-  import Badge from '../components/Badge.svelte'
-  import ActionButton from '../components/ActionButton.svelte'
+  import { resource } from '../lib/resource.svelte.js'
+  import { matcher } from '../lib/match.js'
+  import { formatBytes, formatMs } from '../lib/format.js'
+  import Panel from '../components/Panel.svelte'
+  import SplitView from '../components/SplitView.svelte'
+  import VirtualList from '../components/VirtualList.svelte'
+  import SearchField from '../components/SearchField.svelte'
+  import Button from '../components/Button.svelte'
+  import Badge, { type Tone } from '../components/Badge.svelte'
+  import Highlight from '../components/Highlight.svelte'
+  import EmptyState from '../components/EmptyState.svelte'
 
-  let endpoints = $state<ApiEndpoint[]>([])
-  let selectedEndpoint = $state<ApiEndpoint | null>(null)
+  const endpoints = resource<ApiEndpoint[]>(getApiEndpoints, { initial: [] })
+
+  const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
+  const methodTone = (m: string): Tone => (m === 'GET' ? 'blue' : m === 'POST' ? 'green' : m === 'DELETE' ? 'red' : m === 'HEAD' || m === 'OPTIONS' ? 'neutral' : 'yellow')
+
+  let query = $state('')
+  let selected = $state<string | null>(null)
   let method = $state('GET')
-  let requestUrl = $state('')
-  let requestHeaders = $state('{}')
-  let requestBody = $state('')
+  let url = $state('')
+  let headers = $state('{\n  \n}')
+  let body = $state('')
+  let tab = $state<'body' | 'headers'>('body')
+  let sending = $state(false)
   let response = $state<ApiResponse | null>(null)
-  let loading = $state(false)
+  let requestError = $state<string | null>(null)
 
-  function selectEndpoint(ep: ApiEndpoint) {
-    selectedEndpoint = ep
-    method = ep.methods[0] || 'GET'
-    requestUrl = `${window.location.origin}${ep.path}`
-    requestHeaders = '{}'
-    requestBody = ''
+  const rows = $derived.by(() => {
+    const m = matcher(query)
+    return m ? endpoints.data.filter((e) => m(e.path, e.route, e.methods.join(' '))) : endpoints.data
+  })
+  const current = $derived(selected ? (endpoints.data.find((e) => e.route === selected) ?? null) : null)
+
+  const headersError = $derived.by(() => {
+    if (!headers.trim()) return null
+    try {
+      const v = JSON.parse(headers)
+      return v && typeof v === 'object' && !Array.isArray(v) ? null : 'Headers must be a JSON object'
+    } catch (e) {
+      return (e as Error).message
+    }
+  })
+
+  const hasBody = $derived(method !== 'GET' && method !== 'HEAD')
+
+  const pretty = $derived.by(() => {
+    if (!response?.body) return ''
+    const ct = Object.entries(response.headers).find(([k]) => k.toLowerCase() === 'content-type')?.[1] ?? ''
+    if (ct.includes('json') || /^\s*[[{]/.test(response.body)) {
+      try {
+        return JSON.stringify(JSON.parse(response.body), null, 2)
+      } catch {}
+    }
+    return response.body
+  })
+
+  function pick(e: ApiEndpoint) {
+    selected = e.route
+    method = e.methods[0] ?? 'GET'
+    url = new URL(e.path, location.origin).href
     response = null
+    requestError = null
   }
 
   async function send() {
-    loading = true
-    response = null
+    if (!url || headersError || sending) return
+    sending = true
+    requestError = null
     try {
-      response = await sendApiRequest(requestUrl, method, requestHeaders, requestBody)
+      response = await sendApiRequest(url, method, headers.trim() || '{}', hasBody ? body : '')
     } catch (e) {
-      response = { status: 0, statusText: String(e), headers: {}, body: '', duration: 0 }
+      response = null
+      requestError = e instanceof Error ? e.message : String(e)
+    } finally {
+      sending = false
     }
-    loading = false
   }
 
-  function statusColor(status: number): 'success' | 'warning' | 'error' | 'neutral' {
-    if (status >= 200 && status < 300) return 'success'
-    if (status >= 300 && status < 400) return 'warning'
-    if (status >= 400) return 'error'
-    return 'neutral'
+  function onkeydown(e: KeyboardEvent) {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault()
+      send()
+    }
   }
 
-  onMount(async () => {
-    try { endpoints = await getApiEndpoints() } catch { /* ignore */ }
-  })
+  function statusTone(s: number): Tone {
+    return s >= 200 && s < 300 ? 'green' : s >= 300 && s < 400 ? 'yellow' : s >= 400 ? 'red' : 'neutral'
+  }
 </script>
 
-<PanelContainer summary="Send requests to your +server.ts endpoints without leaving the devtools.">
-  <div class="api-layout">
-    <div class="endpoints-list">
-      <Card title="Endpoints ({endpoints.length})">
-        {#if endpoints.length === 0}
-          <p class="empty">No API endpoints found. Create +server.ts files to add API routes.</p>
-        {:else}
-          {#each endpoints as ep}
-            <button class="endpoint-item" class:selected={selectedEndpoint === ep} onclick={() => selectEndpoint(ep)}>
-              <span class="ep-path">{ep.path}</span>
-              <div class="ep-methods">
-                {#each ep.methods as m}
-                  <Badge variant={m === 'GET' ? 'info' : m === 'POST' ? 'success' : m === 'DELETE' ? 'error' : 'warning'}>{m}</Badge>
-                {/each}
-              </div>
-            </button>
-          {/each}
+<Panel title="API" count={endpoints.data.length}>
+  {#snippet toolbar()}
+    <SearchField bind:value={query} placeholder="Filter endpoints…" count={rows.length} />
+  {/snippet}
+  {#snippet actions()}
+    <Button icon="refresh" variant="ghost" label="Rescan endpoints" disabled={endpoints.busy} onclick={() => endpoints.refresh()} />
+  {/snippet}
+
+  <SplitView id="api" side="start" initial={300} min={200}>
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="client" {onkeydown}>
+      <form
+        class="bar"
+        onsubmit={(e) => {
+          e.preventDefault()
+          send()
+        }}
+      >
+        <select class="select method" bind:value={method} aria-label="HTTP method">
+          {#each current?.methods.length ? current.methods : METHODS as m (m)}<option>{m}</option>{/each}
+        </select>
+        <input class="input url mono" bind:value={url} placeholder="http://localhost:5173/api/…" aria-label="Request URL" spellcheck="false" />
+        <Button type="submit" variant="primary" icon="send" disabled={!url || !!headersError || sending} title="Send (⌘↵)">
+          {sending ? 'Sending…' : 'Send'}
+        </Button>
+      </form>
+
+      <div class="tabs" role="tablist" aria-label="Request parts">
+        <button role="tab" aria-selected={tab === 'body'} onclick={() => (tab = 'body')}>Body</button>
+        <button role="tab" aria-selected={tab === 'headers'} onclick={() => (tab = 'headers')}>
+          Headers {#if headersError}<span class="err-dot" title={headersError}></span>{/if}
+        </button>
+        {#if current}
+          <button class="file mono" onclick={() => openInEditor(current.file).catch(() => {})} title="Open handler in editor">{current.file}</button>
         {/if}
-      </Card>
-    </div>
-
-    <div class="request-area">
-      <Card title="Request">
-        <div class="request-row">
-          <select class="method-select" bind:value={method}>
-            {#each selectedEndpoint?.methods || ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as m}
-              <option value={m}>{m}</option>
-            {/each}
-          </select>
-          <input class="url-input" type="text" bind:value={requestUrl} placeholder="URL" />
-          <ActionButton onclick={send}>{loading ? '...' : 'Send'}</ActionButton>
-        </div>
-
-        <div class="input-group">
-          <label class="input-label" for="api-playground-headers">Headers (JSON)</label>
-          <textarea id="api-playground-headers" class="text-input" rows="2" bind:value={requestHeaders} placeholder="Headers JSON"></textarea>
-        </div>
-
-        {#if method !== 'GET' && method !== 'HEAD'}
-          <div class="input-group">
-            <label class="input-label" for="api-playground-body">Body</label>
-            <textarea id="api-playground-body" class="text-input" rows="3" bind:value={requestBody} placeholder="Request body"></textarea>
-          </div>
-        {/if}
-      </Card>
-
-      {#if response}
-        <Card title="Response">
-          <div class="response-header">
-            <Badge variant={statusColor(response.status)}>{response.status} {response.statusText}</Badge>
-            <span class="res-duration">{response.duration}ms</span>
-          </div>
-          {#if Object.keys(response.headers).length > 0}
-            <details class="res-section">
-              <summary class="res-section-title">Headers ({Object.keys(response.headers).length})</summary>
-              <pre class="res-code">{JSON.stringify(response.headers, null, 2)}</pre>
-            </details>
+      </div>
+      <div class="req" role="tabpanel">
+        {#if tab === 'body'}
+          {#if hasBody}
+            <textarea class="input editor" bind:value={body} placeholder={'{ "name": "value" }'} aria-label="Request body" spellcheck="false"></textarea>
+          {:else}
+            <p class="hint">{method} requests have no body.</p>
           {/if}
-          <div class="res-section">
-            <span class="res-section-title">Body</span>
-            <pre class="res-code">{response.body || '(empty)'}</pre>
-          </div>
-        </Card>
-      {/if}
+        {:else}
+          <textarea class="input editor" bind:value={headers} aria-label="Request headers as JSON" aria-invalid={!!headersError} spellcheck="false"></textarea>
+          {#if headersError}<p class="hint error">{headersError}</p>{/if}
+        {/if}
+      </div>
+
+      <section class="res" aria-label="Response" aria-live="polite">
+        {#if requestError}
+          <EmptyState icon="errors" tone="error" title="Request failed"><p class="mono">{requestError}</p></EmptyState>
+        {:else if response}
+          <header class="res-head">
+            <Badge tone={statusTone(response.status)}>{response.status} {response.statusText}</Badge>
+            <span class="num muted">{formatMs(response.duration)}</span>
+            <span class="num muted">{formatBytes(new Blob([response.body]).size)}</span>
+            <details class="hdrs">
+              <summary>{Object.keys(response.headers).length} headers</summary>
+              <dl class="kv">
+                {#each Object.entries(response.headers) as [k, v] (k)}<dt class="mono">{k}</dt><dd class="mono">{v}</dd>{/each}
+              </dl>
+            </details>
+          </header>
+          <pre class="body mono">{pretty || '(empty body)'}</pre>
+        {:else}
+          <EmptyState icon="send" title="Send a request">
+            <p>Pick an endpoint on the left or type any URL. <kbd>⌘</kbd> <kbd>↵</kbd> sends.</p>
+          </EmptyState>
+        {/if}
+      </section>
     </div>
-  </div>
-</PanelContainer>
+
+    {#snippet aside()}
+      <VirtualList items={rows} getKey={(e) => e.route} bind:selected label="API endpoints" onselect={pick}>
+        {#snippet row(e)}
+          <span class="methods">
+            {#each e.methods.slice(0, 3) as m (m)}<Badge tone={methodTone(m)}>{m}</Badge>{/each}
+            {#if e.methods.length > 3}<Badge>+{e.methods.length - 3}</Badge>{/if}
+          </span>
+          <span class="truncate mono path"><Highlight text={e.path} {query} /></span>
+        {/snippet}
+        {#snippet empty()}
+          {#if endpoints.loading}
+            <EmptyState title="Scanning +server files…" />
+          {:else}
+            <EmptyState icon="api" title={endpoints.data.length ? 'No endpoints match' : 'No +server endpoints'} />
+          {/if}
+        {/snippet}
+      </VirtualList>
+    {/snippet}
+  </SplitView>
+</Panel>
 
 <style>
-  .empty { color: var(--color-text-muted); font-size: var(--text-sm); }
-
-  .api-layout { display: flex; gap: var(--space-3); }
-  .endpoints-list { width: 260px; flex-shrink: 0; }
-  .request-area { flex: 1; display: flex; flex-direction: column; gap: var(--space-3); }
-
-  .endpoint-item {
-    display: flex; align-items: center; justify-content: space-between; width: 100%;
-    padding: var(--space-2); background: none; border: none; border-bottom: 1px dashed var(--color-border);
-    cursor: pointer; font-family: var(--font-sans); text-align: left; transition: background var(--transition-fast);
+  .client {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
   }
-  .endpoint-item:hover { background: var(--color-surface-active); }
-  .endpoint-item.selected { background: var(--color-surface-active); }
-  .ep-path { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text); }
-  .ep-methods { display: flex; gap: 2px; }
-
-  .request-row { display: flex; gap: var(--space-2); align-items: center; margin-bottom: var(--space-2); }
-  .method-select {
-    padding: var(--space-1) var(--space-2); background: var(--color-surface); border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm); color: var(--color-text); font-family: var(--font-mono); font-size: var(--text-sm);
+  .bar {
+    display: flex;
+    gap: 6px;
+    padding: 10px 12px;
   }
-  .url-input {
-    flex: 1; padding: var(--space-1) var(--space-2); background: var(--color-surface); border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm); color: var(--color-text); font-family: var(--font-mono); font-size: var(--text-sm);
+  .method {
+    width: 96px;
+    font-weight: 600;
   }
-  .url-input:focus, .method-select:focus, .text-input:focus { outline: none; border-color: var(--color-accent-500); }
-
-  .input-group { margin-bottom: var(--space-2); }
-  .input-label { display: block; font-size: var(--text-xs); color: var(--color-text-muted); margin-bottom: 4px; }
-  .text-input {
-    width: 100%; padding: var(--space-1) var(--space-2); background: var(--color-surface); border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm); color: var(--color-text); font-family: var(--font-mono); font-size: var(--text-xs);
-    resize: vertical;
+  .url {
+    flex: 1;
   }
-
-  .response-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-2); }
-  .res-duration { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-subtle); }
-  .res-section { margin-top: var(--space-2); }
-  .res-section-title { font-size: var(--text-xs); color: var(--color-text-muted); font-weight: 500; cursor: pointer; }
-  .res-code {
-    margin: var(--space-1) 0 0; padding: var(--space-2); background: var(--color-base);
-    border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: var(--text-xs);
-    color: var(--color-text); overflow-x: auto; white-space: pre-wrap; max-height: 300px; overflow-y: auto;
+  .tabs {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .tabs button {
+    position: relative;
+    height: 30px;
+    padding: 0 10px;
+    border: 0;
+    background: none;
+    color: var(--fg-muted);
+    font-size: var(--fs-sm);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tabs [aria-selected='true'] {
+    color: var(--fg);
+    box-shadow: inset 0 -2px 0 var(--accent);
+  }
+  .tabs .file {
+    margin-left: auto;
+    font-size: var(--fs-xs);
+    color: var(--fg-faint);
+  }
+  .tabs .file:hover {
+    color: var(--accent-fg);
+  }
+  .err-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--red);
+  }
+  .req {
+    padding: 10px 12px;
+  }
+  .editor {
+    width: 100%;
+    min-height: 84px;
+    height: 110px;
+  }
+  .hint {
+    margin: 4px 0 0;
+    color: var(--fg-faint);
+    font-size: var(--fs-sm);
+  }
+  .hint.error {
+    color: var(--red);
+  }
+  .res {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--border);
+  }
+  .res-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    font-size: var(--fs-xs);
+  }
+  .hdrs {
+    margin-left: auto;
+    color: var(--fg-muted);
+  }
+  .hdrs[open] {
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+  .hdrs summary {
+    cursor: pointer;
+  }
+  .hdrs .kv {
+    padding: 6px 0 0;
+  }
+  .body {
+    flex: 1;
+    margin: 0;
+    padding: 10px 12px;
+    overflow: auto;
+    background: var(--bg-inset);
+    border-top: 1px solid var(--border);
+    font-size: var(--fs-xs);
+    line-height: 1.55;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .methods {
+    display: inline-flex;
+    gap: 2px;
+  }
+  .path {
+    font-size: var(--fs-xs);
+  }
+  kbd {
+    padding: 0 4px;
+    border: 1px solid var(--border-strong);
+    border-radius: 3px;
+    font-size: var(--fs-2xs);
   }
 </style>

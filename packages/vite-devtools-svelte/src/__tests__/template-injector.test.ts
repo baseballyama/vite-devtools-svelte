@@ -9,7 +9,9 @@ import {
   TEMPLATE_APP_MARKER,
 } from '../template-injector.js'
 
-const INJECT_URL = '/@id/@vitejs/devtools/client/inject'
+const INJECT_URL = '/__devtools/embedded.js'
+/** Removed from `@vitejs/devtools` 0.7.6; requesting it 500s (review H-INJ). */
+const REMOVED_INJECT_URL = '/@id/@vitejs/devtools/client/inject'
 
 /**
  * Hand-rolled mock that mirrors the literal SvelteKit's `sync.server()` emits.
@@ -37,7 +39,7 @@ describe('injectIntoSvelteKitInternal', () => {
     // around the src attribute appear as \" in the patched source. After
     // injection, the literal sequence we expect is `</script></body>`.
     expect(out!).toMatch(
-      /<script[^>]*src=\\"\/@id\/@vitejs\/devtools\/client\/inject\\"[^>]*><\/script><\/body>/,
+      /<script type=\\"module\\" src=\\"\/__devtools\/embedded\.js\\"><\/script><\/body>/,
     )
   })
 
@@ -69,7 +71,8 @@ describe('injectIntoSvelteKitInternal', () => {
 })
 
 describe('sveltekitTemplateInjector plugin', () => {
-  const plugin = sveltekitTemplateInjector()
+  let hosted = true
+  const plugin = sveltekitTemplateInjector(() => hosted)
 
   it('only applies during dev serve', () => {
     const apply = plugin.apply as (
@@ -94,6 +97,23 @@ describe('sveltekitTemplateInjector plugin', () => {
     )
     expect(result).toBeDefined()
     expect(result!.code).toContain(INJECT_URL)
+    expect(result!.code).not.toContain(REMOVED_INJECT_URL)
+  })
+
+  it('leaves the template untouched when the Vite DevTools hub is not present (standalone)', () => {
+    const transform = plugin.transform as (this: unknown, code: string, id: string) => unknown
+    hosted = false
+    try {
+      expect(
+        transform.call(
+          {},
+          FAKE_INTERNAL_JS,
+          `/abs/project/.svelte-kit/generated/server/internal.js`,
+        ),
+      ).toBeUndefined()
+    } finally {
+      hosted = true
+    }
   })
 
   it('ignores other modules', () => {

@@ -26,4 +26,8 @@ export type {
   BuildChunk,
   BuildAnalysis,
   FpsSample,
+  StateTimelineEntry,
+  StateTimelineDelta,
+  DatasetVersions,
+  LiveComponentsMeta,
 } from '../../../src/types.js'

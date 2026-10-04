@@ -1,192 +1,186 @@
 <script lang="ts">
-  import { getAssets } from '../lib/rpc.js'
+  import { getAssets, openInEditor } from '../lib/rpc.js'
   import type { AssetInfo } from '../lib/types.js'
+  import { resource } from '../lib/resource.svelte.js'
+  import { matcher } from '../lib/match.js'
+  import { formatBytes } from '../lib/format.js'
+  import type { IconName } from '../lib/icons.js'
+  import Panel from '../components/Panel.svelte'
+  import SplitView from '../components/SplitView.svelte'
+  import DataTable, { type Column, type SortState } from '../components/DataTable.svelte'
+  import Inspector from '../components/Inspector.svelte'
+  import SearchField from '../components/SearchField.svelte'
+  import Segmented from '../components/Segmented.svelte'
+  import Button from '../components/Button.svelte'
   import Badge from '../components/Badge.svelte'
-  import SearchInput from '../components/SearchInput.svelte'
-  import ListItem from '../components/ListItem.svelte'
-  import ScrollList from '../components/ScrollList.svelte'
-  import DetailPanel from '../components/DetailPanel.svelte'
-  import PanelContainer from '../components/PanelContainer.svelte'
+  import Icon from '../components/Icon.svelte'
+  import Highlight from '../components/Highlight.svelte'
+  import EmptyState from '../components/EmptyState.svelte'
 
-  let assets = $state<AssetInfo[]>([])
-  let error = $state<string | null>(null)
-  let loading = $state(true)
-  let selectedAsset = $state<AssetInfo | null>(null)
-  let searchQuery = $state('')
-  let filterType = $state<string>('all')
+  const assets = resource<AssetInfo[]>(getAssets, { initial: [] })
 
-  async function load() {
-    try {
-      loading = true
-      assets = await getAssets()
-    } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to load assets'
-    } finally {
-      loading = false
-    }
+  type Category = 'image' | 'font' | 'video' | 'audio' | 'text' | 'other'
+  function category(mime: string): Category {
+    const head = mime.split('/')[0]
+    return head === 'image' || head === 'font' || head === 'video' || head === 'audio' || head === 'text' ? head : 'other'
   }
+  const catIcon: Record<Category, IconName> = { image: 'assets', font: 'file', video: 'play', audio: 'play', text: 'file', other: 'file' }
 
-  load()
+  let query = $state('')
+  let cat = $state<'all' | Category>('all')
+  let sort = $state<SortState | null>({ id: 'size', desc: true })
+  let selected = $state<string | null>(null)
 
-  // Note: this is `$derived.by` (not `$derived`) because the value is a
-  // computed array, not a function. The previous `$derived(() => ...)` form
-  // produced a $state holding the function itself, which broke reactivity.
-  let assetTypes = $derived.by(() => {
-    const types = new Set(assets.map(a => getCategory(a.type)))
-    return ['all', ...Array.from(types).sort()]
+  const counts = $derived.by(() => {
+    const m = new Map<Category, number>()
+    for (const a of assets.data) m.set(category(a.type), (m.get(category(a.type)) ?? 0) + 1)
+    return m
   })
 
-  let filteredAssets = $derived(
-    assets.filter(a => {
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase()
-        if (!a.name.toLowerCase().includes(q) && !a.relativePath.toLowerCase().includes(q)) return false
-      }
-      if (filterType !== 'all' && getCategory(a.type) !== filterType) return false
-      return true
-    })
-  )
+  const catOptions = $derived([
+    { value: 'all' as const, label: 'All', count: assets.data.length },
+    ...(['image', 'font', 'video', 'audio', 'text', 'other'] as const)
+      .filter((c) => counts.get(c))
+      .map((c) => ({ value: c, label: c[0].toUpperCase() + c.slice(1), count: counts.get(c) })),
+  ])
 
-  let totalSize = $derived(assets.reduce((sum, a) => sum + a.size, 0))
+  const rows = $derived.by(() => {
+    const m = matcher(query)
+    return assets.data.filter((a) => (cat === 'all' || category(a.type) === cat) && (!m || m(a.relativePath, a.type)))
+  })
 
-  function formatSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
-  }
+  const rowsBytes = $derived(rows.reduce((s, a) => s + a.size, 0))
+  const maxSize = $derived(assets.data.reduce((m, a) => Math.max(m, a.size), 1))
+  const current = $derived(selected ? (assets.data.find((a) => a.path === selected) ?? null) : null)
 
-  function getCategory(mimeType: string): string {
-    if (mimeType.startsWith('image/')) return 'image'
-    if (mimeType.startsWith('font/')) return 'font'
-    if (mimeType.startsWith('video/')) return 'video'
-    if (mimeType.startsWith('audio/')) return 'audio'
-    if (mimeType.startsWith('text/')) return 'text'
-    return 'other'
-  }
+  const columns: Column<AssetInfo>[] = [
+    { id: 'name', label: 'File', width: 'minmax(0, 1fr)', sort: (a, b) => a.relativePath.localeCompare(b.relativePath) },
+    { id: 'type', label: 'Type', width: '120px', minWidth: 640, sort: (a, b) => a.type.localeCompare(b.type) },
+    { id: 'mtime', label: 'Modified', width: '96px', align: 'end', minWidth: 760, descFirst: true, sort: (a, b) => a.mtime - b.mtime },
+    { id: 'size', label: 'Size', width: '140px', align: 'end', descFirst: true, sort: (a, b) => a.size - b.size },
+  ]
 
-  function isPreviewable(asset: AssetInfo): boolean {
-    return asset.type.startsWith('image/')
+  // Public dev-server URL (docs/devframe-migration.md §6.1: `AssetInfo.url`).
+  // Static files are served from the root, so fall back to that.
+  function assetUrl(a: AssetInfo) {
+    return a.url || '/' + a.relativePath
   }
 </script>
 
-<PanelContainer
-  count={assets.length}
-  summary="Static-folder assets, sized and grouped by MIME — preview images at a glance."
->
+<Panel title="Assets" count={assets.data.length}>
+  {#snippet toolbar()}
+    <Segmented label="Asset type" bind:value={cat} options={catOptions} />
+    <SearchField bind:value={query} placeholder="Filter assets…" count={rows.length} />
+  {/snippet}
   {#snippet actions()}
-    <span class="total-size font-mono" title="Combined size">{formatSize(totalSize)}</span>
-    <select class="filter-select" bind:value={filterType}>
-      {#each assetTypes as type}
-        <option value={type}>{type === 'all' ? 'All types' : type}</option>
-      {/each}
-    </select>
-    <SearchInput bind:value={searchQuery} />
+    <span class="total num" title="Total size of shown assets">{formatBytes(rowsBytes)}</span>
+    <Button icon="refresh" variant="ghost" label="Rescan static directory" disabled={assets.busy} onclick={() => assets.refresh()} />
   {/snippet}
 
-  {#if loading}
-    <p class="status-text">Loading...</p>
-  {:else if error}
-    <p class="status-text error">{error}</p>
-  {:else}
-    <div class="split-layout">
-      <ScrollList items={filteredAssets} getKey={(a) => a.path}>
-        {#snippet item(asset)}
-          <ListItem selected={selectedAsset?.path === asset.path} onclick={() => (selectedAsset = asset)}>
-            <div class="asset-info">
-              <span class="asset-name">{asset.name}</span>
-              <span class="asset-path">{asset.relativePath}</span>
-            </div>
-            <span class="asset-size">{formatSize(asset.size)}</span>
-          </ListItem>
-        {/snippet}
-        {#snippet empty()}
-          <p class="empty">No assets found</p>
-        {/snippet}
-      </ScrollList>
-
-      {#if selectedAsset}
-        <DetailPanel>
-          <h3 class="detail-title">{selectedAsset.name}</h3>
-
-          {#if isPreviewable(selectedAsset)}
+  <SplitView id="assets" open={!!current}>
+    <DataTable items={rows} {columns} getKey={(a) => a.path} bind:sort bind:selected label="Static assets" onactivate={(a) => openInEditor(a.path).catch(() => {})}>
+      {#snippet row(a, { visible })}
+        <span class="file">
+          <Icon name={catIcon[category(a.type)]} size={14} />
+          <span class="truncate"><Highlight text={a.relativePath} {query} /></span>
+        </span>
+        {#if visible.has('type')}<span class="muted truncate mono small">{a.type}</span>{/if}
+        {#if visible.has('mtime')}<span class="end faint num small">{new Date(a.mtime).toLocaleDateString()}</span>{/if}
+        <span class="size end">
+          <span class="bar" style:width="{Math.max(2, (a.size / maxSize) * 56)}px"></span>
+          <span class="num">{formatBytes(a.size)}</span>
+        </span>
+      {/snippet}
+      {#snippet empty()}
+        {#if assets.loading}
+          <EmptyState title="Scanning static directory…" />
+        {:else if assets.error}
+          <EmptyState icon="errors" tone="error" title="Could not read assets"><p class="mono">{assets.error}</p></EmptyState>
+        {:else}
+          <EmptyState icon="assets" title={assets.data.length ? 'No assets match' : 'No static assets'} />
+        {/if}
+      {/snippet}
+    </DataTable>
+    {#snippet aside()}
+      {#if current}
+        <Inspector title={current.name} subtitle={current.relativePath} onclose={() => (selected = null)}>
+          {#snippet badges()}
+            <Badge>{current.type}</Badge>
+            <Badge tone={current.size > 500_000 ? 'yellow' : 'neutral'}>{formatBytes(current.size)}</Badge>
+          {/snippet}
+          {#snippet actions()}
+            <Button icon="external" onclick={() => window.open(assetUrl(current), '_blank', 'noopener')}>Open URL</Button>
+            <Button icon="editor" onclick={() => openInEditor(current.path).catch(() => {})}>Reveal</Button>
+          {/snippet}
+          {#if current.type.startsWith('image/')}
             <div class="preview">
-              <img
-                src="/__svelte-devtools/asset?path={encodeURIComponent(selectedAsset.path)}"
-                alt={selectedAsset.name}
-              />
+              <img src={assetUrl(current)} alt={current.name} loading="lazy" />
             </div>
           {/if}
-
-          <dl class="detail-dl">
-            <div class="dl-row"><dt>Path</dt><dd class="font-mono">{selectedAsset.relativePath}</dd></div>
-            <div class="dl-row"><dt>Size</dt><dd>{formatSize(selectedAsset.size)}</dd></div>
-            <div class="dl-row"><dt>Type</dt><dd><Badge>{selectedAsset.type}</Badge></dd></div>
-            <div class="dl-row"><dt>Modified</dt><dd>{new Date(selectedAsset.mtime).toLocaleString()}</dd></div>
+          <h3 class="section-title">Details</h3>
+          <dl class="kv">
+            <dt>Public URL</dt><dd class="mono">{assetUrl(current)}</dd>
+            <dt>Size</dt><dd class="num">{formatBytes(current.size)} <span class="faint">({current.size.toLocaleString()} bytes)</span></dd>
+            <dt>Modified</dt><dd>{new Date(current.mtime).toLocaleString()}</dd>
+            <dt>Disk path</dt><dd class="mono faint">{current.path}</dd>
           </dl>
-        </DetailPanel>
+        </Inspector>
       {/if}
-    </div>
-  {/if}
-</PanelContainer>
+    {/snippet}
+  </SplitView>
+</Panel>
 
 <style>
-  .total-size {
-    display: inline-flex;
-    align-items: center;
-    padding: 3px var(--space-2);
-    background: var(--color-surface-active);
-    border-radius: var(--radius-full);
-    color: var(--color-text-muted);
-    font-size: var(--text-xs);
-  }
-  .status-text { color: var(--color-text-muted); padding: var(--space-4); }
-  .status-text.error { color: var(--color-error); }
-  .empty { color: var(--color-text-faint); padding: var(--space-5); text-align: center; }
-  .split-layout { display: flex; gap: var(--space-3); flex: 1; overflow: hidden; }
-
-  .filter-select {
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    color: var(--color-text);
-    padding: var(--space-1-5) var(--space-2);
-    font-family: var(--font-sans);
-    font-size: var(--text-sm);
-    cursor: pointer;
-    outline: none;
-  }
-
-  .filter-select:focus { border-color: var(--color-border-input); }
-  .filter-select option { background: var(--color-surface); }
-
-  .asset-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-  .asset-name { font-size: var(--text-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .asset-path { color: var(--color-text-faint); font-size: var(--text-xs); font-family: var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .asset-size { color: var(--color-text-muted); font-size: var(--text-xs); font-family: var(--font-mono); flex-shrink: 0; }
-
-  .detail-title {
-    font-size: var(--text-base);
-    font-weight: 600;
-    color: var(--color-text);
-    margin-bottom: var(--space-3);
-  }
-
-  .preview {
-    background: var(--color-base);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    padding: var(--space-2);
-    margin-bottom: var(--space-3);
+  .file {
     display: flex;
     align-items: center;
-    justify-content: center;
-    min-height: 80px;
+    gap: 8px;
+    min-width: 0;
+    color: var(--fg);
   }
-
-  .preview img { max-width: 100%; max-height: 200px; object-fit: contain; }
-
-  .detail-dl { display: flex; flex-direction: column; gap: var(--space-2); }
-  .dl-row { display: flex; flex-direction: column; gap: 2px; }
-  dt { color: var(--color-text-muted); font-size: var(--text-xs); }
-  dd { color: var(--color-text); font-size: var(--text-sm); word-break: break-all; }
+  .file :global(.icon) {
+    color: var(--fg-faint);
+  }
+  .small {
+    font-size: var(--fs-xs);
+  }
+  .size {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  .bar {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--accent);
+    opacity: 0.55;
+  }
+  .total {
+    color: var(--fg-muted);
+    font-size: var(--fs-xs);
+    margin-right: 4px;
+  }
+  .preview {
+    margin: 12px 14px 0;
+    display: grid;
+    place-items: center;
+    min-height: 120px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background-color: var(--bg-inset);
+    background-image:
+      linear-gradient(45deg, var(--bg-active) 25%, transparent 25%, transparent 75%, var(--bg-active) 75%),
+      linear-gradient(45deg, var(--bg-active) 25%, transparent 25%, transparent 75%, var(--bg-active) 75%);
+    background-size: 16px 16px;
+    background-position:
+      0 0,
+      8px 8px;
+  }
+  .preview img {
+    max-width: 100%;
+    max-height: 260px;
+    object-fit: contain;
+  }
 </style>

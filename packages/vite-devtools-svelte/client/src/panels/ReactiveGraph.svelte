@@ -1,283 +1,291 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
-  import type { ReactiveNode, ReactiveGraph as ReactiveGraphType } from '../lib/types.js'
+  import { untrack } from 'svelte'
   import { getReactiveGraph, openReactiveInEditor } from '../lib/rpc.js'
-  import { componentName } from '../lib/format.js'
-  import PanelContainer from '../components/PanelContainer.svelte'
-  import Card from '../components/Card.svelte'
-  import Badge from '../components/Badge.svelte'
-  import ActionButton from '../components/ActionButton.svelte'
+  import type { ReactiveGraph, ReactiveNode } from '../lib/types.js'
+  import { resource } from '../lib/resource.svelte.js'
+  import { persisted } from '../lib/persisted.svelte.js'
+  import { matcher } from '../lib/match.js'
+  import { componentName, formatValue, prettyValue } from '../lib/format.js'
+  import Panel from '../components/Panel.svelte'
+  import SplitView from '../components/SplitView.svelte'
+  import DataTable, { type Column, type SortState } from '../components/DataTable.svelte'
+  import Inspector from '../components/Inspector.svelte'
+  import SearchField from '../components/SearchField.svelte'
+  import Segmented from '../components/Segmented.svelte'
+  import Button from '../components/Button.svelte'
+  import Badge, { type Tone } from '../components/Badge.svelte'
+  import Highlight from '../components/Highlight.svelte'
+  import EmptyState from '../components/EmptyState.svelte'
+  import LiveControls from '../components/LiveControls.svelte'
   import GraphView from '../components/GraphView.svelte'
+  import CaptureNotice from '../components/CaptureNotice.svelte'
+  import { captureInfo } from '../lib/capture.svelte.js'
 
-  let graph = $state<ReactiveGraphType>({ nodes: [], edges: [] })
-  let selectedNode = $state<ReactiveNode | null>(null)
-  let pollTimer: ReturnType<typeof setInterval> | null = null
+  /** SVG graph layout stays readable (and fast) up to roughly this size. */
+  const GRAPH_LIMIT = 400
+  /**
+   * Every poll makes the app rebuild its whole reactive graph (§6.4): poll
+   * slowly, only while visible (resource), and pause auto-refresh for large
+   * graphs — manual refresh / resume via LiveControls still work.
+   */
+  const POLL_MS = 5000
+  const AUTO_PAUSE_ABOVE = 2000
 
-  // Track previous node values to detect changes
-  let prevValues = $state(new Map<string, unknown>())
-  let changedNodeIds = $state(new Set<string>())
+  let changed = $state.raw(new Set<string>())
+  let lastValues = new Map<string, unknown>()
 
-  async function refresh() {
-    try {
-      const newGraph = await getReactiveGraph()
-      // Detect which nodes changed value since last poll
-      const changed = new Set<string>()
-      for (const node of newGraph.nodes) {
-        if (node.value !== undefined) {
-          const prev = prevValues.get(node.id)
-          if (prev !== undefined && prev !== node.value) {
-            changed.add(node.id)
-          }
-        }
+  const graph = resource<ReactiveGraph>(
+    async () => {
+      const g = await getReactiveGraph()
+      const next = new Map<string, unknown>()
+      const diff = new Set<string>()
+      for (const n of g.nodes) {
+        if (n.value === undefined) continue
+        const v = JSON.stringify(n.value)
+        next.set(n.id, v)
+        if (lastValues.has(n.id) && lastValues.get(n.id) !== v) diff.add(n.id)
       }
+      lastValues = next
+      if (diff.size || changed.size) changed = diff
+      return g
+    },
+    { initial: { nodes: [], edges: [] }, interval: POLL_MS },
+  )
 
-      // Update prev values snapshot
-      const newPrev = new Map<string, unknown>()
-      for (const node of newGraph.nodes) {
-        if (node.value !== undefined) {
-          newPrev.set(node.id, node.value)
-        }
-      }
-      prevValues = newPrev
-      changedNodeIds = changed
-      graph = newGraph
-    } catch {
-      // If RPC not available, graph stays empty
-    }
-  }
+  // Pause once the graph grows past the threshold; if the user resumes,
+  // respect that for the rest of the session.
+  let autoPaused = $state(false)
+  let userResumed = false
+  $effect(() => {
+    if (autoPaused && graph.live) userResumed = true
+  })
+  $effect(() => {
+    if (userResumed || autoPaused || graph.data.nodes.length <= AUTO_PAUSE_ABOVE) return
+    untrack(() => {
+      graph.live = false
+      autoPaused = true
+    })
+  })
 
-  function handleSelectNode(node: ReactiveNode | null) {
-    selectedNode = node
-  }
+  const capture = captureInfo(POLL_MS)
 
-  // Compute connected edges for selected node
-  const connectedEdges = $derived.by(() => {
-    if (!selectedNode) return { deps: [] as string[], dependents: [] as string[] }
-    const deps: string[] = []
-    const dependents: string[] = []
-    for (const edge of graph.edges) {
-      if (edge.to === selectedNode.id) deps.push(edge.from)
-      if (edge.from === selectedNode.id) dependents.push(edge.to)
+  const view = persisted<'auto' | 'graph' | 'list'>('reactive:view', 'auto')
+  let query = $state('')
+  let type = $state<'all' | ReactiveNode['type']>('all')
+  let sort = $state<SortState | null>({ id: 'component', desc: false })
+  let selected = $state<string | null>(null)
+  /** Restrict to one component (+ signals it is directly linked to). */
+  let scope = $state('')
+
+  const byId = $derived(new Map(graph.data.nodes.map((n) => [n.id, n])))
+  const links = $derived.by(() => {
+    const deps = new Map<string, string[]>()
+    const dependents = new Map<string, string[]>()
+    for (const e of graph.data.edges) {
+      ;(deps.get(e.to) ?? deps.set(e.to, []).get(e.to)!).push(e.from)
+      ;(dependents.get(e.from) ?? dependents.set(e.from, []).get(e.from)!).push(e.to)
     }
     return { deps, dependents }
   })
 
-  const nodeMap = $derived(new Map(graph.nodes.map(n => [n.id, n])))
+  const components = $derived([...new Set(graph.data.nodes.map((n) => n.componentFile))].sort())
 
-  async function handleOpenReactive(file: string, name: string, type: string) {
-    try { await openReactiveInEditor(file, name, type) } catch { /* ignore */ }
-  }
-
-  onMount(() => {
-    refresh()
-    pollTimer = setInterval(refresh, 1000)
-    return () => {
-      if (pollTimer) clearInterval(pollTimer)
+  const inScope = $derived.by(() => {
+    if (!scope) return null
+    const ids = new Set<string>()
+    for (const n of graph.data.nodes) if (n.componentFile === scope) ids.add(n.id)
+    for (const e of graph.data.edges) {
+      if (ids.has(e.from) || ids.has(e.to)) {
+        ids.add(e.from)
+        ids.add(e.to)
+      }
     }
+    return ids
   })
+
+  const nodes = $derived.by(() => {
+    const m = matcher(query)
+    const s = inScope
+    return graph.data.nodes.filter(
+      (n) =>
+        (!s || s.has(n.id)) &&
+        (type === 'all' || n.type === type) &&
+        (!m || m(n.name, n.componentFile, n.value === undefined ? '' : formatValue(n.value))),
+    )
+  })
+
+  const nodeIds = $derived(new Set(nodes.map((n) => n.id)))
+  const edges = $derived(graph.data.edges.filter((e) => nodeIds.has(e.from) && nodeIds.has(e.to)))
+  const mode = $derived(view.value === 'auto' ? (nodes.length <= 150 ? 'graph' : 'list') : view.value)
+  const current = $derived(selected ? (byId.get(selected) ?? null) : null)
+
+  const counts = $derived.by(() => {
+    const c = { state: 0, derived: 0, effect: 0 }
+    for (const n of graph.data.nodes) c[n.type]++
+    return c
+  })
+
+  const tones: Record<ReactiveNode['type'], Tone> = { state: 'blue', derived: 'green', effect: 'red' }
+
+  const columns: Column<ReactiveNode>[] = [
+    { id: 'type', label: 'Kind', width: '68px', sort: (a, b) => a.type.localeCompare(b.type) },
+    { id: 'name', label: 'Name', width: 'minmax(120px, 1fr)', sort: (a, b) => a.name.localeCompare(b.name) },
+    { id: 'component', label: 'Component', width: 'minmax(0, 1fr)', minWidth: 560, sort: (a, b) => a.componentFile.localeCompare(b.componentFile) || a.name.localeCompare(b.name) },
+    { id: 'value', label: 'Value', width: 'minmax(0, 1.2fr)' },
+    { id: 'deps', label: 'In / Out', width: '64px', align: 'end', descFirst: true, minWidth: 680, sort: (a, b) => (links.deps.get(a.id)?.length ?? 0) + (links.dependents.get(a.id)?.length ?? 0) - (links.deps.get(b.id)?.length ?? 0) - (links.dependents.get(b.id)?.length ?? 0) },
+  ]
+
+  function open(n: ReactiveNode) {
+    openReactiveInEditor(n.componentFile, n.name, n.type).catch(() => {})
+  }
 </script>
 
-<PanelContainer summary="$state, $derived, and $effect dependency graph — drag nodes to explore.">
+<Panel title="Reactivity" count={graph.data.nodes.length}>
+  {#snippet toolbar()}
+    <Segmented
+      label="Signal kind"
+      bind:value={type}
+      options={[
+        { value: 'all', label: 'All' },
+        { value: 'state', label: '$state', count: counts.state },
+        { value: 'derived', label: '$derived', count: counts.derived },
+        { value: 'effect', label: '$effect', count: counts.effect },
+      ]}
+    />
+    <SearchField bind:value={query} placeholder="Filter signals, components, values…" count={nodes.length} />
+    <select class="select scope" bind:value={scope} aria-label="Limit to component">
+      <option value="">All components ({components.length})</option>
+      {#each components as f (f)}<option value={f}>{componentName(f)}</option>{/each}
+    </select>
+    <CaptureNotice info={capture.data.reactiveNodes} noun="signals" />
+    {#if autoPaused && !graph.live}
+      <span class="paused-hint" title="Polling rebuilds the app's whole reactive graph; large graphs start paused.">
+        Paused: {graph.data.nodes.length.toLocaleString()} signals
+      </span>
+    {/if}
+    <Segmented
+      label="View"
+      bind:value={view.value}
+      options={[
+        { value: 'auto', label: 'Auto' },
+        { value: 'graph', label: 'Graph' },
+        { value: 'list', label: 'List' },
+      ]}
+    />
+  {/snippet}
   {#snippet actions()}
-    <div class="legend">
-      <span class="legend-item state">State</span>
-      <span class="legend-item derived">Derived</span>
-      <span class="legend-item effect">Effect</span>
-    </div>
-    <ActionButton onclick={refresh}>Refresh</ActionButton>
+    <LiveControls res={graph} />
   {/snippet}
 
-  <div class="graph-layout">
-    <div class="graph-area">
-      <GraphView
-        nodes={graph.nodes}
-        edges={graph.edges}
-        onSelectNode={handleSelectNode}
-        {changedNodeIds}
-      />
-    </div>
-
-    {#if selectedNode}
-      <div class="detail-sidebar">
-        <Card title={selectedNode.name}>
-          <div class="detail-row">
-            <span class="detail-label">Type</span>
-            <Badge variant={selectedNode.type === 'state' ? 'info' : selectedNode.type === 'derived' ? 'success' : 'error'}>
-              {selectedNode.type}
-            </Badge>
-          </div>
-
-          {#if selectedNode.value !== undefined}
-            <div class="detail-row">
-              <span class="detail-label">Value</span>
-              <code class="detail-value">{String(selectedNode.value)}</code>
-            </div>
-          {/if}
-
-          <div class="detail-row">
-            <span class="detail-label">Component</span>
-            <button class="detail-file-link" onclick={() => handleOpenReactive(selectedNode!.componentFile, selectedNode!.name, selectedNode!.type)}>
-              {componentName(selectedNode.componentFile, '?')} : {selectedNode.name}
-            </button>
-          </div>
-
-          {#if connectedEdges.deps.length > 0}
-            <div class="detail-section">
-              <span class="detail-label">Dependencies ({connectedEdges.deps.length})</span>
-              <ul class="dep-list">
-                {#each connectedEdges.deps as depId}
-                  {@const depNode = nodeMap.get(depId)}
-                  {#if depNode}
-                    <li>
-                      <button class="dep-link" onclick={() => handleOpenReactive(depNode.componentFile, depNode.name, depNode.type)}>{depNode.name}</button>
-                      <Badge variant="neutral">{depNode.type}</Badge>
-                    </li>
-                  {/if}
-                {/each}
-              </ul>
-            </div>
-          {/if}
-
-          {#if connectedEdges.dependents.length > 0}
-            <div class="detail-section">
-              <span class="detail-label">Dependents ({connectedEdges.dependents.length})</span>
-              <ul class="dep-list">
-                {#each connectedEdges.dependents as depId}
-                  {@const depNode = nodeMap.get(depId)}
-                  {#if depNode}
-                    <li>
-                      <button class="dep-link" onclick={() => handleOpenReactive(depNode.componentFile, depNode.name, depNode.type)}>{depNode.name}</button>
-                      <Badge variant="neutral">{depNode.type}</Badge>
-                    </li>
-                  {/if}
-                {/each}
-              </ul>
-            </div>
-          {/if}
-        </Card>
-      </div>
+  <SplitView id="reactive" open={!!current}>
+    {#if graph.data.nodes.length === 0}
+      {#if graph.loading}
+        <EmptyState title="Collecting reactive graph…" />
+      {:else}
+        <EmptyState icon="reactive" title="No signals tracked yet">
+          <p>Open your app — <code>$state</code>, <code>$derived</code> and <code>$effect</code> appear here with their dependencies.</p>
+        </EmptyState>
+      {/if}
+    {:else if mode === 'graph'}
+      {#if nodes.length > GRAPH_LIMIT}
+        <EmptyState icon="graph" title="{nodes.length.toLocaleString()} signals is too many to lay out">
+          <p>Pick a component in the toolbar or filter to under {GRAPH_LIMIT} signals, or use the list view.</p>
+          <Button icon="list" onclick={() => (view.value = 'list')}>Switch to list</Button>
+        </EmptyState>
+      {:else}
+        <div class="graph">
+          <GraphView {nodes} {edges} changedNodeIds={changed} bind:selectedNodeId={selected} />
+        </div>
+      {/if}
+    {:else}
+      <DataTable items={nodes} {columns} getKey={(n) => n.id} bind:sort bind:selected label="Reactive signals" onactivate={open}>
+        {#snippet row(n, { visible })}
+          <span><Badge tone={tones[n.type]}>{n.type}</Badge></span>
+          <span class="truncate mono name" class:flash={changed.has(n.id)}><Highlight text={n.name} {query} /></span>
+          {#if visible.has('component')}<span class="truncate muted"><Highlight text={componentName(n.componentFile)} {query} /></span>{/if}
+          <span class="truncate mono value">{n.value === undefined ? '' : formatValue(n.value, 120)}</span>
+          {#if visible.has('deps')}<span class="end num faint">{links.deps.get(n.id)?.length ?? 0} / {links.dependents.get(n.id)?.length ?? 0}</span>{/if}
+        {/snippet}
+        {#snippet empty()}<EmptyState icon="search" title="No signals match" />{/snippet}
+      </DataTable>
     {/if}
-  </div>
-</PanelContainer>
+    {#snippet aside()}
+      {#if current}
+        <Inspector title={current.name} subtitle={current.componentFile} onclose={() => (selected = null)}>
+          {#snippet badges()}
+            <Badge tone={tones[current.type]}>${current.type}</Badge>
+            <Badge>component #{current.componentId}</Badge>
+          {/snippet}
+          {#snippet actions()}
+            <Button icon="editor" onclick={() => open(current)}>Go to definition</Button>
+          {/snippet}
+          {#if current.value !== undefined}
+            <h3 class="section-title">Current value</h3>
+            <pre class="code-block" class:flash={changed.has(current.id)}>{prettyValue(current.value)}</pre>
+          {/if}
+          {@render rel('Depends on', links.deps.get(current.id) ?? [])}
+          {@render rel('Triggers', links.dependents.get(current.id) ?? [])}
+        </Inspector>
+      {/if}
+    {/snippet}
+  </SplitView>
+</Panel>
+
+{#snippet rel(title: string, ids: string[])}
+  <h3 class="section-title">{title} <span class="num">{ids.length}</span></h3>
+  {#if ids.length}
+    <ul class="link-list">
+      {#each ids as id (id)}
+        {@const n = byId.get(id)}
+        {#if n}
+          <li>
+            <button onclick={() => (selected = id)}>
+              <Badge tone={tones[n.type]}>{n.type}</Badge>
+              <span class="truncate mono">{n.name}</span>
+              <span class="sub truncate">{componentName(n.componentFile)}</span>
+            </button>
+          </li>
+        {/if}
+      {/each}
+    </ul>
+  {:else}
+    <p class="none">None</p>
+  {/if}
+{/snippet}
 
 <style>
-  .legend {
-    display: flex;
-    gap: var(--space-2);
-    font-size: var(--text-xs);
+  .scope {
+    max-width: 200px;
   }
-
-  .legend-item {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    color: var(--color-text-muted);
+  .paused-hint {
+    font-size: var(--fs-xs);
+    color: var(--fg-faint);
+    white-space: nowrap;
   }
-
-  .legend-item::before {
-    content: '';
-    display: inline-block;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
+  .graph {
+    height: 100%;
+    padding: 8px;
   }
-
-  .legend-item.state::before { background: var(--color-info); }
-  .legend-item.derived::before { background: var(--color-success); }
-  .legend-item.effect::before { background: var(--color-error); }
-
-  .graph-layout {
-    display: flex;
-    gap: var(--space-3);
-    flex: 1;
-    min-height: 300px;
+  .name {
+    font-size: var(--fs-sm);
   }
-
-  .graph-area {
-    flex: 1;
-    display: flex;
+  .value {
+    color: var(--fg-muted);
+    font-size: var(--fs-xs);
   }
-
-  .detail-sidebar {
-    width: 260px;
-    flex-shrink: 0;
+  .flash {
+    animation: flash 1s var(--ease);
   }
-
-  .detail-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--space-1) 0;
-    gap: var(--space-2);
+  @keyframes flash {
+    from {
+      background: var(--yellow-bg);
+      color: var(--yellow);
+    }
   }
-
-  .detail-label {
-    font-size: var(--text-xs);
-    color: var(--color-text-muted);
-    font-weight: 500;
-  }
-
-  .detail-value {
-    font-family: var(--font-mono);
-    font-size: var(--text-xs);
-    color: var(--color-text);
-    background: var(--color-surface-active);
-    padding: 1px 6px;
-    border-radius: var(--radius-sm);
-  }
-
-  .detail-file-link {
-    font-size: var(--text-xs);
-    color: var(--color-accent-400);
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-family: var(--font-mono);
-    padding: 0;
-    text-decoration: underline;
-    text-decoration-style: dotted;
-  }
-
-  .detail-file-link:hover {
-    color: var(--color-accent-300);
-  }
-
-  .detail-section {
-    padding: var(--space-2) 0 0;
-    border-top: 1px dashed var(--color-border);
-    margin-top: var(--space-2);
-  }
-
-  .dep-list {
-    list-style: none;
-    padding: 0;
-    margin: var(--space-1) 0 0;
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-1);
-    font-size: var(--text-xs);
-    color: var(--color-text);
-  }
-
-  .dep-list li {
-    display: flex;
-    align-items: center;
-    gap: var(--space-1);
-  }
-
-  .dep-link {
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: var(--color-accent-400);
-    font-size: var(--text-xs);
-    font-family: var(--font-sans);
-    padding: 0;
-    text-decoration: underline;
-    text-decoration-style: dotted;
-  }
-
-  .dep-link:hover {
-    color: var(--color-accent-300);
+  .none {
+    margin: 0;
+    padding: 0 14px;
+    color: var(--fg-faint);
+    font-size: var(--fs-sm);
   }
 </style>
