@@ -92,6 +92,14 @@ jobs:
           BASE_PATH: /vite-devtools-svelte
         run: pnpm build
 
+      # The build does not type-check. The site has no svelte-check of its
+      # own; use the workspace's official svelte-check (from the Kit 2
+      # example) against the site's tsconfig, after svelte-kit sync.
+      - name: Site typecheck (svelte-check)
+        run: |
+          pnpm -C site exec svelte-kit sync
+          pnpm -C examples/sample-app exec svelte-check --workspace ../../site --tsconfig ./tsconfig.json
+
   build-playground:
     name: Playground production build
     runs-on: ubuntu-latest
