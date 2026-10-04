@@ -15,6 +15,8 @@
 #   profile          71a9992, mode "profiled": per-window CPU profiles (mount / idle /
 #                    input / churn) for CLOSED and OPEN, server cold load vs steady
 #                    windows, DevTools UI operations. Never compared with latency runs.
+#   scale            improve's pair at one point <= 10 000 instances (SCALE_POINT,
+#                    default 9000:4x5 = 9 783), BFFB, part A only.
 #   improve          B 71a9992 vs F $PERF_CANDIDATE (plugin code delta, same lockfile
 #                    and deps), order BFFBBFFB (n = 4 per side), mode latency.
 set -euo pipefail
@@ -171,6 +173,29 @@ case "$PHASE" in
       --order=BFFBBFFB --parts=A,OFF,UI --scales="${PAIR_SCALES:-3000:4x5}" \
       --label=improve $GATE --max-min=14 2>&1 | redact | tee "$OUT/improve.log"
     step "improve BFFBBFFB done (mode latency)"
+    ;;
+  scale)
+    # One larger point (<= 10 000 mounted instances, never more) with the same
+    # pair and protocol as `improve`, part A only and BFFB (n = 2/side) so the
+    # job stays inside the 20 min limit. Resources come from the sampler.
+    SCALE_POINT="${SCALE_POINT:-9000:4x5}"
+    rows="${SCALE_POINT%%:*}" tree="${SCALE_POINT#*:}"
+    if [ "$tree" = none ]; then tn=0; else
+      d="${tree%x*}" b="${tree#*x}"; tn=$(( (b ** (d + 1) - 1) / (b - 1) )); fi
+    # +2: the bench page and its layout are mounted components as well
+    expected=$(( rows + tn + 2 ))
+    echo "scale point $SCALE_POINT: expected mounted instances $expected" | tee -a "$OUT/spec.txt"
+    if [ "$expected" -gt 10000 ]; then
+      echo "scale point above 10 000 instances is not allowed" >&2
+      exit 2
+    fi
+    side "$BASE" base
+    side "${PERF_CANDIDATE:?PERF_CANDIDATE}" candidate
+    assert_same base candidate '(pnpm-lock\.yaml$|^dep )' 'lockfile + resolved deps'
+    node perf/run-paired.mjs --baseline="$SIDES/base" --final="$SIDES/candidate" \
+      --order=BFFB --parts=A --scales="$SCALE_POINT" \
+      --label=scale $GATE --max-min=14 2>&1 | redact | tee "$OUT/scale.log"
+    step "scale $SCALE_POINT BFFB done (mode latency)"
     ;;
   *)
     echo "phase $PHASE not enabled in this run" >&2
