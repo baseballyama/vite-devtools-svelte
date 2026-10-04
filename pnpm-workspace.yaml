@@ -11,3 +11,12 @@ minimumReleaseAgeExclude:
   - '@vitejs/devtools-rolldown'
   - 'devframe'
   - '@devframes/*'
+
+# pnpm >= 11 reads settings only from this file (not package.json "pnpm").
+allowBuilds:
+  esbuild: true
+
+peerDependencyRules:
+  allowAny:
+    - vite
+    - vitest
