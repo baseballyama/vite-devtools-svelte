@@ -219,6 +219,18 @@ jobs:
           path: reactivity-shots/
           retention-days: 7
 
+      # Real MCP request/response examples for the MCP guide (token never
+      # written; machine paths redacted, scanned, and fail the step if found).
+      - name: MCP examples
+        run: node scripts/screenshots/mcp-examples.mjs --out=mcp-examples
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: mcp-examples
+          path: mcp-examples/
+          retention-days: 7
+
       - name: Repo unchanged
         if: always()
         run: git diff --exit-code -- pnpm-lock.yaml examples/ playground/ packages/

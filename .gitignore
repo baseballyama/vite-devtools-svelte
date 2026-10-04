@@ -147,3 +147,4 @@ vite.config.ts.timestamp-*
 result
 result-*
 reactivity-shots/
+mcp-examples/

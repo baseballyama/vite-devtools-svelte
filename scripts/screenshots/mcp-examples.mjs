@@ -334,6 +334,21 @@ try {
   manifest.error = mask(e?.message ?? e).slice(0, 400)
   console.log(`FAILED: ${manifest.error}`)
 } finally {
-  writeFileSync(path.join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n')
+  // The manifest gets the same scan as the example files.
+  let json = redact(JSON.stringify(manifest, null, 2))
+  const hits =
+    SENSITIVE.filter(re => re.test(json)).length +
+    homes.filter(h => json.includes(h)).length +
+    [...secrets].filter(s => json.includes(s)).length
+  if (hits) {
+    failed++
+    json = JSON.stringify(
+      { result: `manifest NOT SAVED: ${hits} sensitive pattern hit(s)` },
+      null,
+      2,
+    )
+    console.log('manifest: NOT SAVED (sensitive text)')
+  }
+  writeFileSync(path.join(outDir, 'manifest.json'), json + '\n')
 }
 await finish(failed ? 1 : 0)
