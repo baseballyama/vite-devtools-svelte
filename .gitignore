@@ -98,7 +98,7 @@ dist
 # Sveltekit cache directory
 .svelte-kit/
 
-# rsvelte-check cache directory
+# rsvelte-check cache / svelte-check --tsgo output directory
 .svelte-check/
 
 # vitepress build output
