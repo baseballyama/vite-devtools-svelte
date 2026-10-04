@@ -67,7 +67,7 @@ and what changed when I edited the tax rate.`
     {
       id: 'scope',
       title: 'Look at one instance',
-      text: 'Nodes of that instance and their direct neighbours. An edge means the source can affect the target (a current dependency), not that it caused a change. Note that the  has no edges although it reads grandTotal (see What the answers cover).',
+      text: 'Nodes of that instance and their direct neighbours. An edge means the source can affect the target (a current dependency), not that it caused a change. Note that the $effect has no edges although it reads grandTotal (see What the answers cover).',
     },
     {
       id: 'timeline-first',
