@@ -250,8 +250,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Pending changesets (release plan)
-        run: pnpm changeset status --verbose --since=HEAD
+      # The release plan's input. (`changeset status` is not used: it fails
+      # on any PR that changes a package without a changeset, and with
+      # --since it lists nothing.)
+      - name: Pending changesets
+        run: |
+          for f in $(find .changeset -name '*.md' ! -name README.md | sort); do
+            echo "== $f"; sed -n '1,/^---$/{p}' "$f" | sed -n '1,6p'
+          done
 
       # changelog-github looks up PR / author info on GitHub; the workflow's
       # own read-only token is enough for a public repository.

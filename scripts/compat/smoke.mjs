@@ -182,8 +182,13 @@ async function withTimeout(label, ms, fn) {
 // fn returns evidence (PASS) or
 // one of { unverified | notChecked | notRun | expectedFail: '<why>' }; a
 // throw is FAIL.
+// The step running now (diagnostics: page errors carry the phase they hit).
+let currentStep = null
+let lastStep = null
+
 async function step(name, ms, fn) {
   if (!ledger.has(name)) throw new Error(`step not in PLAN: ${name}`)
+  currentStep = name
   try {
     const r = (await withTimeout(name, ms, fn)) ?? {}
     if (r.unverified) set(name, 'UNVERIFIED', { reason: r.unverified })
@@ -195,6 +200,48 @@ async function step(name, ms, fn) {
   } catch (e) {
     set(name, 'FAIL', { error: mask(String(e?.message ?? e)).slice(0, 2000) }) // incl. Playwright call log
     return undefined
+  } finally {
+    currentStep = null
+    lastStep = name
+  }
+}
+
+// --- page error diagnostics (bounded, masked; never change a status)
+const phase = () => currentStep ?? `between steps (after: ${lastStep ?? 'start'})`
+// a URL reduced to its path: no origin, query (?t= / ?v=) or hash
+const urlPath = u => {
+  try {
+    return new URL(u).pathname
+  } catch {
+    return String(u ?? '').replace(/[?#].*$/, '')
+  }
+}
+// keeps a trailing :line:col (stack frames put it after the query)
+const stripUrls = text =>
+  String(text).replace(/https?:\/\/[^\s)'"]+/g, m => {
+    const lc = m.match(/(:\d+:\d+)$/)?.[1] ?? ''
+    return urlPath(lc ? m.slice(0, -lc.length) : m) + lc
+  })
+function pageErrorEntry(e) {
+  return {
+    message: mask(stripUrls(e?.message ?? e)).slice(0, 200),
+    name: e?.name ?? null,
+    step: phase(),
+    ms: Date.now() - t0,
+    stack: String(e?.stack ?? '')
+      .split('\n')
+      .slice(1, 6)
+      .map(l => mask(stripUrls(l.trim())).slice(0, 200)),
+  }
+}
+function consoleErrorEntry(m) {
+  const loc = m.location?.() ?? {}
+  return {
+    message: mask(stripUrls(m.text())).slice(0, 200),
+    url: loc.url ? mask(urlPath(loc.url)) : null,
+    line: loc.lineNumber ?? null,
+    step: phase(),
+    ms: Date.now() - t0,
   }
 }
 
@@ -210,8 +257,19 @@ function mask(text) {
     .replace(/(auth code\s+)\d{6}/g, '$1<code>')
     .replace(/devframe_otp=\d{6}/g, 'devframe_otp=<code>')
     .replaceAll(repoRoot, '<repo>')
-    .replace(/\/Users\/[^/\s]+|\/home\/[^/\s]+/g, '<home>')
+    .replace(CI_DIRS, '<ci>')
+    .replaceAll(os.tmpdir(), '<tmp>')
+    .replace(/\/Users\/[^/\s]+|\/home\/[^/\s]+|[A-Za-z]:\\Users\\[^\\\s]+/g, '<home>')
 }
+// CI workspace / temp dirs (public CI logs): GitHub's runner paths when set.
+const CI_DIRS = new RegExp(
+  ['GITHUB_WORKSPACE', 'RUNNER_TEMP', 'RUNNER_TOOL_CACHE']
+    .map(k => process.env[k])
+    .filter(v => v && v.length > 3)
+    .map(v => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('|') || '(?!)',
+  'g',
+)
 
 // ------------------------------------------------------------------ processes
 const cleanup = []
@@ -1031,11 +1089,22 @@ async function openApp(getSrv) {
   cleanup.push(() => browser.close())
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } })
   const page = await ctx.newPage()
+  // uncaught exceptions of the app page and its same-process frames (dock,
+  // DevTools iframe); console errors are recorded as context only
   const errors = []
-  page.on('pageerror', e => errors.push(mask(e.message).slice(0, 200)))
+  const consoleErrors = []
+  let consoleErrorCount = 0
+  page.on('pageerror', e => {
+    if (errors.length < 10) errors.push(pageErrorEntry(e))
+    else errors.overflow = (errors.overflow ?? 0) + 1
+  })
   // HMR diagnostics: Vite client console lines and main-frame navigations
   const viteLog = []
   page.on('console', m => {
+    if (m.type() === 'error') {
+      consoleErrorCount++
+      if (consoleErrors.length < 10) consoleErrors.push(consoleErrorEntry(m))
+    }
     const t = m.text()
     if (t.startsWith('[vite]')) viteLog.push(mask(t).slice(0, 160))
   })
@@ -1053,6 +1122,8 @@ async function openApp(getSrv) {
     ctx,
     page,
     errors,
+    consoleErrors,
+    consoleErrorCount: () => consoleErrorCount,
     viteLog,
     navigations: () => navigations,
     hasRuntime,
@@ -1075,7 +1146,7 @@ async function openApp(getSrv) {
 }
 
 async function tier2(p, getSrv, restart, app) {
-  const { browser, ctx, page, errors, hasRuntime, runtimeActive } = app
+  const { browser, ctx, page, errors, consoleErrors, hasRuntime, runtimeActive } = app
 
   await step(
     'T2 lease: first MCP call activates the runtime; fixture components listed',
@@ -1390,10 +1461,19 @@ async function tier2(p, getSrv, restart, app) {
     set('T2 Kit SSR HTML', 'N/A', { reason: 'plain Svelte profile' })
     set('T2 Kit load profile recorded', 'N/A', { reason: 'plain Svelte profile' })
   }
+  // status unchanged: any uncaught page error is a FAIL; the detail says
+  // where (stack paths) and when (step, ms) it happened
   set(
     'T2 no page errors',
     errors.length === 0 ? 'PASS' : 'FAIL',
-    errors.length ? { errors: errors.slice(0, 3) } : {},
+    errors.length
+      ? {
+          errors: errors.slice(0, 3),
+          errorCount: errors.length + (errors.overflow ?? 0),
+          consoleErrors: consoleErrors.slice(0, 5),
+          consoleErrorCount: app.consoleErrorCount(),
+        }
+      : {},
   )
   await browser.close()
 }
