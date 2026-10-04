@@ -18,8 +18,8 @@ concurrency:
 
 env:
   PERF_PHASE: improve
-  # improve: the pushed candidate commit measured against bff1a9d
-  PERF_CANDIDATE: ba9374525ba21e4a252864b9b34abc7c6cfda182
+  # improve: the pushed candidate commit measured against 71a9992
+  PERF_CANDIDATE: fd676f0e5f8f68c08acc6c0e4d3975b5cf4f02df
 
 jobs:
   measure:
