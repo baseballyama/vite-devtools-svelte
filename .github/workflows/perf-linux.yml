@@ -17,7 +17,9 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PERF_PHASE: profile
+  PERF_PHASE: improve
+  # improve: the pushed candidate commit measured against 0a93356
+  PERF_CANDIDATE: ''
 
 jobs:
   measure:

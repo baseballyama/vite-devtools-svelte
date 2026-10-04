@@ -6,14 +6,17 @@
 # perf/ci/sanitize-artifact.mjs scrubs before upload. Console output is
 # redacted on the way to the public job log as well.
 #
-#   smoke            e0d1e51 only, S1k: OFF / CLOSED / OPEN + DevTools UI. n = 1.
-#   smoke-reactive   smoke, then `reactive`.
+# Kit 3 stack: the baseline is main 0a93356 (SvelteKit 3 playground, kit3
+# fixture shape). Numbers from the pre-Kit-3 branch (perf/linux-bench-smoke,
+# e0d1e51 / kit2 shape) are never compared with these.
+#
+#   smoke            0a93356 only, S1k: OFF / CLOSED / OPEN + DevTools UI. n = 1.
 #   reactive         reduced reactive fixture (separate axis), OFF / CLOSED / OPEN, n = 1.
-#   profile          e0d1e51, mode "profiled": per-window CPU profiles (idle / input /
-#                    churn) for CLOSED and OPEN, server cold load vs steady windows,
-#                    DevTools UI operations. Never compared with latency runs.
-#   pairA            B ee3a716 vs F dc60aa2 (code delta, same deps), BFFB, mode latency.
-#   pairB            B dc60aa2 vs F e0d1e51 (deps delta, same plugin source), same protocol.
+#   profile          0a93356, mode "profiled": per-window CPU profiles (mount / idle /
+#                    input / churn) for CLOSED and OPEN, server cold load vs steady
+#                    windows, DevTools UI operations. Never compared with latency runs.
+#   improve          B 0a93356 vs F $PERF_CANDIDATE (plugin code delta, same lockfile
+#                    and deps), order BFFBBFFB (n = 4 per side), mode latency.
 set -euo pipefail
 
 PHASE="${1:?phase}"
@@ -123,66 +126,51 @@ trap finish EXIT
 spec
 step "start"
 GATE="--gate=$(nproc):50 --linux-gate=2048:10 --gate-wait=180 --gate-policy=skip"
-E0=e0d1e5165ebb16436da8ea4897e2cf3050047fd5
+BASE=0a93356c8d7f8135751775ac1cfd721d44b1e7aa
 
-same_as_e0() {
-  # This branch changes only perf/ and .github/ relative to e0d1e51.
-  if git diff --quiet "$E0" HEAD -- packages playground pnpm-lock.yaml; then
-    echo "plugin/playground/lockfile identical to e0d1e51" >> "$OUT/spec.txt"
+same_as_base() {
+  # This branch changes only perf/ and .github/ relative to 0a93356.
+  if git diff --quiet "$BASE" HEAD -- packages playground pnpm-lock.yaml; then
+    echo "plugin/playground/lockfile identical to 0a93356" >> "$OUT/spec.txt"
   else
-    echo "plugin/playground/lockfile DIFFERS from e0d1e51" | tee -a "$OUT/spec.txt"
+    echo "plugin/playground/lockfile DIFFERS from 0a93356" | tee -a "$OUT/spec.txt"
     exit 2
   fi
-  manifest "$ROOT" e0d1e51-branch
+  manifest "$ROOT" 0a93356-branch
 }
 
 case "$PHASE" in
-  smoke | smoke-reactive)
-    same_as_e0
+  smoke)
+    same_as_base
     node perf/run-paired.mjs --order=F --parts=A,OFF,UI --scales=1000:none \
       --label=smoke-S1k $GATE --max-min=7 2>&1 | redact | tee "$OUT/smoke.log"
     step "smoke S1k OFF/CLOSED/OPEN/UI done (mode latency)"
-    if [ "$PHASE" = smoke-reactive ]; then
-      node perf/reactive-smoke.mjs --treeDepth=3 --gate=$(nproc):50 --linux-gate=2048:10 \
-        --gate-wait=180 --max-min=9 2>&1 | redact | tee "$OUT/reactive.log"
-      step "reactive smoke done (mode latency)"
-    fi
     ;;
   reactive)
-    same_as_e0
+    same_as_base
     node perf/reactive-smoke.mjs --treeDepth=3 --gate=$(nproc):50 --linux-gate=2048:10 \
       --gate-wait=180 --max-min=9 2>&1 | redact | tee "$OUT/reactive.log"
     step "reactive smoke done (mode latency)"
     ;;
   profile)
     # Separate run: profiler overhead must not leak into latency numbers.
-    same_as_e0
+    same_as_base
     node perf/run-paired.mjs --order=F --parts=A,UI --scales="${PROFILE_SCALES:-3000:4x5}" \
       --cpu-profile=1 --label=profile $GATE --max-min=10 2>&1 | redact | tee "$OUT/profile.log"
     step "profiled windows done (mode profiled)"
     ;;
-  pairA | pairB)
-    # Fixed baselines, pristine detached worktrees, each installed with its own
-    # pnpm and built; the harness and Chromium come from this branch.
-    if [ "$PHASE" = pairA ]; then
-      # ee3a716 is the #79 pre-squash history, reachable only from refs/pull/79/head
-      git fetch -q --no-tags origin +refs/pull/79/head:refs/remotes/origin/pr-79
-      side ee3a71690a5544d9cf3324aaabf6ac47e16a2dcc ee3a716
-      side dc60aa216c9dbbe3d351a264936ed3740756a252 dc60aa2
-      BDIR="$SIDES/ee3a716" FDIR="$SIDES/dc60aa2"
-      # code delta only: the resolved dependency versions must be identical
-      assert_same ee3a716 dc60aa2 '^dep ' 'resolved deps'
-    else
-      side dc60aa216c9dbbe3d351a264936ed3740756a252 dc60aa2
-      side "$E0" e0d1e51
-      BDIR="$SIDES/dc60aa2" FDIR="$SIDES/e0d1e51"
-      # deps delta only: plugin + client sources must be identical
-      assert_same dc60aa2 e0d1e51 '^src-tree ' 'plugin/client source tree'
-    fi
-    node perf/run-paired.mjs --baseline="$BDIR" --final="$FDIR" --order=BFFB \
-      --parts=A,OFF,UI --scales="${PAIR_SCALES:-3000:4x5}" --label="$PHASE" $GATE \
-      --max-min=13 2>&1 | redact | tee "$OUT/$PHASE.log"
-    step "$PHASE BFFB done (mode latency)"
+  improve)
+    # Pristine detached worktrees, each installed with its own pnpm and built;
+    # the harness and Chromium come from this branch. The candidate is a
+    # pushed commit (checkout fetch-depth 0 brings every branch).
+    side "$BASE" base
+    side "${PERF_CANDIDATE:?PERF_CANDIDATE}" candidate
+    # plugin code delta only: same lockfile and resolved deps on both sides
+    assert_same base candidate '(pnpm-lock\.yaml$|^dep )' 'lockfile + resolved deps'
+    node perf/run-paired.mjs --baseline="$SIDES/base" --final="$SIDES/candidate" \
+      --order=BFFBBFFB --parts=A,OFF,UI --scales="${PAIR_SCALES:-3000:4x5}" \
+      --label=improve $GATE --max-min=14 2>&1 | redact | tee "$OUT/improve.log"
+    step "improve BFFBBFFB done (mode latency)"
     ;;
   *)
     echo "phase $PHASE not enabled in this run" >&2
