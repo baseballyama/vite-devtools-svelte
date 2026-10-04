@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PERF_PHASE: smoke
+  PERF_PHASE: profile
 
 jobs:
   measure:

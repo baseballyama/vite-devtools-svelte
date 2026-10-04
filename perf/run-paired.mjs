@@ -39,8 +39,9 @@ import {
   heapAfterGc,
   idleWindow,
   importRootDep,
-  lastAuthCode,
+  inputToPaint,
   median,
+  openDevtoolsTab,
   r1,
   repoRoot,
   rootDepFile,
@@ -135,58 +136,6 @@ function prepareFixture(repo) {
 
 // ---------------------------------------------------------------- DevTools tab
 
-/**
- * Open (or reuse) the DevTools tab of this checkout in its own, persistent
- * context. A devframe one-time code is consumed at most once per context and
- * run: the trusted token then lives in this context's localStorage and in the
- * server's isolated HOME, so later server restarts re-trust silently.
- */
-async function openDevtoolsTab(side, srv, opts) {
-  const page = await side.uiCtx.newPage()
-  const cdp = await side.uiCtx.newCDPSession(page)
-  await cdp.send('Performance.enable')
-  const ws = await wsAccounting(cdp)
-  await page.goto(`${srv.base}${opts.devtoolsPath}`, { waitUntil: 'load' })
-  const dialog = page.getByRole('dialog', { name: /authorize/i })
-  const deadline = Date.now() + 60_000
-  for (;;) {
-    if ((await dialog.count()) > 0 && (await dialog.isVisible())) {
-      if (side.authCount >= 1) {
-        // The token was lost (should not happen within one run): record it,
-        // but never consume codes in another context.
-        side.notes.push('second authorization requested in the same context')
-      }
-      let code = null
-      for (let i = 0; i < 300 && !code; i++) {
-        // newest code in the whole log: devframe may have printed it before
-        // this tab asked (it prints each code once)
-        code = lastAuthCode(srv.log())
-        if (!code) await sleep(100)
-      }
-      if (!code)
-        throw new Error('devframe auth dialog shown but no code appeared in the server log')
-      await page.getByLabel('One-time code').fill(code)
-      await page.getByRole('button', { name: /^connect$/i }).click()
-      await dialog.waitFor({ state: 'hidden', timeout: 30_000 })
-      side.authCount++
-      break
-    }
-    // Connected without a gate (baseline UI, or already trusted).
-    const ready = await page
-      .evaluate(
-        () => !document.querySelector('[role="dialog"]') && !!document.querySelector('nav, aside'),
-      )
-      .catch(() => false)
-    if (ready) break
-    if (Date.now() > deadline) {
-      side.notes.push('DevTools tab readiness not detected within 60 s; measured anyway')
-      break
-    }
-    await sleep(200)
-  }
-  return { page, cdp, ws }
-}
-
 /** Wait until the app runtime reports the expected subscription state. */
 async function waitForActive(appPage, expected, timeoutMs = 25_000) {
   const t0 = Date.now()
@@ -259,7 +208,7 @@ async function measureApp(app, scale, opts) {
   res.heapMountedMB = r1((await heapAfterGc(cdp)) / 1048576)
   res.dom = await page.evaluate(() => document.getElementsByTagName('*').length)
   res.runtime = await runtimeState(page)
-  res.input = await inputToPaint(page, opts.inputReps)
+  res.input = await inputToPaint(page, '[data-bench="input"]', opts.inputReps)
   // Ground truth of the workload, next to what the runtime reports it saw
   // (`res.runtime.instances`; null without the plugin).
   res.groundTruth = {
@@ -287,36 +236,6 @@ async function measureApp(app, scale, opts) {
   return res
 }
 
-/**
- * App input -> paint: `reps` real clicks (CDP input) on the fixture's probe
- * button, 250 ms apart. Reports Event Timing durations (only entries >= 16 ms
- * exist) and the click -> next frame proxy for every click.
- */
-async function inputToPaint(page, reps) {
-  await page.evaluate(() => {
-    window.__perf.events.length = 0
-    window.__perf.inputToFrame.length = 0
-  })
-  const btn = page.locator('[data-bench="input"]')
-  for (let i = 0; i < reps; i++) {
-    await btn.click()
-    await sleep(250)
-  }
-  const { events, frames } = await page.evaluate(() => ({
-    events: window.__perf.events.filter(e => e.name === 'click'),
-    frames: window.__perf.inputToFrame.slice(),
-  }))
-  return {
-    clicks: reps,
-    clickToFrameMs: { median: r1(median(frames)), max: r1(Math.max(...frames)), n: frames.length },
-    eventTiming: {
-      over16ms: events.length,
-      medianMs: events.length ? r1(median(events.map(e => e.dur))) : null,
-      maxMs: events.length ? r1(Math.max(...events.map(e => e.dur))) : null,
-    },
-  }
-}
-
 // ---------------------------------------------------------------- UI scenario (part B)
 
 /**
@@ -337,14 +256,21 @@ async function uiInteractions(page, query) {
       }
       return true
     }
-    const rows = () => [...document.querySelectorAll('[role="tree"] [role="treeitem"]')]
+    // Visited panels stay mounted (hidden): scope every query to the visible
+    // Components panel, or a hidden panel's search field / tree is used.
+    const panel = [...document.querySelectorAll('section.panel')].find(
+      el => el.offsetParent !== null && el.querySelector('[role="tree"]'),
+    )
+    if (!panel) return { error: 'no visible panel with a tree' }
+    const rows = () => [...panel.querySelectorAll('[role="tree"] [role="treeitem"]')]
+    const hits = () => panel.querySelector('.search .hits')?.textContent?.trim() ?? null
     const out = { treeRows: rows().length }
     // select
     const target = rows()[Math.min(3, rows().length - 1)]
     if (target) {
       const t0 = performance.now()
       target.click()
-      const ok = await until(() => !!document.querySelector('aside.inspector'))
+      const ok = await until(() => !!panel.querySelector('aside.inspector'))
       await twoFrames()
       out.selectMs = ok ? Math.round((performance.now() - t0) * 10) / 10 : null
     }
@@ -360,25 +286,20 @@ async function uiInteractions(page, query) {
       await twoFrames()
       out.expandMs = ok ? Math.round((performance.now() - t0) * 10) / 10 : null
     } else out.expandMs = 'no collapsed row'
-    // search
-    const input = document.querySelector('input[data-panel-search]')
+    // search: done when the hit count is shown and the filtered rows render
+    // their highlighted match (or the count is 0)
+    const input = panel.querySelector('input[data-panel-search]')
     if (input) {
-      const before = rows()
-        .map(r => r.id)
-        .join()
       const t0 = performance.now()
       input.value = q
       input.dispatchEvent(new Event('input', { bubbles: true }))
       const ok = await until(
-        () =>
-          rows()
-            .map(r => r.id)
-            .join() !== before || !!document.querySelector('.search .hits'),
+        () => hits() !== null && (hits() === '0' || !!panel.querySelector('[role="tree"] mark')),
       )
       await twoFrames()
       out.searchMs = ok ? Math.round((performance.now() - t0) * 10) / 10 : null
       out.searchRows = rows().length
-      out.searchHits = document.querySelector('.search .hits')?.textContent ?? null
+      out.searchHits = hits()
       input.value = ''
       input.dispatchEvent(new Event('input', { bubbles: true }))
     }
