@@ -222,3 +222,62 @@ jobs:
       - name: Repo unchanged
         if: always()
         run: git diff --exit-code -- pnpm-lock.yaml examples/ playground/ packages/
+
+  # What the Release workflow would version and pack, without publishing:
+  # read-only token, no id-token, no npm credentials, no publish command.
+  release-dry-run:
+    name: Release dry run (no publish)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+
+      # Same Node major as release.yml.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Tool versions
+        run: node --version && pnpm --version && pnpm changeset --version
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The release plan's input. (`changeset status` is not used: it fails
+      # on any PR that changes a package without a changeset, and with
+      # --since it lists nothing.)
+      - name: Pending changesets
+        run: |
+          for f in $(find .changeset -name '*.md' ! -name README.md | sort); do
+            echo "== $f"; sed -n '1,/^---$/{p}' "$f" | sed -n '1,6p'
+          done
+
+      # changelog-github looks up PR / author info on GitHub; the workflow's
+      # own read-only token is enough for a public repository.
+      - name: Version (in the runner only, not committed)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          if find .changeset -name '*.md' ! -name README.md | grep -q .; then
+            pnpm changeset version
+            git --no-pager diff --stat
+          else
+            echo "No pending changesets (e.g. the Version Packages branch)."
+          fi
+          echo "version: $(node -p "require('./packages/vite-devtools-svelte/package.json').version")"
+          sed -n 1,12p packages/vite-devtools-svelte/CHANGELOG.md
+
+      - name: Build plugin and client UI
+        run: pnpm build
+
+      - name: Package contents (pnpm pack, not published)
+        run: |
+          pnpm -C packages/vite-devtools-svelte pack --pack-destination "$RUNNER_TEMP"
+          tar -tzf "$RUNNER_TEMP"/vite-devtools-svelte-*.tgz | sort
