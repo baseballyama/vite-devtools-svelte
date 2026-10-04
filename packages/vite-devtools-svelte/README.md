@@ -1,6 +1,6 @@
 # vite-devtools-svelte
 
-Svelte DevTools plugin for [Vite DevTools](https://github.com/vitejs/devtools). Provides 15 specialized panels for debugging, profiling, and inspecting Svelte/SvelteKit applications — all integrated directly into the Vite DevTools UI.
+Svelte DevTools for Vite, built on [Devframe](https://devfra.me/). Provides 15 specialized panels for debugging, profiling, and inspecting Svelte/SvelteKit applications. The same tool runs **standalone** at `/.svelte-devtools/` on your dev server, or **inside the [Vite DevTools](https://devtools.vite.dev/) dock** when `@vitejs/devtools` is installed.
 
 > **Status:** Early development. APIs may change.
 
@@ -132,49 +132,58 @@ Svelte DevTools plugin for [Vite DevTools](https://github.com/vitejs/devtools). 
 
 ## Requirements
 
-- **Vite** >= 8.0.0
+- **Vite** >= 8.3.2
 - **Svelte** 5 (runes mode)
 - **SvelteKit** (recommended, but not required for basic features)
-- **[@vitejs/devtools](https://devtools.vite.dev/)** — the host UI this plugin's panels render inside
+- **[@vitejs/devtools](https://devtools.vite.dev/)** >= 0.7.6 — optional; only for the in-page dock
 
 ## Installation
 
-`vite-devtools-svelte` is a panel provider — it needs the [`@vitejs/devtools`](https://devtools.vite.dev/) host plugin to render its UI. Install both:
-
 ```bash
-npm install -D vite-devtools-svelte @vitejs/devtools
+npm install -D vite-devtools-svelte
+# optional: show the panels inside the Vite DevTools dock
+npm install -D @vitejs/devtools
 ```
 
 ## Setup
 
-Register **both** plugins in your `vite.config.ts`. `svelteDevtools()` **must come before `sveltekit()`** so that its transforms run before the Svelte compiler.
+Register the plugin in your `vite.config.ts`. `svelteDevtools()` **must come before `sveltekit()`** so that its transforms run before the Svelte compiler.
 
 ```ts
 // vite.config.ts
 import { sveltekit } from '@sveltejs/kit/vite'
-import { DevTools } from '@vitejs/devtools'
 import { svelteDevtools } from 'vite-devtools-svelte'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [
     svelteDevtools(), // must come before sveltekit()
-    DevTools(), // the @vitejs/devtools host — without it the panels have nowhere to render
     sveltekit(),
   ],
 })
 ```
 
-Then start your dev server as usual:
+Start your dev server as usual (`npm run dev`) and open the URL it prints:
 
-```bash
-npm run dev
+```
+  ➜  Svelte DevTools: http://localhost:5173/.svelte-devtools/
 ```
 
-Open your app in the browser. The Vite DevTools drawer appears at the bottom edge of the page — click the floating handle to open it, then switch to the **Svelte** tab to see the panels provided by this plugin.
+The first time a browser opens the DevTools it asks for a one-time code: request it from the page, and the dev server prints a 6-digit code plus a link (`…/.svelte-devtools/#devframe_otp=…`) in the terminal. Opening the link (or typing the code) trusts that browser; the token is remembered across reloads and dev-server restarts.
 
-> [!NOTE]
-> If you only register `svelteDevtools()` without `DevTools()` from `@vitejs/devtools`, the dev server starts fine but **no DevTools UI appears** — there is no host for the panels to mount into.
+### Inside the Vite DevTools dock
+
+With `@vitejs/devtools` installed, add its plugin as well. The Svelte tool then mounts as a dock entry instead of standalone (never both), and authentication is handled once by Vite DevTools:
+
+```ts
+import { DevTools } from '@vitejs/devtools'
+
+export default defineConfig({
+  plugins: [svelteDevtools(), DevTools(), sveltekit()],
+})
+```
+
+Open your app, click the floating Vite DevTools handle and switch to the **Svelte** tab. The panels are also reachable directly at `/.svelte-devtools/`.
 
 ## Options
 
@@ -187,25 +196,93 @@ svelteDevtools({
 
 ## How It Works
 
-The plugin uses a **virtual module architecture** instead of fragile regex transforms:
+1. **Runtime wrapper** — Intercepts `svelte/internal/client` to track component lifecycle and reactive signals (`$state`, `$derived`, `$effect`). It only polls state / samples FPS while a DevTools tab or an MCP agent is watching.
+2. **HMR channel** — Streams runtime data (component tree, render profiles, state-timeline deltas, reactive graph) from the browser to the dev server.
+3. **Static analyzers** — Extract routes, component relations, assets, and project metadata from the filesystem.
+4. **Devframe tool** — One portable [Devframe](https://devfra.me/) definition exposes all of this over a typed, schema-validated RPC. It is served standalone (`initDevframe` on Vite's own HTTP server) or mounted into Vite DevTools (`createPluginFromDevframe`); the UI connects with `connectDevframe()` either way.
 
-1. **Runtime wrapper** — Intercepts `svelte/internal/client` to track component lifecycle and reactive signals (`$state`, `$derived`, `$effect`)
-2. **HMR channel** — Streams runtime data (component tree, render profiles, reactive graph) from the browser to the dev server via WebSocket
-3. **Static analyzers** — Extract routes, component relations, assets, and project metadata from the filesystem
-4. **Dual transport RPC** — DevTools Kit RPC with HTTP fallback for compatibility
+The plugin is **development-only** — every sub-plugin is `apply: 'serve'`, so production builds are byte-identical with and without it.
 
-The plugin is **development-only** — it adds zero overhead to production builds.
+## Upgrading from earlier versions
+
+The public API is unchanged — still `svelteDevtools({ componentTracking })`, and the same 15 panels and MCP tools. What changed is how the UI is hosted and how it talks to the dev server:
+
+|           | before                                                                                  | now                                                                                                                  |
+| --------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Host      | panels only rendered inside `@vitejs/devtools` (required)                               | standalone at `/.svelte-devtools/`, or inside the Vite DevTools dock when `@vitejs/devtools` is installed (optional) |
+| Transport | DevTools Kit RPC + HTTP fallback (`/__svelte-devtools/rpc`, `/__svelte-devtools/asset`) | one Devframe WebSocket RPC (SSE in Vite middleware mode); the HTTP endpoints are removed                             |
+| Auth      | per-process token injected into the UI HTML                                             | Devframe one-time code → per-browser token (secure by default); Vite DevTools' own auth when docked                  |
+| Peer deps | `vite >= 8.0.0`                                                                         | `vite ^8.3.2` (uses the public `closeServer` hook), `@vitejs/devtools >= 0.7.6` optional                             |
+
+Static assets in the Assets panel are now served by Vite itself (their public URL) instead of a custom endpoint. The MCP endpoint (`/__svelte-devtools/mcp`) is unchanged.
+
+## Known limitations
+
+- **Very large apps (tens of thousands of live components):** after the initial snapshot the runtime sends only component deltas (≤ 2 000 per message), with periodic full checkpoints. The panels, however, still fetch the whole stored tree (up to 50 000 instances) from the dev server whenever it changes — estimated at a few MB per refresh at that size, about once per second at most. Real-browser performance at this scale has not been benchmarked yet.
+- **Deep in-place mutations of very large `$state` values** are detected after about 1 s (reassignments and primitive changes are picked up on the next 200 ms tick).
+- **Several app tabs:** the panels show the tab that pushed most recently (up to 4 page loads are tracked); there is no per-tab selector yet.
+- **Components tree selection** follows the same instance while the page stays loaded; after a reload, or when an instance is replaced (e.g. `{#key}`, HMR), it is matched by its position in the tree instead. Instances beyond the 50 000 cap are counted but cannot be selected.
+- **Components added after the first render** (e.g. new `{#each}` rows) are placed under their parent using Svelte internals verified on Svelte 5.56.8; with a different internal layout they would appear as separate top-level entries instead.
+- **Restarts in Vite middleware mode** dispose the DevTools via Vite's `closeServer` hook, which is why `vite ^8.3.2` is required.
+
+## AI access (MCP)
+
+The plugin exposes an MCP (Model Context Protocol) endpoint so AI agents such as Claude Code can read performance metrics and run measurement sessions autonomously. The intent: surface the same data the panels show, in a shape an agent can act on — and let the agent's own file-editing tools propose fixes.
+
+On dev-server startup the plugin prints a copy-pasteable registration command:
+
+```
+svelte-devtools MCP ready — register with Claude Code:
+  claude mcp add --transport http svelte http://localhost:5173/__svelte-devtools/mcp --header x-svelte-devtools-token:<token>
+```
+
+The endpoint is gated by a per-process random token (MCP clients are local processes, not browser tabs, so they don't use the browser login). The token rotates every dev-server start, so you'll re-register after a restart.
+
+### Tools exposed
+
+| Tool                                               | Purpose                                                                                                                                                     |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list_performance_issues`                          | Cross-cuts render / reactive / load / fps and returns ranked issues with `suggestedTool` for drill-down. Entry point.                                       |
+| `get_component_hotspots`                           | Top components by total render time.                                                                                                                        |
+| `get_reactive_graph_problems`                      | Classified reactive-graph issues (over-connected effects, orphan deriveds, isolated nodes).                                                                 |
+| `get_load_waterfall`                               | SvelteKit `load` timings grouped by route.                                                                                                                  |
+| `get_fps_drops`                                    | FPS samples below threshold.                                                                                                                                |
+| `get_render_profile`                               | Render profile entries for a specific file.                                                                                                                 |
+| `start_session`, `end_session`, `compare_sessions` | Bracket a measurement window so the agent can diff before/after a fix. `persist:true` writes the session to `node_modules/.vite-devtools-svelte/sessions/`. |
+| `list_sessions`, `load_session`, `delete_session`  | Session inspection / cleanup. The agent owns disposal — the plugin never auto-persists.                                                                     |
+
+### Skills
+
+Two Claude Code skills ship under `node_modules/vite-devtools-svelte/skills/`:
+
+- `vite-devtools-svelte:perf-audit` — captures a baseline session, calls `list_performance_issues`, and presents the top issues for the user to triage.
+- `vite-devtools-svelte:perf-fix` — one issue per run: baseline → edit → after → `compare_sessions`, with `verdict` reported verbatim and an explicit revert path if the change regresses or has no effect.
+
+Skill names are namespaced with `vite-devtools-svelte:` so they don't collide with other skills in your `.claude/skills/`.
+
+To install for a given project:
+
+```bash
+mkdir -p .claude/skills
+cp -r node_modules/vite-devtools-svelte/skills/* .claude/skills/
+```
+
+### Scope
+
+The MCP server is **read + measure only** — it never edits files. Editing is left to the agent's own tools (Claude Code's `Edit`/`Write`), which keeps the permission boundary clean and lets `git` own rollback.
 
 ## Security model
 
-The DevTools backend exposes a small set of dev-only HTTP endpoints (`/__svelte-devtools/rpc`, `/__svelte-devtools/asset`) to drive the panel UI. Some of those endpoints can read files from disk or open them in your editor, so we treat them as authenticated even though the dev server is normally only reachable from `localhost`.
+Some RPCs read files from disk or open them in your editor, so the DevTools backend is authenticated even though the dev server is normally only reachable from `localhost`.
 
-- **Per-process random token.** On every dev-server start the plugin generates a fresh UUID and injects it into the DevTools UI HTML as a `<meta>` tag. The HTTP fallback RPC and the asset middleware require that token in the `x-svelte-devtools-token` header, plus a same-origin `Origin`/`Referer`. Cross-origin requests, requests with the wrong token, and requests without `Content-Type: application/json` are rejected with `403` / `415`. Bodies above 1 MB are rejected with `413`.
-- **Path sandbox.** `inspect-file`, `open-in-editor`, and `open-reactive-in-editor` resolve their input through `fs.realpath()` and refuse anything outside the project root, so a hostile RPC caller cannot read `/etc/passwd` or your `~/.ssh/` files even if they get past the token check. Symlinks inside the project are followed normally.
-- **SSRF defenses.** Outbound fetches from `send-api-request` and the OG-preview RPC block `127.0.0.0/8` / `10.0.0.0/8` / `172.16.0.0/12` / `192.168.0.0/16` / `169.254.0.0/16` / IPv6 loopback / `localhost` / `*.local` / `*.internal`.
-- **Dev-only by construction.** Both the runtime virtual module and the `svelte/internal/client` wrapper are gated on `config.command === 'serve'` and never resolve during a production build, so none of this surface ships to end users.
+- **Devframe auth gate.** Every RPC connection must be trusted first: a browser exchanges a single-use 6-digit code (printed in the dev-server terminal, valid for 5 minutes) for a bearer token stored in that browser. Inside Vite DevTools the hub's own gate covers the tool.
+- **Origin checks.** The RPC WebSocket only accepts loopback origins (plus the dev server's own LAN origins when you use `--host`), which blocks cross-site pages and DNS-rebinding attacks.
+- **Schema-validated arguments.** RPC inputs are validated with zod schemas before any handler runs.
+- **Path sandbox.** `inspect-file`, `open-in-editor`, and `open-reactive-in-editor` resolve their input through `fs.realpath()` and refuse anything outside the project root. Symlinks inside the project are followed normally.
+- **SSRF defenses.** Outbound fetches from the API playground and OG preview block private / loopback / link-local IPv4 and IPv6 targets (also when a hostname _resolves_ to one), `localhost`, `*.local` and `*.internal`, and never follow redirects. The dev server's own origins are the only local targets allowed, so the playground can call your app's endpoints.
+- **Dev-only by construction.** Nothing is registered during `vite build`.
 
-If you bind your dev server to `0.0.0.0` (e.g. `vite --host`), the same-origin check still blocks LAN browsers from invoking RPC, but anyone on the LAN can still see the panel UI itself. Treat that as you would any unauthenticated dev tool: don't run it on networks you don't trust.
+Trusted-browser tokens are stored in your home directory (`~/.svelte-devtools/devframe/auth.json`) and shared across projects. The SSRF check resolves hostnames before fetching, so a resolver that changes its answer between that check and the request (DNS rebinding) is not fully excluded. If you bind your dev server to a non-loopback address, only use it on networks you trust.
 
 ## Contributing
 
