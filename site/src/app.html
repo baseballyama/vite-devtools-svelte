@@ -2,30 +2,40 @@
 <html lang="en" data-theme="dark">
   <head>
     <meta charset="utf-8" />
-    <link rel="icon" href="%sveltekit.assets%/favicon.png" />
+    <!-- Site identity: the official Svelte mark (github.com/sveltejs/branding). -->
+    <link rel="icon" href="%sveltekit.assets%/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="%sveltekit.assets%/favicon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="%sveltekit.assets%/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#101014" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#fbfaf8" media="(prefers-color-scheme: light)" />
     <meta
       name="description"
       content="DevTools for Svelte and SvelteKit, served by your Vite dev server: components, reactivity, routes and compiled output. Open it standalone or inside the Vite DevTools dock."
     />
+    <meta property="og:site_name" content="vite-devtools-svelte" />
     <meta property="og:title" content="vite-devtools-svelte" />
     <meta
       property="og:description"
       content="See inside your Svelte app: components, reactivity, routes and compiled output, from your Vite dev server."
     />
     <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT@0,9..144,300..900,0..100;1,9..144,300..900,0..100&family=DM+Sans:opsz,wght@9..40,300..700&family=JetBrains+Mono:wght@400..700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&family=JetBrains+Mono:wght@400..600&display=swap"
     />
     <script>
       ;(() => {
-        const stored = localStorage.getItem('theme')
+        let stored = null
+        try {
+          stored = localStorage.getItem('theme')
+        } catch {}
         const valid = stored === 'dark' || stored === 'light' ? stored : null
-        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-        const theme = valid ?? (prefersDark ? 'dark' : 'light')
+        const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches
+        const theme = valid ?? (prefersLight ? 'light' : 'dark')
         const root = document.documentElement
         if (root.dataset.theme !== theme) root.dataset.theme = theme
       })()

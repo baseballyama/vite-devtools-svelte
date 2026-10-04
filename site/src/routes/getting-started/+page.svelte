@@ -46,9 +46,8 @@ export default defineConfig({
   <title>Getting Started — vite-devtools-svelte</title>
 </svelte:head>
 
-<section class="hero">
-  <div class="grid-bg" aria-hidden="true"></div>
-  <div class="container narrow">
+<section class="band no-border hero">
+  <div class="container">
     <div class="head-meta">
       <span class="eyebrow"><span class="eyebrow-num">§ setup</span> · getting started</span>
       <span class="mono dim">~3 minutes</span>
@@ -92,8 +91,8 @@ export default defineConfig({
   </div>
 </section>
 
-<section class="section-sm">
-  <div class="container narrow doc">
+<section class="band">
+  <div class="container doc">
     <nav class="toc" aria-label="Table of contents">
       <span class="toc-label mono">contents</span>
       <ol>
@@ -205,10 +204,7 @@ export default defineConfig({
 
 <style>
   .hero {
-    position: relative;
-    padding: 4rem 0 3rem;
-    border-bottom: 1px solid var(--line);
-    overflow: hidden;
+    padding-bottom: 3.5rem;
   }
 
   .head-meta {

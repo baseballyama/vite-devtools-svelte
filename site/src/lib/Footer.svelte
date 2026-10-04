@@ -1,159 +1,91 @@
 <script lang="ts">
   import { base } from '$app/paths'
+  import SvelteMark from './SvelteMark.svelte'
   import { pkgVersion } from './version'
 
-  const year = new Date().getFullYear()
+  const repo = 'https://github.com/baseballyama/vite-devtools-svelte'
 </script>
 
-<footer>
-  <div class="container">
-    <div class="top">
-      <div class="brand">
-        <div class="mark" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="20" height="20">
-            <path
-              d="M12 2 L22 12 L12 22 L2 12 Z"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.4"
-            />
-            <path
-              d="M7 12 L12 7 L17 12 L12 17 Z"
-              fill="currentColor"
-              opacity="0.85"
-            />
-          </svg>
-        </div>
-        <div>
-          <div class="brand-line">
-            <strong>vite-devtools-svelte</strong>
-            <span class="mono dim">// MIT</span>
-          </div>
-          <p class="muted small">
-            DevTools for Svelte and SvelteKit. Open source; runs only while
-            your Vite dev server is running.
-          </p>
-        </div>
-      </div>
-
-      <div class="columns">
-        <section>
-          <p class="col-title">Docs</p>
-          <ul>
-            <li><a href="{base}/getting-started">Getting Started</a></li>
-            <li><a href="{base}/mcp">MCP for AI agents</a></li>
-            <li><a href="{base}/#panels">All panels</a></li>
-          </ul>
-        </section>
-        <section>
-          <p class="col-title">Project</p>
-          <ul>
-            <li>
-              <a
-                href="https://github.com/baseballyama/vite-devtools-svelte"
-                target="_blank"
-                rel="noreferrer noopener">GitHub</a
-              >
-            </li>
-            <li>
-              <a
-                href="https://github.com/baseballyama/vite-devtools-svelte/issues"
-                target="_blank"
-                rel="noreferrer noopener">Issues</a
-              >
-            </li>
-            <li>
-              <a
-                href="https://github.com/baseballyama/vite-devtools-svelte/releases"
-                target="_blank"
-                rel="noreferrer noopener">Releases</a
-              >
-            </li>
-          </ul>
-        </section>
-      </div>
+<footer class="band">
+  <div class="top">
+    <div class="about">
+      <a class="brand" href="{base}/" aria-label="vite-devtools-svelte home">
+        <SvelteMark size={28} />
+        <span>vite-devtools-svelte</span>
+      </a>
+      <p class="muted">
+        DevTools for Svelte and SvelteKit. Open source (MIT); runs only while your Vite dev server
+        is running.
+      </p>
     </div>
 
-    <div class="bottom">
-      <div class="mono small dim">
-        <span class="dot"></span>
-        live · v{pkgVersion} · © {year}
-      </div>
-      <div class="mono small dim">
-        crafted for Svelte 5 · Vite ≥ 8
-      </div>
-    </div>
+    <nav class="columns" aria-label="Footer">
+      <section>
+        <h2 class="col-title">Docs</h2>
+        <ul>
+          <li><a href="{base}/getting-started">Get started</a></li>
+          <li><a href="{base}/mcp">MCP for AI agents</a></li>
+          <li><a href="{base}/#panels">All panels</a></li>
+        </ul>
+      </section>
+      <section>
+        <h2 class="col-title">Project</h2>
+        <ul>
+          <li><a href={repo} target="_blank" rel="noreferrer noopener">GitHub</a></li>
+          <li><a href="{repo}/issues" target="_blank" rel="noreferrer noopener">Issues</a></li>
+          <li><a href="{repo}/releases" target="_blank" rel="noreferrer noopener">Releases</a></li>
+        </ul>
+      </section>
+    </nav>
+  </div>
+
+  <div class="bottom">
+    <p>
+      Site for v{pkgVersion}. Not an official Svelte project. The Svelte name and logo belong to the
+      Svelte project and are used here only to show what this tool works with.
+    </p>
   </div>
 </footer>
 
 <style>
   footer {
-    border-top: 1px solid var(--line);
-    margin-top: 6rem;
-    padding: 3rem 0 2rem;
-    color: var(--text-2);
-    font-size: 0.92rem;
-    background:
-      linear-gradient(
-        to bottom,
-        transparent,
-        color-mix(in srgb, var(--paper) 50%, transparent)
-      );
+    padding-bottom: 2rem;
   }
 
   .top {
-    display: grid;
-    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    display: flex;
+    justify-content: space-between;
     gap: 3rem;
-    padding-bottom: 2.5rem;
-    border-bottom: 1px solid var(--line);
+    flex-wrap: wrap;
   }
 
-  @media (max-width: 720px) {
-    .top {
-      grid-template-columns: 1fr;
-      gap: 2rem;
-    }
+  .about {
+    max-width: 26rem;
   }
 
   .brand {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.85rem;
-    max-width: 420px;
-  }
-
-  .mark {
-    flex-shrink: 0;
-    width: 36px;
-    height: 36px;
-    display: grid;
-    place-items: center;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    color: var(--brand);
-    background: var(--paper);
-  }
-
-  .brand-line {
-    display: flex;
-    align-items: baseline;
-    gap: 0.6rem;
-    margin-bottom: 0.2rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.65rem;
     color: var(--text);
-  }
-
-  .brand-line strong {
-    font-family: var(--font-mono);
-    font-weight: 500;
-    font-size: 0.92rem;
-    letter-spacing: -0.01em;
+    font-weight: 600;
+    margin-bottom: 1rem;
   }
 
   .columns {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 2rem;
+    display: flex;
+    gap: 4rem;
+    flex-wrap: wrap;
+  }
+
+  .col-title {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    margin: 0 0 0.85rem;
   }
 
   ul {
@@ -162,50 +94,28 @@
     padding: 0;
   }
 
-  li {
-    margin-bottom: 0.4rem;
+  li + li {
+    margin-top: 0.5rem;
   }
 
-  a {
+  .columns a {
     color: var(--text-2);
-    font-size: 0.9rem;
   }
 
-  a:hover {
+  .columns a:hover {
     color: var(--text);
-    text-decoration: none;
   }
 
   .bottom {
-    margin-top: 1.5rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-  }
-
-  .small {
-    font-size: 0.78rem;
-  }
-
-  .dot {
-    display: inline-block;
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--accent);
-    margin-right: 0.35rem;
-    vertical-align: 1px;
-  }
-
-  .col-title {
-    margin: 0 0 0.7rem;
-    font-family: var(--font-mono);
-    font-size: 0.72rem;
-    font-weight: 500;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--line);
+    font-size: 0.85rem;
     color: var(--text-3);
+  }
+
+  .bottom p {
+    margin: 0;
+    max-width: 52rem;
   }
 </style>
