@@ -74,7 +74,10 @@ describe('runtime memory bounds', () => {
       for (const s of signals) if (typeof s.v === 'number') s.v++
       poll!.fn()
     }
-    expect(h.dt._stateTimeline.length).toBeLessThanOrEqual(500)
+    // raw array: bulk-trimmed, at most 2 x the cap between trims
+    expect(h.dt._stateTimeline.length).toBeLessThanOrEqual(1000)
+    // what any read sees: the 500-entry ring
+    expect(h.dt.getStateTimeline().length).toBeLessThanOrEqual(500)
   })
 
   it('keeps the FPS frame buffer bounded', () => {

@@ -252,7 +252,7 @@ describe('§6.7 C: timeline throttle + disclosure', () => {
     poll() // seeds
     for (const sig of sigs) sig.v += 1000
     poll()
-    expect(h.dt._stateTimeline.length).toBe(500)
+    expect(h.dt.getStateTimeline().length).toBe(500)
     h.sent.length = 0 // drop the activation snapshot sent at boot
     h.dt._active = true
     h.dt._flushTimeline()
@@ -310,6 +310,93 @@ describe('§6.7 C: timeline throttle + disclosure', () => {
     h.emit('svelte-devtools:subscription', { active: true, componentDeltas: true })
     const reset = timelineMsgs(h).find(m => m.reset)
     expect(reset.dropped).toEqual([{ reason: 'runtime-count', count: 20 }])
+  })
+
+  // Ring contract (500 entries / 4 MB on every read, whenever it is trimmed
+  // internally): checked only through reads and pushed messages, plus the raw
+  // memory guard (at most 2 x 500 entries held between trims).
+  const MB4 = 4 * 1024 * 1024
+  function ring() {
+    const { h } = setup()
+    const id = h.dt.register('/app/src/lib/R.svelte')
+    h.dt.registered(id)
+    const entry = { meta: { componentId: id, name: 'r', componentFile: 'R.svelte' } }
+    const record = (newValue: unknown, approxBytes = 10) =>
+      h.dt._recordChange(`${id}:r`, entry, null, newValue, approxBytes)
+    // activate and push what is pending; returns the messages it sent
+    const flush = () => {
+      h.sent.length = 0
+      h.dt._active = true
+      h.dt._flushTimeline()
+      h.flushTimers()
+      return timelineMsgs(h)
+    }
+    const expectMemoryBound = () => {
+      expect(h.dt._stateTimeline.length).toBeLessThanOrEqual(1000)
+      expect(h.dt._timelineBytes).toBeLessThanOrEqual(MB4)
+    }
+    h.sent.length = 0 // drop the activation snapshot sent at boot
+    return { h, record, flush, expectMemoryBound }
+  }
+  const range = (from: number, to: number) => Array.from({ length: to - from }, (_, i) => from + i)
+
+  it('ring: inactive n changes -> newest min(n, 500) in order, runtime-count = n - 500', () => {
+    for (const n of [0, 1, 500, 501, 1000, 1001]) {
+      const { h, record, flush, expectMemoryBound } = ring()
+      h.dt._active = false // record without pushing
+      for (let i = 0; i < n; i++) record(i)
+      expectMemoryBound() // before any read trims
+      const kept = range(Math.max(0, n - 500), n)
+      expect(h.dt.getStateTimeline().map((c: any) => c.newValue)).toEqual(kept)
+      const msgs = flush()
+      expect(msgs.flatMap(m => m.changes).map((c: any) => c.newValue)).toEqual(kept)
+      const dropped = msgs.flatMap(m => m.dropped ?? [])
+      expect(dropped).toEqual(n > 500 ? [{ reason: 'runtime-count', count: n - 500 }] : [])
+      expectMemoryBound()
+    }
+  })
+
+  it('ring: an entry over 4 MB is kept while newest, then dropped as runtime-bytes', () => {
+    const { h, record, flush, expectMemoryBound } = ring()
+    h.dt._active = false
+    record('huge', MB4 + 1024)
+    expect(h.dt.getStateTimeline().map((c: any) => c.newValue)).toEqual(['huge'])
+    record('next')
+    expect(h.dt.getStateTimeline().map((c: any) => c.newValue)).toEqual(['next'])
+    const msgs = flush()
+    expect(msgs.flatMap(m => m.changes).map((c: any) => c.newValue)).toEqual(['next'])
+    expect(msgs.flatMap(m => m.dropped ?? [])).toEqual([{ reason: 'runtime-bytes', count: 1 }])
+    expectMemoryBound()
+  })
+
+  it('ring: a 3 000-change burst while active is pushed whole, <= 200 per message, nothing dropped', () => {
+    const { h, record, expectMemoryBound } = ring()
+    for (let i = 0; i < 3000; i++) record(i)
+    expectMemoryBound()
+    h.flushTimers()
+    const msgs = timelineMsgs(h)
+    for (const m of msgs) {
+      expect(m.changes.length).toBeLessThanOrEqual(200)
+      expect(m.dropped).toBeUndefined()
+    }
+    expect(msgs.flatMap(m => m.changes).map((c: any) => c.newValue)).toEqual(range(0, 3000))
+    expect(h.dt.getStateTimeline().map((c: any) => c.newValue)).toEqual(range(2500, 3000))
+    expectMemoryBound()
+  })
+
+  it('ring: clearStateTimeline() after 700 inactive changes discloses the 200 over the cap', () => {
+    const { h, record, flush, expectMemoryBound } = ring()
+    h.dt._active = false
+    for (let i = 0; i < 700; i++) record(i)
+    h.dt.clearStateTimeline()
+    expect(h.dt.getStateTimeline()).toHaveLength(0)
+    const [first, ...rest] = flush()
+    expect(first.reset).toBe(true)
+    expect(first.changes).toEqual([])
+    expect(first.dropped).toEqual([{ reason: 'runtime-count', count: 200 }])
+    expect(rest).toEqual([])
+    expect(h.dt.getStateTimeline()).toHaveLength(0)
+    expectMemoryBound()
   })
 })
 
