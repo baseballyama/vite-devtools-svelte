@@ -258,13 +258,28 @@ export default { kit: {} }
 `,
   )
 
-  write(
-    path.join(out, 'src/params/integer.ts'),
-    `export function match(param: string) {
+  // Kit 3 reads every matcher from one `src/params` module (`export const
+  // params`, each returning the value or undefined); Kit 2 from one file per
+  // matcher under src/params/ returning a boolean.
+  if (shape === 'kit3') {
+    write(
+      path.join(out, 'src/params.ts'),
+      `import { defineParams } from '@sveltejs/kit/params'
+
+export const params = defineParams({
+  integer: (param) => (/^\\d+$/.test(param) ? param : undefined),
+})
+`,
+    )
+  } else {
+    write(
+      path.join(out, 'src/params/integer.ts'),
+      `export function match(param: string) {
   return /^\\d+$/.test(param)
 }
 `,
-  )
+    )
+  }
 
   // --- generated components with a sparse DAG import graph (j > i only) ---
   const compDir = path.join(out, 'src/lib/components/gen')
