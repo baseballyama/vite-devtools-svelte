@@ -1,5 +1,36 @@
 # vite-devtools-svelte
 
+## 0.6.0
+
+### Minor Changes
+
+- [#112](https://github.com/baseballyama/vite-devtools-svelte/pull/112) [`9723083`](https://github.com/baseballyama/vite-devtools-svelte/commit/9723083e32bee866a8bbf7d957c4f7bb86cfdf38) Thanks [@baseballyama](https://github.com/baseballyama)! - - New `clientAuth` option: `svelteDevtools({ clientAuth: false })` turns off the one-time code for the standalone DevTools on a trusted single-user machine (default `true`). In the Vite DevTools dock, use `DevTools({ clientAuth: false })` from `@vitejs/devtools`.
+  - The shipped skills are renamed `vite-devtools-svelte-perf-audit` and `vite-devtools-svelte-perf-fix` (they were `vite-devtools-svelte:perf-audit` / `:perf-fix`). The new names follow the Agent Skills spec, so agents such as pi that reject `:` can load them. Re-copy the skills into `.claude/skills/` and call them by the new names.
+
+### Patch Changes
+
+- [#113](https://github.com/baseballyama/vite-devtools-svelte/pull/113) [`ceeaf68`](https://github.com/baseballyama/vite-devtools-svelte/commit/ceeaf68b99baba3dd96ac5d82057583f05457156) Thanks [@baseballyama](https://github.com/baseballyama)! - Overview: "Mounted components" no longer stays at 0 when the DevTools open before the app has reported its components. The count now updates while the overview is open, and is fetched again only when the components changed.
+
+- [#108](https://github.com/baseballyama/vite-devtools-svelte/pull/108) [`9dfc598`](https://github.com/baseballyama/vite-devtools-svelte/commit/9dfc598adc1a4b1c92c0fd625e777c9844e0d020) Thanks [@baseballyama](https://github.com/baseballyama)! - Security: the API playground and Social preview no longer fetch private addresses written as bracketed IPv6 literals (`http://[fd00::1]/`, `http://[fe80::1]/`, `http://[::ffff:127.0.0.1]/`) or in ranges the old check missed (`0.0.0.0/8`, `100.64.0.0/10`, multicast, reserved, documentation and benchmarking ranges, NAT64 and 6to4 forms of private IPv4, `*.localhost`, `localhost.`). Names that fail to resolve are now rejected instead of fetched.
+
+- [#109](https://github.com/baseballyama/vite-devtools-svelte/pull/109) [`0326952`](https://github.com/baseballyama/vite-devtools-svelte/commit/03269522219ff3ee89f21dce19fb67cb975620c6) Thanks [@baseballyama](https://github.com/baseballyama)! - Internal hardening from stricter type checking and linting: malformed hot-channel payloads (non-object messages, FPS samples without numbers, runtime errors without a string message) are dropped instead of stored; a failing MCP request is logged instead of becoming an unhandled rejection; a custom `logger.warn` is called with its logger as `this`; `exports` lists `types` first and exports `./package.json`.
+
+- [#110](https://github.com/baseballyama/vite-devtools-svelte/pull/110) [`23cf5be`](https://github.com/baseballyama/vite-devtools-svelte/commit/23cf5be62891be234b7570e4457d675edff6306c) Thanks [@baseballyama](https://github.com/baseballyama)! - Fixes found by the new test suite:
+
+  - Routes: layout resets (`+page@.svelte`, `+page@(group).svelte`, `+layout@….svelte`) are listed instead of disappearing; parameter matchers (`[id=integer]`), partial segments (`foo-[id]`, `[a]-[b]`) and escapes (`[x+2e]`) are parsed correctly.
+  - API endpoints: methods are read from the module's exports (`export { handler as GET }`, `HEAD`, `OPTIONS`, `fallback`) instead of substrings, so `export const GETTER` or comments no longer count; requests and Social preview fetches time out after 30 s.
+  - Social preview: quoted values with apostrophes, `data-*` attributes, entities, declared charsets, relative `og:image` and first-tag-wins are handled.
+  - Build analysis no longer counts `build/client` twice; dangling symlinks no longer break asset/build scans; a `package.json` mid-edit no longer breaks every panel.
+  - Module graph marks every module in a cycle; MCP `end_session` with `keep: 'discard'` works; p95 uses nearest rank; omitted `effectMaxDeps` keeps the default.
+  - MCP endpoint: constant-time token check, and a 500 instead of a hanging request when the server cannot be built.
+  - Component tracking: components whose markup contains `$.push(` and file ids with `$&`-style sequences are tracked; load profiling no longer breaks `load` for non-serializable results; coloured compiler warnings keep their location; the dock tag is not injected into a `</body>` inside a comment or script.
+  - Reactivity graph build is no longer quadratic in the number of proxy sources.
+  - UI: Svelte highlighting with `>` inside tag expressions and multi-line comments/template literals, highlight offsets for characters like `İ`, component boxes for same-named files in different folders, byte sizes above MB, NaN/Infinity values, polled panels after a missing dataset counter, and stale responses after Clear.
+
+- [#106](https://github.com/baseballyama/vite-devtools-svelte/pull/106) [`1997f14`](https://github.com/baseballyama/vite-devtools-svelte/commit/1997f14e48d350bfcf011d40b764c0efdc71df15) Thanks [@baseballyama](https://github.com/baseballyama)! - Internal: the browser runtime is now plain JavaScript sources (linted and formatted) inlined at build time, and `vite-devtools-svelte/package.json` is exported. No behavior change.
+
+- [#111](https://github.com/baseballyama/vite-devtools-svelte/pull/111) [`7ea6444`](https://github.com/baseballyama/vite-devtools-svelte/commit/7ea64445c90f44e6f221f60a3227ee74b974d22d) Thanks [@baseballyama](https://github.com/baseballyama)! - DevTools UI: the State timeline shows an error instead of "No state changes yet" when loading fails; accessible names for the search fields, command palette, graph zoom buttons and graph nodes (which also report their selected state and respond to Space); valid ARIA for table headers and labelled groups.
+
 ## 0.5.0
 
 ### Minor Changes
