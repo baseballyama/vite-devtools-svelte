@@ -40,6 +40,24 @@ describe('FpsMonitor', () => {
     expect(screen.queryByRole('img')).toBeNull()
   })
 
+  it('shows a failed load as an error, not as "No frame samples yet"', async () => {
+    vi.mocked(rpc.getFps).mockRejectedValue(new Error('RPC down'))
+    render(FpsMonitor)
+    await settle()
+    expect(screen.getByRole('alert').textContent).toContain('RPC down')
+    expect(screen.queryByText('No frame samples yet')).toBeNull()
+  })
+
+  it('draws drops reported in the same millisecond by two tabs', async () => {
+    vi.mocked(rpc.getFps).mockResolvedValue([
+      { timestamp: 100_000, fps: 20 },
+      { timestamp: 100_000, fps: 25 },
+    ])
+    const { container } = render(FpsMonitor)
+    await settle()
+    expect(container.querySelectorAll('line.drop')).toHaveLength(2)
+  })
+
   it('renders the current rate, window stats and the chart', async () => {
     vi.mocked(rpc.getFps).mockResolvedValue(samples([60, 58, 20, 40, 59]))
     const { container } = render(FpsMonitor)

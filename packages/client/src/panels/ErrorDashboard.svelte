@@ -2,18 +2,18 @@
   import Badge from '../components/Badge.svelte'
   import Button from '../components/Button.svelte'
   import CaptureNotice from '../components/CaptureNotice.svelte'
-  import EmptyState from '../components/EmptyState.svelte'
   import Highlight from '../components/Highlight.svelte'
   import Icon from '../components/Icon.svelte'
   import Inspector from '../components/Inspector.svelte'
   import LiveControls from '../components/LiveControls.svelte'
   import Panel from '../components/Panel.svelte'
+  import ResourceEmpty from '../components/ResourceEmpty.svelte'
   import SearchField from '../components/SearchField.svelte'
   import Segmented from '../components/Segmented.svelte'
   import SplitView from '../components/SplitView.svelte'
   import VirtualList from '../components/VirtualList.svelte'
   import { captureInfo } from '../lib/capture.svelte.js'
-  import { countBy } from '../lib/collections.js'
+  import { countBy, uniqueKeys } from '../lib/collections.js'
   import { formatClock, shortPath } from '../lib/format.js'
   import { matcher } from '../lib/match.js'
   import { resource } from '../lib/resource.svelte.js'
@@ -50,26 +50,19 @@
   let query = $state('')
   let selected = $state<string | null>(null)
 
+  // Keys must survive polls: an index into the newest-first list would move
+  // the selection to another problem whenever a new error arrives.
   const all = $derived.by<Problem[]>(() => {
-    const errs: Problem[] = [...problems.data.errors].reverse().map((e, i) => ({
-      key: `e:${e.timestamp}:${i}`,
-      kind: 'error',
-      message: e.message,
-      file: e.file,
-      line: e.line,
-      column: e.column,
-      stack: e.stack,
-      timestamp: e.timestamp,
-    }))
-    const warns: Problem[] = problems.data.warnings.map((w, i) => ({
-      key: `w:${w.file}:${w.line ?? 0}:${w.column ?? 0}:${w.code}:${i}`,
-      kind: 'warning',
-      message: w.message,
-      code: w.code,
-      file: w.file,
-      line: w.line,
-      column: w.column,
-    }))
+    const { errors, warnings } = problems.data
+    const errorKeys = uniqueKeys(errors, e => `e:${e.timestamp}`)
+    const warningKeys = uniqueKeys(
+      warnings,
+      w => `w:${w.file}:${w.line ?? 0}:${w.column ?? 0}:${w.code}`,
+    )
+    const errs = errors
+      .map<Problem>((e, i) => ({ ...e, key: errorKeys[i]!, kind: 'error' }))
+      .reverse()
+    const warns = warnings.map<Problem>((w, i) => ({ ...w, key: warningKeys[i]!, kind: 'warning' }))
     return [...errs, ...warns]
   })
 
@@ -170,15 +163,17 @@
         {/if}
       {/snippet}
       {#snippet empty()}
-        {#if problems.loading}
-          <EmptyState title="Collecting diagnostics…" />
-        {:else if all.length === 0}
-          <EmptyState icon="check" title="No problems">
-            <p>Compiler warnings and runtime errors from your app show up here as they happen.</p>
-          </EmptyState>
-        {:else}
-          <EmptyState icon="search" title="No problems match" />
-        {/if}
+        <ResourceEmpty
+          res={problems}
+          total={all.length}
+          loading="Collecting diagnostics…"
+          failed="Could not load problems"
+          icon="check"
+          title="No problems"
+          noMatch="No problems match"
+        >
+          <p>Compiler warnings and runtime errors from your app show up here as they happen.</p>
+        </ResourceEmpty>
       {/snippet}
     </VirtualList>
     {#snippet aside()}

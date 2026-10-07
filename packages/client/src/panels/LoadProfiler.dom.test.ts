@@ -61,6 +61,28 @@ describe('LoadProfiler', () => {
     expect(document.querySelector('.stats')).toBeNull()
   })
 
+  it('shows a failed load as an error, not as an empty list', async () => {
+    vi.mocked(rpc.getLoadProfiles).mockRejectedValue(new Error('RPC down'))
+    render(LoadProfiler)
+    await settle()
+    expect(screen.getByRole('alert').textContent).toContain('RPC down')
+    expect(screen.queryByText('No load calls recorded yet')).toBeNull()
+  })
+
+  it('keeps the selected call selected when the server drops older ones', async () => {
+    vi.mocked(rpc.getLoadProfiles).mockResolvedValue(loads)
+    render(LoadProfiler)
+    await settle()
+    const list = screen.getByRole('listbox', { name: 'Load function calls' })
+    await userEvent.click(within(list).getByRole('option', { name: /about/ }))
+    // The server buffer is bounded: the oldest call falls off the front.
+    vi.mocked(rpc.getLoadProfiles).mockResolvedValue(loads.slice(1))
+    await userEvent.click(screen.getByRole('button', { name: /^Refresh/ }))
+    await settle()
+    const selected = within(list).getByRole('option', { selected: true })
+    expect(selected.querySelector('.route')!.textContent).toBe('/about')
+  })
+
   it('lists load calls newest first with stats', async () => {
     vi.mocked(rpc.getLoadProfiles).mockResolvedValue(loads)
     render(LoadProfiler)

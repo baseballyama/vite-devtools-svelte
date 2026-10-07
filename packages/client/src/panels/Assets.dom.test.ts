@@ -123,6 +123,18 @@ describe('Assets', () => {
     expect(within(list).getByText('No assets match')).toBeTruthy()
   })
 
+  it('keeps the chosen category listed after its last asset goes away', async () => {
+    const { user } = await setup()
+    const group = screen.getByRole('radiogroup', { name: 'Asset type' })
+    await user.click(within(group).getByRole('radio', { name: /Font/ }))
+    vi.mocked(rpc.getAssets).mockResolvedValue(data.filter(a => !a.type.startsWith('font')))
+    await user.click(screen.getByRole('button', { name: 'Rescan static directory' }))
+    await settle()
+    const font = within(group).getByRole('radio', { name: /Font/ })
+    expect(font.getAttribute('aria-checked')).toBe('true')
+    expect(font.textContent).toContain('0')
+  })
+
   it('shows an image asset with preview and actions', async () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(null)
     const { user, list } = await setup()

@@ -3,14 +3,15 @@
   import Button from '../components/Button.svelte'
   import CaptureNotice from '../components/CaptureNotice.svelte'
   import DataTable from '../components/DataTable.svelte'
-  import EmptyState from '../components/EmptyState.svelte'
   import Highlight from '../components/Highlight.svelte'
   import LiveControls from '../components/LiveControls.svelte'
   import Panel from '../components/Panel.svelte'
+  import ResourceEmpty from '../components/ResourceEmpty.svelte'
   import SearchField from '../components/SearchField.svelte'
   import Segmented from '../components/Segmented.svelte'
   import type { Column, SortState, TableRowState } from '../components/types.js'
   import { captureInfo } from '../lib/capture.svelte.js'
+  import { uniqueKeys } from '../lib/collections.js'
   import { formatBytes, formatClock, formatMs } from '../lib/format.js'
   import { matcher } from '../lib/match.js'
   import { resource } from '../lib/resource.svelte.js'
@@ -33,9 +34,10 @@
   let sort = $state<SortState | null>({ id: 'time', desc: true })
   let selected = $state<string | null>(null)
 
-  const keyed = $derived(
-    loads.data.map((p, i) => ({ ...p, key: `${p.timestamp}:${p.route}:${p.type}:${i}` })),
-  )
+  const keyed = $derived.by(() => {
+    const keys = uniqueKeys(loads.data, p => `${p.timestamp}:${p.route}:${p.type}`)
+    return loads.data.map((p, i) => ({ ...p, key: keys[i]! }))
+  })
   type Row = (typeof keyed)[number]
 
   const rows = $derived.by(() => {
@@ -190,15 +192,17 @@
             >{/if}
         {/snippet}
         {#snippet empty()}
-          {#if loads.data.length === 0}
-            <EmptyState icon="loads" title="No load calls recorded yet"
-              ><p>
-                Navigate between routes in your app to time their <code>load</code> functions.
-              </p></EmptyState
-            >
-          {:else}
-            <EmptyState icon="search" title="No loads match" />
-          {/if}
+          <ResourceEmpty
+            res={loads}
+            total={loads.data.length}
+            loading="Waiting for load calls…"
+            failed="Could not load load-function timings"
+            icon="loads"
+            title="No load calls recorded yet"
+            noMatch="No loads match"
+          >
+            <p>Navigate between routes in your app to time their <code>load</code> functions.</p>
+          </ResourceEmpty>
         {/snippet}
       </DataTable>
     </div>

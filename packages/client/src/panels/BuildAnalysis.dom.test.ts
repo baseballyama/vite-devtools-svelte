@@ -51,6 +51,14 @@ describe('BuildAnalysis', () => {
     expect(files()).toHaveLength(4)
   })
 
+  it('shows a failed read as an error, not as "No build output found"', async () => {
+    vi.mocked(rpc.getBuildAnalysis).mockRejectedValue(new Error('RPC down'))
+    render(BuildAnalysis)
+    await settle()
+    expect(screen.getByRole('alert').textContent).toContain('RPC down')
+    expect(screen.queryByText('No build output found')).toBeNull()
+  })
+
   it('shows a reading state while the first answer is pending', async () => {
     vi.mocked(rpc.getBuildAnalysis).mockReturnValue(new Promise(() => {}))
     render(BuildAnalysis)

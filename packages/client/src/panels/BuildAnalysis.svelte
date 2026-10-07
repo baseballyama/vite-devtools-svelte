@@ -7,6 +7,7 @@
   import Inspector from '../components/Inspector.svelte'
   import Panel from '../components/Panel.svelte'
   import RefreshButton from '../components/RefreshButton.svelte'
+  import ResourceEmpty from '../components/ResourceEmpty.svelte'
   import SearchField from '../components/SearchField.svelte'
   import Segmented from '../components/Segmented.svelte'
   import SplitView from '../components/SplitView.svelte'
@@ -103,13 +104,20 @@
     <RefreshButton res={build} label="Re-read build output" />
   {/snippet}
 
-  {#if !build.loading && chunks.length === 0}
-    <EmptyState icon="build" title="No build output found">
+  {#if chunks.length === 0}
+    <ResourceEmpty
+      res={build}
+      total={0}
+      loading="Reading build output…"
+      failed="Could not read the build output"
+      icon="build"
+      title="No build output found"
+    >
       <p>
         Run <code>vite build</code> (or <code>pnpm build</code>) to produce chunks, then refresh.
       </p>
       <Button icon="refresh" onclick={() => build.refresh()}>Refresh</Button>
-    </EmptyState>
+    </ResourceEmpty>
   {:else}
     <div class="layout">
       <!-- `role="group"`: an aria-label on a role-less div is ignored by
@@ -168,10 +176,7 @@
                 <span class="num" class:big={c.size > 250_000}>{formatBytes(c.size)}</span>
               </span>
             {/snippet}
-            {#snippet empty()}<EmptyState
-                icon={build.loading ? undefined : 'search'}
-                title={build.loading ? 'Reading build output…' : 'No chunks match'}
-              />{/snippet}
+            {#snippet empty()}<EmptyState icon="search" title="No chunks match" />{/snippet}
           </DataTable>
           {#snippet aside()}
             {#if current}

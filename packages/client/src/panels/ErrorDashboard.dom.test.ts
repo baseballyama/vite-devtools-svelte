@@ -81,6 +81,29 @@ describe('ErrorDashboard', () => {
     expect(screen.getByRole('heading', { name: /Problems/ }).textContent).toContain('5')
   })
 
+  it('keeps the selected error selected when a newer one arrives', async () => {
+    const { user, list } = await setup()
+    await user.click(within(list).getAllByRole('option')[1]!)
+    expect(screen.getByRole('complementary').textContent).toContain('older error')
+    vi.mocked(rpc.getRuntimeErrors).mockResolvedValue([
+      ...errors,
+      { message: 'newest error', timestamp: 3_000 },
+    ])
+    await user.click(screen.getByRole('button', { name: /^Refresh/ }))
+    await settle()
+    expect(messages(list)[0]).toBe('newest error')
+    const selected = within(list).getByRole('option', { selected: true })
+    expect(selected.querySelector('.msg')!.textContent).toBe('older error')
+    expect(screen.getByRole('complementary').textContent).toContain('older error')
+  })
+
+  it('shows a failed load as an error, not as "No problems"', async () => {
+    vi.mocked(rpc.getRuntimeErrors).mockRejectedValue(new Error('RPC down'))
+    await setup()
+    expect(screen.getByRole('alert').textContent).toContain('RPC down')
+    expect(screen.queryByText('No problems')).toBeNull()
+  })
+
   it('filters by severity', async () => {
     const { user, list } = await setup()
     const sev = screen.getByRole('radiogroup', { name: 'Severity' })

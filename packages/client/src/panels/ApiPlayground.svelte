@@ -5,6 +5,7 @@
   import Highlight from '../components/Highlight.svelte'
   import Panel from '../components/Panel.svelte'
   import RefreshButton from '../components/RefreshButton.svelte'
+  import ResourceEmpty from '../components/ResourceEmpty.svelte'
   import SearchField from '../components/SearchField.svelte'
   import SplitView from '../components/SplitView.svelte'
   import type { Tone } from '../components/types.js'
@@ -244,14 +245,15 @@
           <span class="truncate mono path"><Highlight text={e.path} {query} /></span>
         {/snippet}
         {#snippet empty()}
-          {#if endpoints.loading}
-            <EmptyState title="Scanning +server files…" />
-          {:else}
-            <EmptyState
-              icon="api"
-              title={endpoints.data.length ? 'No endpoints match' : 'No +server endpoints'}
-            />
-          {/if}
+          <ResourceEmpty
+            res={endpoints}
+            total={endpoints.data.length}
+            loading="Scanning +server files…"
+            failed="Could not read endpoints"
+            icon="api"
+            title="No +server endpoints"
+            noMatch="No endpoints match"
+          />
         {/snippet}
       </VirtualList>
     {/snippet}

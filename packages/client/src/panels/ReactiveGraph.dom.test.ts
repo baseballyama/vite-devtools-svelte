@@ -602,6 +602,13 @@ describe('ReactiveGraph: full graph', () => {
     expect(reactiveScope.current?.componentId).toBe(3)
   })
 
+  it('a graph filtered to nothing says nothing matches, not that nothing is tracked', async () => {
+    await full()
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Filter' }), 'zzz-no-such-signal')
+    expect(screen.getByText('No loaded signals match')).toBeTruthy()
+    expect(screen.queryByText('No reactive signals tracked yet.')).toBeNull()
+  })
+
   it('refuses to lay out too many signals and offers the list', async () => {
     localStorage.setItem('svelte-devtools:reactive:view', '"graph"')
     vi.mocked(rpc.getReactiveGraph).mockImplementation(req =>

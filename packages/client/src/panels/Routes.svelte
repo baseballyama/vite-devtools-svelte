@@ -1,11 +1,11 @@
 <script lang="ts">
   import Badge from '../components/Badge.svelte'
   import Button from '../components/Button.svelte'
-  import EmptyState from '../components/EmptyState.svelte'
   import Highlight from '../components/Highlight.svelte'
   import Inspector from '../components/Inspector.svelte'
   import Panel from '../components/Panel.svelte'
   import RefreshButton from '../components/RefreshButton.svelte'
+  import ResourceEmpty from '../components/ResourceEmpty.svelte'
   import SearchField from '../components/SearchField.svelte'
   import Segmented from '../components/Segmented.svelte'
   import SplitView from '../components/SplitView.svelte'
@@ -179,19 +179,17 @@
         {/if}
       {/snippet}
       {#snippet empty()}
-        {#if routes.loading}
-          <EmptyState title="Scanning src/routes…" />
-        {:else if routes.error}
-          <EmptyState title="Could not read routes" error={routes.error} />
-        {:else if routes.data.length === 0}
-          <EmptyState icon="routes" title="No routes found"
-            ><p>
-              Routes appear here for SvelteKit projects with a <code>src/routes</code> directory.
-            </p></EmptyState
-          >
-        {:else}
-          <EmptyState icon="search" title="No routes match" />
-        {/if}
+        <ResourceEmpty
+          res={routes}
+          total={routes.data.length}
+          loading="Scanning src/routes…"
+          failed="Could not read routes"
+          icon="routes"
+          title="No routes found"
+          noMatch="No routes match"
+        >
+          <p>Routes appear here for SvelteKit projects with a <code>src/routes</code> directory.</p>
+        </ResourceEmpty>
       {/snippet}
     </TreeView>
     {#snippet aside()}

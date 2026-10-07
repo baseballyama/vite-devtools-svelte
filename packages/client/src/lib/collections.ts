@@ -36,3 +36,19 @@ export function groupBy<T, K, V>(
   }
   return out
 }
+
+/**
+ * `key(item)` for each item, with `#2`, `#3`… appended to repeats so the
+ * keys are unique. Counted from the start, so keys already handed out stay
+ * put when items are appended — unlike an index suffix, which shifts.
+ * `key` must not itself end in `#<n>`.
+ */
+export function uniqueKeys<T>(items: readonly T[], key: (item: T) => string): string[] {
+  const seen = new Map<string, number>()
+  return items.map(item => {
+    const k = key(item)
+    const n = (seen.get(k) ?? 0) + 1
+    seen.set(k, n)
+    return n === 1 ? k : `${k}#${n}`
+  })
+}

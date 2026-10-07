@@ -3,11 +3,11 @@
   import Button from '../components/Button.svelte'
   import CaptureNotice from '../components/CaptureNotice.svelte'
   import DataTable from '../components/DataTable.svelte'
-  import EmptyState from '../components/EmptyState.svelte'
   import Highlight from '../components/Highlight.svelte'
   import Inspector from '../components/Inspector.svelte'
   import LiveControls from '../components/LiveControls.svelte'
   import Panel from '../components/Panel.svelte'
+  import ResourceEmpty from '../components/ResourceEmpty.svelte'
   import SearchField from '../components/SearchField.svelte'
   import Segmented from '../components/Segmented.svelte'
   import SplitView from '../components/SplitView.svelte'
@@ -206,15 +206,17 @@
         </span>
       {/snippet}
       {#snippet empty()}
-        {#if profiles.loading}
-          <EmptyState title="Waiting for render data…" />
-        {:else if profiles.data.length === 0}
-          <EmptyState icon="render" title="No renders recorded yet"
-            ><p>Interact with your app — every component mount and update is timed.</p></EmptyState
-          >
-        {:else}
-          <EmptyState icon="search" title="No components match" />
-        {/if}
+        <ResourceEmpty
+          res={profiles}
+          total={profiles.data.length}
+          loading="Waiting for render data…"
+          failed="Could not load render profiles"
+          icon="render"
+          title="No renders recorded yet"
+          noMatch="No components match"
+        >
+          <p>Interact with your app — every component mount and update is timed.</p>
+        </ResourceEmpty>
       {/snippet}
     </DataTable>
     {#snippet aside()}

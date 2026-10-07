@@ -2,11 +2,11 @@
   import Badge from '../components/Badge.svelte'
   import Button from '../components/Button.svelte'
   import CaptureNotice from '../components/CaptureNotice.svelte'
-  import EmptyState from '../components/EmptyState.svelte'
   import Highlight from '../components/Highlight.svelte'
   import Inspector from '../components/Inspector.svelte'
   import LiveControls from '../components/LiveControls.svelte'
   import Panel from '../components/Panel.svelte'
+  import ResourceEmpty from '../components/ResourceEmpty.svelte'
   import SearchField from '../components/SearchField.svelte'
   import SplitView from '../components/SplitView.svelte'
   import VirtualList from '../components/VirtualList.svelte'
@@ -184,18 +184,19 @@
             </span>
           {/snippet}
           {#snippet empty()}
-            <!-- Fix: a failed fetch used to read as "No state changes yet". -->
-            {#if timeline.error && timeline.data.length === 0}
-              <EmptyState title="Could not load the state timeline" error={timeline.error} />
-            {:else if timeline.data.length === 0}
-              <EmptyState icon="timeline" title="No state changes yet"
-                ><p>
-                  Interact with your app — every <code>$state</code> write is recorded here, newest first.
-                </p></EmptyState
-              >
-            {:else}
-              <EmptyState icon="search" title="No changes match" />
-            {/if}
+            <ResourceEmpty
+              res={timeline}
+              total={timeline.data.length}
+              loading="Waiting for state changes…"
+              failed="Could not load the state timeline"
+              icon="timeline"
+              title="No state changes yet"
+              noMatch="No changes match"
+            >
+              <p>
+                Interact with your app — every <code>$state</code> write is recorded here, newest first.
+              </p>
+            </ResourceEmpty>
           {/snippet}
         </VirtualList>
       </div>

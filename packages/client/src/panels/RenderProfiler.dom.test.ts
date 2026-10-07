@@ -85,6 +85,14 @@ describe('RenderProfiler', () => {
     expect(screen.getByRole('status').textContent).toContain('No renders recorded yet')
   })
 
+  it('shows a failed load as an error, not as an empty profile', async () => {
+    vi.mocked(rpc.getRenderProfiles).mockRejectedValue(new Error('RPC down'))
+    render(RenderProfiler)
+    await settle()
+    expect(screen.getByRole('alert').textContent).toContain('RPC down')
+    expect(screen.queryByText('No renders recorded yet')).toBeNull()
+  })
+
   it('folds instances by component file, heaviest total first', async () => {
     vi.mocked(rpc.getRenderProfiles).mockResolvedValue(profiles)
     render(RenderProfiler)
