@@ -1,6 +1,6 @@
 import { render, screen, within } from '@testing-library/svelte'
 import { userEvent } from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 
 import * as rpc from '../lib/rpc.js'
 import type { AssetInfo, ComponentInstance, RouteInfo } from '../lib/types.js'
@@ -117,6 +117,41 @@ describe('Overview panel', () => {
     expect(tile('Problems').textContent).toContain('— errors · 0 warnings')
   })
 
+  it('updates the mounted components once the app reports them, only when they changed', async () => {
+    vi.useFakeTimers()
+    onTestFinished(() => void vi.useRealTimers())
+    let components = 0
+    vi.mocked(rpc.getVersions).mockImplementation(() =>
+      Promise.resolve({
+        components,
+        renderProfiles: 0,
+        loadProfiles: 0,
+        stateTimeline: 0,
+        reactiveGraph: 0,
+        errors: 0,
+        fps: 0,
+      }),
+    )
+    render(Overview)
+    await vi.advanceTimersByTimeAsync(0)
+    // first load: the runtime has not reported its components yet
+    expect(tile('Mounted components').textContent).toContain('from 0 files')
+    const calls = vi.mocked(rpc.getLiveComponents).mock.calls.length
+
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(vi.mocked(rpc.getLiveComponents).mock.calls.length).toBe(calls) // version unchanged
+
+    vi.mocked(rpc.getLiveComponents).mockResolvedValue([
+      instance(1, 'src/App.svelte'),
+      instance(2, 'src/Box.svelte'),
+      instance(3, 'src/Box.svelte'),
+    ])
+    components = 1
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(tile('Mounted components').textContent).toContain('3')
+    expect(tile('Mounted components').textContent).toContain('from 2 files')
+  })
+
   it('navigates to a panel from its tile', async () => {
     withData()
     render(Overview)
@@ -175,6 +210,8 @@ describe('Overview panel', () => {
     await settle()
     expect(rpc.getProject).toHaveBeenCalledTimes(2)
     expect(rpc.getRoutes).toHaveBeenCalledTimes(2)
+    expect(rpc.getLiveComponents).toHaveBeenCalledTimes(2)
     expect(tile('Routes').textContent).toContain('3')
+    expect(tile('Mounted components').textContent).toContain('from 2 files')
   })
 })

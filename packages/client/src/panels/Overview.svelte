@@ -23,6 +23,7 @@
     getRuntimeErrors,
   } from '../lib/rpc.js'
   import type { ProjectInfo } from '../lib/types.js'
+  import { datasetVersion } from '../lib/versions.js'
 
   const project = resource<ProjectInfo | null>(getProject, { initial: null })
 
@@ -38,11 +39,10 @@
           () => null,
         )
       }
-      const [routes, assets, modules, live, warnings, errors] = await Promise.all([
+      const [routes, assets, modules, warnings, errors] = await Promise.all([
         settle(getRoutes()),
         settle(getAssets()),
         settle(getModuleGraph()),
-        settle(getLiveComponents()),
         settle(getCompilerWarnings()),
         settle(getRuntimeErrors()),
       ])
@@ -54,13 +54,22 @@
         assetBytes: assets?.reduce((s, a) => s + a.size, 0) ?? null,
         modules: modules?.modules.length ?? null,
         cycles: modules?.cycles.length ?? null,
-        live: live?.length ?? null,
-        liveFiles: live ? new Set(live.map(c => c.file)).size : null,
         warnings: warnings?.length ?? null,
         errors: errors?.length ?? null,
       }
     },
     { initial: null },
+  )
+
+  // Mounted components arrive after the overview's first load: the app's
+  // runtime only reports them once this DevTools client has connected. Poll
+  // like the Components panel (skipped while the server's counter is unchanged).
+  const live = resource(
+    async () => {
+      const list = await getLiveComponents()
+      return { count: list.length, files: new Set(list.map(c => c.file)).size }
+    },
+    { initial: null, interval: 2000, version: datasetVersion('components') },
   )
 
   let depQuery = $state('')
@@ -107,8 +116,8 @@
         panel: 'components',
         icon: 'components',
         label: 'Mounted components',
-        value: n(s?.live),
-        sub: s?.liveFiles != null ? `from ${n(s.liveFiles)} files` : undefined,
+        value: n(live.data?.count),
+        sub: live.data ? `from ${n(live.data.files)} files` : undefined,
       },
       {
         panel: 'modules',
@@ -143,7 +152,7 @@
       icon="refresh"
       variant="ghost"
       label="Refresh"
-      onclick={() => (project.refresh(), stats.refresh())}
+      onclick={() => (project.refresh(), stats.refresh(), live.refresh())}
     />
   {/snippet}
 
