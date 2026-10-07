@@ -1,6 +1,6 @@
 {
   "name": "vite-devtools-svelte",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Svelte DevTools for Vite: standalone on your dev server or inside the Vite DevTools dock",
   "keywords": [
     "devtools",
