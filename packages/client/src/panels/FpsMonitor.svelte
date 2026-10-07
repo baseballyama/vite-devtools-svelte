@@ -5,6 +5,8 @@
   import Panel from '../components/Panel.svelte'
   import ResourceEmpty from '../components/ResourceEmpty.svelte'
   import Segmented from '../components/Segmented.svelte'
+  import StatList from '../components/StatList.svelte'
+  import type { Stat } from '../components/types.js'
   import { resource } from '../lib/resource.svelte.js'
   import { getFps, clearFps } from '../lib/rpc.js'
   import type { FpsSample } from '../lib/types.js'
@@ -54,20 +56,25 @@
     return fps.data.filter(s => s.timestamp >= recordStart && s.timestamp <= end)
   })
 
-  function summarize(src: FpsSample[]) {
+  function summarize(src: FpsSample[]): { count: number; items: Stat[] } | null {
     if (!src.length) return null
     const sorted = src.map(s => s.fps).sort((a, b) => a - b)
+    const min = sorted[0]!
+    const p1 = sorted[Math.floor(sorted.length * 0.01)]!
+    const avg = Math.round(sorted.reduce((sum, f) => sum + f, 0) / sorted.length)
+    const drops = sorted.filter(f => f < DROP).length
     return {
-      min: sorted[0]!,
-      max: sorted.at(-1)!,
-      avg: Math.round(sorted.reduce((sum, f) => sum + f, 0) / sorted.length),
-      p1: sorted[Math.floor(sorted.length * 0.01)]!,
-      drops: sorted.filter(f => f < DROP).length,
       count: sorted.length,
+      items: [
+        { label: 'Min', value: min, tone: tone(min) },
+        { label: '1% low', value: p1, tone: tone(p1) },
+        { label: 'Avg', value: avg, tone: tone(avg) },
+        { label: 'Max', value: sorted.at(-1)! },
+        { label: `Drops <${DROP}`, value: drops, tone: drops > 0 ? 'red' : null },
+      ],
     }
   }
 
-  type Stats = NonNullable<ReturnType<typeof summarize>>
   const stats = $derived(summarize(visible))
   const recStats = $derived(summarize(recorded))
   const region = $derived.by(() => {
@@ -78,7 +85,7 @@
   })
 
   function tone(f: number) {
-    return f >= 55 ? 'good' : f >= DROP ? 'fair' : 'poor'
+    return f >= 55 ? 'green' : f >= DROP ? 'yellow' : 'red'
   }
 
   function toggleRecord() {
@@ -142,7 +149,7 @@
           <span class="unit">fps</span>
           {#if recording}<Badge tone="red">● REC</Badge>{/if}
         </div>
-        {#if stats}{@render statList(stats)}{/if}
+        {#if stats}<StatList items={stats.items} variant="box" />{/if}
       </div>
 
       <figure class="chart">
@@ -179,37 +186,12 @@
           <h3 class="section-title">
             Recording · {((recordEnd - recordStart) / 1000).toFixed(1)} s · {recStats.count} samples
           </h3>
-          {@render statList(recStats)}
+          <StatList items={recStats.items} variant="box" />
         </section>
       {/if}
     </div>
   {/if}
 </Panel>
-
-{#snippet statList(st: Stats)}
-  <dl class="stats">
-    <div>
-      <dt>Min</dt>
-      <dd class="num {tone(st.min)}">{st.min}</dd>
-    </div>
-    <div>
-      <dt>1% low</dt>
-      <dd class="num {tone(st.p1)}">{st.p1}</dd>
-    </div>
-    <div>
-      <dt>Avg</dt>
-      <dd class="num {tone(st.avg)}">{st.avg}</dd>
-    </div>
-    <div>
-      <dt>Max</dt>
-      <dd class="num">{st.max}</dd>
-    </div>
-    <div>
-      <dt>Drops &lt;{DROP}</dt>
-      <dd class="num" class:poor={st.drops > 0}>{st.drops}</dd>
-    </div>
-  </dl>
-{/snippet}
 
 <style>
   .wrap {
@@ -239,37 +221,13 @@
     color: var(--fg-muted);
     margin-right: 8px;
   }
-  .stats {
-    display: flex;
-    flex-wrap: wrap;
-    margin: 0;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-  }
-  .stats div {
-    padding: 6px 14px;
-    border-right: 1px solid var(--border);
-  }
-  .stats div:last-child {
-    border-right: 0;
-  }
-  .stats dt {
-    font-size: var(--fs-xs);
-    color: var(--fg-muted);
-  }
-  .stats dd {
-    margin: 0;
-    font-size: var(--fs-lg);
-    font-weight: 600;
-  }
-  .good {
+  .green {
     color: var(--green);
   }
-  .fair {
+  .yellow {
     color: var(--yellow);
   }
-  .poor {
+  .red {
     color: var(--red);
   }
   .chart {

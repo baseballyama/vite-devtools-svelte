@@ -46,6 +46,8 @@
     }
   })
 
+  const cardTitle = $derived(preview?.title || 'Untitled page')
+  const cardDescription = $derived(preview?.description || 'No description')
   const twitterCard = $derived(
     preview?.tags.find(t => t.property === 'twitter:card')?.content ?? 'summary',
   )
@@ -100,16 +102,16 @@
           </div>
           <figcaption>
             <span class="host">{host}</span>
-            <strong class="t">{preview.title || 'Untitled page'}</strong>
-            <span class="d">{preview.description || 'No description'}</span>
+            <strong class="t">{cardTitle}</strong>
+            <span class="d">{cardDescription}</span>
           </figcaption>
         </figure>
         <figure class="card slack">
           <div class="bar-accent"></div>
           <div>
             <span class="site">{host}</span>
-            <strong class="t link">{preview.title || 'Untitled page'}</strong>
-            <span class="d">{preview.description || 'No description'}</span>
+            <strong class="t link">{cardTitle}</strong>
+            <span class="d">{cardDescription}</span>
             {#if preview.image}<img class="thumb" src={preview.image} alt="" />{/if}
           </div>
           <span class="label">Slack / Discord</span>

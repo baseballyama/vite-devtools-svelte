@@ -9,7 +9,8 @@
   import ResourceEmpty from '../components/ResourceEmpty.svelte'
   import SearchField from '../components/SearchField.svelte'
   import Segmented from '../components/Segmented.svelte'
-  import type { Column, SortState, TableRowState } from '../components/types.js'
+  import StatList from '../components/StatList.svelte'
+  import type { Column, SortState, Stat, TableRowState } from '../components/types.js'
   import { captureInfo } from '../lib/capture.svelte.js'
   import { uniqueKeys } from '../lib/collections.js'
   import { formatBytes, formatClock, formatMs } from '../lib/format.js'
@@ -50,17 +51,20 @@
     )
   })
 
-  const stats = $derived.by(() => {
+  const stats = $derived.by<Stat[] | null>(() => {
     const d = rows.map(r => r.duration).sort((a, b) => a - b)
     if (!d.length) return null
     const q = (p: number) => d[Math.min(d.length - 1, Math.floor(p * d.length))]!
-    return {
-      avg: d.reduce((s, x) => s + x, 0) / d.length,
-      p50: q(0.5),
-      p95: q(0.95),
-      max: d[d.length - 1]!,
-      slow: d.filter(x => x > SLOW_MS).length,
-    }
+    const slowTone = (ms: number) => (ms > SLOW_MS ? 'red' : null)
+    const slow = d.filter(x => x > SLOW_MS).length
+    return [
+      { label: 'Calls', value: d.length.toLocaleString() },
+      { label: 'Average', value: formatMs(d.reduce((s, x) => s + x, 0) / d.length) },
+      { label: 'p50', value: formatMs(q(0.5)) },
+      { label: 'p95', value: formatMs(q(0.95)), tone: slowTone(q(0.95)) },
+      { label: 'Max', value: formatMs(d.at(-1)), tone: slowTone(d.at(-1)!) },
+      { label: `> ${SLOW_MS} ms`, value: slow, tone: slow > 0 ? 'red' : null },
+    ]
   })
 
   const maxDuration = $derived(keyed.reduce((m, p) => Math.max(m, p.duration), 1))
@@ -134,34 +138,7 @@
   {/snippet}
 
   <div class="layout">
-    {#if stats}
-      <dl class="stats">
-        <div>
-          <dt>Calls</dt>
-          <dd class="num">{rows.length.toLocaleString()}</dd>
-        </div>
-        <div>
-          <dt>Average</dt>
-          <dd class="num">{formatMs(stats.avg)}</dd>
-        </div>
-        <div>
-          <dt>p50</dt>
-          <dd class="num">{formatMs(stats.p50)}</dd>
-        </div>
-        <div>
-          <dt>p95</dt>
-          <dd class="num" class:slow={stats.p95 > SLOW_MS}>{formatMs(stats.p95)}</dd>
-        </div>
-        <div>
-          <dt>Max</dt>
-          <dd class="num" class:slow={stats.max > SLOW_MS}>{formatMs(stats.max)}</dd>
-        </div>
-        <div>
-          <dt>&gt; {SLOW_MS} ms</dt>
-          <dd class="num" class:slow={stats.slow > 0}>{stats.slow}</dd>
-        </div>
-      </dl>
-    {/if}
+    {#if stats}<StatList items={stats} variant="strip" />{/if}
     <div class="table">
       <DataTable
         items={rows}
@@ -218,25 +195,6 @@
   .table {
     flex: 1;
     min-height: 0;
-  }
-  .stats {
-    display: flex;
-    flex-wrap: wrap;
-    margin: 0;
-    border-bottom: 1px solid var(--border);
-  }
-  .stats div {
-    padding: 8px 16px;
-    border-right: 1px solid var(--border);
-  }
-  .stats dt {
-    font-size: var(--fs-xs);
-    color: var(--fg-muted);
-  }
-  .stats dd {
-    margin: 0;
-    font-size: var(--fs-lg);
-    font-weight: 600;
   }
   .route {
     font-size: var(--fs-xs);

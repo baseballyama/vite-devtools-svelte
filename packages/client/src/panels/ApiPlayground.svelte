@@ -19,16 +19,14 @@
   const endpoints = resource<ApiEndpoint[]>(getApiEndpoints, { initial: [] })
 
   const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
-  const methodTone = (m: string): Tone =>
-    m === 'GET'
-      ? 'blue'
-      : m === 'POST'
-        ? 'green'
-        : m === 'DELETE'
-          ? 'red'
-          : m === 'HEAD' || m === 'OPTIONS'
-            ? 'neutral'
-            : 'yellow'
+  const METHOD_TONES: Partial<Record<string, Tone>> = {
+    GET: 'blue',
+    POST: 'green',
+    DELETE: 'red',
+    HEAD: 'neutral',
+    OPTIONS: 'neutral',
+  }
+  const methodTone = (m: string): Tone => METHOD_TONES[m] ?? 'yellow'
 
   let query = $state('')
   let selected = $state<string | null>(null)
@@ -57,7 +55,7 @@
         ? null
         : 'Headers must be a JSON object'
     } catch (e) {
-      return (e as Error).message
+      return errorMessage(e)
     }
   })
 
@@ -106,13 +104,9 @@
   }
 
   function statusTone(s: number): Tone {
-    return s >= 200 && s < 300
-      ? 'green'
-      : s >= 300 && s < 400
-        ? 'yellow'
-        : s >= 400
-          ? 'red'
-          : 'neutral'
+    if (s >= 400) return 'red'
+    if (s >= 300) return 'yellow'
+    return s >= 200 ? 'green' : 'neutral'
   }
 </script>
 

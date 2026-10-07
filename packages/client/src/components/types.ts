@@ -12,6 +12,13 @@ import type { IconName } from '../lib/icons.js'
 /** Colour of a `<Badge>`. */
 export type Tone = 'neutral' | 'accent' | 'green' | 'yellow' | 'red' | 'blue' | 'purple' | 'cyan'
 
+/** One figure of a `<StatList>`; `tone` colours the value. */
+export interface Stat {
+  label: string
+  value: string | number
+  tone?: 'green' | 'yellow' | 'red' | null
+}
+
 /** One `<DataTable>` column. */
 export interface Column<T> {
   id: string
