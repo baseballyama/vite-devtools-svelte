@@ -54,7 +54,7 @@ jobs:
         run: node node_modules/@typescript/native/bin/tsc --noEmit -p packages/vite-devtools-svelte/tsconfig.json
 
   test:
-    name: Plugin tests + build
+    name: Tests + build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -72,8 +72,8 @@ jobs:
       - name: Build plugin
         run: pnpm -C packages/vite-devtools-svelte build
 
-      - name: Run plugin tests
-        run: pnpm -C packages/vite-devtools-svelte test
+      - name: Run tests (plugin + client)
+        run: pnpm test
 
       - name: Build client UI
         run: pnpm build:client
