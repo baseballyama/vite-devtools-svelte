@@ -12,14 +12,19 @@ import {
   runtimeCode,
   WRAPPER_MODULE_ID,
   wrapperCode,
-} from './runtime.js'
-import { Collector } from './collector.js'
-import { createSvelteDevframe, DEVFRAME_BASE } from './devframe.js'
-import type { SvelteDevtoolsHost } from './devframe.js'
-import { mountStandalone } from './mount.js'
+} from './runtime/index.js'
+import {
+  injectComponentTracking,
+  injectModuleTracking,
+  SVELTE_MODULE_RE,
+} from './runtime/transform.js'
+import { Collector } from './server/collector.js'
+import { createSvelteDevframe, DEVFRAME_BASE } from './server/devframe.js'
+import type { SvelteDevtoolsHost } from './server/devframe.js'
+import { mountStandalone } from './server/mount.js'
 import { SessionStore } from './mcp/sessions.js'
 import { buildMcpServer, StreamableHTTPServerTransport } from './mcp/server.js'
-import { sveltekitTemplateInjector } from './template-injector.js'
+import { sveltekitTemplateInjector } from './server/template-injector.js'
 import type { LoadProfile } from './types.js'
 
 export interface SvelteDevtoolsOptions {
@@ -53,50 +58,6 @@ function collectModules(server: ViteDevServer): GraphModuleLike[] {
     if (legacy?.idToModuleMap) modules.push(...legacy.idToModuleMap.values())
   }
   return modules
-}
-
-/**
- * Component-tracking transform for one compiled client `.svelte` module:
- * imports the runtime and names the file for the wrapper's next `push()`.
- * `null` when the module has no component (`$.push(`) to track.
- *
- * Nothing is inserted as a new line, so every original line keeps its
- * number (`map: null` = mappings unchanged; stack traces and the
- * compiler's sourcemap stay aligned).
- */
-export function injectComponentTracking(code: string, id: string): string | null {
-  if (!code.includes('$.push(')) return null
-  const safeId = JSON.stringify(id)
-  return (
-    `import '${RUNTIME_MODULE_ID}';` +
-    code.replace(
-      /(\$\.push\([^)]+\);?)/,
-      `if (typeof window !== 'undefined' && window.__SVELTE_DEVTOOLS__) { window.__SVELTE_DEVTOOLS__._pendingFile = ${safeId}; } $1`,
-    )
-  )
-}
-
-/** A Svelte module (`.svelte.js` / `.svelte.ts`, runes outside components). */
-export const SVELTE_MODULE_RE = /\.svelte\.[cm]?[jt]s$/
-
-/**
- * Module-scope transform for one client Svelte module: signals created while
- * its body runs (shared state, `export const cart = $state(...)`) are tracked
- * under a scope named after the file. The body is bracketed by enter/leave
- * calls; nothing is inserted as a new line. The bracket is plain JS, so it
- * works before or after vite-plugin-svelte compiles the module (with
- * `svelteDevtools()` listed before `sveltekit()`, a `.svelte.ts` module is
- * compiled after this transform). `null` for a server-compiled module.
- */
-export function injectModuleTracking(code: string, id: string): string | null {
-  if (code.includes('svelte/internal/server')) return null
-  const safeId = JSON.stringify(id)
-  const dt = `(typeof window !== 'undefined' && window.__SVELTE_DEVTOOLS__)`
-  return (
-    `import '${RUNTIME_MODULE_ID}';if (${dt}) { window.__SVELTE_DEVTOOLS__._enterModule(${safeId}); }` +
-    code +
-    `\n;if (${dt}) { window.__SVELTE_DEVTOOLS__._leaveModule(); }\n`
-  )
 }
 
 export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {

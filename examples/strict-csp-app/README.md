@@ -30,7 +30,7 @@ pnpm -C examples/strict-csp-app dev
 
 - 当時（`@vitejs/devtools@0.2.0`）: `DevTools()` は `transformIndexHtml` で inject script を注入するが、SvelteKit dev は app.html を独自の SSR パイプラインで処理して `transformIndexHtml` を通さないため、ドックが出なかった。回避策として `+layout.svelte` で `import('@vitejs/devtools/client/inject')`（`browser` ガード付き）していた。
 - **現在（`@vitejs/devtools` >= 0.7.6）: `@vitejs/devtools/client/inject` は存在しない**（exports から削除）。回避策の import は production build を `"./client/inject" is not exported` で壊すため削除した。
-- 代わりに vite-devtools-svelte の `svelteDevtools()` が SvelteKit の生成テンプレートに `<script type="module" src="/__devtools/embedded.js">` を注入する（`packages/vite-devtools-svelte/src/template-injector.ts`）。同一 origin の静的 `src` なので `script-src 'self'` の strict CSP でも動く。
+- 代わりに vite-devtools-svelte の `svelteDevtools()` が SvelteKit の生成テンプレートに `<script type="module" src="/__devtools/embedded.js">` を注入する（`packages/vite-devtools-svelte/src/server/template-injector.ts`）。同一 origin の静的 `src` なので `script-src 'self'` の strict CSP でも動く。
 
 ### ✅ #51-3: `connect-src` の WS ポート
 

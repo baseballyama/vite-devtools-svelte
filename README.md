@@ -324,10 +324,10 @@ pnpm build
 # Run the playground app with DevTools
 pnpm dev
 
-# Run tests
-pnpm -C packages/vite-devtools-svelte test
+# Run tests (plugin + client UI)
+pnpm test
 
-# Watch mode
+# Watch mode (plugin)
 pnpm -C packages/vite-devtools-svelte test:watch
 
 # Lint and format (oxlint / oxfmt)
@@ -352,12 +352,23 @@ matches across machines.
 ### Project Structure
 
 ```
-├── packages/vite-devtools-svelte/
-│   ├── src/              # Vite plugin (instrumentation, collector, devframe tool, MCP)
-│   ├── client/           # DevTools UI (Svelte 5 SPA)
-│   └── dist/             # Build output
-├── playground/           # Demo SvelteKit app for development
-└── docs/images/          # Screenshots
+├── packages/
+│   ├── vite-devtools-svelte/   # The published Vite plugin
+│   │   ├── src/
+│   │   │   ├── plugin.ts       # svelteDevtools(): Vite hooks, middleware, HMR wiring
+│   │   │   ├── runtime/        # Browser code served as virtual modules + transforms
+│   │   │   ├── server/         # Dev-server side: collector, devframe RPC, mount, security
+│   │   │   ├── analyzers/      # Routes, components, assets, build, module graph, OG
+│   │   │   └── mcp/            # MCP server for AI agents
+│   │   └── test/               # Vitest: unit, reactivity (real Svelte), perf
+│   └── client/                 # DevTools UI (Svelte 5 SPA), built into the plugin's dist/client
+├── playground/                 # Demo SvelteKit app for development
+├── examples/                   # Sample apps (Kit 2, plain Svelte, strict CSP)
+├── e2e/                        # Browser end-to-end checks: compat matrix, reactivity through MCP
+├── perf/                       # Opt-in large-app benchmarks
+├── scripts/screenshots/        # Doc screenshot and MCP example capture
+├── site/                       # Documentation site
+└── docs/images/                # Screenshots used by the READMEs
 ```
 
 ## Contributing

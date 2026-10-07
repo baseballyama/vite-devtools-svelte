@@ -1,6 +1,6 @@
 <!--
   Reactivity lab: one page with the patterns the devtools runtime has to
-  follow (scripts/reactivity-e2e.mjs checks it through MCP).
+  follow (e2e/reactivity.mjs checks it through MCP).
 -->
 <script lang="ts">
   import { untrack } from 'svelte'

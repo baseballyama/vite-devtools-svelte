@@ -1,6 +1,6 @@
 import { defineConfig } from 'vitest/config'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
-import { reactivityHarnessPlugin } from './src/__tests__/reactivity/plugin.js'
+import { reactivityHarnessPlugin } from './test/reactivity/plugin.js'
 
 export default defineConfig({
   test: {
@@ -8,8 +8,8 @@ export default defineConfig({
       {
         test: {
           name: 'unit',
-          include: ['src/**/*.test.ts', 'client/src/**/*.test.ts'],
-          exclude: ['src/__tests__/reactivity/**'],
+          include: ['test/**/*.test.ts'],
+          exclude: ['test/reactivity/**'],
         },
       },
       {
@@ -24,7 +24,7 @@ export default defineConfig({
         resolve: { conditions: ['browser'] },
         test: {
           name: 'reactivity',
-          include: ['src/__tests__/reactivity/**/*.test.ts'],
+          include: ['test/reactivity/**/*.test.ts'],
           environment: 'happy-dom',
         },
       },

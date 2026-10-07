@@ -1,0 +1,27 @@
+{
+  "name": "compat-kit3",
+  "version": "0.0.1",
+  "private": true,
+  "description": "SvelteKit 3 compatibility fixture. Outside the pnpm workspace on purpose: it pins Svelte 5.57.1 (required by Kit 3) without moving the Kit 2 profile's (examples/sample-app) versions, and installs the plugin from a packed tarball (see e2e/compat/README.md).",
+  "type": "module",
+  "imports": {
+    "#lib/*": "./src/lib/*"
+  },
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-auto": "8.0.0",
+    "@sveltejs/kit": "3.0.0",
+    "@sveltejs/vite-plugin-svelte": "7.3.1",
+    "@vitejs/devtools": "0.7.6",
+    "svelte": "5.57.1",
+    "typescript": "6.0.3",
+    "vite": "8.3.2",
+    "vite-devtools-svelte": "file:../.pack/vite-devtools-svelte.tgz"
+  },
+  "engines": {
+    "node": ">=22.17"
+  }
+}

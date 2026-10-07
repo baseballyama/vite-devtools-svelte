@@ -1,5 +1,5 @@
-import { assertOutboundUrl } from '../security.js'
-import type { OutboundUrlOptions } from '../security.js'
+import { assertOutboundUrl } from '../server/security.js'
+import type { OutboundUrlOptions } from '../server/security.js'
 import type { OGPreview } from '../types.js'
 
 /**

@@ -101,9 +101,9 @@ const safeFlags = userPattern.flags.replace(/[gy]/g, '')
 const regex = new RegExp(`^(?:${userPattern.source})$`, safeFlags)
 ```
 
-### runtime.ts のセキュリティ観点
+### runtime/client.js のセキュリティ観点
 
-ユーザーアプリのブラウザコンテキストに注入される `runtime.ts` は、特にレビューを厳しくする：
+ユーザーアプリのブラウザコンテキストに注入される `runtime/client.js` は、特にレビューを厳しくする：
 
 - `window` グローバルへの書き込みは `window.__SVELTE_DEVTOOLS__` 名前空間に集約されているか
 - `Object.prototype` / `Array.prototype` などビルトインを拡張していないか
@@ -160,10 +160,10 @@ resolveId(id, importer) {
 
 `server.hot.send(name, data)` と `server.hot.on(name, handler)` はペアで存在する必要がある。新しいチャネルを追加する時は **両側を同時に追加** すること。
 
-| 役割                        | 送信側                                                        | 受信側                                                             |
-| --------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------ |
-| サーバー → クライアント要求 | `plugin.ts` の `server.hot.send('svelte-devtools:request-*')` | `runtime.ts` の `import.meta.hot?.on('svelte-devtools:request-*')` |
-| クライアント → サーバー報告 | `runtime.ts` の `import.meta.hot?.send('svelte-devtools:*')`  | `plugin.ts` の `server.hot.on('svelte-devtools:*')`                |
+| 役割                        | 送信側                                                              | 受信側                                                                    |
+| --------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| サーバー → クライアント要求 | `plugin.ts` の `server.hot.send('svelte-devtools:request-*')`       | `runtime/client.js` の `import.meta.hot?.on('svelte-devtools:request-*')` |
+| クライアント → サーバー報告 | `runtime/client.js` の `import.meta.hot?.send('svelte-devtools:*')` | `plugin.ts` の `server.hot.on('svelte-devtools:*')`                       |
 
 レビュー時は、新しい `send` を見つけたら対応する `on` ハンドラが反対側に存在することを確認する。片側だけ追加されていると silent に動かない。
 
@@ -363,12 +363,12 @@ DevTools パネルでは **ポーリング (`setInterval(refresh, 500)`)** が�
 
 ### 機能追加の PR
 
-- 新規 RPC ハンドラ → `src/__tests__/plugin.test.ts` に対応テスト
-- 新規 analyzer → `src/__tests__/analyzers.test.ts` に対応テスト
-- 新規 transform → `src/__tests__/transforms.test.ts` に対応テスト
-- runtime.ts の変更 → `src/__tests__/runtime.test.ts`
-- セキュリティ系（URL 検証、パス検証、XSS 防止）→ `src/__tests__/security.test.ts` の負例テストを追加
-- middleware（`/__svelte-devtools/*` の Express 風ルート）→ `src/__tests__/middleware.test.ts`
+- 新規 RPC ハンドラ → `test/plugin.test.ts` に対応テスト
+- 新規 analyzer → `test/analyzers.test.ts` に対応テスト
+- 新規 transform → `test/transforms.test.ts` に対応テスト
+- runtime/client.js の変更 → `test/runtime.test.ts`
+- セキュリティ系（URL 検証、パス検証、XSS 防止）→ `test/security.test.ts` の負例テストを追加
+- middleware（`/__svelte-devtools/*` の Express 風ルート）→ `test/middleware.test.ts`
 
 ### バグ修正の PR
 
@@ -382,7 +382,7 @@ DevTools パネルでは **ポーリング (`setInterval(refresh, 500)`)** が�
 
 ### テストコードの品質
 
-- フィクスチャを `src/__tests__/fixtures` に集約しているか（散在させない）
+- フィクスチャを `test/fixtures` に集約しているか（散在させない）
 - 外部 fetch をモックしているか（実ネットワークアクセスを避ける）
 - コメントとアサーションが矛盾していないか
 
