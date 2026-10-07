@@ -1,11 +1,12 @@
-import { isDigits } from './chars.js'
-import { formatValue } from './format.js'
 /**
  * Reactivity data helpers (docs/devframe-migration.md §6.7 A/I).
  *
  * Replies are normalised so the UI never shows a guessed number: anything
  * the server did not report is `null` / `false`.
  */
+import { isDigits } from './chars.js'
+import { groupBy } from './collections.js'
+import { formatValue } from './format.js'
 import { getReactiveGraph, getReactiveSummary } from './rpc.js'
 import type {
   ReactiveEdge,
@@ -16,6 +17,7 @@ import type {
   ReactiveSummary,
   ReactiveSummaryRequest,
   ReactiveSummaryRow,
+  StateTimelineEntry,
 } from './types.js'
 
 /** Server-side caps (§6.7 A); larger requests are rejected by the RPC schema. */
@@ -232,3 +234,48 @@ export function fileNeighbourhood(
   }
   return ids
 }
+
+/** Signal kind for display: `$state`, `$derived`, `$effect`, or `markup` for the template node. */
+export const kindLabel = (t: ReactiveNode['type']) => (t === 'template' ? 'markup' : `$${t}`)
+
+/** One state's entries in the timeline buffer, folded into a row. */
+export interface HotState {
+  key: string
+  name: string
+  file: string
+  componentId: number | null
+  changes: number
+  /** Latest write; the first one wins a tie, like the buffer order. */
+  last: StateTimelineEntry
+}
+
+/**
+ * The timeline buffer grouped by state (first-seen order). Node ids are
+ * `<componentId>:<name>` (runtime trackState); a non-numeric prefix has no
+ * component to open.
+ */
+export function hotStates(entries: readonly StateTimelineEntry[]): HotState[] {
+  return [...groupBy(entries, c => c.id)].map(([id, [first, ...rest]]) => {
+    const cid = Number(id.slice(0, id.indexOf(':')))
+    return {
+      key: id,
+      name: first!.name,
+      file: first!.componentFile,
+      componentId: Number.isInteger(cid) ? cid : null,
+      changes: rest.length + 1,
+      last: rest.reduce((last, c) => (c.seq > last.seq ? c : last), first!),
+    }
+  })
+}
+
+/** A reported count, or `unknown` when the server did not report one. */
+export const totalLabel = (n: number | null | undefined) =>
+  n === null || n === undefined ? 'unknown' : n.toLocaleString()
+
+/** Why a reply is stale, or `null` for a fresh one. */
+export const staleLabel = (s?: { stale?: boolean; staleReason?: string } | null) =>
+  s?.stale
+    ? s.staleReason === 'no-runtime'
+      ? 'no app page is connected'
+      : 'the app did not answer in time; showing the previous reply'
+    : null

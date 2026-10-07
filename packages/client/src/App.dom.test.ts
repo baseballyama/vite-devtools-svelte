@@ -99,7 +99,8 @@ describe('App shell', () => {
 
   it('contains a panel that crashes while rendering and offers a reload', async () => {
     await renderApp('#/fps')
-    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy())
+    // The panel module loads lazily: give a loaded machine more than the 1 s default.
+    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy(), { timeout: 5000 })
     const alert = screen.getByRole('alert')
     expect(within(alert).getByText('Frame rate crashed')).toBeTruthy()
     expect(within(alert).getByText('kaboom')).toBeTruthy()

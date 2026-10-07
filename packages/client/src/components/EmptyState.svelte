@@ -4,18 +4,29 @@
   import type { IconName } from '../lib/icons.js'
   import Icon from './Icon.svelte'
 
+  /**
+   * Placeholder for an empty, loading or failed view. With `error` (the
+   * failure message, shown monospace above any children) it is an alert
+   * with the error icon.
+   */
   let {
     icon,
     title,
-    tone = 'neutral',
+    error,
     children,
-  }: { icon?: IconName; title: string; tone?: 'neutral' | 'error'; children?: Snippet } = $props()
+  }: { icon?: IconName; title: string; error?: string | null; children?: Snippet } = $props()
+
+  const failed = $derived(error != null)
+  const ico = $derived(failed ? 'errors' : icon)
 </script>
 
-<div class="empty {tone}" role={tone === 'error' ? 'alert' : 'status'}>
-  {#if icon}<span class="ico"><Icon name={icon} size={20} /></span>{/if}
+<div class="empty" class:failed role={failed ? 'alert' : 'status'}>
+  {#if ico}<span class="ico"><Icon name={ico} size={20} /></span>{/if}
   <p class="title">{title}</p>
-  {#if children}<div class="body">{@render children()}</div>{/if}
+  {#if error || children}<div class="body">
+      {#if error}<p class="mono">{error}</p>{/if}
+      {@render children?.()}
+    </div>{/if}
 </div>
 
 <style>
@@ -40,7 +51,7 @@
     color: var(--fg-muted);
     margin-bottom: 4px;
   }
-  .error .ico {
+  .failed .ico {
     background: var(--red-bg);
     color: var(--red);
   }

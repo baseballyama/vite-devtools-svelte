@@ -10,6 +10,7 @@
   import Inspector from '../components/Inspector.svelte'
   import LiveControls from '../components/LiveControls.svelte'
   import Panel from '../components/Panel.svelte'
+  import RefreshButton from '../components/RefreshButton.svelte'
   import SearchField from '../components/SearchField.svelte'
   import Segmented from '../components/Segmented.svelte'
   import SplitView from '../components/SplitView.svelte'
@@ -287,22 +288,14 @@
     {#if mode.value === 'tree'}
       <LiveControls res={live} />
     {:else}
-      <Button
-        icon="refresh"
-        variant="ghost"
-        label="Re-analyze"
-        disabled={relations.busy}
-        onclick={() => relations.refresh()}
-      />
+      <RefreshButton res={relations} label="Re-analyze" />
     {/if}
   {/snippet}
 
   {#if mode.value === 'tree'}
     <SplitView id="components-tree" open={!!selectedNode}>
       {#if live.error && liveList.length === 0}
-        <EmptyState icon="errors" tone="error" title="Could not read live components"
-          ><p class="mono">{live.error}</p></EmptyState
-        >
+        <EmptyState title="Could not read live components" error={live.error} />
       {:else}
         <TreeView
           bind:this={treeView}
@@ -459,9 +452,7 @@
           {#if relations.loading}
             <EmptyState title="Analyzing components…" />
           {:else if relations.error}
-            <EmptyState icon="errors" tone="error" title="Analysis failed"
-              ><p class="mono">{relations.error}</p></EmptyState
-            >
+            <EmptyState title="Analysis failed" error={relations.error} />
           {:else}
             <EmptyState
               icon="search"
@@ -504,7 +495,7 @@
                   </li>
                 {/each}
               </ul>
-            {:else}<p class="none">Imports no other components.</p>{/if}
+            {:else}<p class="section-note">Imports no other components.</p>{/if}
             <h3 class="section-title">Used by <span class="num">{users.length}</span></h3>
             {#if users.length}
               <ul class="link-list">
@@ -518,7 +509,7 @@
                   </li>
                 {/each}
               </ul>
-            {:else}<p class="none">Not imported by any component (route or entry).</p>{/if}
+            {:else}<p class="section-note">Not imported by any component (route or entry).</p>{/if}
           </Inspector>
         {/if}
       {/snippet}
@@ -598,11 +589,5 @@
   }
   .crumbs [aria-current] {
     color: var(--fg);
-  }
-  .none {
-    margin: 0;
-    padding: 0 14px;
-    color: var(--fg-faint);
-    font-size: var(--fs-sm);
   }
 </style>

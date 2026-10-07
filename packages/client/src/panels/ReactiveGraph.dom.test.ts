@@ -117,6 +117,16 @@ const radio = (group: string, name: string | RegExp) =>
 const options = (list: string) =>
   within(screen.getByRole('listbox', { name: list })).queryAllByRole('option')
 
+/** Click each column's sort button; every one must take the sort. */
+async function sortByEach(table: string, names: string[]) {
+  const cols = screen.getByRole('table', { name: `${table} columns` })
+  for (const name of names) {
+    const header = within(cols).getByRole('columnheader', { name })
+    await userEvent.click(within(header).getByRole('button'))
+    expect(header.getAttribute('aria-sort')).toMatch(/ascending|descending/)
+  }
+}
+
 beforeEach(() => {
   layout(() => ({ width: 1200, height: 600 }))
   reactiveScope.set(null)
@@ -154,7 +164,7 @@ async function states() {
   await settle()
 }
 
-async function scoped(componentId = 1, epoch: string | null = 'e1') {
+async function scoped(componentId = 1, epoch = 'e1') {
   reactiveScope.set({ componentId, epoch, label: '<Counter>', file: COUNTER })
   const r = render(ReactiveGraph)
   await settle()
@@ -279,6 +289,22 @@ describe('ReactiveGraph: components overview', () => {
     expect(rpc.getReactiveGraph).toHaveBeenCalledWith({ maxNodes: 5000, maxEdges: 20000 })
   })
 
+  it('sorts by every column, and the inspector closes', async () => {
+    render(ReactiveGraph)
+    await settle()
+    await sortByEach('Most active components', [
+      'Inst.',
+      'Signals',
+      'Changes',
+      'Renders',
+      'Render time',
+      'Component',
+    ])
+    await userEvent.click(options('Most active components')[0]!)
+    await userEvent.click(screen.getByRole('button', { name: 'Close details (Esc)' }))
+    expect(screen.queryByRole('complementary')).toBeNull()
+  })
+
   it('shows an empty window', async () => {
     vi.mocked(rpc.getReactiveSummary).mockResolvedValue(summary({ rows: [] }))
     render(ReactiveGraph)
@@ -314,6 +340,21 @@ describe('ReactiveGraph: states overview', () => {
     expect(rows[1]!.textContent).not.toContain('#')
     expect(screen.getByRole('status', { name: '' }).textContent).toContain('2 states pending')
     expect(screen.getByText(/the latest 3 sampled changes/)).toBeTruthy()
+  })
+
+  it('sorts by every column', async () => {
+    vi.mocked(rpc.getStateTimelineDelta).mockResolvedValue({
+      cursor: 3,
+      reset: true,
+      changes: [entry(1, '1:count'), entry(2, '1:count'), entry(3, '2:other')],
+    })
+    await states()
+    const list = 'Most changed states in the timeline buffer'
+    await sortByEach(list, ['State', 'Component', 'Last seen', 'Changes'])
+    expect(options(list).map(r => r.querySelector('.name')?.textContent)).toEqual([
+      'count',
+      'other',
+    ])
   })
 
   it('activating a state opens its component with the served page load', async () => {
@@ -380,15 +421,6 @@ describe('ReactiveGraph: component scope', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Components' }))
     expect(router.current).toBe('components')
     await userEvent.click(screen.getByRole('button', { name: 'Overview' }))
-    expect(radio('Reactivity view', 'Overview').getAttribute('aria-checked')).toBe('true')
-  })
-
-  it('refuses a scope without a page-load id', async () => {
-    await scoped(1, null)
-    expect(screen.getByText('This selection has no page-load id')).toBeTruthy()
-    expect(rpc.getReactiveGraph).not.toHaveBeenCalled()
-    await userEvent.click(screen.getByRole('button', { name: 'Clear selection' }))
-    expect(reactiveScope.current).toBeNull()
     expect(radio('Reactivity view', 'Overview').getAttribute('aria-checked')).toBe('true')
   })
 

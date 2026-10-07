@@ -4,6 +4,7 @@
   import EmptyState from '../components/EmptyState.svelte'
   import Highlight from '../components/Highlight.svelte'
   import Panel from '../components/Panel.svelte'
+  import RefreshButton from '../components/RefreshButton.svelte'
   import SearchField from '../components/SearchField.svelte'
   import SplitView from '../components/SplitView.svelte'
   import type { Tone } from '../components/types.js'
@@ -119,13 +120,7 @@
     <SearchField bind:value={query} placeholder="Filter endpoints…" count={rows.length} />
   {/snippet}
   {#snippet actions()}
-    <Button
-      icon="refresh"
-      variant="ghost"
-      label="Rescan endpoints"
-      disabled={endpoints.busy}
-      onclick={() => endpoints.refresh()}
-    />
+    <RefreshButton res={endpoints} label="Rescan endpoints" />
   {/snippet}
 
   <SplitView id="api" side="start" initial={300} min={200}>
@@ -209,9 +204,7 @@
 
       <section class="res" aria-label="Response" aria-live="polite">
         {#if requestError}
-          <EmptyState icon="errors" tone="error" title="Request failed"
-            ><p class="mono">{requestError}</p></EmptyState
-          >
+          <EmptyState title="Request failed" error={requestError} />
         {:else if response}
           <header class="res-head">
             <Badge tone={statusTone(response.status)}>{response.status} {response.statusText}</Badge

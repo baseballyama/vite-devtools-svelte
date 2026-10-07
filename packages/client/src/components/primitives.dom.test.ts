@@ -97,11 +97,19 @@ describe('EmptyState', () => {
     expect(status.querySelector('svg')).not.toBeNull()
   })
 
-  it('is an alert in the error tone, and needs neither icon nor body', () => {
-    render(EmptyState, { title: 'Failed', tone: 'error' })
+  it('with an error it is an alert showing the message, with the error icon', () => {
+    render(EmptyState, { title: 'Failed', error: 'ENOENT', children: html('<p>Retry</p>') })
+    const alert = screen.getByRole('alert')
+    expect(alert.querySelector('.mono')!.textContent).toBe('ENOENT')
+    expect(alert.textContent).toContain('Retry')
+    expect(alert.querySelector('svg')).not.toBeNull()
+  })
+
+  it('an empty error is still an alert, without a message line', () => {
+    render(EmptyState, { title: 'Failed', error: '' })
     const alert = screen.getByRole('alert')
     expect(alert.textContent.trim()).toBe('Failed')
-    expect(alert.querySelector('svg')).toBeNull()
+    expect(alert.querySelector('.mono')).toBeNull()
   })
 })
 

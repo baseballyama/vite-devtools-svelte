@@ -56,7 +56,7 @@ export default defineConfig({
         // guard); all lines are covered.
         'src/**/*.ts': { perFile: true, lines: 100, statements: 99, functions: 98, branches: 97 },
         // Every component: the weakest reach 97.0 % statements (Segmented),
-        // 97.2 % lines and 95.7 % functions (ReactiveGraph). Branch
+        // 97.9 % lines (GraphView) and 96.6 % functions (StateTimeline). Branch
         // counts include compiler-generated template branches (a one-element
         // Badge reports 2), so the per-file floor is low; the total above
         // holds the real bar.

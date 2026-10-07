@@ -16,4 +16,15 @@ describe('reactiveScope', () => {
     t.stop()
     expect(t.seen).toEqual([null, scope, null])
   })
+
+  it('scopeTo labels the instance by its component file', () => {
+    reactiveScope.scopeTo(7, 'src/lib/Row.svelte', 'e2')
+    expect(reactiveScope.current).toEqual({
+      componentId: 7,
+      epoch: 'e2',
+      label: '<Row>',
+      file: 'src/lib/Row.svelte',
+    })
+    reactiveScope.set(null)
+  })
 })

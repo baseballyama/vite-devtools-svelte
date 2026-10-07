@@ -5,6 +5,7 @@ import type {
   ReactiveGraphResult,
   ReactiveNode,
   ReactiveSummaryRow,
+  StateTimelineEntry,
 } from './types.js'
 
 // The RPC layer is mocked: fetchGraph / fetchSummary are checked for the request they send.
@@ -19,11 +20,15 @@ const {
   nodeCount,
   BASELINE_UNKNOWN,
   groupByFile,
+  hotStates,
   isValueSummary,
+  kindLabel,
   nodeValueText,
   normalizeGraph,
   sameGraph,
   sameValue,
+  staleLabel,
+  totalLabel,
 } = await import('./reactive.js')
 
 const node = (id: string, componentId: number, value?: unknown): ReactiveNode => ({
@@ -345,5 +350,52 @@ describe('fileNeighbourhood', () => {
 
   it('is empty for an unknown file without edges to it', () => {
     expect(fileNeighbourhood(ns, [{ from: '1:a', to: '2:c' }], 'nope').size).toBe(0)
+  })
+})
+
+describe('display labels', () => {
+  it('kindLabel uses the rune name, and `markup` for the template node', () => {
+    expect(['state', 'derived', 'effect', 'template'].map(t => kindLabel(t as never))).toEqual([
+      '$state',
+      '$derived',
+      '$effect',
+      'markup',
+    ])
+  })
+
+  it('totalLabel says `unknown` for an unreported count', () => {
+    expect([totalLabel(null), totalLabel(1234)]).toEqual(['unknown', (1234).toLocaleString()])
+  })
+
+  it('staleLabel explains a stale reply', () => {
+    expect(staleLabel(null)).toBeNull()
+    expect(staleLabel({ stale: false })).toBeNull()
+    expect(staleLabel({ stale: true, staleReason: 'no-runtime' })).toBe('no app page is connected')
+    expect(staleLabel({ stale: true, staleReason: 'timeout' })).toMatch('did not answer in time')
+  })
+})
+
+const e = (seq: number, id: string, newValue: unknown = seq): StateTimelineEntry => ({
+  seq,
+  id,
+  name: id.slice(id.indexOf(':') + 1),
+  componentFile: 'src/A.svelte',
+  oldValue: null,
+  newValue,
+  timestamp: seq,
+})
+
+describe('hotStates', () => {
+  it('groups the buffer by state in first-seen order, with the latest write', () => {
+    const rows = hotStates([e(1, '3:a'), e(4, 'mod:b'), e(3, '3:a'), e(2, '3:a')])
+    expect(rows.map(r => [r.key, r.name, r.componentId, r.changes, r.last.seq])).toEqual([
+      ['3:a', 'a', 3, 3, 3],
+      ['mod:b', 'b', null, 1, 4],
+    ])
+  })
+
+  it('a tie on seq keeps the first entry', () => {
+    const [hot] = hotStates([e(5, '1:x', 'first'), e(5, '1:x', 'second')])
+    expect(hot!.last.newValue).toBe('first')
   })
 })

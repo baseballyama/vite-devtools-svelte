@@ -7,6 +7,7 @@
   import Icon from '../components/Icon.svelte'
   import Inspector from '../components/Inspector.svelte'
   import Panel from '../components/Panel.svelte'
+  import RefreshButton from '../components/RefreshButton.svelte'
   import SearchField from '../components/SearchField.svelte'
   import Segmented from '../components/Segmented.svelte'
   import SplitView from '../components/SplitView.svelte'
@@ -117,13 +118,7 @@
   {/snippet}
   {#snippet actions()}
     <span class="total num" title="Total size of shown assets">{formatBytes(rowsBytes)}</span>
-    <Button
-      icon="refresh"
-      variant="ghost"
-      label="Rescan static directory"
-      disabled={assets.busy}
-      onclick={() => assets.refresh()}
-    />
+    <RefreshButton res={assets} label="Rescan static directory" />
   {/snippet}
 
   <SplitView id="assets" open={!!current}>
@@ -154,9 +149,7 @@
         {#if assets.loading}
           <EmptyState title="Scanning static directory…" />
         {:else if assets.error}
-          <EmptyState icon="errors" tone="error" title="Could not read assets"
-            ><p class="mono">{assets.error}</p></EmptyState
-          >
+          <EmptyState title="Could not read assets" error={assets.error} />
         {:else}
           <EmptyState
             icon="assets"

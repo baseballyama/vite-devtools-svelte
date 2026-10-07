@@ -186,9 +186,7 @@
           {#snippet empty()}
             <!-- Fix: a failed fetch used to read as "No state changes yet". -->
             {#if timeline.error && timeline.data.length === 0}
-              <EmptyState icon="errors" tone="error" title="Could not load the state timeline"
-                ><p class="mono">{timeline.error}</p></EmptyState
-              >
+              <EmptyState title="Could not load the state timeline" error={timeline.error} />
             {:else if timeline.data.length === 0}
               <EmptyState icon="timeline" title="No state changes yet"
                 ><p>
