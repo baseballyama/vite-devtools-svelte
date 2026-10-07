@@ -166,7 +166,10 @@ export interface ReactiveProblems {
    * is not listed: having no effect/markup reader is not "unused".
    */
   orphanDeriveds: Array<{ id: string; name: string; file: string }>
-  /** Nodes without any tracked dependency or reader (markup reads included). */
+  /**
+   * Nodes without any dependency or tracked reader (markup reads included).
+   * A node depending only on untracked signals (`untrackedDeps`) is not listed.
+   */
   isolatedNodes: Array<{ id: string; name: string; type: string; file: string }>
 }
 
@@ -193,7 +196,7 @@ export function summarizeReactiveProblems(
     if (node.type === 'template') continue
     if (node.type === 'derived' && node.unevaluated) {
       orphanDeriveds.push({ id: node.id, name: node.name, file: node.componentFile })
-    } else if (ind === 0 && outd === 0) {
+    } else if (ind === 0 && outd === 0 && !node.untrackedDeps) {
       isolatedNodes.push({
         id: node.id,
         name: node.name,

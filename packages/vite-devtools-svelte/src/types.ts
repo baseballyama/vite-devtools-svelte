@@ -100,6 +100,12 @@ export interface ReactiveNode {
   value?: unknown
   /** A `$derived` nothing has read yet (Svelte computes deriveds lazily). */
   unevaluated?: true
+  /**
+   * Dependencies on signals devtools does not track (created in
+   * node_modules — e.g. SvelteKit's page state — or outside any component
+   * init / module body). Absent when there are none.
+   */
+  untrackedDeps?: number
 }
 
 export interface ReactiveEdge {

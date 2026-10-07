@@ -72,7 +72,7 @@ describe('object / array $state (proxies)', () => {
     const shop = instance('Shop')
     const g = graph(shop.id)
     const cart = g.nodes.find(x => x.name === 'cart')!
-    expect(cart.componentFile).toMatch(/shared\.svelte\.js$/)
+    expect(cart.componentFile).toMatch(/shared\.svelte\.ts$/)
     expect(incoming(g, node(g, shop.id, 'count').id)).toEqual([cart.id])
   })
 })

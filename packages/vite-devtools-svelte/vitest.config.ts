@@ -15,9 +15,11 @@ export default defineConfig({
       {
         // Real Svelte components (dev compile) through the production wrapper
         // and runtime, in a DOM: the reactivity mechanism end to end.
+        // Harness first, as svelteDevtools() is listed before sveltekit():
+        // .svelte.ts modules are then compiled after the tracking transform.
         plugins: [
-          svelte({ compilerOptions: { dev: true }, configFile: false }),
           reactivityHarnessPlugin(),
+          svelte({ compilerOptions: { dev: true }, configFile: false }),
         ],
         resolve: { conditions: ['browser'] },
         test: {

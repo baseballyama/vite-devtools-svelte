@@ -1,5 +1,5 @@
 <script>
-  import { cart, addToCart, getTotal } from './shared.svelte.js'
+  import { cart, addToCart, getTotal } from './shared.svelte'
   import Price from './Price.svelte'
   const count = $derived(cart.items.length)
   const sum = $derived(getTotal())

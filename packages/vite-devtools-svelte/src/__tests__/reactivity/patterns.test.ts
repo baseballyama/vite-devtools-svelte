@@ -95,7 +95,19 @@ describe('module-level state (.svelte.js)', () => {
     const g = graph(shop.id)
     const count = node(g, shop.id, 'count')
     const cart = g.nodes.find(x => x.name === 'cart')!
-    expect(cart.componentFile).toMatch(/shared\.svelte\.js$/)
+    expect(cart.componentFile).toMatch(/shared\.svelte\.ts$/)
     expect(incoming(g, count.id)).toEqual([cart.id])
+  })
+})
+
+describe('untracked dependencies', () => {
+  it('an effect reading only a signal created outside components is not isolated', async () => {
+    mountIt((await import('./fixtures/ReadsExternal.svelte')).default)
+    const c = instance('ReadsExternal')
+    const g = graph(c.id)
+    const effect = g.nodes.find(n => n.type === 'effect')!
+    expect(effect.untrackedDeps).toBe(1)
+    const { summarizeReactiveProblems } = await import('../../mcp/issues.js')
+    expect(summarizeReactiveProblems(g as any).isolatedNodes).toEqual([])
   })
 })

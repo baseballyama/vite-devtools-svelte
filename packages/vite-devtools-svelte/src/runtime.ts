@@ -1354,7 +1354,11 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       // only) receives the template node of each untracked effect reached.
       // On the deps side an untracked leaf source (a proxy's property) is
       // resolved to its proxy's node (readerCid: the reading component).
-      const walk = (start, field, onHit, onTemplate, readerCid) => {
+      // nodeId -> dependencies on signals devtools does not track (created
+      // in node_modules, e.g. SvelteKit's page state, or outside any
+      // component/module body): reported so such a node is not "isolated"
+      const untracked = new Map();
+      const walk = (start, field, onHit, onTemplate, readerCid, onUntracked) => {
         if (!start) return;
         const visited = new Set();
         const queue = [...start];
@@ -1374,10 +1378,12 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
           } else if (field === 'deps' && onHit && !('fn' in dep)) {
             const owner = this._sourceOwner(dep, readerCid, liveSignal);
             if (owner) onHit(owner);
+            else if (onUntracked) onUntracked();
           }
         }
       };
       const nodeCid = (nodeId) => this._reactiveNodes.get(nodeId).meta.componentId;
+      const countUntracked = (nodeId) => () => untracked.set(nodeId, (untracked.get(nodeId) || 0) + 1);
       // Reads of a component's markup effects: edges into its template node
       // (filter: keep only edges from these node ids, for neighbours).
       const markupEdges = (cid, filter) => {
@@ -1400,7 +1406,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
           const signal = liveSignal(nodeId);
           if (!signal) continue;
           see(nodeId);
-          walk(signal.deps, 'deps', (depId) => addEdge(depId, nodeId), null, componentId);
+          walk(signal.deps, 'deps', (depId) => addEdge(depId, nodeId), null, componentId, countUntracked(nodeId));
           const toReader = (rId) => addEdge(nodeId, rId);
           walk(signal.reactions, 'reactions', toReader, toReader);
         }
@@ -1429,7 +1435,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
           const signal = liveSignal(nodeId);
           if (!signal) continue;
           see(nodeId);
-          walk(signal.deps, 'deps', (depId) => addEdge(depId, nodeId), null, nodeCid(nodeId));
+          walk(signal.deps, 'deps', (depId) => addEdge(depId, nodeId), null, nodeCid(nodeId), countUntracked(nodeId));
           // tracked readers are found from their own deps; only template
           // readers need the reactions side
           walk(signal.reactions, 'reactions', null, (t) => addEdge(nodeId, t));
@@ -1451,7 +1457,10 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
           continue;
         }
         const signal = liveSignal(nodeId);
-        if (signal) nodes.push(this._graphNode(nodeId, this._reactiveNodes.get(nodeId), signal));
+        if (!signal) continue;
+        const node = this._graphNode(nodeId, this._reactiveNodes.get(nodeId), signal);
+        if (untracked.has(nodeId)) node.untrackedDeps = untracked.get(nodeId);
+        nodes.push(node);
       }
       return {
         scope: scoped ? componentId : null,

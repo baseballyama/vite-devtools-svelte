@@ -80,14 +80,16 @@ export function injectComponentTracking(code: string, id: string): string | null
 export const SVELTE_MODULE_RE = /\.svelte\.[cm]?[jt]s$/
 
 /**
- * Module-scope transform for one compiled client Svelte module: signals
- * created while its body runs (shared state, `export const cart =
- * $state(...)`) are tracked under a scope named after the file. The body is
- * bracketed by enter/leave calls; nothing is inserted as a new line.
- * `null` when the module is not a client-compiled Svelte module.
+ * Module-scope transform for one client Svelte module: signals created while
+ * its body runs (shared state, `export const cart = $state(...)`) are tracked
+ * under a scope named after the file. The body is bracketed by enter/leave
+ * calls; nothing is inserted as a new line. The bracket is plain JS, so it
+ * works before or after vite-plugin-svelte compiles the module (with
+ * `svelteDevtools()` listed before `sveltekit()`, a `.svelte.ts` module is
+ * compiled after this transform). `null` for a server-compiled module.
  */
 export function injectModuleTracking(code: string, id: string): string | null {
-  if (!code.includes('svelte/internal/client')) return null
+  if (code.includes('svelte/internal/server')) return null
   const safeId = JSON.stringify(id)
   const dt = `(typeof window !== 'undefined' && window.__SVELTE_DEVTOOLS__)`
   return (
@@ -356,14 +358,14 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     enforce: 'post',
     apply: 'serve',
 
-    transform(code, id) {
+    transform(code, id, options) {
       if (!componentTracking) return null
       if (id.includes('node_modules')) return null
       if (config?.command !== 'serve') return null
       const file = id.split('?')[0]
       const modified = file.endsWith('.svelte')
         ? injectComponentTracking(code, id)
-        : SVELTE_MODULE_RE.test(file)
+        : SVELTE_MODULE_RE.test(file) && !options?.ssr
           ? injectModuleTracking(code, file)
           : null
       return modified === null ? null : { code: modified, map: null }
