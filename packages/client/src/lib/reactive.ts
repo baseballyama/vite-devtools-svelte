@@ -1,3 +1,4 @@
+import { isDigits } from './chars.js'
 import { formatValue } from './format.js'
 /**
  * Reactivity data helpers (docs/devframe-migration.md §6.7 A/I).
@@ -128,12 +129,15 @@ export function baselineNotice(
 }
 
 /** A value the runtime summarised instead of sending it. */
-export const isValueSummary = (v: unknown) =>
-  typeof v === 'string' && /^(\(object\)|\[\d+\]|\{\d+\})$/.test(v)
+export const isValueSummary = (v: unknown): v is string =>
+  typeof v === 'string' &&
+  (v === '(object)' ||
+    (((v.startsWith('[') && v.endsWith(']')) || (v.startsWith('{') && v.endsWith('}'))) &&
+      isDigits(v.slice(1, -1))))
 
 /** A node value for display: runtime summaries as they are (not as a quoted string). */
 export const nodeValueText = (v: unknown, max?: number) =>
-  isValueSummary(v) ? (v as string) : formatValue(v, max)
+  isValueSummary(v) ? v : formatValue(v, max)
 
 const sameNode = (a: ReactiveNode, b: ReactiveNode) =>
   a.id === b.id &&

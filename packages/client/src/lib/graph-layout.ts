@@ -3,6 +3,7 @@
  * dependency graph). Kept out of the component so it is plain, testable
  * TypeScript; the component only renders the result.
  */
+import { componentName } from './format.js'
 import type { ReactiveEdge, ReactiveNode } from './types.js'
 
 // Layout constants (also used by the renderer for node geometry).
@@ -54,17 +55,7 @@ export interface Propagation {
 }
 
 /** File name without directory or `.svelte` extension. */
-export function shortFile(file: string): string {
-  if (!file) return ''
-  // Only a trailing `.svelte` is the component extension: module state lives
-  // in `x.svelte.ts`, which must not read as `x.ts`. Windows separators too.
-  return (
-    file
-      .split(/[\\/]/)
-      .pop()
-      ?.replace(/\.svelte$/, '') ?? ''
-  )
-}
+export const shortFile = (file: string) => componentName(file, '')
 
 /** Layered DAG layout with component grouping and barycenter ordering. */
 export function layoutGraph(

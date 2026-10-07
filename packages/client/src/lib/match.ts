@@ -1,14 +1,11 @@
+import { words } from './chars.js'
+
 /** Case-insensitive substring matcher shared by every search field. */
 export function matcher(
   query: string,
 ): ((...fields: (string | undefined | null)[]) => boolean) | null {
-  const q = query.trim().toLowerCase()
-  if (!q) return null
-  const terms = q.split(/\s+/)
-  return (...fields) => {
-    const hay = fields.filter(Boolean).join('\n').toLowerCase()
-    return terms.every(t => hay.includes(t))
-  }
+  const match = haystackMatcher(query)
+  return match && ((...fields) => match(haystack(...fields)))
 }
 
 /**
@@ -17,9 +14,8 @@ export function matcher(
  * costs only `includes` per item.
  */
 export function haystackMatcher(query: string): ((hay: string) => boolean) | null {
-  const q = query.trim().toLowerCase()
-  if (!q) return null
-  const terms = q.split(/\s+/)
+  const terms = words(query.toLowerCase())
+  if (terms.length === 0) return null
   return hay => terms.every(t => hay.includes(t))
 }
 
@@ -30,7 +26,7 @@ export function haystack(...fields: (string | undefined | null)[]): string {
 
 /** Split `text` into plain / highlighted segments for `<Highlight>`. */
 export function highlightParts(text: string, query: string): { t: string; m: boolean }[] {
-  const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  const terms = words(query.toLowerCase())
   if (terms.length === 0 || !text) return [{ t: text, m: false }]
   // Offsets in `lower` must be offsets in `text`. A few characters lowercase
   // to more code units ('İ' → 'i̇'), which would shift every later mark; then

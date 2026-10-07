@@ -65,7 +65,8 @@
     if (!response?.body) return ''
     const ct =
       Object.entries(response.headers).find(([k]) => k.toLowerCase() === 'content-type')?.[1] ?? ''
-    if (ct.includes('json') || /^\s*[[{]/.test(response.body)) {
+    const first = response.body.trimStart()[0]
+    if (ct.includes('json') || first === '[' || first === '{') {
       try {
         return JSON.stringify(JSON.parse(response.body), null, 2)
       } catch {}

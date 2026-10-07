@@ -147,7 +147,7 @@ export function createMockBackend(scale = 5000) {
     const params = segs
       .filter(s => s.startsWith('['))
       .map(s => ({
-        name: s.replaceAll(/[[\].]/g, ''),
+        name: s.slice(s.startsWith('[...') ? 4 : 1, -1),
         optional: false,
         rest: s.startsWith('[...'),
       }))
@@ -162,8 +162,10 @@ export function createMockBackend(scale = 5000) {
     routes.push({
       id,
       path,
-      pattern:
-        '^' + path.replaceAll(/\[\.\.\.\w+\]/g, '(.*)').replaceAll(/\[\w+\]/g, '([^/]+?)') + '/?$',
+      pattern: `^${path
+        .split('/')
+        .map(s => (s.startsWith('[...') ? '(.*)' : s.startsWith('[') ? '([^/]+?)' : s))
+        .join('/')}/?$`,
       segments: segs,
       hasPage,
       hasLayout: filesR.some(f => f.type === 'layout'),
@@ -640,5 +642,7 @@ export const MOCK_ASSET_SVG =
 
 /** RPCs with side effects are `action`s on the devframe wire. */
 export function rpcType(name: string): 'query' | 'action' {
-  return /:(clear|open|send|set)-/.test(name) ? 'action' : 'query'
+  return ['clear', 'open', 'send', 'set'].some(verb => name.includes(`:${verb}-`))
+    ? 'action'
+    : 'query'
 }

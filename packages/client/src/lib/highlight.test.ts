@@ -271,6 +271,22 @@ describe('highlightSvelte sections', () => {
     expect(cls(highlightSvelte(['<a {...rest} />'])[0]!, 'hl-tg')).toEqual(['<a', '/', '>'])
   })
 
+  it('a selector with a pseudo-class is a selector, not a declaration', () => {
+    const o = highlightSvelte(['<style>', '  button:focus-visible {', '  a:hover{ ', '</style>'])
+    expect(cls(o[1]!, 'hl-cs')).toEqual(['button:focus-visible'])
+    expect(cls(o[1]!, 'hl-cp')).toEqual([])
+    expect(cls(o[2]!, 'hl-cs')).toEqual(['a:hover'])
+    expect(text(o[2]!)).toBe('  a:hover{ ')
+  })
+
+  it('declarations keep their `;` and spacing outside the value', () => {
+    const o = highlightSvelte(['<style>', '  margin : 0 auto;  ', '  color:;', '</style>'])
+    expect(cls(o[1]!, 'hl-cp')).toEqual(['margin'])
+    expect(cls(o[1]!, 'hl-cv')).toEqual(['0 auto'])
+    expect(text(o[1]!)).toBe('  margin : 0 auto;  ')
+    expect(cls(o[2]!, 'hl-cv')).toEqual([';'])
+  })
+
   it('CSS lines that are neither rule nor declaration are kept plain', () => {
     const o = highlightSvelte(['<style>', '  }', '  @media (x) {', '</style>'])
     expect(o[1]).toBe('  }')
