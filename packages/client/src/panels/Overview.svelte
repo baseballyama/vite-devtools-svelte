@@ -1,4 +1,18 @@
 <script lang="ts">
+  import Badge from '../components/Badge.svelte'
+  import Button from '../components/Button.svelte'
+  import EmptyState from '../components/EmptyState.svelte'
+  import Highlight from '../components/Highlight.svelte'
+  import Icon from '../components/Icon.svelte'
+  import Panel from '../components/Panel.svelte'
+  import SearchField from '../components/SearchField.svelte'
+  import Segmented from '../components/Segmented.svelte'
+  import { formatBytes } from '../lib/format.js'
+  import type { IconName } from '../lib/icons.js'
+  import { matcher } from '../lib/match.js'
+  import type { PanelId } from '../lib/panels.js'
+  import { resource } from '../lib/resource.svelte.js'
+  import { router } from '../lib/router.svelte.js'
   import {
     getProject,
     getRoutes,
@@ -9,20 +23,6 @@
     getRuntimeErrors,
   } from '../lib/rpc.js'
   import type { ProjectInfo } from '../lib/types.js'
-  import { resource } from '../lib/resource.svelte.js'
-  import { router } from '../lib/router.svelte.js'
-  import { matcher } from '../lib/match.js'
-  import { formatBytes } from '../lib/format.js'
-  import type { PanelId } from '../lib/panels.js'
-  import type { IconName } from '../lib/icons.js'
-  import Panel from '../components/Panel.svelte'
-  import Icon from '../components/Icon.svelte'
-  import Badge from '../components/Badge.svelte'
-  import Button from '../components/Button.svelte'
-  import SearchField from '../components/SearchField.svelte'
-  import Segmented from '../components/Segmented.svelte'
-  import EmptyState from '../components/EmptyState.svelte'
-  import Highlight from '../components/Highlight.svelte'
 
   const project = resource<ProjectInfo | null>(getProject, { initial: null })
 
@@ -30,7 +30,14 @@
   // landing page and must not trigger whole-project static analysis.
   const stats = resource(
     async () => {
-      const settle = <T,>(p: Promise<T>) => p.then((v) => v, () => null)
+      // A function declaration: a generic arrow (`<T,>`) loses its comma when
+      // formatted and then reads as markup in a .svelte file.
+      function settle<T>(p: Promise<T>): Promise<T | null> {
+        return p.then(
+          v => v,
+          () => null,
+        )
+      }
       const [routes, assets, modules, live, warnings, errors] = await Promise.all([
         settle(getRoutes()),
         settle(getAssets()),
@@ -41,14 +48,14 @@
       ])
       return {
         routes: routes?.length ?? null,
-        pages: routes?.filter((r) => r.hasPage).length ?? null,
-        endpoints: routes?.filter((r) => r.hasEndpoint).length ?? null,
+        pages: routes?.filter(r => r.hasPage).length ?? null,
+        endpoints: routes?.filter(r => r.hasEndpoint).length ?? null,
         assets: assets?.length ?? null,
         assetBytes: assets?.reduce((s, a) => s + a.size, 0) ?? null,
         modules: modules?.modules.length ?? null,
         cycles: modules?.cycles.length ?? null,
         live: live?.length ?? null,
-        liveFiles: live ? new Set(live.map((c) => c.file)).size : null,
+        liveFiles: live ? new Set(live.map(c => c.file)).size : null,
         warnings: warnings?.length ?? null,
         errors: errors?.length ?? null,
       }
@@ -64,11 +71,15 @@
     if (!p) return []
     const out: { name: string; version: string; dev: boolean }[] = []
     if (depKind !== 'devDependencies')
-      for (const [name, version] of Object.entries(p.dependencies)) out.push({ name, version, dev: false })
+      for (const [name, version] of Object.entries(p.dependencies))
+        out.push({ name, version, dev: false })
     if (depKind !== 'dependencies')
-      for (const [name, version] of Object.entries(p.devDependencies)) out.push({ name, version, dev: true })
+      for (const [name, version] of Object.entries(p.devDependencies))
+        out.push({ name, version, dev: true })
     const m = matcher(depQuery)
-    return (m ? out.filter((d) => m(d.name, d.version)) : out).sort((a, b) => a.name.localeCompare(b.name))
+    return (m ? out.filter(d => m(d.name, d.version)) : out).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    )
   })
 
   interface Tile {
@@ -85,10 +96,35 @@
   const tiles = $derived.by<Tile[]>(() => {
     const s = stats.data
     return [
-      { panel: 'routes', icon: 'routes', label: 'Routes', value: n(s?.routes), sub: s ? `${n(s.pages)} pages · ${n(s.endpoints)} endpoints` : undefined },
-      { panel: 'components', icon: 'components', label: 'Mounted components', value: n(s?.live), sub: s?.liveFiles != null ? `from ${n(s.liveFiles)} files` : undefined },
-      { panel: 'modules', icon: 'modules', label: 'Modules', value: n(s?.modules), sub: s?.cycles ? `${n(s.cycles)} circular` : 'no cycles', tone: s?.cycles ? 'yellow' : undefined },
-      { panel: 'assets', icon: 'assets', label: 'Static assets', value: n(s?.assets), sub: s?.assetBytes != null ? formatBytes(s.assetBytes) : undefined },
+      {
+        panel: 'routes',
+        icon: 'routes',
+        label: 'Routes',
+        value: n(s?.routes),
+        sub: s ? `${n(s.pages)} pages · ${n(s.endpoints)} endpoints` : undefined,
+      },
+      {
+        panel: 'components',
+        icon: 'components',
+        label: 'Mounted components',
+        value: n(s?.live),
+        sub: s?.liveFiles != null ? `from ${n(s.liveFiles)} files` : undefined,
+      },
+      {
+        panel: 'modules',
+        icon: 'modules',
+        label: 'Modules',
+        value: n(s?.modules),
+        sub: s?.cycles ? `${n(s.cycles)} circular` : 'no cycles',
+        tone: s?.cycles ? 'yellow' : undefined,
+      },
+      {
+        panel: 'assets',
+        icon: 'assets',
+        label: 'Static assets',
+        value: n(s?.assets),
+        sub: s?.assetBytes != null ? formatBytes(s.assetBytes) : undefined,
+      },
       {
         panel: 'errors',
         icon: 'errors',
@@ -103,7 +139,12 @@
 
 <Panel title="Overview" scroll>
   {#snippet actions()}
-    <Button icon="refresh" variant="ghost" label="Refresh" onclick={() => (project.refresh(), stats.refresh())} />
+    <Button
+      icon="refresh"
+      variant="ghost"
+      label="Refresh"
+      onclick={() => (project.refresh(), stats.refresh())}
+    />
   {/snippet}
 
   {#if project.loading}
@@ -111,7 +152,9 @@
   {:else if project.error || !project.data}
     <EmptyState icon="errors" tone="error" title="Dev server not reachable">
       <p class="mono">{project.error}</p>
-      <p>This panel needs a running Vite dev server with <code>vite-devtools-svelte</code> installed.</p>
+      <p>
+        This panel needs a running Vite dev server with <code>vite-devtools-svelte</code> installed.
+      </p>
       <Button icon="refresh" onclick={() => project.refresh()}>Retry</Button>
     </EmptyState>
   {:else}
@@ -124,21 +167,34 @@
           {#if p.version}<p class="faint mono">v{p.version}</p>{/if}
         </div>
         <dl class="stack">
-          <div><dt>Svelte</dt><dd class="mono">{p.svelteVersion || '—'}</dd></div>
-          <div><dt>SvelteKit</dt><dd class="mono">{p.sveltekitVersion || '—'}</dd></div>
-          <div><dt>Vite</dt><dd class="mono">{p.viteVersion || '—'}</dd></div>
+          <div>
+            <dt>Svelte</dt>
+            <dd class="mono">{p.svelteVersion || '—'}</dd>
+          </div>
+          <div>
+            <dt>SvelteKit</dt>
+            <dd class="mono">{p.sveltekitVersion || '—'}</dd>
+          </div>
+          <div>
+            <dt>Vite</dt>
+            <dd class="mono">{p.viteVersion || '—'}</dd>
+          </div>
         </dl>
       </header>
 
       <div class="tiles">
         {#each tiles as t (t.panel)}
-          <button class="tile" onclick={() => router.go(t.panel)}>
+          <button type="button" class="tile" onclick={() => router.go(t.panel)}>
             <span class="tile-head">
               <Icon name={t.icon} size={14} />
               {t.label}
               <span class="go"><Icon name="chevron" size={12} /></span>
             </span>
-            <span class="tile-value num" class:red={t.tone === 'red'} class:yellow={t.tone === 'yellow'}>{t.value}</span>
+            <span
+              class="tile-value num"
+              class:red={t.tone === 'red'}
+              class:yellow={t.tone === 'yellow'}>{t.value}</span
+            >
             <span class="tile-sub">{t.sub ?? ' '}</span>
           </button>
         {/each}
@@ -151,15 +207,27 @@
             label="Dependency kind"
             bind:value={depKind}
             options={[
-              { value: 'all', label: 'All', count: Object.keys(p.dependencies).length + Object.keys(p.devDependencies).length },
-              { value: 'dependencies', label: 'Runtime', count: Object.keys(p.dependencies).length },
-              { value: 'devDependencies', label: 'Dev', count: Object.keys(p.devDependencies).length },
+              {
+                value: 'all',
+                label: 'All',
+                count: Object.keys(p.dependencies).length + Object.keys(p.devDependencies).length,
+              },
+              {
+                value: 'dependencies',
+                label: 'Runtime',
+                count: Object.keys(p.dependencies).length,
+              },
+              {
+                value: 'devDependencies',
+                label: 'Dev',
+                count: Object.keys(p.devDependencies).length,
+              },
             ]}
           />
           <SearchField bind:value={depQuery} placeholder="Filter packages…" count={deps.length} />
         </div>
         <ul class="dep-list" aria-label="Dependencies">
-          {#each deps as d (d.name + d.dev)}
+          {#each deps as d ((d.dev ? 'dev:' : 'dep:') + d.name)}
             <li class="dep">
               <span class="dep-name truncate"><Highlight text={d.name} query={depQuery} /></span>
               {#if d.dev}<Badge>dev</Badge>{/if}

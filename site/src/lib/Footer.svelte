@@ -1,5 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths'
+
   import SvelteMark from './SvelteMark.svelte'
   import { pkgVersion } from './version'
 
@@ -25,7 +26,9 @@
         <ul>
           <li><a href={resolve('/getting-started')}>Get started</a></li>
           <li><a href={resolve('/mcp')}>MCP for AI agents</a></li>
-          <li><a href={resolve('/ja/mcp')} hreflang="ja" lang="ja">MCP クイックスタート（日本語）</a></li>
+          <li>
+            <a href={resolve('/ja/mcp')} hreflang="ja" lang="ja">MCP クイックスタート（日本語）</a>
+          </li>
           <li><a href={resolve('/#panels')}>All panels</a></li>
         </ul>
       </section>

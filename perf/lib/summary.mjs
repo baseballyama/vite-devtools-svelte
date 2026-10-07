@@ -5,7 +5,8 @@
 
 import { median, r1 } from './harness.mjs'
 
-export const METRICS = [
+/** @type {Array<[string, (run: any) => number | undefined]>} */
+const METRICS = [
   ['rows mount ms', r => r.rows?.mountMs],
   ['rows unmount ms', r => r.rows?.unmountMs],
   ['tree mount ms', r => r.tree?.mountMs],
@@ -31,11 +32,15 @@ export const METRICS = [
   ],
 ]
 
-export function compare(bVals, fVals) {
+const range = xs => [Math.min(...xs), Math.max(...xs)]
+
+const fmt = s =>
+  s?.median === undefined ? '—' : `${s.median} [${r1(s.min)}–${r1(s.max)}] (${s.n})`
+
+function compare(bVals, fVals) {
   const b = bVals.filter(v => typeof v === 'number' && !Number.isNaN(v))
   const f = fVals.filter(v => typeof v === 'number' && !Number.isNaN(v))
   if (b.length === 0 || f.length === 0) return { verdict: 'insufficient samples', b, f }
-  const range = xs => [Math.min(...xs), Math.max(...xs)]
   const [bMin, bMax] = range(b)
   const [fMin, fMax] = range(f)
   let verdict = 'no measurable difference at this load'
@@ -69,8 +74,6 @@ export function summarize(items) {
     for (const [name, get] of METRICS) {
       const c = compare(g.B.map(get), g.F.map(get))
       out[key][name] = c
-      const fmt = s =>
-        s?.median === undefined ? '—' : `${s.median} [${r1(s.min)}–${r1(s.max)}] (${s.n})`
       md.push(`| ${g.scale} | ${g.scenario} | ${name} | ${fmt(c.b)} | ${fmt(c.f)} | ${c.verdict} |`)
     }
   }

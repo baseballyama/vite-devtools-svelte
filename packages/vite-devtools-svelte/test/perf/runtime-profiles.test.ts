@@ -3,8 +3,13 @@
 // R2 cumulative counters, R3 forced activation/resync, R4 gating, R5 cadence,
 // R6 hard 2 s bound).
 import { describe, expect, it } from 'vitest'
+
 import { Collector, LIMITS } from '../../src/server/collector.js'
 import { createRuntime, mountList, type Harness } from './harness.js'
+
+const zeroClock = () => 0
+/** The size-term interval the runtime picks for a payload estimate (R5). */
+const intervalForBytes = (bytes: number) => (bytes > 1_000_000 ? 2000 : 1000)
 
 const profileMsgs = (h: Harness) =>
   h.sent.filter(s => s.event === 'svelte-devtools:profiles').map(s => s.data as any)
@@ -83,7 +88,7 @@ describe('P-1 Option A: profiles push', () => {
   })
 
   it('R5: interval grows with the measured payload; small apps keep 500 ms', () => {
-    const clock = () => 0 // serialization cost 0 ms → only the size term decides
+    const clock = zeroClock // serialization cost 0 ms → only the size term decides
     const small = createRuntime({ clock })
     const s = mountList(small, 3, 0)
     small.flushTimers()
@@ -105,13 +110,18 @@ describe('P-1 Option A: profiles push', () => {
     const timer = big.dt._profileDebounceTimer
     big.dt.recordRender(b.ids[1]) // throttle, not debounce: the timer is kept
     expect(big.dt._profileDebounceTimer).toBe(timer)
-    expect(big.pendingDelays()).toEqual([est > 1000000 ? 2000 : 1000])
+    expect(big.pendingDelays()).toEqual([intervalForBytes(est)])
   })
 
   it('R6: slow serialization and high churn never push the interval past 2 s', () => {
     let now = 0
     // every send "costs" 300 ms of serialization → 20 × ms = 6 s unclamped
-    const h = createRuntime({ clock: () => now, onSend: () => (now += 300) })
+    const h = createRuntime({
+      clock: () => now,
+      onSend: () => {
+        now += 300
+      },
+    })
     const list = mountList(h, 50, 0)
     h.flushTimers()
     h.sent.length = 0

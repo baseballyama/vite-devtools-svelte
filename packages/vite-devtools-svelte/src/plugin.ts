@@ -1,11 +1,16 @@
-import type { Plugin, ResolvedConfig, ViteDevServer } from 'vite'
-import path from 'node:path'
 import crypto from 'node:crypto'
+import type { IncomingMessage, ServerResponse } from 'node:http'
+import path from 'node:path'
+
 import { launchEditor } from 'devframe/utils/launch-editor'
-import { analyzeRoutes } from './analyzers/routes.js'
-import { analyzeProject } from './analyzers/project.js'
+import type { Plugin, ResolvedConfig, ViteDevServer } from 'vite'
+
 import { analyzeComponents } from './analyzers/components.js'
 import type { GraphModuleLike } from './analyzers/module-graph.js'
+import { analyzeProject } from './analyzers/project.js'
+import { analyzeRoutes } from './analyzers/routes.js'
+import { buildMcpServer, StreamableHTTPServerTransport } from './mcp/server.js'
+import { SessionStore } from './mcp/sessions.js'
 import {
   RUNTIME_MODULE_ID,
   RESOLVED_RUNTIME_ID,
@@ -22,8 +27,6 @@ import { Collector } from './server/collector.js'
 import { createSvelteDevframe, DEVFRAME_BASE } from './server/devframe.js'
 import type { SvelteDevtoolsHost } from './server/devframe.js'
 import { mountStandalone } from './server/mount.js'
-import { SessionStore } from './mcp/sessions.js'
-import { buildMcpServer, StreamableHTTPServerTransport } from './mcp/server.js'
 import { sveltekitTemplateInjector } from './server/template-injector.js'
 import type { LoadProfile } from './types.js'
 
@@ -78,16 +81,14 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
   // `root` is resolved.
   let sessions: SessionStore | null = null
   function getSessions(): SessionStore {
-    if (!sessions) {
-      sessions = new SessionStore({
-        persistDir: path.join(root, 'node_modules', '.vite-devtools-svelte', 'sessions'),
-        getters: {
-          getRenderProfiles: () => collector.renderProfiles,
-          getLoadProfiles: () => collector.loadProfiles,
-          getFpsSamples: () => collector.fpsSamples,
-        },
-      })
-    }
+    sessions ??= new SessionStore({
+      persistDir: path.join(root, 'node_modules', '.vite-devtools-svelte', 'sessions'),
+      getters: {
+        getRenderProfiles: () => collector.renderProfiles,
+        getLoadProfiles: () => collector.loadProfiles,
+        getFpsSamples: () => collector.fpsSamples,
+      },
+    })
     return sessions
   }
 
@@ -198,7 +199,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       // measurement sessions over the Streamable HTTP transport. Same-origin
       // is *not* required because MCP clients are local processes that don't
       // run inside a browser tab; the token is the gate.
-      devServer.middlewares.use('/__svelte-devtools/mcp', async (req, res) => {
+      const handleMcp = async (req: IncomingMessage, res: ServerResponse) => {
         const tokenHeader = req.headers['x-svelte-devtools-token']
         const token = Array.isArray(tokenHeader) ? tokenHeader[0] : tokenHeader
         if (token !== mcpToken) {
@@ -218,20 +219,21 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
           sessionIdGenerator: undefined,
           enableJsonResponse: true,
         })
+        // oxlint-disable-next-line unicorn/prefer-add-event-listener -- the MCP transport is not an EventTarget; `onerror` is its only error hook
         mcpTransport.onerror = err => {
           devServer.config.logger.error(
-            `[svelte-devtools] MCP transport error: ${err.stack || err.message}`,
+            `[svelte-devtools] MCP transport error: ${err.stack ?? err.message}`,
           )
         }
         try {
           await mcpServer.connect(mcpTransport)
           // The SDK consumes the request body itself; pre-reading would
           // leave the stream empty.
-          await mcpTransport.handleRequest(req as any, res as any)
+          await mcpTransport.handleRequest(req, res)
         } catch (e) {
           devServer.config.logger.error(
             `[svelte-devtools] MCP handler error: ${
-              e instanceof Error ? e.stack || e.message : String(e)
+              e instanceof Error ? (e.stack ?? e.message) : String(e)
             }`,
           )
           if (!res.headersSent) {
@@ -243,6 +245,13 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
           await mcpTransport.close().catch(() => {})
           await mcpServer.close().catch(() => {})
         }
+      }
+      // Connect middleware ignores the returned promise: route any rejection
+      // to the logger instead of leaving it unhandled.
+      devServer.middlewares.use('/__svelte-devtools/mcp', (req, res) => {
+        handleMcp(req, res).catch((e: unknown) => {
+          devServer.config.logger.error(`[svelte-devtools] MCP handler error: ${String(e)}`)
+        })
       })
     },
 
@@ -264,7 +273,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     // Virtual module resolution: runtime + svelte/internal/client wrapper.
     // dev only — never resolve our virtual modules during production build.
     resolveId(id, importer) {
-      if (config?.command !== 'serve') return undefined
+      if (config?.command !== 'serve') return null
       if (id === RUNTIME_MODULE_ID) return RESOLVED_RUNTIME_ID
       if (
         componentTracking &&
@@ -275,14 +284,14 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       ) {
         return WRAPPER_MODULE_ID
       }
-      return undefined
+      return null
     },
 
     load(id) {
-      if (config?.command !== 'serve') return undefined
+      if (config?.command !== 'serve') return null
       if (id === RESOLVED_RUNTIME_ID) return runtimeCode
       if (id === WRAPPER_MODULE_ID) return wrapperCode
-      return undefined
+      return null
     },
 
     // Inject the runtime into the user's app
@@ -326,14 +335,14 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     enforce: 'post',
     apply: 'serve',
 
-    transform(code, id, options) {
+    transform(code, id, transformOptions) {
       if (!componentTracking) return null
       if (id.includes('node_modules')) return null
       if (config?.command !== 'serve') return null
-      const file = id.split('?')[0]
+      const [file = id] = id.split('?')
       const modified = file.endsWith('.svelte')
         ? injectComponentTracking(code, id)
-        : SVELTE_MODULE_RE.test(file) && !options?.ssr
+        : SVELTE_MODULE_RE.test(file) && !transformOptions?.ssr
           ? injectModuleTracking(code, file)
           : null
       return modified === null ? null : { code: modified, map: null }
@@ -359,7 +368,8 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       const loadType = isServerLoad ? 'server' : 'universal'
       // Determine route from file path
       const routesMatch = id.match(/routes(.*)\/\+/)
-      const route = routesMatch ? routesMatch[1] || '/' : '/'
+      // An empty capture (the root route's own file) is '/' as well.
+      const route = (routesMatch?.[1] ?? '') || '/'
       const safeRoute = JSON.stringify(route)
       const safeFile = JSON.stringify(id)
       const safeType = JSON.stringify(loadType)
@@ -441,19 +451,20 @@ export const load = async (event) => {
         const fileMatch = msg.match(/(?:^|\s)((?:\/|\.\/|\w:)[^\s:]+\.svelte)(?::(\d+):(\d+))?/)
         const codeMatch = msg.match(/\(([a-z0-9_-]+)\)/)
         collector.recordCompilerWarning({
-          code: codeMatch?.[1] || 'unknown',
+          code: codeMatch?.[1] ?? 'unknown',
           // oxlint-disable-next-line no-control-regex -- intentional: strip ANSI escape sequences
-          message: msg.replace(/\x1b\[[0-9;]*m/g, '').trim(),
-          file: fileMatch?.[1] || '',
-          line: fileMatch?.[2] ? parseInt(fileMatch[2]) : undefined,
-          column: fileMatch?.[3] ? parseInt(fileMatch[3]) : undefined,
+          message: msg.replaceAll(/\u001B\[[0-9;]*m/g, '').trim(),
+          file: fileMatch?.[1] ?? '',
+          line: fileMatch?.[2] ? Number(fileMatch[2]) : undefined,
+          column: fileMatch?.[3] ? Number(fileMatch[3]) : undefined,
         })
       }
       if (wrapped) return
-      const originalWarn = logger.warn
-      logger.warn = (msg: string, options?: { timestamp?: boolean }) => {
+      // Bound: a custom logger's `warn` may rely on `this`.
+      const originalWarn = logger.warn.bind(logger)
+      logger.warn = (msg: string, warnOptions?: { timestamp?: boolean }) => {
         logger[WARN_SINK]?.(msg)
-        originalWarn(msg, options)
+        originalWarn(msg, warnOptions)
       }
     },
   }

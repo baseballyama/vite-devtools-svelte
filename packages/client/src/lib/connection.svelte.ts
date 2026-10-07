@@ -7,13 +7,8 @@
  */
 import * as rpc from './rpc.js'
 
-export type ConnectionStatus =
-  | 'connecting'
-  | 'connected'
-  | 'unauthorized'
-  | 'disconnected'
-  | 'error'
-export interface ConnectionState {
+type ConnectionStatus = 'connecting' | 'connected' | 'unauthorized' | 'disconnected' | 'error'
+interface ConnectionState {
   status: ConnectionStatus
   host: 'standalone' | 'vite-devtools' | 'unknown'
   error?: string

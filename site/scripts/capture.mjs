@@ -30,14 +30,17 @@ import { createReadStream, existsSync, mkdirSync, statSync, writeFileSync } from
 import { createServer } from 'node:http'
 import { createRequire } from 'node:module'
 import path from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { pathToFileURL } from 'node:url'
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
+const repoRoot = path.resolve(import.meta.dirname, '../..')
 const arg = (name, fallback) =>
   process.argv.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3) ?? fallback
-const outDir = path.resolve(
-  arg('out', '') || (console.error('usage: --out=<dir>'), process.exit(64)),
-)
+const outArg = arg('out', '')
+if (outArg === '') {
+  console.error('usage: --out=<dir>')
+  process.exit(64)
+}
+const outDir = path.resolve(outArg)
 const buildDir = path.resolve(repoRoot, arg('build', 'site/build'))
 const beforeUrl = arg('before', 'https://baseballyama.github.io/vite-devtools-svelte')
 const referenceUrl = arg('reference', 'https://vite.dev')
@@ -89,7 +92,7 @@ const TYPES = {
 /** The file a request maps to, as the static host (GitHub Pages) resolves it. */
 function resolveFile(urlPath) {
   if (!urlPath.startsWith(BASE)) return null
-  let rel = decodeURIComponent(urlPath.slice(BASE.length)) || '/'
+  const rel = decodeURIComponent(urlPath.slice(BASE.length)) || '/'
   if (rel.includes('..')) return null
   const candidates = rel.endsWith('/')
     ? [rel + 'index.html']
@@ -110,7 +113,9 @@ const server = createServer((req, res) => {
   res.setHeader('content-type', TYPES[path.extname(file)] ?? 'application/octet-stream')
   createReadStream(file).pipe(res)
 })
-await new Promise(r => server.listen(0, '127.0.0.1', r))
+await new Promise(r => {
+  server.listen(0, '127.0.0.1', r)
+})
 const origin = `http://127.0.0.1:${server.address().port}`
 
 // ------------------------------------------------------------------ browser
@@ -197,6 +202,7 @@ async function shoot(page, dir, name) {
 
 /** QA checks that run inside the page; returns plain data. */
 const inPageChecks = () => {
+  // oxlint-disable-next-line unicorn/consistent-function-scoping -- runs in the page (serialized by evaluate); it cannot reference module scope
   const parse = c => {
     const m = c.match(/rgba?\(([^)]+)\)/)
     if (!m) return null
@@ -206,7 +212,9 @@ const inPageChecks = () => {
       .map(Number)
     return { r, g, b, a }
   }
+  // oxlint-disable-next-line unicorn/consistent-function-scoping -- runs in the page (serialized by evaluate); it cannot reference module scope
   const lum = ({ r, g, b }) => {
+    // oxlint-disable-next-line unicorn/consistent-function-scoping -- runs in the page (serialized by evaluate); it cannot reference module scope
     const f = v => ((v /= 255) <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)
     return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b)
   }
@@ -226,9 +234,10 @@ const inPageChecks = () => {
     const fg = parse(cs.color)
     const bg = bgOf(el)
     if (!fg || !bg || fg.a < 0.95) continue
-    const [l1, l2] = [lum(fg), lum(bg)].sort((a, b) => b - a)
+    const [l1, l2] = [lum(fg), lum(bg)].toSorted((a, b) => b - a)
     const ratio = (l1 + 0.05) / (l2 + 0.05)
-    const size = parseFloat(cs.fontSize)
+    // oxlint-disable-next-line unicorn/prefer-number-coercion -- computed CSS lengths end in 'px'; Number() would give NaN
+    const size = Number.parseFloat(cs.fontSize)
     const large = size >= 24 || (size >= 18.66 && Number(cs.fontWeight) >= 700)
     if (ratio < (large ? 3 : 4.5))
       lowContrast.push({
@@ -285,11 +294,14 @@ async function focusCheck(page, stops = 12) {
         if (!el || el === document.body) return { tag: 'body', visible: false }
         const cs = getComputedStyle(el)
         const ring =
-          (cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) > 0) ||
+          // oxlint-disable-next-line unicorn/prefer-number-coercion -- computed CSS lengths end in 'px'; Number() would give NaN
+          (cs.outlineStyle !== 'none' && Number.parseFloat(cs.outlineWidth) > 0) ||
           (cs.boxShadow && cs.boxShadow !== 'none')
         return {
           tag: el.tagName.toLowerCase(),
-          label: (el.getAttribute('aria-label') || el.textContent || '').trim().slice(0, 30),
+          label: ((el.getAttribute('aria-label') ?? '') || (el.textContent ?? ''))
+            .trim()
+            .slice(0, 30),
           visible: !!ring,
         }
       }),
@@ -328,8 +340,11 @@ try {
           document.documentElement.style.scrollBehavior = 'auto'
           for (let y = 0; y < document.documentElement.scrollHeight; y += window.innerHeight / 2) {
             window.scrollTo(0, y)
-            await new Promise(r => setTimeout(r, 60))
+            await new Promise(r => {
+              setTimeout(r, 60)
+            })
           }
+          // oxlint-disable-next-line unicorn/consistent-function-scoping -- runs in the page (serialized by evaluate); it cannot reference module scope
           const settled = i =>
             new Promise(r => {
               i.addEventListener('load', r, { once: true })
@@ -337,7 +352,9 @@ try {
             })
           await Promise.race([
             Promise.all([...document.images].filter(i => !i.complete).map(settled)),
-            new Promise(r => setTimeout(r, 10_000)),
+            new Promise(r => {
+              setTimeout(r, 10_000)
+            }),
           ])
           window.scrollTo(0, 0)
         })
@@ -360,26 +377,26 @@ try {
             badResponses.push(`missing icon ${u.pathname}`)
         }
         const r = { page: p.id, width: size.w, theme, status: res?.status() ?? null, problems: [] }
-        if (badResponses.length)
+        if (badResponses.length > 0)
           r.problems.push(`broken assets: ${[...new Set(badResponses)].join(', ')}`)
-        if (brokenImages.length)
+        if (brokenImages.length > 0)
           r.problems.push(`images that did not load: ${brokenImages.join(', ')}`)
         const c = await page.evaluate(inPageChecks)
         pagesByPath.set(p.path, c.ids)
         const privacy = SENSITIVE.filter(re => re.test(c.text)).map(String)
-        if (privacy.length) r.problems.push(`privacy: ${privacy.length} pattern hit(s)`)
+        if (privacy.length > 0) r.problems.push(`privacy: ${privacy.length} pattern hit(s)`)
         if (r.status !== 200) r.problems.push(`HTTP ${r.status}`)
         if (c.overflowX) r.problems.push('horizontal overflow')
         if (c.lowContrastCount)
           r.problems.push(`${c.lowContrastCount} low-contrast text element(s)`)
         if (c.imagesWithoutAlt) r.problems.push(`${c.imagesWithoutAlt} image(s) without alt`)
-        if (c.clipped.length) r.problems.push(`clipped code: ${c.clipped.join(' | ')}`)
+        if (c.clipped.length > 0) r.problems.push(`clipped code: ${c.clipped.join(' | ')}`)
         if (c.h1 !== 1) r.problems.push(`${c.h1} h1 element(s)`)
         r.lowContrast = c.lowContrast
         r.overflowing = c.overflowing
         r.anchors = c.anchors
         // Screenshots first, before Tab / copy move focus or scroll the page.
-        if (!privacy.length) await shoot(page, 'after', `${p.id}-${size.w}-${theme}`)
+        if (privacy.length === 0) await shoot(page, 'after', `${p.id}-${size.w}-${theme}`)
         if (size.w === 1440) {
           r.focus = await focusCheck(page)
           if (r.focus.some(f => f.tag !== 'body' && !f.visible))
@@ -394,7 +411,8 @@ try {
             if (!clip) r.problems.push('copy button copied nothing')
           }
         }
-        if (errors.length) r.problems.push(`console/page errors: ${errors.slice(0, 5).join(' | ')}`)
+        if (errors.length > 0)
+          r.problems.push(`console/page errors: ${errors.slice(0, 5).join(' | ')}`)
         failures += r.problems.length
         qa.push(r)
         await ctx.close()

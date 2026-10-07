@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeAll, afterEach } from 'vitest'
 import { flushSync } from 'svelte'
+import { describe, it, expect, beforeAll, afterEach } from 'vitest'
+
 import StateKinds from './fixtures/StateKinds.svelte'
 import { render, instance, instances, dt, poll, timeline } from './harness.js'
 
@@ -10,6 +11,8 @@ beforeAll(() => {
 
 let r: ReturnType<typeof render>
 afterEach(() => r?.destroy())
+
+const renders = (id: number): number => dt()._profiles.get(id)?.renderCount ?? 0
 
 function step(fn: () => void) {
   fn()
@@ -56,26 +59,24 @@ describe('state timeline', () => {
     step(api.second)
     const entries = timeline().slice(n)
     expect(entries.map(e => e.name)).toEqual(['Counter.count'])
-    expect(entries[0].id).toMatch(/#2$/)
+    expect(entries[0]!.id).toMatch(/#2$/)
   })
 })
 
 describe('render profiling', () => {
-  it('attributes re-renders to the component whose markup updated', () => {
+  it('attributes re-renders to the component whose markup updated', async () => {
     r = render(StateKinds)
     const api = (r.app as any).api
     step(api.addRow)
     const owner = instance('StateKinds')
     const rows = instances('Child').filter(c => c.parentId === owner.id)
     expect(rows).toHaveLength(2)
-    const renders = (id: number) => dt()._profiles.get(id)?.renderCount ?? 0
     const before = { owner: renders(owner.id), rows: rows.map(c => renders(c.id)) }
     step(api.num)
-    return Promise.resolve().then(() => {
-      // pooled per microtask
-      expect(renders(owner.id)).toBe(before.owner + 1)
-      // each row's label depends on num: the row (the later-added one too) re-renders
-      expect(rows.map(c => renders(c.id))).toEqual(before.rows.map(x => x + 1))
-    })
+    // pooled per microtask
+    await Promise.resolve()
+    expect(renders(owner.id)).toBe(before.owner + 1)
+    // each row's label depends on num: the row (the later-added one too) re-renders
+    expect(rows.map(c => renders(c.id))).toEqual(before.rows.map(x => x + 1))
   })
 })

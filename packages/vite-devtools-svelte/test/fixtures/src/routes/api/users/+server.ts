@@ -1,4 +1,4 @@
-export async function GET() {
+export function GET() {
   return new Response(JSON.stringify([]))
 }
 
@@ -7,6 +7,6 @@ export async function POST({ request }) {
   return new Response(JSON.stringify(body), { status: 201 })
 }
 
-export async function DELETE({ params: _params }) {
+export function DELETE({ params: _params }) {
   return new Response(null, { status: 204 })
 }

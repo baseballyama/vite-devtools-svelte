@@ -1,5 +1,6 @@
 import { connectDevframe } from 'devframe/client'
 import type { DevframeConnectionStatus, DevframeRpcClient } from 'devframe/client'
+
 import type {
   RouteInfo,
   AssetInfo,
@@ -68,12 +69,14 @@ function setState(next: Partial<ConnectionState>): void {
 // it is connected and visible, renewing well inside the server's 15 s TTL.
 
 const HEARTBEAT_INTERVAL = 5_000
+// Also loaded by unit tests outside a browser.
+const hasDocument = typeof document !== 'undefined'
 const CLIENT_ID = Math.random().toString(36).slice(2, 12)
 let heartbeat: ReturnType<typeof setInterval> | undefined
 
 function sendActive(active: boolean): void {
   const c = client
-  if (!c || c.status !== 'connected') return
+  if (c?.status !== 'connected') return
   c.scope(NAMESPACE)
     .rpc.call('set-active', { client: CLIENT_ID, active })
     .catch(() => {})
@@ -81,9 +84,7 @@ function sendActive(active: boolean): void {
 
 function syncActivity(): void {
   const wanted =
-    state.status === 'connected' &&
-    typeof document !== 'undefined' &&
-    document.visibilityState === 'visible'
+    state.status === 'connected' && hasDocument && document.visibilityState === 'visible'
   if (wanted && !heartbeat) {
     sendActive(true)
     heartbeat = setInterval(() => sendActive(true), HEARTBEAT_INTERVAL)
@@ -94,7 +95,7 @@ function syncActivity(): void {
   }
 }
 
-if (typeof document !== 'undefined') {
+if (hasDocument) {
   document.addEventListener('visibilitychange', syncActivity)
   window.addEventListener('pagehide', () => {
     if (heartbeat) clearInterval(heartbeat)
@@ -191,7 +192,9 @@ export function onConnectionState(cb: (s: ConnectionState) => void): () => void 
   listeners.add(cb)
   cb(state)
   getClient().catch(() => {})
-  return () => listeners.delete(cb)
+  return () => {
+    listeners.delete(cb)
+  }
 }
 
 /**
@@ -329,7 +332,13 @@ export async function clearErrors(): Promise<void> {
   await call('clear-errors')
 }
 
-export function getSvelteFiles(): Promise<{ file: string; name: string }[]> {
+/** A `.svelte` file the Inspect panel can compile. */
+export interface SvelteFileEntry {
+  file: string
+  name: string
+}
+
+export function getSvelteFiles(): Promise<SvelteFileEntry[]> {
   return call('get-svelte-files')
 }
 

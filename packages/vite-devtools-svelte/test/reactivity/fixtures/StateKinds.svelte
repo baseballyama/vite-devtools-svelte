@@ -1,6 +1,6 @@
 <script>
-  import { Counter } from './counter.svelte.js'
   import Child from './Child.svelte'
+  import { Counter } from './counter.svelte.js'
   let num = $state(0)
   let list = $state([1, 2])
   let obj = $state({ a: 1 })

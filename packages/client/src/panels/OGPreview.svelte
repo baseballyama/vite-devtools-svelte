@@ -1,16 +1,20 @@
 <script lang="ts">
+  import Badge from '../components/Badge.svelte'
+  import Button from '../components/Button.svelte'
+  import EmptyState from '../components/EmptyState.svelte'
+  import Icon from '../components/Icon.svelte'
+  import Panel from '../components/Panel.svelte'
+  import { resource } from '../lib/resource.svelte.js'
   import { getOGPreview, getRoutes } from '../lib/rpc.js'
   import type { OGPreview } from '../lib/types.js'
-  import { resource } from '../lib/resource.svelte.js'
-  import Panel from '../components/Panel.svelte'
-  import Button from '../components/Button.svelte'
-  import Badge from '../components/Badge.svelte'
-  import Icon from '../components/Icon.svelte'
-  import EmptyState from '../components/EmptyState.svelte'
 
-  const routes = resource(async () => (await getRoutes()).filter((r) => r.hasPage && r.params.length === 0).map((r) => r.path), {
-    initial: [] as string[],
-  })
+  const routes = resource(
+    async () =>
+      (await getRoutes()).filter(r => r.hasPage && r.params.length === 0).map(r => r.path),
+    {
+      initial: [] as string[],
+    },
+  )
 
   let path = $state('/')
   let custom = $state('')
@@ -41,32 +45,49 @@
     }
   })
 
-  const twitterCard = $derived(preview?.tags.find((t) => t.property === 'twitter:card')?.content ?? 'summary')
+  const twitterCard = $derived(
+    preview?.tags.find(t => t.property === 'twitter:card')?.content ?? 'summary',
+  )
 </script>
 
 <Panel title="Social preview" scroll>
   {#snippet toolbar()}
     <form
       class="bar"
-      onsubmit={(e) => {
+      onsubmit={e => {
         e.preventDefault()
-        run()
+        void run()
       }}
     >
       <select class="select" bind:value={path} aria-label="Route" disabled={!!custom.trim()}>
-        {#each routes.data.length ? routes.data : ['/'] as r (r)}<option value={r}>{r}</option>{/each}
+        {#each routes.data.length ? routes.data : ['/'] as r (r)}<option value={r}>{r}</option
+          >{/each}
       </select>
-      <input class="input mono url" bind:value={custom} placeholder="…or any URL" aria-label="Custom URL" spellcheck="false" />
-      <Button type="submit" variant="primary" icon="search" disabled={loading}>{loading ? 'Fetching…' : 'Preview'}</Button>
+      <input
+        class="input mono url"
+        bind:value={custom}
+        placeholder="…or any URL"
+        aria-label="Custom URL"
+        spellcheck="false"
+      />
+      <Button type="submit" variant="primary" icon="search" disabled={loading}
+        >{loading ? 'Fetching…' : 'Preview'}</Button
+      >
     </form>
   {/snippet}
 
   {#if error}
-    <EmptyState icon="errors" tone="error" title="Could not fetch the page"><p class="mono">{error}</p></EmptyState>
+    <EmptyState icon="errors" tone="error" title="Could not fetch the page"
+      ><p class="mono">{error}</p></EmptyState
+    >
   {:else if !preview}
     <EmptyState icon="og" title="Check how a page unfurls">
-      <p>Pick a route and press <strong>Preview</strong> to read its Open Graph and Twitter tags.</p>
-      <Button variant="primary" icon="search" onclick={run} disabled={loading}>Preview {path}</Button>
+      <p>
+        Pick a route and press <strong>Preview</strong> to read its Open Graph and Twitter tags.
+      </p>
+      <Button variant="primary" icon="search" onclick={run} disabled={loading}
+        >Preview {path}</Button
+      >
     </EmptyState>
   {:else}
     <div class="wrap">
@@ -74,7 +95,9 @@
         <figure class="card large">
           <span class="label">X / Twitter · {twitterCard}</span>
           <div class="img">
-            {#if preview.image}<img src={preview.image} alt="" />{:else}<span><Icon name="assets" size={22} />no og:image</span>{/if}
+            {#if preview.image}<img src={preview.image} alt="" />{:else}<span
+                ><Icon name="assets" size={22} />no og:image</span
+              >{/if}
           </div>
           <figcaption>
             <span class="host">{host}</span>
@@ -97,13 +120,16 @@
       <section class="side">
         <h3 class="section-title">
           Checks
-          {#if preview.issues.length}<Badge tone="yellow">{preview.issues.length}</Badge>{:else}<Badge tone="green">all good</Badge>{/if}
+          {#if preview.issues.length}<Badge tone="yellow">{preview.issues.length}</Badge
+            >{:else}<Badge tone="green">all good</Badge>{/if}
         </h3>
         <ul class="issues">
           {#each preview.issues as issue (issue)}
             <li><Icon name="warning" size={14} />{issue}</li>
           {:else}
-            <li class="ok"><Icon name="check" size={14} />Title, description and image are present.</li>
+            <li class="ok">
+              <Icon name="check" size={14} />Title, description and image are present.
+            </li>
           {/each}
         </ul>
         <h3 class="section-title">Tags <span class="num">{preview.tags.length}</span></h3>
@@ -112,7 +138,8 @@
             <dt class="mono">{t.property}</dt>
             <dd>{t.content}</dd>
           {:else}
-            <dt class="faint">none</dt><dd></dd>
+            <dt class="faint">none</dt>
+            <dd></dd>
           {/each}
         </dl>
       </section>

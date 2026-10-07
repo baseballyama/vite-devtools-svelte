@@ -24,14 +24,14 @@
 // Output: <dir>/*.png + <dir>/manifest.json (no machine paths).
 // Exit 0 only when all four cases produced a clean image.
 import { spawn, execFileSync } from 'node:child_process'
-import { createRequire } from 'node:module'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { pathToFileURL } from 'node:url'
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
+const repoRoot = path.resolve(import.meta.dirname, '../..')
 const outArg = process.argv.find(a => a.startsWith('--out='))
 if (!outArg) {
   console.error('usage: node scripts/screenshots/reactivity.mjs --out=<dir>')
@@ -40,17 +40,20 @@ if (!outArg) {
 const outDir = path.resolve(outArg.slice('--out='.length))
 const appDir = path.join(repoRoot, 'examples/sample-app')
 const CAP_MS = 180_000
-const sleep = ms => new Promise(r => setTimeout(r, ms))
-const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g')
+const sleep = ms =>
+  new Promise(r => {
+    setTimeout(r, ms)
+  })
+const ANSI = new RegExp(`${String.fromCodePoint(27)}\\[[0-9;]*m`, 'g')
 
 const secrets = new Set()
 function mask(text) {
   let t = String(text)
   for (const s of secrets) if (s) t = t.split(s).join('<secret>')
   return t
-    .replace(/x-svelte-devtools-token:\s*\S+/gi, 'x-svelte-devtools-token:<secret>')
-    .replace(/devframe_otp=\d+/g, 'devframe_otp=<code>')
-    .replace(/(auth code\s+)\d{6}/g, '$1<code>')
+    .replaceAll(/x-svelte-devtools-token:\s*\S+/gi, 'x-svelte-devtools-token:<secret>')
+    .replaceAll(/devframe_otp=\d+/g, 'devframe_otp=<code>')
+    .replaceAll(/(auth code\s+)\d{6}/g, '$1<code>')
     .split(repoRoot)
     .join('<repo>')
 }
@@ -60,7 +63,7 @@ let finished = false
 async function finish(code) {
   if (finished) return
   finished = true
-  for (const fn of cleanup.reverse())
+  for (const fn of cleanup.toReversed())
     await Promise.resolve()
       .then(fn)
       .catch(() => {})
@@ -125,8 +128,12 @@ const child = spawn(
   },
 )
 let log = ''
-child.stdout.on('data', d => (log += d))
-child.stderr.on('data', d => (log += d))
+child.stdout.on('data', d => {
+  log += d
+})
+child.stderr.on('data', d => {
+  log += d
+})
 cleanup.push(async () => {
   if (child.exitCode !== null || child.signalCode !== null) return
   const kill = sig => {
@@ -209,7 +216,7 @@ const git = (...a) =>
     .trim()
 const homes = [os.homedir(), home]
   .filter(Boolean)
-  .map(h => h.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  .map(h => h.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&'))
 const SENSITIVE = [
   /\/Users\//,
   /\/home\//,
@@ -277,7 +284,7 @@ function notShown(kase, why) {
   console.log(`case ${kase}: NOT SHOWN — ${why}`)
 }
 const go = async id => {
-  await ui.evaluate(id => (location.hash = `#/${id}`), id)
+  await ui.evaluate(panelId => (location.hash = `#/${panelId}`), id)
   await ui.waitForSelector(`${host} section.panel`, { timeout: 30_000 })
 }
 // Segmented controls are radiogroups; match the group and the radio's exact
@@ -298,7 +305,7 @@ async function choose(group, name) {
 async function panelDump() {
   const t = await ui.evaluate(sel => {
     const h = document.querySelector(sel)
-    const q = s => h?.querySelector(s)?.textContent?.replace(/\s+/g, ' ').trim() ?? null
+    const q = s => h?.querySelector(s)?.textContent?.replaceAll(/\s+/g, ' ').trim() ?? null
     const checked = [...(h?.querySelectorAll('[role=radiogroup]') ?? [])].map(
       g =>
         `${g.getAttribute('aria-label')}=${g.querySelector('[aria-checked=true]')?.textContent?.trim() ?? '?'}`,
@@ -357,7 +364,7 @@ try {
   })
 
   // Components → <name> → Show reactivity: the local (component) view of one instance.
-  async function showComponent(name) {
+  const showComponent = async name => {
     await go('components')
     await ui
       .locator(`${host} [role=treeitem]`, { hasText: name })
@@ -399,7 +406,7 @@ try {
     const row = ui.locator(`${host} [role=option]`, { hasText: 'taxRate' }).first()
     await row.click({ timeout: 15_000 })
     // A meaningful local graph: taxRate must have outgoing links (tax depends on it).
-    const rowText = (await row.innerText()).replace(/\s+/g, ' ').trim()
+    const rowText = (await row.innerText()).replaceAll(/\s+/g, ' ').trim()
     if (/\b0 \/ 0$/.test(rowText) || !/\d+ \/ [1-9]\d*$/.test(rowText))
       throw new Error(`taxRate has no "can affect" links: ${mask(rowText).slice(0, 120)}`)
     await choose('Layout', 'Graph')

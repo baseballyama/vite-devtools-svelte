@@ -1,34 +1,18 @@
-import { describe, it, expect } from 'vitest'
-import { svelteDevtools } from '../src/plugin.js'
 import type { Plugin } from 'vite'
+import { describe, it, expect } from 'vitest'
+
+import { svelteDevtools } from '../src/plugin.js'
+import { callHook, codeOf, resolvePlugins } from './helpers.js'
 
 function getPlugins(options = {}) {
   const plugins = svelteDevtools(options)
-  for (const plugin of plugins) {
-    if (typeof plugin.configResolved === 'function') {
-      plugin.configResolved({
-        command: 'serve',
-        root: '/test',
-        logger: { warn: () => {} },
-        plugins: [],
-      } as any)
-    }
-  }
+  resolvePlugins(plugins)
   return plugins
 }
 
 function getBuildPlugins(options = {}) {
   const plugins = svelteDevtools(options)
-  for (const plugin of plugins) {
-    if (typeof plugin.configResolved === 'function') {
-      plugin.configResolved({
-        command: 'build',
-        root: '/test',
-        logger: { warn: () => {} },
-        plugins: [],
-      } as any)
-    }
-  }
+  resolvePlugins(plugins, { command: 'build' })
   return plugins
 }
 
@@ -55,9 +39,9 @@ function Component($$anchor) {
   $.pop();
 }
 `
-    const result = (plugin.transform as Function)!(code, '/test/src/lib/Counter.svelte')
+    const result = callHook(plugin.transform, code, '/test/src/lib/Counter.svelte')
     expect(result).not.toBeNull()
-    const output = typeof result === 'string' ? result : result!.code
+    const output = codeOf(result)
     // Should inject _pendingFile before $.push()
     expect(output).toContain('_pendingFile')
     expect(output).toContain('/test/src/lib/Counter.svelte')
@@ -74,8 +58,8 @@ function Component($$anchor) {
   $.pop();
 }
 `
-    const result = (plugin.transform as Function)!(code, '/test/src/lib/Counter.svelte')
-    const output = typeof result === 'string' ? result : result!.code
+    const result = callHook(plugin.transform, code, '/test/src/lib/Counter.svelte')
+    const output = codeOf(result)
     expect(output).not.toContain('onMount')
     expect(output).not.toContain('onDestroy')
   })
@@ -91,8 +75,8 @@ function Component($$anchor) {
   $.pop();
 }
 `
-    const result = (plugin.transform as Function)!(code, '/test/src/lib/Counter.svelte')
-    const output = typeof result === 'string' ? result : result!.code
+    const result = callHook(plugin.transform, code, '/test/src/lib/Counter.svelte')
+    const output = codeOf(result)
     expect(output).not.toContain('trackState')
     expect(output).not.toContain('trackDerived')
     expect(output).not.toContain('trackProxy')
@@ -103,13 +87,14 @@ function Component($$anchor) {
 
   it('should skip non-svelte files', () => {
     const plugin = getTrackingPlugin()
-    const result = (plugin.transform as Function)!('const x = 1', '/test/src/lib/utils.ts')
+    const result = callHook(plugin.transform, 'const x = 1', '/test/src/lib/utils.ts')
     expect(result).toBeNull()
   })
 
   it('should skip node_modules files', () => {
     const plugin = getTrackingPlugin()
-    const result = (plugin.transform as Function)!(
+    const result = callHook(
+      plugin.transform,
       '$.push()',
       '/test/node_modules/svelte/Component.svelte',
     )
@@ -119,7 +104,7 @@ function Component($$anchor) {
   it('should skip when componentTracking is disabled', () => {
     const plugin = getTrackingPlugin({ componentTracking: false })
     const code = '$.push($$anchor, true); $.pop();'
-    const result = (plugin.transform as Function)!(code, '/test/src/lib/Counter.svelte')
+    const result = callHook(plugin.transform, code, '/test/src/lib/Counter.svelte')
     expect(result).toBeNull()
   })
 
@@ -129,7 +114,7 @@ function Component($$anchor) {
 import * as $ from 'svelte/internal/client';
 export function something() {}
 `
-    const result = (plugin.transform as Function)!(code, '/test/src/lib/Counter.svelte')
+    const result = callHook(plugin.transform, code, '/test/src/lib/Counter.svelte')
     expect(result).toBeNull()
   })
 
@@ -143,7 +128,7 @@ function Component($$anchor) {
   $.pop();
 }
 `
-    const result = (plugin.transform as Function)!(code, '/test/src/lib/Counter.svelte')
+    const result = callHook(plugin.transform, code, '/test/src/lib/Counter.svelte')
     expect(result).toBeNull()
   })
 
@@ -156,8 +141,8 @@ function Component($$anchor) {
   $.pop();
 }
 `
-    const result = (plugin.transform as Function)!(code, '/test/src/lib/My"Component.svelte')
-    const output = typeof result === 'string' ? result : result!.code
+    const result = callHook(plugin.transform, code, '/test/src/lib/My"Component.svelte')
+    const output = codeOf(result)
     expect(output).toContain('\\"')
     expect(output).toContain('_pendingFile')
   })
@@ -171,7 +156,7 @@ function Component($$anchor) {
   $.pop();
 }
 `
-    const result = (plugin.transform as Function)!(code, '/test/src/lib/Counter.svelte')
+    const result = callHook(plugin.transform, code, '/test/src/lib/Counter.svelte')
     expect(result).toHaveProperty('code')
     expect(result).toHaveProperty('map', null)
   })
@@ -185,8 +170,8 @@ function Component($$anchor) {
   $.pop();
 }
 `
-    const result = (plugin.transform as Function)!(code, '/test/src/lib/Counter.svelte')
-    const output = typeof result === 'string' ? result : result!.code
+    const result = callHook(plugin.transform, code, '/test/src/lib/Counter.svelte')
+    const output = codeOf(result)
     const pendingIdx = output.indexOf('_pendingFile')
     const pushIdx = output.indexOf('$.push(')
     expect(pendingIdx).toBeLessThan(pushIdx)
@@ -201,12 +186,9 @@ describe('loadProfilePlugin transform', () => {
   it('should wrap export const load with profiling', () => {
     const plugin = getLoadProfilePlugin()
     const code = `export const load = async ({ params }) => { return { title: params.slug } }`
-    const result = (plugin.transform as Function)!(
-      code,
-      '/test/src/routes/blog/[slug]/+page.server.ts',
-    )
+    const result = callHook(plugin.transform, code, '/test/src/routes/blog/[slug]/+page.server.ts')
     expect(result).not.toBeNull()
-    const output = typeof result === 'string' ? result : result!.code
+    const output = codeOf(result)
     expect(output).toContain('__original_load')
     expect(output).toContain('performance.now()')
     expect(output).toContain('__svelte_devtools_record_load')
@@ -215,12 +197,9 @@ describe('loadProfilePlugin transform', () => {
   it('should wrap export function load with profiling', () => {
     const plugin = getLoadProfilePlugin()
     const code = `export function load({ params }) { return { title: params.slug } }`
-    const result = (plugin.transform as Function)!(
-      code,
-      '/test/src/routes/blog/[slug]/+page.server.ts',
-    )
+    const result = callHook(plugin.transform, code, '/test/src/routes/blog/[slug]/+page.server.ts')
     expect(result).not.toBeNull()
-    const output = typeof result === 'string' ? result : result!.code
+    const output = codeOf(result)
     expect(output).toContain('__original_load')
     expect(output).toContain('__load_impl')
   })
@@ -228,58 +207,50 @@ describe('loadProfilePlugin transform', () => {
   it('should wrap export async function load with profiling', () => {
     const plugin = getLoadProfilePlugin()
     const code = `export async function load({ params }) { return { title: params.slug } }`
-    const result = (plugin.transform as Function)!(
-      code,
-      '/test/src/routes/blog/[slug]/+page.server.ts',
-    )
+    const result = callHook(plugin.transform, code, '/test/src/routes/blog/[slug]/+page.server.ts')
     expect(result).not.toBeNull()
-    const output = typeof result === 'string' ? result : result!.code
+    const output = codeOf(result)
     expect(output).toContain('__original_load')
     expect(output).toContain('async function __load_impl')
   })
 
   it('should skip non-load files', () => {
     const plugin = getLoadProfilePlugin()
-    const result = (plugin.transform as Function)!('const x = 1', '/test/src/routes/+page.svelte')
+    const result = callHook(plugin.transform, 'const x = 1', '/test/src/routes/+page.svelte')
     expect(result).toBeNull()
   })
 
   it('should extract route from file path', () => {
     const plugin = getLoadProfilePlugin()
     const code = `export const load = async () => ({ data: 1 })`
-    const result = (plugin.transform as Function)!(
-      code,
-      '/test/src/routes/blog/[slug]/+page.server.ts',
-    )
-    const output = typeof result === 'string' ? result : result!.code
+    const result = callHook(plugin.transform, code, '/test/src/routes/blog/[slug]/+page.server.ts')
+    const output = codeOf(result)
     expect(output).toContain('/blog/[slug]')
   })
 
   it('should handle +layout.server.ts files', () => {
     const plugin = getLoadProfilePlugin()
     const code = `export const load = async () => ({ user: {} })`
-    const result = (plugin.transform as Function)!(
-      code,
-      '/test/src/routes/dashboard/+layout.server.ts',
-    )
+    const result = callHook(plugin.transform, code, '/test/src/routes/dashboard/+layout.server.ts')
     expect(result).not.toBeNull()
-    const output = typeof result === 'string' ? result : result!.code
+    const output = codeOf(result)
     expect(output).toContain('"server"')
   })
 
   it('should handle +page.ts (universal load)', () => {
     const plugin = getLoadProfilePlugin()
     const code = `export const load = async () => ({ data: 1 })`
-    const result = (plugin.transform as Function)!(code, '/test/src/routes/dashboard/+page.ts')
+    const result = callHook(plugin.transform, code, '/test/src/routes/dashboard/+page.ts')
     expect(result).not.toBeNull()
-    const output = typeof result === 'string' ? result : result!.code
+    const output = codeOf(result)
     expect(output).toContain('"universal"')
   })
 
   it('should skip node_modules files', () => {
     const plugin = getLoadProfilePlugin()
     const code = `export const load = async () => ({ data: 1 })`
-    const result = (plugin.transform as Function)!(
+    const result = callHook(
+      plugin.transform,
       code,
       '/test/node_modules/@sveltejs/kit/src/routes/+page.server.ts',
     )
@@ -289,7 +260,7 @@ describe('loadProfilePlugin transform', () => {
   it('should skip files without export keyword', () => {
     const plugin = getLoadProfilePlugin()
     const code = `const load = async () => ({ data: 1 })`
-    const result = (plugin.transform as Function)!(code, '/test/src/routes/+page.server.ts')
+    const result = callHook(plugin.transform, code, '/test/src/routes/+page.server.ts')
     expect(result).toBeNull()
   })
 
@@ -297,14 +268,14 @@ describe('loadProfilePlugin transform', () => {
     const plugins = getBuildPlugins()
     const plugin = plugins.find(p => p.name === 'vite-devtools-svelte:load-profile')!
     const code = `export const load = async () => ({ data: 1 })`
-    const result = (plugin.transform as Function)!(code, '/test/src/routes/+page.server.ts')
+    const result = callHook(plugin.transform, code, '/test/src/routes/+page.server.ts')
     expect(result).toBeNull()
   })
 
   it('should return code and null map', () => {
     const plugin = getLoadProfilePlugin()
     const code = `export const load = async () => ({ data: 1 })`
-    const result = (plugin.transform as Function)!(code, '/test/src/routes/+page.server.ts')
+    const result = callHook(plugin.transform, code, '/test/src/routes/+page.server.ts')
     expect(result).toHaveProperty('code')
     expect(result).toHaveProperty('map', null)
   })

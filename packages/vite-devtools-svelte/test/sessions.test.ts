@@ -1,3 +1,7 @@
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+
 /**
  * Session ids come from MCP clients and become file names (review C-7): only
  * the issued `s_<base36>_<hex6>` shape may reach the disk. No file outside the
@@ -5,9 +9,7 @@
  * access, which the fs spies check.
  */
 import { describe, it, expect, afterEach, vi } from 'vitest'
-import fs from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
+
 import { SessionStore, isSessionId, SESSION_ID_PATTERN } from '../src/mcp/sessions.js'
 
 const dirs: string[] = []

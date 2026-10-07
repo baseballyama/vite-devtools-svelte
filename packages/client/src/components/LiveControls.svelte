@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { Resource } from '../lib/resource.svelte.js'
   import { formatAgo } from '../lib/format.js'
+  import type { Resource } from '../lib/resource.svelte.js'
   import Button from './Button.svelte'
 
   /** Live/paused toggle + manual refresh for polling resources. */

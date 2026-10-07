@@ -1,16 +1,17 @@
 <script lang="ts">
+  import { resolve } from '$app/paths'
   import FpsCanvas from '$lib/components/FpsCanvas.svelte'
 </script>
 
 <section class="hero">
   <h1>devtools-shop</h1>
   <p class="muted">
-    <code>vite-devtools-svelte</code> の機能を実際に触って体感できるサンプル EC
-    アプリです。Vite DevTools を開いて各パネルを切り替えてみてください。
+    <code>vite-devtools-svelte</code> の機能を実際に触って体感できるサンプル EC アプリです。Vite DevTools
+    を開いて各パネルを切り替えてみてください。
   </p>
   <p class="row">
-    <a class="cta" href="/products">商品一覧へ →</a>
-    <a href="/dashboard">ダッシュボード</a>
+    <a class="cta" href={resolve('/products')}>商品一覧へ →</a>
+    <a href={resolve('/dashboard')}>ダッシュボード</a>
   </p>
 </section>
 
@@ -44,9 +45,7 @@
   </article>
   <article class="card">
     <h3>📈 FPS Monitor</h3>
-    <p class="muted">
-      下のキャンバスはパーティクル数を上げると FPS が落ちます。
-    </p>
+    <p class="muted">下のキャンバスはパーティクル数を上げると FPS が落ちます。</p>
   </article>
   <article class="card">
     <h3>🖼 OG Preview / Asset Browser</h3>

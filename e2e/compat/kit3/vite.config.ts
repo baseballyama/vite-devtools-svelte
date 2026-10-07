@@ -2,8 +2,8 @@
 // (no svelte.config.js). `SVELTE_DEVTOOLS_DOCK=1` adds `@vitejs/devtools`.
 import adapter from '@sveltejs/adapter-auto'
 import { sveltekit } from '@sveltejs/kit/vite'
-import { svelteDevtools } from 'vite-devtools-svelte'
 import { defineConfig } from 'vite'
+import { svelteDevtools } from 'vite-devtools-svelte'
 
 const dock = process.env.SVELTE_DEVTOOLS_DOCK === '1'
 

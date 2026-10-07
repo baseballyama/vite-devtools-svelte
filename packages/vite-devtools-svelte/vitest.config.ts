@@ -1,5 +1,6 @@
-import { defineConfig } from 'vitest/config'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
+import { defineConfig } from 'vitest/config'
+
 import { reactivityHarnessPlugin } from './test/reactivity/plugin.js'
 
 export default defineConfig({

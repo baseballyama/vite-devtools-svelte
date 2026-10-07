@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
+
   import Button from './Button.svelte'
 
   /** Detail pane shown in a SplitView's aside. Esc closes it. */
@@ -26,7 +27,7 @@
 <aside class="inspector" aria-label="{title} details" {onkeydown}>
   <header class="head">
     <div class="titles">
-      <h2 class="title truncate" title={title}>{title}</h2>
+      <h2 class="title truncate" {title}>{title}</h2>
       {#if subtitle}<p class="subtitle truncate mono" title={subtitle}>{subtitle}</p>{/if}
     </div>
     {#if onclose}

@@ -1,3 +1,11 @@
+import fs from 'node:fs'
+import { createRequire } from 'node:module'
+import os from 'node:os'
+import path from 'node:path'
+import { pathToFileURL } from 'node:url'
+
+import { createServer } from 'vite'
+import type { Plugin, PluginOption, ViteDevServer } from 'vite'
 /**
  * Integration (review P-HMR): the SvelteKit template injector follows the real
  * Vite lifecycle. Standalone (no `@vitejs/devtools`) has no resolver for the
@@ -5,13 +13,7 @@
  * hub present the tag points at the bootstrap the hub actually serves.
  */
 import { describe, it, expect, afterAll } from 'vitest'
-import fs from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
-import { createRequire } from 'node:module'
-import { pathToFileURL } from 'node:url'
-import { createServer } from 'vite'
-import type { Plugin, ViteDevServer } from 'vite'
+
 import { svelteDevtools } from '../src/plugin.js'
 import { sveltekitTemplateInjector } from '../src/server/template-injector.js'
 
@@ -48,7 +50,7 @@ const hubStandIn: Plugin = { name: 'vite:devtools' }
 
 const servers: ViteDevServer[] = []
 let lastOrigin = ''
-async function transformedInternal(plugins: Plugin[]): Promise<string> {
+async function transformedInternal(plugins: PluginOption[]): Promise<string> {
   process.env.HOME = tmpHome
   const server = await createServer({
     configFile: false,
@@ -59,8 +61,8 @@ async function transformedInternal(plugins: Plugin[]): Promise<string> {
   })
   servers.push(server)
   await server.listen()
-  lastOrigin = server.resolvedUrls!.local[0].replace(/\/$/, '')
-  const result = await server.transformRequest(INTERNAL, { ssr: true })
+  lastOrigin = server.resolvedUrls!.local[0]!.replace(/\/$/, '')
+  const result = await server.environments.ssr.transformRequest(INTERNAL)
   expect(result).not.toBeNull()
   return result!.code
 }

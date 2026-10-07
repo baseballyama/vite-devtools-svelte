@@ -1,29 +1,38 @@
 <script lang="ts">
-  import { getComponentRelations, getLiveComponents, getLiveComponentsMeta, openInEditor } from '../lib/rpc.js'
-  import type { ComponentInstance, ComponentRelation, LiveComponentsMeta } from '../lib/types.js'
-  import { resource } from '../lib/resource.svelte.js'
-  import { persisted } from '../lib/persisted.svelte.js'
-  import { matcher } from '../lib/match.js'
   import { untrack } from 'svelte'
-  import { branchKeys, defaultExpansion, remapAcross } from '../lib/tree.js'
-  import { componentName, shortPath } from '../lib/format.js'
-  import Panel from '../components/Panel.svelte'
-  import SplitView from '../components/SplitView.svelte'
-  import TreeView from '../components/TreeView.svelte'
-  import DataTable, { type Column, type SortState } from '../components/DataTable.svelte'
+
+  import Badge from '../components/Badge.svelte'
+  import Button from '../components/Button.svelte'
+  import CaptureNotice from '../components/CaptureNotice.svelte'
+  import DataTable from '../components/DataTable.svelte'
+  import EmptyState from '../components/EmptyState.svelte'
+  import Highlight from '../components/Highlight.svelte'
   import Inspector from '../components/Inspector.svelte'
+  import LiveControls from '../components/LiveControls.svelte'
+  import Panel from '../components/Panel.svelte'
   import SearchField from '../components/SearchField.svelte'
   import Segmented from '../components/Segmented.svelte'
-  import Button from '../components/Button.svelte'
-  import Badge from '../components/Badge.svelte'
-  import Highlight from '../components/Highlight.svelte'
-  import EmptyState from '../components/EmptyState.svelte'
-  import LiveControls from '../components/LiveControls.svelte'
-  import CaptureNotice from '../components/CaptureNotice.svelte'
+  import SplitView from '../components/SplitView.svelte'
+  import TreeView from '../components/TreeView.svelte'
+  import type { Column, SortState, TableRowState, TreeViewApi } from '../components/types.js'
   import type { CaptureInfo } from '../lib/capture.svelte.js'
-  import { datasetVersion } from '../lib/versions.js'
-  import { router } from '../lib/router.svelte.js'
+  import { countBy, groupBy } from '../lib/collections.js'
+  import { componentName, shortPath } from '../lib/format.js'
+  import { buildLiveTree, type LiveNode } from '../lib/live-tree.js'
+  import { matcher } from '../lib/match.js'
+  import { persisted } from '../lib/persisted.svelte.js'
   import { reactiveScope } from '../lib/reactive-selection.svelte.js'
+  import { resource } from '../lib/resource.svelte.js'
+  import { router } from '../lib/router.svelte.js'
+  import {
+    getComponentRelations,
+    getLiveComponents,
+    getLiveComponentsMeta,
+    openInEditor,
+  } from '../lib/rpc.js'
+  import { branchKeys, defaultExpansion, remapAcross, type TreeRow } from '../lib/tree.js'
+  import type { ComponentInstance, ComponentRelation, LiveComponentsMeta } from '../lib/types.js'
+  import { datasetVersion } from '../lib/versions.js'
 
   type Mode = 'tree' | 'files'
   const mode = persisted<Mode>('components:mode', 'tree')
@@ -48,69 +57,33 @@
       const meta = await getLiveComponentsMeta()
       return { list, meta, epoch: before.epoch === meta.epoch ? (meta.epoch ?? '') : null }
     },
-    { initial: { list: [], meta: null, epoch: '' }, interval: 2000, version: datasetVersion('components') },
+    {
+      initial: { list: [], meta: null, epoch: '' },
+      interval: 2000,
+      version: datasetVersion('components'),
+    },
   )
   const liveList = $derived(live.data.list)
 
-  interface LiveNode {
-    c: ComponentInstance
-    key: string
-    children: LiveNode[]
-  }
-
-  // Rows are keyed by a path (`Parent#0/Name#ordinal`, ordinal among
-  // same-name siblings). Tree state is *anchored* by instance id though:
-  // on every snapshot the selection and expanded set are carried over with
-  // `remapKeys` — a live id wins (so removing an earlier same-name sibling,
-  // which shifts ordinals, never moves the selection to a neighbour) and
-  // the path is used only for fresh ids, i.e. HMR remounts (review U4b).
-  // Tree order is registration order, which can differ from DOM order
-  // after keyed reorders.
-  const tree = $derived.by(() => {
-    const byId = new Map<number, LiveNode>()
-    for (const c of liveList) byId.set(c.id, { c, key: '', children: [] })
-    const roots: LiveNode[] = []
-    // A parent outside the server's bounded capture leaves its subtree
-    // without an anchor: surface it as a root, flagged as detached.
-    const detachedNodes = new Set<LiveNode>()
-    for (const node of byId.values()) {
-      const parent = node.c.parentId != null ? byId.get(node.c.parentId) : undefined
-      if (parent) parent.children.push(node)
-      else {
-        roots.push(node)
-        if (node.c.parentId != null) detachedNodes.add(node)
-      }
-    }
-    const byKey = new Map<string, LiveNode>()
-    const assign = (nodes: LiveNode[], prefix: string) => {
-      const seen = new Map<string, number>()
-      for (const n of nodes) {
-        const ord = seen.get(n.c.name) ?? 0
-        seen.set(n.c.name, ord + 1)
-        n.key = `${prefix}${detachedNodes.has(n) ? '~' : ''}${n.c.name}#${ord}`
-        byKey.set(n.key, n)
-        if (n.children.length) assign(n.children, n.key + '/')
-      }
-    }
-    assign(roots, '')
-    const detached = new Set([...detachedNodes].map((n) => n.key))
-    return { roots, byId, byKey, detached, epoch: live.data.epoch }
-  })
+  // Tree state is *anchored* by instance id: on every snapshot the
+  // selection and expanded set are carried over with `remapKeys` — a live id
+  // wins (so removing an earlier same-name sibling, which shifts ordinals,
+  // never moves the selection to a neighbour) and the path is used only for
+  // fresh ids, i.e. HMR remounts (review U4b).
+  const tree = $derived(buildLiveTree(liveList, live.data.epoch))
 
   const capture = $derived.by<CaptureInfo | null>(() => {
     const m = live.data.meta
-    return m ? { captured: m.kept, total: m.total, truncated: m.truncated, policy: 'parents first' } : null
+    return m
+      ? { captured: m.kept, total: m.total, truncated: m.truncated, policy: 'parents first' }
+      : null
   })
 
-  const instancesPerFile = $derived.by(() => {
-    const m = new Map<string, number>()
-    for (const c of liveList) m.set(c.file, (m.get(c.file) ?? 0) + 1)
-    return m
-  })
+  const instancesPerFile = $derived(countBy(liveList, c => c.file))
 
   let expanded = $state(new Set<string>())
   let treeSelected = $state<string | null>(null)
-  let treeView = $state<TreeView<LiveNode> | null>(null)
+  let treeView = $state<TreeViewApi | null>(null)
   /** Page load the default expansion was applied to (`undefined` = not yet). */
   let seededEpoch: string | undefined = undefined
 
@@ -129,9 +102,11 @@
         const keys = remapAcross(expanded, prev, next, idOf, keyOf)
         // Skip the reassignment when nothing moved, so TreeView does not
         // re-flatten on every poll.
-        if (keys.length !== expanded.size || keys.some((k) => !expanded.has(k))) expanded = new Set(keys)
+        if (keys.length !== expanded.size || keys.some(k => !expanded.has(k)))
+          expanded = new Set(keys)
       }
-      if (treeSelected != null) treeSelected = remapAcross([treeSelected], prev, next, idOf, keyOf)[0] ?? null
+      if (treeSelected != null)
+        treeSelected = remapAcross([treeSelected], prev, next, idOf, keyOf)[0] ?? null
     })
   })
 
@@ -141,7 +116,7 @@
   $effect(() => {
     // `null` = the epoch flipped during the read: wait for a settled snapshot.
     if (tree.epoch === null || seededEpoch === tree.epoch) return
-    const keys = defaultExpansion(tree.roots, (n) => n.children, keyOf)
+    const keys = defaultExpansion(tree.roots, n => n.children, keyOf)
     if (keys.length === 0) return
     seededEpoch = tree.epoch
     untrack(() => (expanded = new Set([...expanded, ...keys])))
@@ -152,9 +127,13 @@
     return m ? (n: LiveNode) => m(n.c.name, n.c.file) : null
   })
 
-  const treeMatches = $derived(treeFilter ? liveList.filter((c) => treeFilter({ c } as LiveNode)).length : null)
+  const treeMatches = $derived(
+    treeFilter ? liveList.filter(c => treeFilter({ c } as LiveNode)).length : null,
+  )
 
-  const selectedNode = $derived(treeSelected != null ? (tree.byKey.get(treeSelected) ?? null) : null)
+  const selectedNode = $derived(
+    treeSelected != null ? (tree.byKey.get(treeSelected) ?? null) : null,
+  )
 
   function ancestorsOf(id: number): LiveNode[] {
     const out: LiveNode[] = []
@@ -173,7 +152,7 @@
     if (!node) return
     treeView?.reveal(
       node.key,
-      ancestorsOf(id).map((a) => a.key),
+      ancestorsOf(id).map(a => a.key),
     )
   }
 
@@ -183,22 +162,20 @@
     when: () => mode.value === 'files' || treeSelected != null,
   })
 
-  const importers = $derived.by(() => {
-    const m = new Map<string, ComponentRelation[]>()
-    for (const r of relations.data)
-      for (const imp of r.imports) {
-        const list = m.get(imp)
-        if (list) list.push(r)
-        else m.set(imp, [r])
-      }
-    return m
-  })
+  /** Relations importing each file, in relation order. */
+  const importers = $derived(
+    groupBy(
+      relations.data.flatMap(r => r.imports.map(imp => ({ imp, r }))),
+      e => e.imp,
+      e => e.r,
+    ),
+  )
 
-  const relationByFile = $derived(new Map(relations.data.map((r) => [r.file, r])))
+  const relationByFile = $derived(new Map(relations.data.map(r => [r.file, r])))
 
   const fileRows = $derived.by(() => {
     const m = matcher(query)
-    return m ? relations.data.filter((r) => m(r.name, r.file)) : relations.data
+    return m ? relations.data.filter(r => m(r.name, r.file)) : relations.data
   })
 
   let fileSort = $state<SortState | null>({ id: 'name', desc: false })
@@ -206,10 +183,37 @@
   const selectedFile = $derived(fileSelected ? (relationByFile.get(fileSelected) ?? null) : null)
 
   const columns: Column<ComponentRelation>[] = [
-    { id: 'name', label: 'Component', width: 'minmax(0, 1fr)', sort: (a, b) => a.name.localeCompare(b.name) },
-    { id: 'imports', label: 'Imports', width: '72px', align: 'end', descFirst: true, sort: (a, b) => a.imports.length - b.imports.length },
-    { id: 'used', label: 'Used by', width: '72px', align: 'end', descFirst: true, sort: (a, b) => (importers.get(a.file)?.length ?? 0) - (importers.get(b.file)?.length ?? 0) },
-    { id: 'live', label: 'Mounted', width: '72px', align: 'end', descFirst: true, minWidth: 520, sort: (a, b) => (instancesPerFile.get(a.file) ?? 0) - (instancesPerFile.get(b.file) ?? 0) },
+    {
+      id: 'name',
+      label: 'Component',
+      width: 'minmax(0, 1fr)',
+      sort: (a, b) => a.name.localeCompare(b.name),
+    },
+    {
+      id: 'imports',
+      label: 'Imports',
+      width: '72px',
+      align: 'end',
+      descFirst: true,
+      sort: (a, b) => a.imports.length - b.imports.length,
+    },
+    {
+      id: 'used',
+      label: 'Used by',
+      width: '72px',
+      align: 'end',
+      descFirst: true,
+      sort: (a, b) => (importers.get(a.file)?.length ?? 0) - (importers.get(b.file)?.length ?? 0),
+    },
+    {
+      id: 'live',
+      label: 'Mounted',
+      width: '72px',
+      align: 'end',
+      descFirst: true,
+      minWidth: 520,
+      sort: (a, b) => (instancesPerFile.get(a.file) ?? 0) - (instancesPerFile.get(b.file) ?? 0),
+    },
   ]
 
   /**
@@ -219,7 +223,7 @@
    */
   const liveEpoch = $derived(live.data.epoch || null)
   $effect(() => {
-    if (live.data.epoch === null) untrack(() => live.refresh())
+    if (live.data.epoch === null) untrack(() => void live.refresh())
   })
 
   /** Scope Reactivity to this instance (§6.7 A) with the validated page load its id belongs to. */
@@ -240,7 +244,7 @@
   }
 
   function showInstancesOf(file: string) {
-    const first = liveList.find((c) => c.file === file)
+    const first = liveList.find(c => c.file === file)
     mode.value = 'tree'
     query = ''
     if (first) queueMicrotask(() => revealInstance(first.id))
@@ -264,40 +268,64 @@
     />
     {#if mode.value === 'tree'}
       <CaptureNotice info={capture} noun="components" detached={tree.detached.size} />
-      <Button icon="expand" variant="ghost" label="Expand all" onclick={() => (expanded = branchKeys(tree.roots, { key: (n) => n.key, children: (n) => n.children }))} />
-      <Button icon="collapse" variant="ghost" label="Collapse all" onclick={() => (expanded = new Set())} />
+      <Button
+        icon="expand"
+        variant="ghost"
+        label="Expand all"
+        onclick={() =>
+          (expanded = branchKeys(tree.roots, { key: n => n.key, children: n => n.children }))}
+      />
+      <Button
+        icon="collapse"
+        variant="ghost"
+        label="Collapse all"
+        onclick={() => (expanded = new Set())}
+      />
     {/if}
   {/snippet}
   {#snippet actions()}
     {#if mode.value === 'tree'}
       <LiveControls res={live} />
     {:else}
-      <Button icon="refresh" variant="ghost" label="Re-analyze" disabled={relations.busy} onclick={() => relations.refresh()} />
+      <Button
+        icon="refresh"
+        variant="ghost"
+        label="Re-analyze"
+        disabled={relations.busy}
+        onclick={() => relations.refresh()}
+      />
     {/if}
   {/snippet}
 
   {#if mode.value === 'tree'}
     <SplitView id="components-tree" open={!!selectedNode}>
       {#if live.error && liveList.length === 0}
-        <EmptyState icon="errors" tone="error" title="Could not read live components"><p class="mono">{live.error}</p></EmptyState>
+        <EmptyState icon="errors" tone="error" title="Could not read live components"
+          ><p class="mono">{live.error}</p></EmptyState
+        >
       {:else}
         <TreeView
           bind:this={treeView}
           bind:expanded
           bind:selected={treeSelected}
           roots={tree.roots}
-          getKey={(n) => n.key}
-          getChildren={(n) => n.children}
+          getKey={(n: LiveNode) => n.key}
+          getChildren={(n: LiveNode) => n.children}
           filter={treeFilter}
           label="Mounted component tree"
-          onactivate={(n) => open(n.c.file)}
+          onactivate={(n: LiveNode) => open(n.c.file)}
         >
-          {#snippet row(n, r)}
+          {#snippet row(n: LiveNode, r: TreeRow<LiveNode>)}
             <span class="tag" class:dim={!n.c.mounted}>
-              <span class="lt">&lt;</span><Highlight text={n.c.name} {query} /><span class="lt">&gt;</span>
+              <span class="lt">&lt;</span><Highlight text={n.c.name} {query} /><span class="lt"
+                >&gt;</span
+              >
             </span>
             <span class="file truncate"><Highlight text={shortPath(n.c.file)} {query} /></span>
-            {#if tree.detached.has(n.key)}<span class="detached" title="Parent #{n.c.parentId} is outside the captured set">detached</span>{/if}
+            {#if tree.detached.has(n.key)}<span
+                class="detached"
+                title="Parent #{n.c.parentId} is outside the captured set">detached</span
+              >{/if}
             {#if r.hasChildren && !r.expanded}<span class="kids num">{n.children.length}</span>{/if}
           {/snippet}
           {#snippet empty()}
@@ -307,8 +335,13 @@
               <EmptyState icon="search" title="No instances match “{query}”" />
             {:else}
               <EmptyState icon="components" title="No mounted components">
-                <p>Open your app in another tab — the tree updates live as components mount and unmount.</p>
-                <Button onclick={() => (mode.value = 'files')}>Browse component files instead</Button>
+                <p>
+                  Open your app in another tab — the tree updates live as components mount and
+                  unmount.
+                </p>
+                <Button onclick={() => (mode.value = 'files')}
+                  >Browse component files instead</Button
+                >
               </EmptyState>
             {/if}
           {/snippet}
@@ -321,14 +354,18 @@
           {@const ancestors = ancestorsOf(c.id)}
           <Inspector title="<{c.name}>" subtitle={c.file} onclose={() => (treeSelected = null)}>
             {#snippet badges()}
-              <Badge tone={c.mounted ? 'green' : 'neutral'}>{c.mounted ? 'mounted' : 'unmounted'}</Badge>
+              <Badge tone={c.mounted ? 'green' : 'neutral'}
+                >{c.mounted ? 'mounted' : 'unmounted'}</Badge
+              >
               <Badge>#{c.id}</Badge>
             {/snippet}
             {#snippet actions()}
               <Button icon="editor" onclick={() => open(c.file)}>Open in editor</Button>
               {#if c.mounted}
                 <Button icon="reactive" disabled={!liveEpoch} onclick={() => showReactivity(c)}>
-                  {liveEpoch ? 'Show reactivity' : 'Show reactivity (waiting for a consistent snapshot)'}
+                  {liveEpoch
+                    ? 'Show reactivity'
+                    : 'Show reactivity (waiting for a consistent snapshot)'}
                 </Button>
               {/if}
             {/snippet}
@@ -337,7 +374,9 @@
               <h3 class="section-title">Ancestors</h3>
               <ol class="crumbs">
                 {#each ancestors as a (a.key)}
-                  <li><button onclick={() => revealInstance(a.c.id)}>{a.c.name}</button></li>
+                  <li>
+                    <button type="button" onclick={() => revealInstance(a.c.id)}>{a.c.name}</button>
+                  </li>
                 {/each}
                 <li aria-current="true">{c.name}</li>
               </ol>
@@ -345,22 +384,31 @@
 
             <h3 class="section-title">Instance</h3>
             <dl class="kv">
-              <dt>Children</dt><dd class="num">{selectedNode.children.length}</dd>
+              <dt>Children</dt>
+              <dd class="num">{selectedNode.children.length}</dd>
               <dt>Same file</dt>
               <dd>
-                <button class="link" onclick={() => showFile(c.file)}>
-                  {instancesPerFile.get(c.file) ?? 1} mounted instance{(instancesPerFile.get(c.file) ?? 1) === 1 ? '' : 's'}
+                <button type="button" class="link" onclick={() => showFile(c.file)}>
+                  {instancesPerFile.get(c.file) ?? 1} mounted instance{(instancesPerFile.get(
+                    c.file,
+                  ) ?? 1) === 1
+                    ? ''
+                    : 's'}
                 </button>
               </dd>
             </dl>
 
             {#if selectedNode.children.length}
-              <h3 class="section-title">Children <span class="num">{selectedNode.children.length}</span></h3>
+              <h3 class="section-title">
+                Children <span class="num">{selectedNode.children.length}</span>
+              </h3>
               <ul class="link-list">
                 {#each selectedNode.children.slice(0, 200) as ch (ch.key)}
                   <li>
-                    <button onclick={() => revealInstance(ch.c.id)}>
-                      <span class="truncate">{ch.c.name}</span><span class="sub mono">#{ch.c.id}</span>
+                    <button type="button" onclick={() => revealInstance(ch.c.id)}>
+                      <span class="truncate">{ch.c.name}</span><span class="sub mono"
+                        >#{ch.c.id}</span
+                      >
                     </button>
                   </li>
                 {/each}
@@ -371,7 +419,13 @@
               <h3 class="section-title">Imports <span class="num">{rel.imports.length}</span></h3>
               <ul class="link-list">
                 {#each rel.imports as imp (imp)}
-                  <li><button onclick={() => open(imp)} title="Open {imp}"><span class="truncate">{componentName(imp)}</span><span class="sub truncate">{shortPath(imp)}</span></button></li>
+                  <li>
+                    <button type="button" onclick={() => open(imp)} title="Open {imp}"
+                      ><span class="truncate">{componentName(imp)}</span><span class="sub truncate"
+                        >{shortPath(imp)}</span
+                      ></button
+                    >
+                  </li>
                 {/each}
               </ul>
             {/if}
@@ -384,48 +438,68 @@
       <DataTable
         items={fileRows}
         {columns}
-        getKey={(r) => r.file}
+        getKey={(r: ComponentRelation) => r.file}
         bind:sort={fileSort}
         bind:selected={fileSelected}
         label="Component files"
-        onactivate={(r) => open(r.file)}
+        onactivate={(r: ComponentRelation) => open(r.file)}
       >
-        {#snippet row(r, { visible })}
+        {#snippet row(r: ComponentRelation, { visible }: TableRowState)}
           <span class="name-cell">
             <span class="cname"><Highlight text={r.name} {query} /></span>
             <span class="file truncate"><Highlight text={r.file} {query} /></span>
           </span>
           <span class="end num muted">{r.imports.length || ''}</span>
           <span class="end num muted">{importers.get(r.file)?.length || ''}</span>
-          {#if visible.has('live')}<span class="end num" class:faint={!instancesPerFile.get(r.file)}>{instancesPerFile.get(r.file) ?? '–'}</span>{/if}
+          {#if visible.has('live')}<span class="end num" class:faint={!instancesPerFile.get(r.file)}
+              >{instancesPerFile.get(r.file) ?? '–'}</span
+            >{/if}
         {/snippet}
         {#snippet empty()}
           {#if relations.loading}
             <EmptyState title="Analyzing components…" />
           {:else if relations.error}
-            <EmptyState icon="errors" tone="error" title="Analysis failed"><p class="mono">{relations.error}</p></EmptyState>
+            <EmptyState icon="errors" tone="error" title="Analysis failed"
+              ><p class="mono">{relations.error}</p></EmptyState
+            >
           {:else}
-            <EmptyState icon="search" title={query ? `No components match “${query}”` : 'No .svelte files found'} />
+            <EmptyState
+              icon="search"
+              title={query ? `No components match “${query}”` : 'No .svelte files found'}
+            />
           {/if}
         {/snippet}
       </DataTable>
       {#snippet aside()}
         {#if selectedFile}
           {@const users = importers.get(selectedFile.file) ?? []}
-          <Inspector title={selectedFile.name} subtitle={selectedFile.file} onclose={() => (fileSelected = null)}>
+          <Inspector
+            title={selectedFile.name}
+            subtitle={selectedFile.file}
+            onclose={() => (fileSelected = null)}
+          >
             {#snippet actions()}
               {#if instancesPerFile.get(selectedFile.file)}
-                <Button icon="tree" onclick={() => showInstancesOf(selectedFile.file)}>Show in tree</Button>
+                <Button icon="tree" onclick={() => showInstancesOf(selectedFile.file)}
+                  >Show in tree</Button
+                >
               {/if}
               <Button icon="editor" onclick={() => open(selectedFile.file)}>Open in editor</Button>
             {/snippet}
-            <h3 class="section-title">Imports <span class="num">{selectedFile.imports.length}</span></h3>
+            <h3 class="section-title">
+              Imports <span class="num">{selectedFile.imports.length}</span>
+            </h3>
             {#if selectedFile.imports.length}
               <ul class="link-list">
                 {#each selectedFile.imports as imp (imp)}
                   <li>
-                    <button onclick={() => (relationByFile.has(imp) ? (fileSelected = imp) : open(imp))}>
-                      <span class="truncate">{componentName(imp)}</span><span class="sub truncate">{shortPath(imp)}</span>
+                    <button
+                      type="button"
+                      onclick={() => (relationByFile.has(imp) ? (fileSelected = imp) : open(imp))}
+                    >
+                      <span class="truncate">{componentName(imp)}</span><span class="sub truncate"
+                        >{shortPath(imp)}</span
+                      >
                     </button>
                   </li>
                 {/each}
@@ -435,7 +509,13 @@
             {#if users.length}
               <ul class="link-list">
                 {#each users as u (u.file)}
-                  <li><button onclick={() => (fileSelected = u.file)}><span class="truncate">{u.name}</span><span class="sub truncate">{shortPath(u.file)}</span></button></li>
+                  <li>
+                    <button type="button" onclick={() => (fileSelected = u.file)}
+                      ><span class="truncate">{u.name}</span><span class="sub truncate"
+                        >{shortPath(u.file)}</span
+                      ></button
+                    >
+                  </li>
                 {/each}
               </ul>
             {:else}<p class="none">Not imported by any component (route or entry).</p>{/if}

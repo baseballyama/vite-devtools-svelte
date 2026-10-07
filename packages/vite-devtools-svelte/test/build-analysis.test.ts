@@ -1,8 +1,10 @@
-import { describe, it, expect, afterEach } from 'vitest'
-import { createTestHost, rpcHandlers } from './helpers.js'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+
+import { describe, it, expect, afterEach } from 'vitest'
+
+import { createTestHost, rpcHandlers } from './helpers.js'
 
 // Use an isolated tmp root per test run so this file does not race with
 // other test files that read from the shared FIXTURES_DIR (e.g. plugin.test.ts
@@ -36,8 +38,8 @@ describe('build analysis', () => {
   })
 
   it('should return empty analysis when no build directory exists', async () => {
-    const rpcHandlers = setupWithRpc()
-    const result = (await rpcHandlers.get('svelte-devtools:get-build-analysis')!()) as any
+    const handlers = setupWithRpc()
+    const result = await handlers.get('svelte-devtools:get-build-analysis')!()
 
     expect(result.chunks).toEqual([])
     expect(result.totalSize).toBe(0)
@@ -51,8 +53,8 @@ describe('build analysis', () => {
     fs.writeFileSync(path.join(svelteKitOutputDir, 'app.js'), 'console.log("app")')
     fs.writeFileSync(path.join(svelteKitOutputDir, 'style.css'), 'body { color: red }')
 
-    const rpcHandlers = setupWithRpc()
-    const result = (await rpcHandlers.get('svelte-devtools:get-build-analysis')!()) as any
+    const handlers = setupWithRpc()
+    const result = await handlers.get('svelte-devtools:get-build-analysis')!()
 
     expect(result.chunks.length).toBe(3)
     expect(result.totalSize).toBeGreaterThan(0)
@@ -75,8 +77,8 @@ describe('build analysis', () => {
     fs.writeFileSync(path.join(svelteKitOutputDir, 'large.js'), 'x'.repeat(1000))
     fs.writeFileSync(path.join(svelteKitOutputDir, 'medium.js'), 'x'.repeat(100))
 
-    const rpcHandlers = setupWithRpc()
-    const result = (await rpcHandlers.get('svelte-devtools:get-build-analysis')!()) as any
+    const handlers = setupWithRpc()
+    const result = await handlers.get('svelte-devtools:get-build-analysis')!()
 
     expect(result.chunks.length).toBe(3)
     expect(result.chunks[0].size).toBeGreaterThanOrEqual(result.chunks[1].size)
@@ -89,8 +91,8 @@ describe('build analysis', () => {
     fs.writeFileSync(path.join(svelteKitOutputDir, 'start.js'), 'start()')
     fs.writeFileSync(path.join(svelteKitOutputDir, 'chunk-abc.js'), 'chunk()')
 
-    const rpcHandlers = setupWithRpc()
-    const result = (await rpcHandlers.get('svelte-devtools:get-build-analysis')!()) as any
+    const handlers = setupWithRpc()
+    const result = await handlers.get('svelte-devtools:get-build-analysis')!()
 
     const indexChunk = result.chunks.find((c: any) => c.name === 'index.js')
     expect(indexChunk!.isEntry).toBe(true)
@@ -108,8 +110,8 @@ describe('build analysis', () => {
     fs.writeFileSync(path.join(assetsDir, 'chunk-123.js'), 'chunk()')
     fs.writeFileSync(path.join(assetsDir, 'app.css'), 'body {}')
 
-    const rpcHandlers = setupWithRpc()
-    const result = (await rpcHandlers.get('svelte-devtools:get-build-analysis')!()) as any
+    const handlers = setupWithRpc()
+    const result = await handlers.get('svelte-devtools:get-build-analysis')!()
 
     expect(result.chunks.length).toBe(2)
     expect(result.chunks.find((c: any) => c.name === 'chunk-123.js')).toBeDefined()
@@ -122,8 +124,8 @@ describe('build analysis', () => {
     fs.writeFileSync(path.join(svelteKitOutputDir, 'data.json'), '{}')
     fs.writeFileSync(path.join(svelteKitOutputDir, 'image.png'), 'binary')
 
-    const rpcHandlers = setupWithRpc()
-    const result = (await rpcHandlers.get('svelte-devtools:get-build-analysis')!()) as any
+    const handlers = setupWithRpc()
+    const result = await handlers.get('svelte-devtools:get-build-analysis')!()
 
     // Only .js, .css, .html should be included
     expect(result.chunks.length).toBe(1)
@@ -135,8 +137,8 @@ describe('build analysis', () => {
     fs.writeFileSync(path.join(svelteKitOutputDir, 'a.js'), '12345') // 5 bytes
     fs.writeFileSync(path.join(svelteKitOutputDir, 'b.js'), '1234567890') // 10 bytes
 
-    const rpcHandlers = setupWithRpc()
-    const result = (await rpcHandlers.get('svelte-devtools:get-build-analysis')!()) as any
+    const handlers = setupWithRpc()
+    const result = await handlers.get('svelte-devtools:get-build-analysis')!()
 
     expect(result.totalSize).toBe(15)
   })
@@ -146,8 +148,8 @@ describe('build analysis', () => {
     fs.mkdirSync(clientDir, { recursive: true })
     fs.writeFileSync(path.join(clientDir, 'app.js'), 'code()')
 
-    const rpcHandlers = setupWithRpc()
-    const result = (await rpcHandlers.get('svelte-devtools:get-build-analysis')!()) as any
+    const handlers = setupWithRpc()
+    const result = await handlers.get('svelte-devtools:get-build-analysis')!()
 
     // Found by both build/client scan and build/ recursive scan
     expect(result.chunks.length).toBeGreaterThanOrEqual(1)
@@ -158,8 +160,8 @@ describe('build analysis', () => {
     fs.mkdirSync(svelteKitOutputDir, { recursive: true })
     fs.writeFileSync(path.join(svelteKitOutputDir, 'app.js'), 'code()')
 
-    const rpcHandlers = setupWithRpc()
-    const result = (await rpcHandlers.get('svelte-devtools:get-build-analysis')!()) as any
+    const handlers = setupWithRpc()
+    const result = await handlers.get('svelte-devtools:get-build-analysis')!()
 
     expect(result.chunks[0].file).toContain('.svelte-kit')
     expect(path.isAbsolute(result.chunks[0].file)).toBe(false)

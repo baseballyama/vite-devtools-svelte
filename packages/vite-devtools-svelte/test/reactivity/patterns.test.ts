@@ -1,8 +1,9 @@
-import { describe, it, expect, afterEach } from 'vitest'
 import { flushSync, tick } from 'svelte'
-import Shop from './fixtures/Shop.svelte'
+import { describe, it, expect, afterEach } from 'vitest'
+
 import Blocks from './fixtures/Blocks.svelte'
 import Legacy from './fixtures/Legacy.svelte'
+import Shop from './fixtures/Shop.svelte'
 import {
   render,
   instance,
@@ -20,6 +21,11 @@ afterEach(() => {
   for (const c of cleanup) c()
   cleanup = []
 })
+/** Components whose parent is not in the tree. */
+function orphansOf(t: Array<{ parentId: number | null }>, ids: Set<number>) {
+  return t.filter(c => c.parentId !== null && !ids.has(c.parentId))
+}
+
 function mountIt(C: any, props?: any) {
   const r = render(C, props)
   cleanup.push(() => r.destroy())
@@ -47,9 +53,9 @@ describe('blocks', () => {
     const check = () => {
       const t = tree()
       const ids = new Set(t.map(c => c.id))
-      expect(t.filter(c => c.parentId !== null && !ids.has(c.parentId))).toEqual([])
-      for (const c of t.filter(c => c.name === 'Child' || c.name === 'Price'))
-        expect(c.parentId).toBe(blocks.id)
+      expect(orphansOf(t, ids)).toEqual([])
+      for (const child of t.filter(x => ['Child', 'Price'].includes(x.name)))
+        expect(child.parentId).toBe(blocks.id)
       expect(dt()._stack).toEqual([])
     }
     check()
@@ -90,7 +96,7 @@ describe('module-level state (.svelte.js)', () => {
     const changed = timeline()
       .slice(n)
       .map(e => e.name)
-      .sort()
+      .toSorted()
     expect(changed).toEqual(['cart', 'total'])
     const g = graph(shop.id)
     const count = node(g, shop.id, 'count')

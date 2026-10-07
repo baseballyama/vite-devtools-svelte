@@ -1,12 +1,13 @@
 <script lang="ts">
-  import { cart } from '$lib/stores/cart.svelte'
+  import { resolve } from '$app/paths'
   import ReactivePriceChart from '$lib/components/ReactivePriceChart.svelte'
+  import { cart } from '$lib/stores/cart.svelte'
 </script>
 
 <h1>カート</h1>
 
 {#if cart.lines.length === 0}
-  <p class="muted">カートは空です。<a href="/products">商品を見る</a></p>
+  <p class="muted">カートは空です。<a href={resolve('/products')}>商品を見る</a></p>
 {:else}
   <div class="layout">
     <div class="lines card">
@@ -30,20 +31,19 @@
                   type="number"
                   min="0"
                   value={line.qty}
-                  oninput={(e) =>
-                    cart.setQty(line.id, +(e.target as HTMLInputElement).value)}
+                  oninput={e => cart.setQty(line.id, +(e.target as HTMLInputElement).value)}
                 />
               </td>
               <td>¥{(line.price * line.qty).toLocaleString()}</td>
               <td>
-                <button onclick={() => cart.remove(line.id)}>削除</button>
+                <button type="button" onclick={() => cart.remove(line.id)}>削除</button>
               </td>
             </tr>
           {/each}
         </tbody>
       </table>
       <p class="actions">
-        <button onclick={() => cart.clear()}>カートを空にする</button>
+        <button type="button" onclick={() => cart.clear()}>カートを空にする</button>
       </p>
     </div>
 

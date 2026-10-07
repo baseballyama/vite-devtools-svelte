@@ -1,5 +1,8 @@
+import http from 'node:http'
+
+import type { Plugin } from 'vite'
 import { describe, it, expect, vi } from 'vitest'
-import { EventEmitter } from 'node:events'
+
 import { svelteDevtools } from '../src/plugin.js'
 import {
   RUNTIME_MODULE_ID,
@@ -8,7 +11,7 @@ import {
   WRAPPER_MODULE_ID,
   wrapperCode,
 } from '../src/runtime/index.js'
-import type { Plugin } from 'vite'
+import { callHook, resolvePlugins } from './helpers.js'
 
 // =====================================================================
 // Plugin Factory: svelteDevtools()
@@ -69,16 +72,7 @@ describe('svelteDevtools factory', () => {
 
   it('should default componentTracking to true', () => {
     const plugins = svelteDevtools()
-    for (const p of plugins) {
-      if (typeof p.configResolved === 'function') {
-        p.configResolved({
-          command: 'serve',
-          root: '/test',
-          logger: { warn: () => {} },
-          plugins: [],
-        } as any)
-      }
-    }
+    resolvePlugins(plugins)
     const trackingPlugin = plugins.find(p => p.name === 'vite-devtools-svelte:tracking')!
     const code = `
 import * as $ from 'svelte/internal/client';
@@ -87,7 +81,7 @@ function Component($$anchor) {
   $.pop();
 }
 `
-    const result = (trackingPlugin.transform as Function)!(code, '/test/src/lib/Counter.svelte')
+    const result = callHook(trackingPlugin.transform, code, '/test/src/lib/Counter.svelte')
     expect(result).not.toBeNull()
   })
 })
@@ -96,38 +90,32 @@ function Component($$anchor) {
 // Virtual Module Resolution (runtime + wrapper)
 // =====================================================================
 
-describe('mainPlugin virtual module resolution', () => {
-  function getMainPlugin(): Plugin {
-    const plugins = svelteDevtools()
-    const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
-    if (typeof plugin.configResolved === 'function') {
-      plugin.configResolved({
-        command: 'serve',
-        root: '/test',
-        logger: { warn: () => {} },
-        plugins: [],
-      } as any)
-    }
-    return plugin
-  }
+function getMainPlugin(): Plugin {
+  const plugins = svelteDevtools()
+  const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
+  resolvePlugins([plugin])
+  return plugin
+}
 
+describe('mainPlugin virtual module resolution', () => {
   // Runtime virtual module
   it('should resolve the runtime virtual module ID', () => {
     const plugin = getMainPlugin()
-    const resolved = (plugin.resolveId as Function)!(RUNTIME_MODULE_ID)
+    const resolved = callHook(plugin.resolveId, RUNTIME_MODULE_ID)
     expect(resolved).toBe(RESOLVED_RUNTIME_ID)
   })
 
   it('should load the runtime code for the resolved ID', () => {
     const plugin = getMainPlugin()
-    const loaded = (plugin.load as Function)!(RESOLVED_RUNTIME_ID)
+    const loaded = callHook(plugin.load, RESOLVED_RUNTIME_ID)
     expect(loaded).toBe(runtimeCode)
   })
 
   // svelte/internal/client wrapper
   it('should intercept svelte/internal/client from user code', () => {
     const plugin = getMainPlugin()
-    const resolved = (plugin.resolveId as Function)!(
+    const resolved = callHook(
+      plugin.resolveId,
       'svelte/internal/client',
       '/test/src/lib/Counter.svelte',
     )
@@ -136,74 +124,64 @@ describe('mainPlugin virtual module resolution', () => {
 
   it('should NOT intercept svelte/internal/client from node_modules', () => {
     const plugin = getMainPlugin()
-    const resolved = (plugin.resolveId as Function)!(
+    const resolved = callHook(
+      plugin.resolveId,
       'svelte/internal/client',
       '/test/node_modules/svelte/src/index.js',
     )
-    expect(resolved).toBeUndefined()
+    expect(resolved).toBeNull()
   })
 
   it('should NOT intercept svelte/internal/client from virtual modules (\\0 prefix)', () => {
     const plugin = getMainPlugin()
-    const resolved = (plugin.resolveId as Function)!(
+    const resolved = callHook(
+      plugin.resolveId,
       'svelte/internal/client',
       '\0svelte-devtools:wrapped-client',
     )
-    expect(resolved).toBeUndefined()
+    expect(resolved).toBeNull()
   })
 
   it('should NOT intercept svelte/internal/client without importer', () => {
     const plugin = getMainPlugin()
-    const resolved = (plugin.resolveId as Function)!('svelte/internal/client')
-    expect(resolved).toBeUndefined()
+    const resolved = callHook(plugin.resolveId, 'svelte/internal/client')
+    expect(resolved).toBeNull()
   })
 
   it('should NOT intercept svelte/internal/client in build mode', () => {
     const plugins = svelteDevtools()
     const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
-    if (typeof plugin.configResolved === 'function') {
-      plugin.configResolved({
-        command: 'build',
-        root: '/test',
-        logger: { warn: () => {} },
-        plugins: [],
-      } as any)
-    }
-    const resolved = (plugin.resolveId as Function)!(
+    resolvePlugins([plugin], { command: 'build' })
+    const resolved = callHook(
+      plugin.resolveId,
       'svelte/internal/client',
       '/test/src/lib/Counter.svelte',
     )
-    expect(resolved).toBeUndefined()
+    expect(resolved).toBeNull()
   })
 
   it('should NOT intercept svelte/internal/client when componentTracking is disabled', () => {
     const plugins = svelteDevtools({ componentTracking: false })
     const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
-    if (typeof plugin.configResolved === 'function') {
-      plugin.configResolved({
-        command: 'serve',
-        root: '/test',
-        logger: { warn: () => {} },
-        plugins: [],
-      } as any)
-    }
-    const resolved = (plugin.resolveId as Function)!(
+    resolvePlugins([plugin])
+    const resolved = callHook(
+      plugin.resolveId,
       'svelte/internal/client',
       '/test/src/lib/Counter.svelte',
     )
-    expect(resolved).toBeUndefined()
+    expect(resolved).toBeNull()
   })
 
   it('should load the wrapper code for the wrapper module ID', () => {
     const plugin = getMainPlugin()
-    const loaded = (plugin.load as Function)!(WRAPPER_MODULE_ID)
+    const loaded = callHook(plugin.load, WRAPPER_MODULE_ID)
     expect(loaded).toBe(wrapperCode)
   })
 
-  it('should return undefined for other module IDs', () => {
+  it('should return null (defer) for other module IDs', () => {
     const plugin = getMainPlugin()
-    expect((plugin.resolveId as Function)!('some-other-module')).toBeUndefined()
-    expect((plugin.load as Function)!('some-other-id')).toBeUndefined()
+    expect(callHook(plugin.resolveId, 'some-other-module')).toBeNull()
+    expect(callHook(plugin.load, 'some-other-id')).toBeNull()
   })
 })
 
@@ -215,15 +193,8 @@ describe('mainPlugin transformIndexHtml', () => {
   it('should inject runtime script in serve mode', () => {
     const plugins = svelteDevtools()
     const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
-    if (typeof plugin.configResolved === 'function') {
-      plugin.configResolved({
-        command: 'serve',
-        root: '/test',
-        logger: { warn: () => {} },
-        plugins: [],
-      } as any)
-    }
-    const hook = plugin.transformIndexHtml as { order: string; handler: Function }
+    resolvePlugins([plugin])
+    const hook = plugin.transformIndexHtml as { order: string; handler: () => any }
     // before Vite's HTML processing, which rewrites the inline bare import
     expect(hook.order).toBe('pre')
     const result = hook.handler()
@@ -238,15 +209,8 @@ describe('mainPlugin transformIndexHtml', () => {
   it('should not inject anything in build mode', () => {
     const plugins = svelteDevtools()
     const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
-    if (typeof plugin.configResolved === 'function') {
-      plugin.configResolved({
-        command: 'build',
-        root: '/test',
-        logger: { warn: () => {} },
-        plugins: [],
-      } as any)
-    }
-    const result = (plugin.transformIndexHtml as { handler: Function }).handler()
+    resolvePlugins([plugin], { command: 'build' })
+    const result = (plugin.transformIndexHtml as { handler: () => any }).handler()
     expect(result).toEqual([])
   })
 })
@@ -265,7 +229,10 @@ vi.mock('@vitejs/devtools-kit/node', () => kit)
 
 // Observe devframe instances without running real transports (host.test.ts covers the real stack).
 const initiate = vi.hoisted(() => ({
-  initDevframe: vi.fn(() => ({ nodeMiddleware: vi.fn(), close: vi.fn(async () => {}) })),
+  initDevframe: vi.fn((_def: unknown, _options: unknown) => ({
+    nodeMiddleware: vi.fn(),
+    close: vi.fn(async () => {}),
+  })),
 }))
 vi.mock('devframe/initiate', () => initiate)
 
@@ -273,7 +240,7 @@ const FIXTURES = new URL('fixtures', import.meta.url).pathname
 
 /** Run the hub path: devtools.setup → createPluginFromDevframe → def.setup(ctx). */
 async function hubHandlers(plugins: Plugin[]) {
-  const handlers = new Map<string, Function>()
+  const handlers = new Map<string, (...args: any[]) => any>()
   const main = plugins.find(p => p.name === 'vite-devtools-svelte')!
   await (main.devtools as any).setup({
     scope: (id: string) => ({
@@ -284,22 +251,13 @@ async function hubHandlers(plugins: Plugin[]) {
 }
 
 function resolve(plugins: Plugin[], config: Record<string, unknown> = {}) {
-  const resolved = {
-    command: 'serve',
-    root: FIXTURES,
-    base: '/',
-    plugins: [],
-    logger: { warn: () => {} },
-    ...config,
-  }
-  for (const p of plugins)
-    if (typeof p.configResolved === 'function') (p.configResolved as Function)(resolved)
-  return resolved
+  return resolvePlugins(plugins, { root: FIXTURES, ...config })
 }
 
 function mockServer() {
-  const middlewares: Function[] = []
-  const httpServer = Object.assign(new EventEmitter(), { address: () => null })
+  const middlewares: Array<(...args: any[]) => any> = []
+  // An unlistened http.Server: emits 'close' like the dev server's own.
+  const httpServer = Object.assign(http.createServer(), { address: () => null })
   return {
     middlewares,
     httpServer,
@@ -345,7 +303,7 @@ describe('mount selection', () => {
     const plugins = svelteDevtools()
     resolve(plugins)
     const m = mockServer()
-    ;(plugins[0].configureServer as Function)(m.server)
+    callHook(plugins[0]!.configureServer, m.server)
     // [standalone devframe middleware, MCP middleware]
     expect(m.middlewares).toHaveLength(2)
   })
@@ -354,7 +312,7 @@ describe('mount selection', () => {
     const plugins = svelteDevtools()
     resolve(plugins, { plugins: [{ name: 'vite:devtools' }] })
     const m = mockServer()
-    ;(plugins[0].configureServer as Function)(m.server)
+    callHook(plugins[0]!.configureServer, m.server)
     expect(m.middlewares).toHaveLength(1) // MCP only
   })
 
@@ -362,12 +320,12 @@ describe('mount selection', () => {
     const plugins = svelteDevtools()
     resolve(plugins)
     const m = mockServer()
-    ;(plugins[0].configureServer as Function)(m.server)
+    callHook(plugins[0]!.configureServer, m.server)
     const res = { statusCode: 200, end: vi.fn() }
     const next = vi.fn()
-    m.middlewares[0]({ url: '/.svelte-devtools/' }, res, next)
+    m.middlewares[0]!({ url: '/.svelte-devtools/' }, res, next)
     expect(res.statusCode).toBe(503)
-    m.middlewares[0]({ url: '/app' }, { end: vi.fn() }, next)
+    m.middlewares[0]!({ url: '/app' }, { end: vi.fn() }, next)
     expect(next).toHaveBeenCalledOnce()
   })
 
@@ -375,7 +333,7 @@ describe('mount selection', () => {
     const plugins = svelteDevtools()
     resolve(plugins)
     const m = mockServer()
-    ;(plugins[0].configureServer as Function)(m.server)
+    callHook(plugins[0]!.configureServer, m.server)
     expect(m.server.hot.on).toHaveBeenCalledWith('svelte-devtools:components', expect.any(Function))
     m.httpServer.emit('close')
     expect(m.server.hot.off).toHaveBeenCalledWith(
@@ -385,49 +343,49 @@ describe('mount selection', () => {
   })
 })
 
-describe('middleware mode disposal (closeServer hook)', () => {
-  function middlewareServer() {
-    const m = mockServer()
-    m.server.httpServer = null
-    return m
-  }
-  const lastInstance = () => initiate.initDevframe.mock.results.at(-1)!.value
+function middlewareServer() {
+  const m = mockServer()
+  m.server.httpServer = null
+  return m
+}
+const lastInstance = () => initiate.initDevframe.mock.results.at(-1)!.value
 
+describe('middleware mode disposal (closeServer hook)', () => {
   it('config-file restart: the old plugin instance disposes its mount, the new one survives', async () => {
     const oldInstance = svelteDevtools()
     resolve(oldInstance)
-    ;(oldInstance[0].configureServer as Function)(middlewareServer().server)
+    callHook(oldInstance[0]!.configureServer, middlewareServer().server)
     const a = lastInstance()
     const newInstance = svelteDevtools() // config re-evaluated on restart
     resolve(newInstance)
-    ;(newInstance[0].configureServer as Function)(middlewareServer().server)
+    callHook(newInstance[0]!.configureServer, middlewareServer().server)
     const b = lastInstance()
 
-    await (oldInstance[0].closeServer as Function)({ reason: 'restart' })
+    await callHook(oldInstance[0]!.closeServer, { reason: 'restart' })
     expect(a.close).toHaveBeenCalledOnce()
     expect(b.close).not.toHaveBeenCalled()
-    await (newInstance[0].closeServer as Function)({ reason: 'close' })
+    await callHook(newInstance[0]!.closeServer, { reason: 'close' })
     expect(b.close).toHaveBeenCalledOnce()
   })
 
   it('inline restart: the reused plugin instance keeps only the newest mount', async () => {
     const plugins = svelteDevtools()
     resolve(plugins)
-    ;(plugins[0].configureServer as Function)(middlewareServer().server)
+    callHook(plugins[0]!.configureServer, middlewareServer().server)
     const a = lastInstance()
-    ;(plugins[0].configureServer as Function)(middlewareServer().server)
+    callHook(plugins[0]!.configureServer, middlewareServer().server)
     const b = lastInstance()
-    await (plugins[0].closeServer as Function)({ reason: 'restart' })
+    await callHook(plugins[0]!.closeServer, { reason: 'restart' })
     expect(a.close).toHaveBeenCalledOnce()
     expect(b.close).not.toHaveBeenCalled()
-    await (plugins[0].closeServer as Function)({ reason: 'close' })
+    await callHook(plugins[0]!.closeServer, { reason: 'close' })
     expect(b.close).toHaveBeenCalledOnce()
   })
 
   it('serves devframe through SSE in middleware mode (no WebSocket server to share)', () => {
     const plugins = svelteDevtools()
     resolve(plugins)
-    ;(plugins[0].configureServer as Function)(middlewareServer().server)
+    callHook(plugins[0]!.configureServer, middlewareServer().server)
     expect(initiate.initDevframe.mock.calls.at(-1)![1]).toMatchObject({
       ws: false,
       sse: true,
@@ -483,7 +441,7 @@ describe('loadProfileServerPlugin', () => {
     const plugins = svelteDevtools()
     resolve(plugins)
     const serverPlugin = plugins.find(p => p.name === 'vite-devtools-svelte:load-profile-server')!
-    ;(serverPlugin.configureServer as Function)({})
+    callHook(serverPlugin.configureServer, {})
     ;(globalThis as any).__svelte_devtools_record_load('/', '/r/+page.ts', 'universal', 1.234, 10)
     const loads = await (await hubHandlers(plugins)).get('svelte-devtools:get-load-profiles')!()
     expect(loads[0]).toMatchObject({ route: '/', duration: 1.23, dataSize: 10, type: 'universal' })
@@ -494,12 +452,14 @@ describe('loadProfileServerPlugin', () => {
 // Production no-op
 // =====================================================================
 
+function appliesToBuild(p: Plugin): boolean {
+  return typeof p.apply === 'function'
+    ? p.apply({}, { command: 'build', mode: 'production' } as any)
+    : p.apply === undefined || p.apply === 'build'
+}
+
 describe('production build no-op', () => {
   it('every plugin is serve-only (absent from vite build)', () => {
-    const appliesToBuild = (p: Plugin) =>
-      typeof p.apply === 'function'
-        ? p.apply({}, { command: 'build', mode: 'production' } as any)
-        : p.apply === undefined || p.apply === 'build'
     expect(
       svelteDevtools()
         .filter(appliesToBuild)

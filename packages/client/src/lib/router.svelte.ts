@@ -7,7 +7,7 @@ import { panels, type PanelId } from './panels.js'
 const ids = new Set<string>(panels.map(p => p.id))
 
 function parse(): PanelId {
-  const id = location.hash.replace(/^#\/?/, '').split(/[/?]/)[0]
+  const id = location.hash.replace(/^#\/?/, '').split(/[/?]/)[0]!
   return (ids.has(id) ? id : 'overview') as PanelId
 }
 

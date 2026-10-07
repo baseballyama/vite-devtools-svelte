@@ -1,28 +1,9 @@
-<script lang="ts" module>
-  export interface Column<T> {
-    id: string
-    label: string
-    /** CSS grid track, e.g. `minmax(0, 1fr)` or `80px`. */
-    width: string
-    align?: 'start' | 'end'
-    /** Comparator; presence makes the column sortable. */
-    sort?: (a: T, b: T) => number
-    /** Sort descending on first click (numbers usually want this). */
-    descFirst?: boolean
-    /** Hide below this container width (px) for narrow layouts. */
-    minWidth?: number
-  }
-
-  export interface SortState {
-    id: string
-    desc: boolean
-  }
-</script>
-
 <script lang="ts" generics="T">
   import type { Snippet } from 'svelte'
-  import VirtualList, { type RowState } from './VirtualList.svelte'
+
   import Icon from './Icon.svelte'
+  import type { Column, RowState, SortState, TableRowState } from './types.js'
+  import VirtualList from './VirtualList.svelte'
 
   /**
    * Virtualised, sortable table. Rows are rendered by the caller's `row`
@@ -34,7 +15,7 @@
     columns: Column<T>[]
     getKey: (item: T) => string
     label: string
-    row: Snippet<[T, { visible: Set<string>; state: RowState }]>
+    row: Snippet<[T, TableRowState]>
     sort?: SortState | null
     selected?: string | null
     rowHeight?: number
@@ -59,12 +40,12 @@
 
   let width = $state(1000)
 
-  const shown = $derived(columns.filter((c) => !c.minWidth || width >= c.minWidth))
-  const visible = $derived(new Set(shown.map((c) => c.id)))
-  const template = $derived(shown.map((c) => c.width).join(' '))
+  const shown = $derived(columns.filter(c => !c.minWidth || width >= c.minWidth))
+  const visible = $derived(new Set(shown.map(c => c.id)))
+  const template = $derived(shown.map(c => c.width).join(' '))
 
   const sorted = $derived.by(() => {
-    const col = sort && columns.find((c) => c.id === sort!.id)
+    const col = sort && columns.find(c => c.id === sort!.id)
     if (!col?.sort) return items
     const cmp = col.sort
     const dir = sort!.desc ? -1 : 1
@@ -89,7 +70,12 @@
     {#each shown as col (col.id)}
       <div class="th" class:end={col.align === 'end'} role="columnheader" aria-sort={ariaSort(col)}>
         {#if col.sort}
-          <button class="sort" class:active={sort?.id === col.id} onclick={() => toggleSort(col)}>
+          <button
+            type="button"
+            class="sort"
+            class:active={sort?.id === col.id}
+            onclick={() => toggleSort(col)}
+          >
             <span class="truncate">{col.label}</span>
             {#if sort?.id === col.id}
               <span class="dir" class:desc={sort.desc}><Icon name="chevronDown" size={11} /></span>
@@ -104,15 +90,15 @@
   <div class="body">
     <VirtualList
       items={sorted}
-      getKey={(item) => getKey(item)}
+      getKey={(item: T) => getKey(item)}
       bind:selected
       {label}
       {rowHeight}
       {empty}
-      onselect={(item) => onselect?.(item)}
-      onactivate={(item) => onactivate?.(item)}
+      onselect={(item: T) => onselect?.(item)}
+      onactivate={(item: T) => onactivate?.(item)}
     >
-      {#snippet row(item, state)}
+      {#snippet row(item: T, state: RowState)}
         <div class="tr">{@render renderRow(item, { visible, state })}</div>
       {/snippet}
     </VirtualList>

@@ -1,3 +1,13 @@
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { setTimeout as sleep } from 'node:timers/promises'
+
+import { connectDevframe } from 'devframe/client'
+import type { DevframeRpcClient } from 'devframe/client'
+import { getTempAuthCode } from 'devframe/node/auth'
+import { createServer } from 'vite'
+import type { ViteDevServer } from 'vite'
 /**
  * Integration (review B1): live data must keep flowing after a dev-server
  * restart driven by a config-file change (Vite re-evaluates the config, so a
@@ -9,14 +19,12 @@
  * deltas. A devframe client (browser globals shimmed) plays the DevTools tab.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import fs from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
-import { createServer } from 'vite'
-import type { ViteDevServer } from 'vite'
-import { connectDevframe } from 'devframe/client'
-import type { DevframeRpcClient } from 'devframe/client'
-import { getTempAuthCode } from 'devframe/node/auth'
+
+/** The plugin's RPC names are not in devframe's typed registry, so call them by name. */
+type UntypedCall = (method: string, ...args: unknown[]) => Promise<unknown>
+function rpc(client: DevframeRpcClient, method: string, ...args: unknown[]): Promise<unknown> {
+  return (client as unknown as { call: UntypedCall }).call(method, ...args)
+}
 
 const PLUGIN = path.resolve(import.meta.dirname, '../src/plugin.ts')
 
@@ -31,7 +39,7 @@ function shimBrowser(url: string) {
     configurable: true,
     value: {
       getItem: (k: string) => store.get(k) ?? null,
-      setItem: (k: string, v: string) => store.set(k, String(v)),
+      setItem: (k: string, v: string) => store.set(k, v),
       removeItem: (k: string) => store.delete(k),
     },
   })
@@ -48,7 +56,7 @@ async function waitFor<T>(
     if (ok(v)) return v
     if (Date.now() > end)
       throw new Error(`timed out; last value: ${JSON.stringify(v)?.slice(0, 300)}`)
-    await new Promise(r => setTimeout(r, 50))
+    await sleep(50)
   }
 }
 
@@ -68,21 +76,20 @@ class FakeRuntime {
   deltas = false
   ws!: WebSocket
   log: string[] = []
+  private url: string
 
-  constructor(
-    private url: string,
-    ids: number[],
-  ) {
+  constructor(url: string, ids: number[]) {
+    this.url = url
     for (const id of ids) this.components.set(id, comp(id))
   }
 
   async connect(): Promise<void> {
     this.ws = new WebSocket(this.url, 'vite-hmr')
     await new Promise<void>((resolve, reject) => {
-      this.ws.onopen = () => resolve()
-      this.ws.onerror = () => reject(new Error('hmr ws failed'))
+      this.ws.addEventListener('open', () => resolve())
+      this.ws.addEventListener('error', () => reject(new Error('hmr ws failed')))
     })
-    this.ws.onmessage = e => {
+    this.ws.addEventListener('message', e => {
       const msg = JSON.parse(String(e.data))
       if (msg.type !== 'custom' || msg.event !== 'svelte-devtools:subscription') return
       this.log.push(JSON.stringify(msg.data))
@@ -90,7 +97,7 @@ class FakeRuntime {
       this.active = !!msg.data?.active
       this.deltas = !!msg.data?.componentDeltas
       if (this.active && (!wasActive || msg.data?.resync)) this.sendFull()
-    }
+    })
     this.send('svelte-devtools:runtime-ready', {})
   }
 
@@ -161,10 +168,13 @@ async function connectUi(): Promise<DevframeRpcClient> {
 }
 
 const liveIds = async () =>
-  ((await ui.call('svelte-devtools:get-live-components' as never)) as Comp[])
+  ((await rpc(ui, 'svelte-devtools:get-live-components')) as Comp[])
     .map(c => c.id)
-    .sort((a, b) => a - b)
+    .toSorted((a, b) => a - b)
 
+// The fake runtimes connect to Vite's HMR socket like a browser page, which needs
+// the token Vite injects into its client; there is no public replacement.
+// oxlint-disable-next-line typescript/no-deprecated -- emulating Vite's own HMR client requires its socket token
 const hmrUrl = () => `${origin.replace('http', 'ws')}/?token=${server.config.webSocketToken}`
 
 beforeAll(async () => {
@@ -181,7 +191,7 @@ beforeAll(async () => {
     server: { port: 0, host: 'localhost' },
   })
   await server.listen()
-  origin = server.resolvedUrls!.local[0].replace(/\/$/, '')
+  origin = server.resolvedUrls!.local[0]!.replace(/\/$/, '')
   ui = await connectUi()
   await waitFor(
     () => ui.status,
@@ -190,7 +200,7 @@ beforeAll(async () => {
   if (!(await ui.requestTrustWithCode(getTempAuthCode())))
     throw new Error('DevTools tab could not be trusted')
   // flush the debounced token store before the restart test needs it
-  await new Promise(r => setTimeout(r, 300))
+  await sleep(300)
 }, 30_000)
 
 afterAll(async () => {
@@ -205,7 +215,7 @@ describe('live data across a config-file restart (review B1)', () => {
   it('shows components mounted after the restart, and after a UI reload', async () => {
     const before = new FakeRuntime(hmrUrl(), [1, 2, 3, 4, 5])
     await before.connect()
-    await ui.call('svelte-devtools:set-active' as never, { client: 'tab', active: true } as never)
+    await rpc(ui, 'svelte-devtools:set-active', { client: 'tab', active: true })
     expect(await waitFor(liveIds, ids => ids.length === 5)).toEqual([1, 2, 3, 4, 5])
 
     // config change → Vite restarts with a new plugin instance; the app page
@@ -219,7 +229,7 @@ describe('live data across a config-file restart (review B1)', () => {
       () => ui.status,
       s => s === 'connected',
     )
-    await ui.call('svelte-devtools:set-active' as never, { client: 'tab', active: true } as never)
+    await rpc(ui, 'svelte-devtools:set-active', { client: 'tab', active: true })
     const after = new FakeRuntime(hmrUrl(), [1, 2, 3, 4, 5])
     await after.connect()
     await waitFor(liveIds, ids => ids.length === 5).catch(e => {
@@ -243,7 +253,7 @@ describe('live data across a config-file restart (review B1)', () => {
   it('order B: the reloaded app connects before the DevTools tab reconnects', async () => {
     const before = new FakeRuntime(hmrUrl(), [1, 2])
     await before.connect()
-    await ui.call('svelte-devtools:set-active' as never, { client: 'tab', active: true } as never)
+    await rpc(ui, 'svelte-devtools:set-active', { client: 'tab', active: true })
     await waitFor(liveIds, ids => ids.length === 2)
 
     writeConfig('v3')
@@ -251,14 +261,14 @@ describe('live data across a config-file restart (review B1)', () => {
     before.close()
     const after = new FakeRuntime(hmrUrl(), [7, 8])
     await after.connect() // app first …
-    await new Promise(r => setTimeout(r, 200))
+    await sleep(200)
     ui.close?.()
     ui = await connectUi() // … DevTools tab later (reconnect backoff)
     await waitFor(
       () => ui.status,
       s => s === 'connected',
     )
-    await ui.call('svelte-devtools:set-active' as never, { client: 'tab', active: true } as never)
+    await rpc(ui, 'svelte-devtools:set-active', { client: 'tab', active: true })
     await waitFor(liveIds, ids => ids.join() === '7,8').catch(e => {
       throw new Error(`${e.message}; runtime saw subscriptions ${after.log.join(' ')}`)
     })
@@ -276,7 +286,7 @@ describe('live data across a config-file restart (review B1)', () => {
       () => ui.status,
       s => s === 'connected',
     )
-    await ui.call('svelte-devtools:set-active' as never, { client: 'tab', active: true } as never)
+    await rpc(ui, 'svelte-devtools:set-active', { client: 'tab', active: true })
     const tabA = new FakeRuntime(hmrUrl(), [31, 32])
     const tabB = new FakeRuntime(hmrUrl(), [41, 42])
     await tabA.connect()
@@ -298,15 +308,17 @@ describe('live data across a config-file restart (review B1)', () => {
   it('an epoch known only from profiles/timeline (no component snapshot yet) is never served as an empty tree', async () => {
     const tab = new FakeRuntime(hmrUrl(), [51])
     await tab.connect()
-    await ui.call('svelte-devtools:set-active' as never, { client: 'tab', active: true } as never)
+    await rpc(ui, 'svelte-devtools:set-active', { client: 'tab', active: true })
     await waitFor(liveIds, ids => ids.includes(51))
     // a second page load whose component snapshot has not arrived yet
     const half = new FakeRuntime(hmrUrl(), [])
     half.ws = new WebSocket(hmrUrl(), 'vite-hmr')
-    await new Promise(r => (half.ws.onopen = r))
+    await new Promise<void>(resolve => {
+      half.ws.addEventListener('open', () => resolve(), { once: true })
+    })
     half.send('svelte-devtools:profiles', { epoch: half.epoch, profiles: [] })
     half.send('svelte-devtools:state-timeline', { epoch: half.epoch, changes: [] })
-    await new Promise(r => setTimeout(r, 300))
+    await sleep(300)
     expect(await liveIds()).toContain(51)
     tab.close()
     half.close()

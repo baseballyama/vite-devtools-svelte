@@ -1,8 +1,10 @@
 <script lang="ts" generics="N">
   import type { Snippet } from 'svelte'
+
   import { flattenTree, type TreeRow } from '../lib/tree.js'
-  import VirtualList from './VirtualList.svelte'
   import Icon from './Icon.svelte'
+  import type { VirtualListApi } from './types.js'
+  import VirtualList from './VirtualList.svelte'
 
   /**
    * Virtualised ARIA tree. Expansion state is a key Set owned by the caller
@@ -39,29 +41,28 @@
     onactivate,
   }: Props = $props()
 
-  let list = $state<VirtualList<TreeRow<N>> | null>(null)
+  let list = $state<VirtualListApi | null>(null)
 
-  const rows = $derived(flattenTree(roots, { key: getKey, children: getChildren }, expanded, filter))
+  const rows = $derived(
+    flattenTree(roots, { key: getKey, children: getChildren }, expanded, filter),
+  )
 
+  // `expanded` is replaced, never mutated: the caller owns it (bindable) and
+  // reacts to the new reference.
   function toggle(key: string, open?: boolean) {
-    const next = new Set(expanded)
-    const isOpen = next.has(key)
-    if (open ?? !isOpen) next.add(key)
-    else next.delete(key)
-    expanded = next
+    expanded =
+      (open ?? !expanded.has(key))
+        ? new Set([...expanded, key])
+        : new Set([...expanded].filter(k => k !== key))
   }
 
   function indexOfKey(key: string) {
-    return rows.findIndex((r) => r.key === key)
+    return rows.findIndex(r => r.key === key)
   }
 
   /** Reveal (expand ancestors) and select a node by key. */
   export function reveal(key: string, ancestors: string[]) {
-    if (ancestors.length) {
-      const next = new Set(expanded)
-      for (const a of ancestors) next.add(a)
-      expanded = next
-    }
+    if (ancestors.length > 0) expanded = new Set([...expanded, ...ancestors])
     selected = key
     queueMicrotask(() => list?.scrollToIndex(indexOfKey(key), 'center'))
   }
@@ -93,30 +94,31 @@
   bind:this={list}
   bind:selected
   items={rows}
-  getKey={(r) => r.key}
+  getKey={(r: TreeRow<N>) => r.key}
   role="tree"
   {label}
   {rowHeight}
   {empty}
-  onselect={(r) => onselect?.(r.node)}
-  onactivate={(r) => onactivate?.(r.node)}
+  onselect={(r: TreeRow<N>) => onselect?.(r.node)}
+  onactivate={(r: TreeRow<N>) => onactivate?.(r.node)}
   {onrowkeydown}
-  rowAttrs={(r) => ({
+  rowAttrs={(r: TreeRow<N>) => ({
     'aria-level': r.depth + 1,
     'aria-posinset': r.posinset,
     'aria-setsize': r.setsize,
     'aria-expanded': r.hasChildren ? r.expanded : undefined,
   })}
 >
-  {#snippet row(r)}
+  {#snippet row(r: TreeRow<N>)}
     <span class="indent" style:width="{r.depth * 14}px" aria-hidden="true"></span>
     {#if r.hasChildren}
       <button
+        type="button"
         class="twisty"
         class:open={r.expanded}
         tabindex="-1"
         aria-hidden="true"
-        onclick={(e) => {
+        onclick={e => {
           e.stopPropagation()
           if (!filter) toggle(r.key)
         }}

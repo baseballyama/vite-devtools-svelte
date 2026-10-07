@@ -78,5 +78,3 @@ export function createThemeStore() {
     set,
   }
 }
-
-export type ThemeStore = ReturnType<typeof createThemeStore>

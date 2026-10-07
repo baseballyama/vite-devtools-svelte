@@ -5,10 +5,10 @@ const fakeClient = vi.hoisted(() => ({
   status: 'unauthorized',
   connectionMeta: {},
   events: { on: () => () => {} },
-  requestAuthCode: vi.fn(async (_options?: { reissue?: boolean }) => {}),
-  requestTrustWithCode: vi.fn(async () => 'token'),
+  requestAuthCode: vi.fn((_options?: { reissue?: boolean }) => Promise.resolve()),
+  requestTrustWithCode: vi.fn(() => Promise.resolve('token')),
 }))
-vi.mock('devframe/client', () => ({ connectDevframe: vi.fn(async () => fakeClient) }))
+vi.mock('devframe/client', () => ({ connectDevframe: vi.fn(() => Promise.resolve(fakeClient)) }))
 
 const { requestAuthCode, submitAuthCode } = await import('./rpc.js')
 

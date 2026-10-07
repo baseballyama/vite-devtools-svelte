@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from '$app/paths'
   import { cart } from '$lib/stores/cart.svelte'
 
   interface Props {
@@ -21,14 +22,14 @@
 
 <article class="card">
   <header>
-    <a href="/products/{id}">{name}</a>
+    <a href={resolve('/products/[id]', { id })}>{name}</a>
     <span class="cat">{category}</span>
   </header>
   <div class="price">¥{price.toLocaleString()}</div>
   <div class="stock" class:low={isLow} class:out={isOut}>
     {#if isOut}在庫切れ{:else if isLow}残り {stock}{:else}在庫 {stock}{/if}
   </div>
-  <button onclick={add} disabled={isOut}>カートに追加</button>
+  <button type="button" onclick={add} disabled={isOut}>カートに追加</button>
 </article>
 
 <style>

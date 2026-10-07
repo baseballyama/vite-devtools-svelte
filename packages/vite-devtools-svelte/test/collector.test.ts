@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+
 import {
   Collector,
   HOT_EVENTS,
@@ -12,12 +13,18 @@ import {
 import type { HotChannel, HotClient } from '../src/server/collector.js'
 
 function fakeHot() {
-  const listeners = new Map<string, (payload: any, client: HotClient) => void>()
+  const listeners = new Map<string, (payload: unknown, client: HotClient) => void>()
   const sent: Array<{ event: string; payload: unknown }> = []
   const hot: HotChannel = {
-    send: (event, payload) => sent.push({ event, payload }),
-    on: (event, listener) => listeners.set(event, listener),
-    off: event => listeners.delete(event),
+    send: (event, payload) => {
+      sent.push({ event, payload })
+    },
+    on: (event, listener) => {
+      listeners.set(event, listener)
+    },
+    off: event => {
+      listeners.delete(event)
+    },
   }
   const emit = (event: string, payload: unknown, client?: HotClient) =>
     listeners.get(event)?.(payload, client ?? { send: () => {} })
@@ -58,11 +65,11 @@ describe('Collector ingestion caps', () => {
 
     // Edges are kept only between kept nodes, then capped (§6.7 A).
     c.ingestReactiveGraph({
-      nodes: Array.from({ length: 6000 }, (_, i) => ({ id: String(i) })) as any,
+      nodes: Array.from({ length: 6000 }, (_, i) => ({ id: String(i) })),
       edges: Array.from({ length: 25000 }, (_, i) => ({
         from: String(i % 4000),
         to: String((i + 1) % 4000),
-      })) as any,
+      })),
     })
     expect(c.reactiveGraph.nodes).toHaveLength(LIMITS.reactiveNodes)
     expect(c.reactiveGraph.edges).toHaveLength(LIMITS.reactiveEdges)
@@ -95,9 +102,9 @@ describe('Collector ingestion caps', () => {
   it('treats non-array payloads as empty without throwing', () => {
     const c = new Collector()
     c.ingestComponents({ components: 'nope' })
-    c.ingestProfiles(undefined)
+    c.ingestProfiles()
     c.ingestStateTimeline({ changes: 42 })
-    c.ingestReactiveGraph({ nodes: null as any, edges: {} as any })
+    c.ingestReactiveGraph({ nodes: null, edges: {} })
     expect(c.liveComponents).toEqual([])
     expect(c.renderProfiles).toEqual([])
     expect(c.stateTimeline).toEqual([])
@@ -141,8 +148,8 @@ describe('Collector ingestion caps', () => {
   })
 
   it('forwards fps samples and load profiles to hooks (measurement sessions)', () => {
-    const onFpsSample = vi.fn()
-    const onLoadProfile = vi.fn()
+    const onFpsSample = vi.fn<() => void>()
+    const onLoadProfile = vi.fn<() => void>()
     const c = new Collector({ onFpsSample, onLoadProfile })
     c.ingestFps({ fps: 60 } as any)
     c.recordLoadProfile({ route: '/' } as any)
@@ -151,15 +158,16 @@ describe('Collector ingestion caps', () => {
   })
 })
 
-describe('Collector component deltas + per-epoch state (§6.5)', () => {
-  const comp = (id: number, parentId: number | null = null) => ({
-    id,
-    file: '/C.svelte',
-    name: `C${id}`,
-    parentId,
-    mounted: true,
-  })
+function comp(id: number, parentId: number | null = null) {
+  return { id, file: '/C.svelte', name: `C${id}`, parentId, mounted: true }
+}
 
+/** Live components whose parent is not live (the parent gate must prevent these). */
+function orphansOf(list: Array<{ parentId: number | null }>, ids: Set<number>) {
+  return list.filter(x => x.parentId !== null && !ids.has(x.parentId))
+}
+
+describe('Collector component deltas + per-epoch state (§6.5)', () => {
   it('applies the delta form: removed first, then added, parents-first order kept', () => {
     const c = new Collector()
     c.ingestComponents({ epoch: 'a', components: [comp(1), comp(2, 1), comp(3, 1)] })
@@ -167,7 +175,9 @@ describe('Collector component deltas + per-epoch state (§6.5)', () => {
     expect(c.liveComponents.map(x => x.id)).toEqual([1, 2, 4])
     expect(c.liveComponentsTotal).toBe(3)
     // a full form replaces the epoch's tree
-    c.ingestComponents({ epoch: 'a', reset: true, components: [comp(9)] })
+    // `reset` rides along on the wire; the collector keys off `components` alone
+    const full = { epoch: 'a', reset: true, components: [comp(9)] }
+    c.ingestComponents(full)
     expect(c.liveComponents.map(x => x.id)).toEqual([9])
   })
 
@@ -178,7 +188,7 @@ describe('Collector component deltas + per-epoch state (§6.5)', () => {
     c.ingestComponents({ epoch: 'a', added: [comp(n), comp(n + 1)], removed: [] })
     expect(c.liveComponents).toHaveLength(n)
     expect(c.liveComponentsTotal).toBe(n + 2)
-    expect(c.liveComponents[0].id).toBe(0) // root-first prefix kept
+    expect(c.liveComponents[0]!.id).toBe(0) // root-first prefix kept
     c.ingestComponents({ epoch: 'a', added: [], removed: [n + 1] }) // an uncounted id
     expect(c.liveComponentsTotal).toBe(n + 1)
     c.ingestComponents({ epoch: 'a', added: [], removed: [5] })
@@ -234,7 +244,8 @@ describe('Collector component deltas + per-epoch state (§6.5)', () => {
     expect(c.epochInfo.epoch).toBe('a')
     expect(c.liveComponents.map(x => x.id)).toEqual([1])
     // the resync full snapshot makes the epoch servable; later deltas apply
-    c.ingestComponents({ epoch: 'b', reset: true, components: [comp(7), comp(8)] })
+    const resync = { epoch: 'b', reset: true, components: [comp(7), comp(8)] }
+    c.ingestComponents(resync)
     c.ingestComponents({ epoch: 'b', added: [comp(10, 7)], removed: [8] }, client)
     expect(c.liveComponents.map(x => x.id)).toEqual([7, 10])
     expect(client.send).toHaveBeenCalledTimes(2)
@@ -249,7 +260,7 @@ describe('Collector component deltas + per-epoch state (§6.5)', () => {
     c.ingestComponents({ epoch: 'a', added: [comp(n + 2, n)], removed: [] }) // child of uncaptured parent
     const ids = new Set(c.liveComponents.map(x => x.id))
     expect(ids.has(n + 2)).toBe(false)
-    const orphans = c.liveComponents.filter(x => x.parentId != null && !ids.has(x.parentId))
+    const orphans = orphansOf(c.liveComponents, ids)
     expect(orphans).toEqual([])
     expect(c.liveComponentsTotal).toBe(n - 2 + 3)
     // the same gate applies within a full snapshot
@@ -469,7 +480,7 @@ describe('Collector state timeline deltas', () => {
     const start = c.getStateTimelineDelta().cursor
     let cursor = start
     for (let i = 0; i < 6; i++) {
-      c.ingestStateTimeline({ epoch: i % 2 ? 'tab1' : 'tab2', changes: [change(i)] })
+      c.ingestStateTimeline({ epoch: ['tab2', 'tab1'][i % 2], changes: [change(i)] })
       const d = c.getStateTimelineDelta(cursor)
       expect(d.reset).toBe(false)
       cursor = d.cursor
@@ -563,20 +574,20 @@ describe('Collector activity leases (runtime subscription)', () => {
   })
 })
 
+/** A collector with a served epoch 'e1' (a full component snapshot). */
+function served() {
+  const c = new Collector()
+  const h = fakeHot()
+  c.attach(h.hot)
+  c.ingestComponents({ epoch: 'e1', components: [{ id: 1, parentId: null } as any] })
+  return { c, h }
+}
+const requests = (h: ReturnType<typeof fakeHot>) =>
+  h.sent.filter(s => s.event === HOT_EVENTS.requestReactiveGraph).map(s => s.payload as any)
+
 describe('Collector scoped graph pulls (§6.7 A, review G5/M1)', () => {
   beforeEach(() => vi.useFakeTimers())
   afterEach(() => vi.useRealTimers())
-
-  /** A collector with a served epoch 'e1' (a full component snapshot). */
-  function served() {
-    const c = new Collector()
-    const h = fakeHot()
-    c.attach(h.hot)
-    c.ingestComponents({ epoch: 'e1', components: [{ id: 1, parentId: null } as any] })
-    return { c, h }
-  }
-  const requests = (h: ReturnType<typeof fakeHot>) =>
-    h.sent.filter(s => s.event === HOT_EVENTS.requestReactiveGraph).map(s => s.payload as any)
 
   it('forwards componentId, caps, epoch and a requestId to the runtime', () => {
     const { c, h } = served()
@@ -730,7 +741,7 @@ describe('Collector scoped graph pulls (§6.7 A, review G5/M1)', () => {
       ],
     })
     const r = await p
-    expect(r.nodes.map(n => n.id).sort()).toEqual(['1:a', '2:b'])
+    expect(r.nodes.map(n => n.id).toSorted()).toEqual(['1:a', '2:b'])
     expect(r.edges).toEqual([{ from: '2:b', to: '1:a' }])
     expect(r).toMatchObject({ policy: 'server-filter', total: null, scope: 1 })
   })
@@ -908,7 +919,7 @@ describe('Collector live snapshot epoch (two app tabs, review M1)', () => {
     const fromA = c.liveSnapshot
     c.ingestComponents({ epoch: 'tab-b', components: [{ id: 1, parentId: null } as any] })
     await expect(
-      c.requestReactiveGraph({ componentId: fromA.components[0].id, epoch: fromA.epoch! }),
+      c.requestReactiveGraph({ componentId: fromA.components[0]!.id, epoch: fromA.epoch! }),
     ).resolves.toMatchObject({ stale: true, staleReason: 'epoch-changed', epoch: 'tab-b' })
     expect(h.sent.filter(s => s.event === HOT_EVENTS.requestReactiveGraph)).toHaveLength(0)
   })
@@ -943,28 +954,28 @@ describe('Collector state timeline baseline disclosure (review B1/B2)', () => {
       reset: true,
       changes: [],
       baseline: { complete: false, pendingNodes: 7 },
-    } as any)
+    })
     expect(c.getCaptureInfo().stateTimeline?.baseline).toEqual({ complete: false, pendingNodes: 7 })
     expect(c.getCaptureInfo().stateTimeline?.captured).toBe(0)
     c.ingestStateTimeline({
       epoch: 'e1',
       changes: [],
       baseline: { complete: true, pendingNodes: 0 },
-    } as any)
+    })
     expect(c.getCaptureInfo().stateTimeline?.baseline).toEqual({ complete: true, pendingNodes: 0 })
     // malformed values are ignored, the last valid one is kept
     c.ingestStateTimeline({
       epoch: 'e1',
       changes: [],
       baseline: { complete: 'yes', pendingNodes: -1 },
-    } as any)
+    })
     expect(c.getCaptureInfo().stateTimeline?.baseline).toEqual({ complete: true, pendingNodes: 0 })
   })
 
   it('omits baseline when the runtime never sent one (older runtime)', () => {
     const c = new Collector()
     c.ingestComponents({ epoch: 'e1', components: [{ id: 1, parentId: null } as any] })
-    c.ingestStateTimeline({ epoch: 'e1', reset: true, changes: [] } as any)
+    c.ingestStateTimeline({ epoch: 'e1', reset: true, changes: [] })
     expect(c.getCaptureInfo().stateTimeline).not.toHaveProperty('baseline')
   })
 

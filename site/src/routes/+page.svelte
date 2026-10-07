@@ -1,9 +1,10 @@
 <script lang="ts">
   import { asset, resolve } from '$app/paths'
-  import { image } from '#lib/paths.ts'
-  import { panels, taglineParts } from '#lib/panels.ts'
-  import { MCP_TOOL_COUNT } from '#lib/mcp-tools.ts'
+
   import InstallTabs from '#lib/InstallTabs.svelte'
+  import { MCP_TOOL_COUNT } from '#lib/mcp-tools.ts'
+  import { panels, taglineParts } from '#lib/panels.ts'
+  import { image } from '#lib/paths.ts'
 
   const repo = 'https://github.com/baseballyama/vite-devtools-svelte'
 
@@ -79,7 +80,10 @@
     <div class="hero-install">
       <InstallTabs />
       <ol class="next-steps">
-        <li>Add <code>svelteDevtools()</code> before <code>sveltekit()</code> in <code>vite.config.ts</code>.</li>
+        <li>
+          Add <code>svelteDevtools()</code> before <code>sveltekit()</code> in
+          <code>vite.config.ts</code>.
+        </li>
         <li>Run your dev server.</li>
         <li>Open <code>/.svelte-devtools/</code>.</li>
       </ol>
@@ -112,8 +116,8 @@
     />
     <figcaption>
       Components: the live tree stays virtualized on large apps and tells you when only part of it
-      was captured. Captured from the UI in dev-mock mode with synthetic data, before the
-      reactivity update.
+      was captured. Captured from the UI in dev-mock mode with synthetic data, before the reactivity
+      update.
     </figcaption>
   </figure>
 </section>
@@ -122,14 +126,19 @@
   <div class="band-head">
     <p class="eyebrow">What you can see</p>
     <h2 id="features-title">Your running app, panel by panel.</h2>
-    <p>The panels read your running app and your project while the dev server runs. Production builds are unaffected.</p>
+    <p>
+      The panels read your running app and your project while the dev server runs. Production builds
+      are unaffected.
+    </p>
   </div>
   <ul class="features">
     {#each features as f (f.slug)}
       <li>
         <h3>{f.title}</h3>
         <p>{f.body}</p>
-        <a href={resolve('/panels/[slug]', { slug: f.slug })} aria-label="{f.title} panel">Panel details <span aria-hidden="true">→</span></a>
+        <a href={resolve('/panels/[slug]', { slug: f.slug })} aria-label="{f.title} panel"
+          >Panel details <span aria-hidden="true">→</span></a
+        >
       </li>
     {/each}
   </ul>
@@ -140,15 +149,17 @@
     <p class="eyebrow">Reactivity in large apps</p>
     <h2 id="large-title">Start from the busiest components, then zoom in.</h2>
     <p>
-      The overview counts sampled state changes and renders per component without building the
-      whole graph. Pick one instance to see its signals and what can affect what.
+      The overview counts sampled state changes and renders per component without building the whole
+      graph. Pick one instance to see its signals and what can affect what.
     </p>
     <ul class="checks">
       <li>Every view says what it covers: window, 200 ms sampling, caps.</li>
       <li>Edges mean “can affect”. Which write changed a value is not recorded.</li>
       <li>After a page reload, old component ids are refused instead of guessed.</li>
     </ul>
-    <a class="more" href={resolve('/panels/[slug]', { slug: 'reactive' })}>The Reactivity panel <span aria-hidden="true">→</span></a>
+    <a class="more" href={resolve('/panels/[slug]', { slug: 'reactive' })}
+      >The Reactivity panel <span aria-hidden="true">→</span></a
+    >
   </div>
   <figure class="split-shot shot">
     <img
@@ -168,7 +179,14 @@
     {#each showcase as s (s.img)}
       <article>
         <figure class="shot">
-          <img src={image(s.img)} width="1200" height="750" alt={s.alt} loading="lazy" decoding="async" />
+          <img
+            src={image(s.img)}
+            width="1200"
+            height="750"
+            alt={s.alt}
+            loading="lazy"
+            decoding="async"
+          />
         </figure>
         <h3>{s.title}</h3>
         <p class="muted">{s.body}</p>
@@ -183,16 +201,23 @@
     <p class="eyebrow">For AI agents</p>
     <h2 id="mcp-title">Your coding agent can read it too.</h2>
     <p>
-      The dev server also serves an MCP endpoint with {MCP_TOOL_COUNT} read tools. Claude Code and
-      other MCP clients get the same data as the panels, and every answer says what it covers.
+      The dev server also serves an MCP endpoint with {MCP_TOOL_COUNT} read tools. Claude Code and other
+      MCP clients get the same data as the panels, and every answer says what it covers.
     </p>
     <a class="btn btn-secondary" href={resolve('/mcp')}>Read the MCP guide</a>
   </div>
-  <div class="terminal" role="img" aria-label="Terminal output: the dev server prints a claude mcp add command with the URL and a token">
+  <div
+    class="terminal"
+    role="img"
+    aria-label="Terminal output: the dev server prints a claude mcp add command with the URL and a token"
+  >
     <p class="t-dim">$ npm run dev</p>
     <p class="t-dim">…</p>
     <p>svelte-devtools MCP ready — register with Claude Code:</p>
-    <p class="t-cmd">claude mcp add --transport http svelte http://localhost:5173/__svelte-devtools/mcp --header x-svelte-devtools-token:&lt;token&gt;</p>
+    <p class="t-cmd">
+      claude mcp add --transport http svelte http://localhost:5173/__svelte-devtools/mcp --header
+      x-svelte-devtools-token:&lt;token&gt;
+    </p>
   </div>
 </section>
 
@@ -205,15 +230,15 @@
     <div>
       <h3>Standalone</h3>
       <p class="muted">
-        Add the plugin and open <code>/.svelte-devtools/</code>. The first visit asks for the one-time
-        code printed in your terminal; after that the browser is trusted.
+        Add the plugin and open <code>/.svelte-devtools/</code>. The first visit asks for the
+        one-time code printed in your terminal; after that the browser is trusted.
       </p>
     </div>
     <div>
       <h3>Vite DevTools dock</h3>
       <p class="muted">
-        Install <code>@vitejs/devtools</code> ≥ 0.7.6 and add <code>DevTools()</code> to your Vite
-        config: the same panels open as an entry in the Vite DevTools dock.
+        Install <code>@vitejs/devtools</code> ≥ 0.7.6 and add <code>DevTools()</code> to your Vite config:
+        the same panels open as an entry in the Vite DevTools dock.
       </p>
     </div>
   </div>
@@ -230,7 +255,8 @@
         <a href={resolve('/panels/[slug]', { slug: p.slug })}>
           <span class="p-title">{p.title}</span>
           <span class="p-tag">
-            {#each taglineParts(p.tagline) as part, i (i)}{#if part.code}<code>{part.text}</code>{:else}{part.text}{/if}{/each}
+            {#each taglineParts(p.tagline) as part, i (i)}{#if part.code}<code>{part.text}</code
+                >{:else}{part.text}{/if}{/each}
           </span>
         </a>
       </li>
@@ -242,7 +268,9 @@
   <h2>Try it in your dev server.</h2>
   <div class="actions">
     <a class="btn btn-primary" href={resolve('/getting-started')}>Get started</a>
-    <a class="btn btn-secondary" href={repo} target="_blank" rel="noreferrer noopener">View on GitHub</a>
+    <a class="btn btn-secondary" href={repo} target="_blank" rel="noreferrer noopener"
+      >View on GitHub</a
+    >
   </div>
 </section>
 

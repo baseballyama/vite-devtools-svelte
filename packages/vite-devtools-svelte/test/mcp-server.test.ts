@@ -1,14 +1,16 @@
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+
+import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 /**
  * MCP tool surface (review: MCP had no tests). In-memory transport, no HTTP:
  * the tool list, and that the reactivity tools stay bounded and say what
  * they cover (docs/devframe-migration.md §6.7).
  */
 import { describe, it, expect, afterEach } from 'vitest'
-import fs from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
+
 import { buildMcpServer, MCP_TIMELINE_LIMIT } from '../src/mcp/server.js'
 import type { McpDeps } from '../src/mcp/server.js'
 import { SessionStore } from '../src/mcp/sessions.js'
@@ -58,10 +60,10 @@ function baseDeps(): McpDeps {
     getLiveComponents: () => [],
     getComponentRelations: () => [],
     getRenderProfiles: () => [],
-    getReactiveGraph: async () => ({ nodes: [], edges: [] }),
+    getReactiveGraph: () => Promise.resolve({ nodes: [], edges: [] }),
     getLoadProfiles: () => [],
     getFpsSamples: () => [],
-    sessions: new SessionStore({ persistDir, getters: getters as any }),
+    sessions: new SessionStore({ persistDir, getters: getters }),
   }
 }
 
@@ -80,19 +82,21 @@ describe('MCP server tools', () => {
   it('lists the 16 existing tools when no reactivity deps are given', async () => {
     const client = await connect(baseDeps())
     const { tools } = await client.listTools()
-    expect(tools.map(t => t.name).sort()).toEqual([...BASE_TOOLS].sort())
+    expect(tools.map(t => t.name).toSorted()).toEqual(BASE_TOOLS.toSorted())
   })
 
   it('adds the 4 bounded reactivity tools when their deps are given', async () => {
     const client = await connect({
       ...baseDeps(),
-      getReactiveSummary: async () => ({}) as any,
-      getReactiveScope: async () => ({}) as any,
+      getReactiveSummary: () => Promise.resolve({} as any),
+      getReactiveScope: () => Promise.resolve({} as any),
       getStateTimelineDelta: () => ({ cursor: 1, reset: true, changes: [] }),
       getCaptureInfo: () => ({}),
     })
     const { tools } = await client.listTools()
-    expect(tools.map(t => t.name).sort()).toEqual([...BASE_TOOLS, ...REACTIVITY_TOOLS].sort())
+    expect(tools.map(t => t.name).toSorted()).toEqual(
+      [...BASE_TOOLS, ...REACTIVITY_TOOLS].toSorted(),
+    )
   })
 
   it('get_state_timeline returns at most `limit` newest entries and counts the omitted ones', async () => {
@@ -133,9 +137,9 @@ describe('MCP server tools', () => {
     const calls: unknown[] = []
     const client = await connect({
       ...baseDeps(),
-      getReactiveScope: async req => {
+      getReactiveScope: req => {
         calls.push(req)
-        return {
+        return Promise.resolve({
           nodes: [],
           edges: [],
           scope: 3,
@@ -145,7 +149,7 @@ describe('MCP server tools', () => {
           edgesOmitted: 0,
           computedAt: null,
           policy: 'scoped',
-        }
+        })
       },
     })
     const result = parse(
@@ -162,9 +166,9 @@ describe('MCP server tools', () => {
     const calls: unknown[] = []
     const client = await connect({
       ...baseDeps(),
-      getReactiveScope: async req => {
+      getReactiveScope: req => {
         calls.push(req)
-        return {} as any
+        return Promise.resolve({} as any)
       },
     })
     const result: any = await client.callTool({

@@ -22,9 +22,8 @@
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const repoRoot = path.resolve(import.meta.dirname, '..')
 
 export const DEFAULTS = {
   components: 800,
@@ -48,8 +47,10 @@ function parseArgs(argv) {
 // Small deterministic PRNG so every run produces byte-identical output.
 function mulberry32(seed) {
   return () => {
+    /* oxlint-disable unicorn/prefer-math-trunc -- int32 wrap-around, Math.trunc would change the sequence */
     seed |= 0
     seed = (seed + 0x6d2b79f5) | 0
+    /* oxlint-enable unicorn/prefer-math-trunc */
     let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
@@ -527,7 +528,7 @@ export async function POST({ request }) {
   return { out, shape, ...opts }
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
   const opts = parseArgs(process.argv.slice(2))
   const t0 = performance.now()
   const res = generate(opts)

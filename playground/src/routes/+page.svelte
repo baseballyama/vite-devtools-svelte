@@ -1,11 +1,11 @@
-<script>
+<script lang="ts">
   import Counter from '#lib/components/Counter.svelte'
-  import TodoList from '#lib/components/TodoList.svelte'
-  import Timer from '#lib/components/Timer.svelte'
-  import TemperatureConverter from '#lib/components/TemperatureConverter.svelte'
-  import UserSearch from '#lib/components/UserSearch.svelte'
   import DynamicList from '#lib/components/DynamicList.svelte'
+  import TemperatureConverter from '#lib/components/TemperatureConverter.svelte'
   import ThemeSwitcher from '#lib/components/ThemeSwitcher.svelte'
+  import Timer from '#lib/components/Timer.svelte'
+  import TodoList from '#lib/components/TodoList.svelte'
+  import UserSearch from '#lib/components/UserSearch.svelte'
 
   let showTimer = $state(true)
   let showDynamic = $state(true)
@@ -38,20 +38,39 @@
 </div>
 
 <style>
-  h1 { color: #ff3e00; margin-bottom: 4px; }
-  .subtitle { color: #888; margin-bottom: 16px; }
-  .toggles {
-    display: flex; gap: 16px; margin-bottom: 16px; padding: 8px 12px;
-    background: #1e1e3a; border: 1px solid #2a2a4a; border-radius: 6px;
-    font-size: 13px; color: #ccc;
+  h1 {
+    color: #ff3e00;
+    margin-bottom: 4px;
   }
-  .toggles label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .subtitle {
+    color: #888;
+    margin-bottom: 16px;
+  }
+  .toggles {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+    padding: 8px 12px;
+    background: #1e1e3a;
+    border: 1px solid #2a2a4a;
+    border-radius: 6px;
+    font-size: 13px;
+    color: #ccc;
+  }
+  .toggles label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+  }
   .grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 16px;
   }
   @media (max-width: 640px) {
-    .grid { grid-template-columns: 1fr; }
+    .grid {
+      grid-template-columns: 1fr;
+    }
   }
 </style>

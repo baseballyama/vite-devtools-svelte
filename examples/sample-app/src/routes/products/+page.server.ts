@@ -1,7 +1,11 @@
 import { products } from '$lib/server/products'
+
 import type { PageServerLoad } from './$types'
 
-const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+const sleep = (ms: number) =>
+  new Promise(r => {
+    setTimeout(r, ms)
+  })
 
 export const load: PageServerLoad = async ({ url }) => {
   const category = url.searchParams.get('category') ?? 'all'

@@ -1,8 +1,9 @@
 <script>
+  import { setContext } from 'svelte'
+  import { writable } from 'svelte/store'
+
   import Child from './Child.svelte'
   import Price from './Price.svelte'
-  import { writable } from 'svelte/store'
-  import { setContext } from 'svelte'
   let k = $state(0)
   let which = $state(true)
   let promise = $state(Promise.resolve(1))

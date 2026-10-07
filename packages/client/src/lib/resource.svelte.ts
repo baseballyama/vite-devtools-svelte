@@ -14,7 +14,7 @@ import { getContext, untrack } from 'svelte'
 
 export const PANEL_ACTIVE = Symbol('panel-active')
 
-export type PanelActive = () => boolean
+type PanelActive = () => boolean
 
 export interface ResourceOptions<T> {
   initial: T
@@ -118,22 +118,28 @@ export function resource<T>(fetcher: () => Promise<T>, opts: ResourceOptions<T>)
     return inflight
   }
 
-  $effect(() => {
-    if (!isActive() || (opts.when && !opts.when())) return
-    untrack(() => load(false))
-    if (!opts.interval || !live) return
-    const tick = () => {
-      if (!document.hidden) load(false)
-    }
-    const id = setInterval(tick, opts.interval)
-    const onVisible = () => {
-      if (!document.hidden) load(false)
-    }
-    document.addEventListener('visibilitychange', onVisible)
+  /** Background poll: skipped while the document is hidden. Never rejects. */
+  function poll(): void {
+    if (!document.hidden) void load(false)
+  }
+
+  function startPolling(interval: number): () => void {
+    const id = setInterval(poll, interval)
+    document.addEventListener('visibilitychange', poll)
     return () => {
       clearInterval(id)
-      document.removeEventListener('visibilitychange', onVisible)
+      document.removeEventListener('visibilitychange', poll)
     }
+  }
+
+  $effect(() => {
+    let stop: (() => void) | undefined
+    if (isActive() && (!opts.when || opts.when())) {
+      // `load` settles every failure into `error`, so it never rejects.
+      untrack(() => void load(false))
+      if (opts.interval && live) stop = startPolling(opts.interval)
+    }
+    return () => stop?.()
   })
 
   return {

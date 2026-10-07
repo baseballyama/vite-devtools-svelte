@@ -4,7 +4,7 @@
  */
 const VLQ_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 const charToInt = new Map<string, number>()
-for (let i = 0; i < VLQ_CHARS.length; i++) charToInt.set(VLQ_CHARS[i], i)
+for (let i = 0; i < VLQ_CHARS.length; i++) charToInt.set(VLQ_CHARS.charAt(i), i)
 
 function decodeVLQ(encoded: string): number[] {
   const out: number[] = []
@@ -41,7 +41,7 @@ export function parseLineMappings(mappings: string): LineMaps {
     for (const seg of line.split(',')) {
       const d = decodeVLQ(seg)
       if (d.length < 4) continue
-      sl += d[2]
+      sl += d[2]!
       const g = gl + 1
       const s = sl + 1
       ;(c2s.get(g) ?? c2s.set(g, new Set()).get(g)!).add(s)

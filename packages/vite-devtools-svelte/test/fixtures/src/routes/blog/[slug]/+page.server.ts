@@ -1,3 +1,3 @@
-export const load = async ({ params }) => {
+export const load = ({ params }) => {
   return { title: params.slug }
 }

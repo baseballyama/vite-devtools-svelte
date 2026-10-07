@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
+
+import { summarizeReactiveProblems, listPerformanceIssues } from '../../src/mcp/issues.js'
 import DerivedConsumers from './fixtures/DerivedConsumers.svelte'
 import { render, instance, graph, node, outgoing } from './harness.js'
-import { summarizeReactiveProblems, listPerformanceIssues } from '../../src/mcp/issues.js'
 
 describe('derived consumers', () => {
   it('reads from the markup are edges to the component (template) node', () => {
@@ -35,7 +36,7 @@ describe('derived consumers', () => {
     expect(
       summarizeReactiveProblems(graph(null) as any)
         .orphanDeriveds.map(d => d.name)
-        .sort(),
+        .toSorted(),
     ).toEqual(['inHandler', 'neverRead'])
     const log = console.log
     console.log = () => {}
@@ -53,7 +54,7 @@ describe('derived consumers', () => {
       loadProfiles: [],
       fpsSamples: [],
     })
-    expect(issues.filter(i => i.kind === 'derived-orphan')).toEqual([])
+    expect(issues.filter(i => (i.kind as string) === 'derived-orphan')).toEqual([])
     expect(c).toBeTruthy()
     r.destroy()
   })

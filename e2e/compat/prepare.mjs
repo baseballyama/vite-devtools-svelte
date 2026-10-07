@@ -7,9 +7,8 @@
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
+const root = path.resolve(import.meta.dirname, '../..')
 const id = process.argv[2]
 const { profiles } = JSON.parse(fs.readFileSync(path.join(root, 'e2e/compat/matrix.json'), 'utf8'))
 const profile = profiles.find(p => p.id === id)
@@ -29,7 +28,7 @@ if (!profile.workspace) {
     ['pack', '--pack-destination', packDir],
     path.join(root, 'packages/vite-devtools-svelte'),
   )
-  const [tarball] = fs.readdirSync(packDir).filter(f => f.endsWith('.tgz'))
+  const tarball = fs.readdirSync(packDir).find(f => f.endsWith('.tgz'))
   if (!tarball) throw new Error('pnpm pack produced no tarball')
   fs.renameSync(path.join(packDir, tarball), path.join(packDir, 'vite-devtools-svelte.tgz'))
   // The tarball's integrity changes with every build, so the lockfile entry

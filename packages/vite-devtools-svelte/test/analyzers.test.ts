@@ -1,11 +1,13 @@
-import { describe, it, expect } from 'vitest'
-import path from 'node:path'
 import fs from 'node:fs'
 import os from 'node:os'
-import { analyzeRoutes } from '../src/analyzers/routes.js'
+import path from 'node:path'
+
+import { describe, it, expect } from 'vitest'
+
 import { analyzeAssets, MIME_TYPES } from '../src/analyzers/assets.js'
-import { analyzeProject } from '../src/analyzers/project.js'
 import { analyzeComponents } from '../src/analyzers/components.js'
+import { analyzeProject } from '../src/analyzers/project.js'
+import { analyzeRoutes } from '../src/analyzers/routes.js'
 
 const FIXTURES_DIR = path.resolve(import.meta.dirname, 'fixtures')
 const ROUTES_DIR = path.join(FIXTURES_DIR, 'src', 'routes')
@@ -34,9 +36,9 @@ describe('analyzeRoutes', () => {
     const slugRoute = routes.find(r => r.path.includes(':slug'))
     expect(slugRoute).toBeDefined()
     expect(slugRoute!.params.length).toBe(1)
-    expect(slugRoute!.params[0].name).toBe('slug')
-    expect(slugRoute!.params[0].rest).toBe(false)
-    expect(slugRoute!.params[0].optional).toBe(false)
+    expect(slugRoute!.params[0]!.name).toBe('slug')
+    expect(slugRoute!.params[0]!.rest).toBe(false)
+    expect(slugRoute!.params[0]!.optional).toBe(false)
   })
 
   it('should detect endpoints (server routes)', () => {
@@ -76,9 +78,9 @@ describe('analyzeRoutes', () => {
     const docsRoute = routes.find(r => r.path.includes('*rest'))
     expect(docsRoute).toBeDefined()
     expect(docsRoute!.params.length).toBe(1)
-    expect(docsRoute!.params[0].name).toBe('rest')
-    expect(docsRoute!.params[0].rest).toBe(true)
-    expect(docsRoute!.params[0].optional).toBe(false)
+    expect(docsRoute!.params[0]!.name).toBe('rest')
+    expect(docsRoute!.params[0]!.rest).toBe(true)
+    expect(docsRoute!.params[0]!.optional).toBe(false)
   })
 
   // --- Optional params ---
@@ -88,9 +90,9 @@ describe('analyzeRoutes', () => {
     const settingsRoute = routes.find(r => r.path.includes('optional'))
     expect(settingsRoute).toBeDefined()
     expect(settingsRoute!.params.length).toBe(1)
-    expect(settingsRoute!.params[0].name).toBe('optional')
-    expect(settingsRoute!.params[0].optional).toBe(true)
-    expect(settingsRoute!.params[0].rest).toBe(false)
+    expect(settingsRoute!.params[0]!.name).toBe('optional')
+    expect(settingsRoute!.params[0]!.optional).toBe(true)
+    expect(settingsRoute!.params[0]!.rest).toBe(false)
     // Optional params become :param? in the path
     expect(settingsRoute!.path).toContain(':optional?')
   })
@@ -102,10 +104,10 @@ describe('analyzeRoutes', () => {
     const usersRoute = routes.find(r => r.path.includes(':id'))
     expect(usersRoute).toBeDefined()
     expect(usersRoute!.params.length).toBe(1)
-    expect(usersRoute!.params[0].name).toBe('id')
-    expect(usersRoute!.params[0].matcher).toBe('integer')
-    expect(usersRoute!.params[0].rest).toBe(false)
-    expect(usersRoute!.params[0].optional).toBe(false)
+    expect(usersRoute!.params[0]!.name).toBe('id')
+    expect(usersRoute!.params[0]!.matcher).toBe('integer')
+    expect(usersRoute!.params[0]!.rest).toBe(false)
+    expect(usersRoute!.params[0]!.optional).toBe(false)
   })
 
   // --- Layout server ---
@@ -151,7 +153,7 @@ describe('analyzeRoutes', () => {
   it('should return routes sorted by path', () => {
     const routes = analyzeRoutes(ROUTES_DIR)
     const paths = routes.map(r => r.path)
-    const sorted = [...paths].sort()
+    const sorted = paths.toSorted()
     expect(paths).toEqual(sorted)
   })
 
@@ -246,7 +248,7 @@ describe('analyzeAssets', () => {
   it('should return assets sorted by relative path', () => {
     const assets = analyzeAssets(STATIC_DIR)
     const paths = assets.map(a => a.relativePath)
-    const sorted = [...paths].sort()
+    const sorted = paths.toSorted()
     expect(paths).toEqual(sorted)
   })
 

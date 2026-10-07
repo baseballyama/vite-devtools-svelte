@@ -11,6 +11,7 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
+
 import { DEFAULTS as FIXTURE, ensurePlaygroundSync, generate } from './generate-large-app.mjs'
 import {
   INIT_SCRIPT,
@@ -38,16 +39,19 @@ const home = path.join(repoRoot, 'playground/.temp/perf-home', label)
 const mask = text =>
   String(text)
     .replaceAll(repoRoot, '<repo>')
-    .replace(/\/Users\/[^/\s]+/g, '<home>')
-    .replace(/[0-9a-f]{12,}/gi, '<hex>')
-    .replace(/\d+/g, '#')
+    .replaceAll(/\/Users\/[^/\s]+/g, '<home>')
+    .replaceAll(/[0-9a-f]{12,}/gi, '<hex>')
+    .replaceAll(/\d+/g, '#')
     .slice(0, 240)
 
 const cleanup = []
-const watchdog = setTimeout(async () => {
+async function onWatchdog() {
   console.error(`[diag-console] --max-min=${maxMin} exceeded — closing own children`)
-  for (const fn of cleanup.reverse()) await fn().catch(() => {})
+  for (const fn of cleanup.toReversed()) await fn().catch(() => {})
   process.exit(4)
+}
+const watchdog = setTimeout(() => {
+  void onWatchdog()
 }, maxMin * 60_000)
 watchdog.unref()
 
@@ -97,10 +101,10 @@ async function measure(browser, appDir, withDevtools, port) {
   const res = {
     plugin: withDevtools ? 'on' : 'off',
     serverPid: srv.pid,
-    pageLoad: classes.size ? 'see classes' : 'no warnings/errors',
+    pageLoad: classes.size > 0 ? 'see classes' : 'no warnings/errors',
     phases,
     forwardConsole: forward,
-    classes: [...classes.values()].sort((a, b) => b.count - a.count),
+    classes: [...classes.values()].toSorted((a, b) => b.count - a.count),
     pageErrors,
   }
   await ctx.close()
@@ -145,7 +149,9 @@ async function main() {
   console.log(`→ ${path.join(outDir, 'result.json')}`)
 }
 
-main().catch(e => {
+try {
+  await main()
+} catch (e) {
   console.error(e)
   process.exit(1)
-})
+}

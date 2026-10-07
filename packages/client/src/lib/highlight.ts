@@ -13,17 +13,17 @@ const JS_LIT = new Set('true,false,null,undefined,NaN,Infinity'.split(','))
 const RUNES = new Set(['$state', '$derived', '$effect', '$props', '$inspect', '$bindable', '$host'])
 
 function esc(s: string) {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  return s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
 }
 
 function tokJS(code: string): Tok[] {
   const toks: Tok[] = []
   let i = 0
   while (i < code.length) {
-    const ch = code[i]
+    const ch = code.charAt(i)
     if (/\s/.test(ch)) {
       let j = i
-      while (j < code.length && /\s/.test(code[j])) j++
+      while (j < code.length && /\s/.test(code.charAt(j))) j++
       toks.push({ t: code.slice(i, j) })
       i = j
       continue
@@ -42,19 +42,19 @@ function tokJS(code: string): Tok[] {
       i = j + 1
       continue
     }
-    if (/\d/.test(ch) && (i === 0 || !/\w/.test(code[i - 1]))) {
+    if (/\d/.test(ch) && (i === 0 || !/\w/.test(code.charAt(i - 1)))) {
       let j = i
-      while (j < code.length && /[\d.e_]/.test(code[j])) j++
+      while (j < code.length && /[\d.e_]/.test(code.charAt(j))) j++
       toks.push({ t: code.slice(i, j), c: 'hl-nm' })
       i = j
       continue
     }
     if (/[a-zA-Z_$]/.test(ch)) {
       let j = i
-      while (j < code.length && /[\w$.]/.test(code[j])) j++
+      while (j < code.length && /[\w$.]/.test(code.charAt(j))) j++
       const w = code.slice(i, j)
       let c: string | undefined
-      if (w.startsWith('$.') || RUNES.has(w.split('.')[0])) c = 'hl-sv'
+      if (w.startsWith('$.') || RUNES.has(w.split('.')[0]!)) c = 'hl-sv'
       else if (JS_KW.has(w)) c = 'hl-kw'
       else if (JS_LIT.has(w)) c = 'hl-lt'
       else if (code[j] === '(') c = 'hl-fn'
@@ -82,12 +82,13 @@ function tokHTML(code: string): Tok[] {
         i = j + 1
         continue
       }
-      toks.push({ t: m[1], c: 'hl-tg' })
-      let rest = tag.slice(m[1].length)
+      const head = m[1]!
+      toks.push({ t: head, c: 'hl-tg' })
+      let rest = tag.slice(head.length)
       while (rest.length > 0) {
         const am = rest.match(/^(\s+)([\w:|-]+)(=)/)
         if (am) {
-          toks.push({ t: am[1] }, { t: am[2], c: 'hl-at' }, { t: '=' })
+          toks.push({ t: am[1]! }, { t: am[2]!, c: 'hl-at' }, { t: '=' })
           rest = rest.slice(am[0].length)
           if (rest[0] === '"' || rest[0] === "'") {
             const q = rest[0]
@@ -110,10 +111,13 @@ function tokHTML(code: string): Tok[] {
         }
         const bm = rest.match(/^(\s+)([\w:|-]+)/)
         if (bm) {
-          toks.push({ t: bm[1] }, { t: bm[2], c: 'hl-at' })
+          toks.push({ t: bm[1]! }, { t: bm[2]!, c: 'hl-at' })
           rest = rest.slice(bm[0].length)
         } else {
-          toks.push({ t: rest[0], c: rest[0] === '>' || rest[0] === '/' ? 'hl-tg' : undefined })
+          toks.push({
+            t: rest.charAt(0),
+            c: rest[0] === '>' || rest[0] === '/' ? 'hl-tg' : undefined,
+          })
           rest = rest.slice(1)
         }
       }
@@ -147,13 +151,13 @@ function tokCSS(code: string): Tok[] {
   if (pm)
     return [
       { t: ind },
-      { t: pm[1], c: 'hl-cp' },
-      { t: pm[2] },
-      { t: pm[3], c: 'hl-cv' },
-      { t: pm[4] },
+      { t: pm[1]!, c: 'hl-cp' },
+      { t: pm[2]! },
+      { t: pm[3]!, c: 'hl-cv' },
+      { t: pm[4]! },
     ]
   const sm = tr.match(/^([^{]+)(\s*\{)\s*$/)
-  if (sm) return [{ t: ind }, { t: sm[1], c: 'hl-cs' }, { t: sm[2] }]
+  if (sm) return [{ t: ind }, { t: sm[1]!, c: 'hl-cs' }, { t: sm[2]! }]
   return [{ t: code }]
 }
 

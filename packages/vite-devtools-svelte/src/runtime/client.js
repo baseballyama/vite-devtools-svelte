@@ -1,3 +1,31 @@
+// FNV-1a over UTF-16 code units: cheap change detection for large snapshots.
+function __hash(str) {
+  let h = 0x811c9dc5
+  for (let i = 0; i < str.length; i++) {
+    // oxlint-disable-next-line unicorn/prefer-code-point -- hashes UTF-16 code units on purpose (one per index, no surrogate decoding)
+    h ^= str.charCodeAt(i)
+    h = Math.imul(h, 0x01000193)
+  }
+  return (h >>> 0).toString(36)
+}
+
+// Wire shape of one component in a components message.
+function __componentEntry(instance) {
+  return {
+    id: instance.id,
+    file: instance.file,
+    name: instance.name,
+    parentId: instance.parentId,
+    mounted: instance.mounted,
+  }
+}
+
+// An integer within [lo, hi], or `d` when `v` is not a finite number.
+function __clampInt(v, lo, hi, d) {
+  const n = Math.floor(Number(v))
+  return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d
+}
+
 if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
   const __NO_VALUE = Symbol('no value')
   // State timeline ring (§6.7 C): every read sees at most 500 entries and
@@ -5,15 +33,6 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
   // hold up to __TIMELINE_TRIM_AT (2 x the 500 cap) between bulk trims.
   const __TIMELINE_BYTES = 4 * 1024 * 1024
   const __TIMELINE_TRIM_AT = 1000
-  // FNV-1a over UTF-16 code units: cheap change detection for large snapshots.
-  const __hash = str => {
-    let h = 0x811c9dc5
-    for (let i = 0; i < str.length; i++) {
-      h ^= str.charCodeAt(i)
-      h = Math.imul(h, 0x01000193)
-    }
-    return (h >>> 0).toString(36)
-  }
   const __SVELTE_DT = {
     _nextId: 0,
     _instances: new Map(),
@@ -144,9 +163,10 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
         hint !== undefined && hint !== null && this._instances.has(hint)
           ? hint
           : this._stack.length > 0
-            ? this._stack[this._stack.length - 1]
+            ? this._stack.at(-1)
             : null
-      const name = file.split('/').pop()?.replace('.svelte', '') || 'Unknown'
+      const baseName = file.slice(file.lastIndexOf('/') + 1).replace('.svelte', '')
+      const name = baseName === '' ? 'Unknown' : baseName
       // children is a Set so unmounting one row of a 5 000-row list is O(1).
       this._instances.set(id, { id, file, name, parentId, mounted: true, children: new Set() })
       if (parentId !== null) {
@@ -216,13 +236,13 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
         const set = this._nodesByComponent.get(entry.meta.componentId)
         if (set) set.delete(nodeId)
       }
-      const signal = entry && entry.signal.deref()
+      const signal = entry?.signal?.deref()
       if (signal && this._idBySignal.get(signal) === nodeId) this._idBySignal.delete(signal)
       const proxy = this._reactiveProxies.get(nodeId)?.deref()
       if (proxy && this._idByProxy.get(proxy) === nodeId) this._idByProxy.delete(proxy)
-      if (entry && entry.meta.type === 'state') {
+      if (entry?.meta.type === 'state') {
         const named = this._proxyNames.get(entry.meta.name)
-        const inScope = named && named.get(entry.meta.componentId)
+        const inScope = named?.get(entry.meta.componentId)
         if (inScope) {
           inScope.delete(nodeId)
           if (inScope.size === 0) named.delete(entry.meta.componentId)
@@ -246,7 +266,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     },
 
     _scopeFile(id) {
-      const scope = this._instances.get(id) || this._modules.get(id)
+      const scope = this._instances.get(id) ?? this._modules.get(id)
       return scope ? scope.file : ''
     },
 
@@ -267,7 +287,8 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       let id = this._moduleByFile.get(file)
       if (id === undefined) {
         id = this._nextId++
-        const base = file.split('/').pop() || file
+        const lastSegment = file.slice(file.lastIndexOf('/') + 1)
+        const base = lastSegment === '' ? file : lastSegment
         this._modules.set(id, { id, file, name: base, kind: 'module' })
         this._moduleByFile.set(file, id)
       }
@@ -344,7 +365,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
         seq = new Map()
         this._nameSeq.set(componentId, seq)
       }
-      let k = seq.get(name) || 1
+      let k = seq.get(name) ?? 1
       let id
       do {
         k++
@@ -487,24 +508,17 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       const CHECKPOINT_MS = 30000
       const pending = this._pendingAdded.size + this._pendingRemoved.size
       const full =
-        forceFull ||
+        forceFull === true ||
         !this._componentDeltas ||
         t0 - this._lastFullAt >= CHECKPOINT_MS ||
         pending > this._instances.size
-      const toEntry = instance => ({
-        id: instance.id,
-        file: instance.file,
-        name: instance.name,
-        parentId: instance.parentId,
-        mounted: instance.mounted,
-      })
       let bytes = 0
       const msgs = []
       if (full) {
         const components = []
         for (const [, instance] of this._instances) {
           if (instance.mounted) {
-            components.push(toEntry(instance))
+            components.push(__componentEntry(instance))
             bytes += instance.file.length + instance.name.length + 72
           }
         }
@@ -515,8 +529,8 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
         const added = []
         for (const id of this._pendingAdded) {
           const instance = this._instances.get(id)
-          if (instance && instance.mounted) {
-            added.push(toEntry(instance))
+          if (instance?.mounted) {
+            added.push(__componentEntry(instance))
             bytes += instance.file.length + instance.name.length + 72
           }
         }
@@ -580,7 +594,10 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
 
     recordRender(id) {
       const profile = this._profiles.get(id)
-      if (!profile) {
+      if (profile) {
+        profile.renderCount++
+        profile.lastRenderAt = Date.now()
+      } else {
         const instance = this._instances.get(id)
         if (!instance) return
         this._profiles.set(id, {
@@ -593,9 +610,6 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
           lastRenderTime: 0,
           lastRenderAt: Date.now(),
         })
-      } else {
-        profile.renderCount++
-        profile.lastRenderAt = Date.now()
       }
       this._activityRow(id).renders++
       this._scheduleProfileUpdate()
@@ -707,7 +721,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     // A user effect object (already created). Kept for callers that have one.
     trackEffect(effect, name, componentId) {
       const nodeId = componentId + ':' + name
-      const target = effect || { v: undefined, _isEffect: true }
+      const target = effect ?? { v: undefined, _isEffect: true }
       this._registerNode(
         nodeId,
         componentId,
@@ -758,13 +772,13 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     // tracked $effect nodes. Svelte links child effects via first/next.
     _markupEffects(id) {
       const instance = this._instances.get(id)
-      const hook = instance && instance.hook && instance.hook.deref()
-      if (!hook || !hook.ctx || !hook.parent) return []
+      const hook = instance?.hook?.deref()
+      if (!hook?.ctx || !hook.parent) return []
       const ctx = hook.ctx
       const out = []
       const stack = []
       for (let e = hook.parent.first; e; e = e.next) stack.push(e)
-      while (stack.length) {
+      while (stack.length > 0) {
         const e = stack.pop()
         if (e === hook || e.ctx !== ctx) continue
         if (e.deps && !this._idBySignal.has(e)) out.push(e)
@@ -831,8 +845,8 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       for (const ids of named.values()) for (const id of ids) all.push(id)
       const found = fits(all)
       if (found.length > 0) return found[0]
-      for (const cid of scopes) for (const id of named.get(cid) || []) if (liveSignal(id)) return id
-      return all.find(id => liveSignal(id)) || null
+      for (const cid of scopes) for (const id of named.get(cid) ?? []) if (liveSignal(id)) return id
+      return all.find(id => liveSignal(id)) ?? null
     },
 
     // '.items[0].text' -> ['items', '0', 'text']; null for ' version' and
@@ -962,8 +976,8 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     // not shown without readers.
     getReactiveGraph(componentId, caps) {
       const scoped = componentId !== undefined && componentId !== null
-      const maxNodes = this._graphCap(caps && caps.maxNodes, 5000)
-      const maxEdges = this._graphCap(caps && caps.maxEdges, 20000)
+      const maxNodes = this._graphCap(caps?.maxNodes, 5000)
+      const maxEdges = this._graphCap(caps?.maxEdges, 20000)
       const live = new Map()
       // Live signal of a tracked node, or null (forgets dead / unmounted nodes).
       const liveSignal = nodeId => {
@@ -1043,7 +1057,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
         }
       }
       const nodeCid = nodeId => this._reactiveNodes.get(nodeId).meta.componentId
-      const countUntracked = nodeId => () => untracked.set(nodeId, (untracked.get(nodeId) || 0) + 1)
+      const countUntracked = nodeId => () => untracked.set(nodeId, (untracked.get(nodeId) ?? 0) + 1)
       // Reads of a component's markup effects: edges into its template node
       // (filter: keep only edges from these node ids, for neighbours).
       const markupEdges = (cid, filter) => {
@@ -1069,7 +1083,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       let totalEdges = null
       if (scoped) {
         // a copy: liveSignal() forgets dead nodes during the loop
-        for (const nodeId of Array.from(this._nodesByComponent.get(componentId) || [])) {
+        for (const nodeId of Array.from(this._nodesByComponent.get(componentId) ?? [])) {
           const signal = liveSignal(nodeId)
           if (!signal) continue
           see(nodeId)
@@ -1091,7 +1105,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
         const instance = this._instances.get(componentId)
         for (const child of instance ? instance.children : []) {
           // a copy: liveSignal() forgets dead nodes during the loop
-          for (const nodeId of Array.from(this._nodesByComponent.get(child) || [])) {
+          for (const nodeId of Array.from(this._nodesByComponent.get(child) ?? [])) {
             const signal = liveSignal(nodeId)
             if (signal)
               walk(signal.deps, 'deps', depId => own(depId) && addEdge(depId, nodeId), null, child)
@@ -1173,7 +1187,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     // answered by this one; the reply echoes requestId and epoch. An old
     // server sends {} → global graph with the default caps (= its LIMITS).
     sendReactiveGraph(request) {
-      const req = request || {}
+      const req = request ?? {}
       if (req.epoch !== undefined && req.epoch !== null && req.epoch !== this._epoch) return
       const cid = typeof req.componentId === 'number' ? req.componentId : null
       const graph = this.getReactiveGraph(cid, { maxNodes: req.maxNodes, maxEdges: req.maxEdges })
@@ -1192,13 +1206,9 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     // window), no graph, no node scan. Rows rank by sampled changes, then
     // renders, then render ms; rows + other = total (components and nodes).
     getReactiveSummary(opts) {
-      const o = opts || {}
-      const clampInt = (v, lo, hi, d) => {
-        const n = Math.floor(Number(v))
-        return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d
-      }
-      const topK = clampInt(o.topK, 1, 200, 50)
-      const windowMs = clampInt(o.windowMs, 1000, 60000, 10000)
+      const o = opts ?? {}
+      const topK = __clampInt(o.topK, 1, 200, 50)
+      const windowMs = __clampInt(o.windowMs, 1000, 60000, 10000)
       const nowSec = Math.floor(performance.now() / 1000)
       const agg = new Map()
       let sampledMs = 0
@@ -1219,7 +1229,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
           a.renderMs += r.renderMs
         }
       }
-      const ranked = [...agg].sort(
+      const ranked = [...agg].toSorted(
         (x, y) =>
           y[1].changes - x[1].changes ||
           y[1].renders - x[1].renders ||
@@ -1228,7 +1238,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       )
       let rowNodes = 0
       const rows = ranked.slice(0, topK).map(([cid, a]) => {
-        const n = this._nodeCounts.get(cid) || { state: 0, derived: 0, effect: 0 }
+        const n = this._nodeCounts.get(cid) ?? { state: 0, derived: 0, effect: 0 }
         rowNodes += n.state + n.derived + n.effect
         const row = {
           componentId: cid,
@@ -1272,7 +1282,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     // Request { requestId?, epoch?, topK?, windowMs? } (same correlation as
     // the graph, review M1).
     sendReactiveSummary(request) {
-      const req = request || {}
+      const req = request ?? {}
       if (req.epoch !== undefined && req.epoch !== null && req.epoch !== this._epoch) return
       const summary = this.getReactiveSummary(req)
       if (req.requestId !== undefined) summary.requestId = req.requestId
@@ -1345,7 +1355,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
         if (!baseline && !this._pollSweep.startedAt) this._pollSweep.startedAt = now
         const nodeId = ids[this._pollCursor]
         const entry = this._reactiveNodes.get(nodeId)
-        if (!entry || entry.meta.type !== 'state') {
+        if (entry?.meta.type !== 'state') {
           // re-tracked as another type: drop from the poll list (slot reused)
           this._pollRemove(nodeId)
           continue
@@ -1448,7 +1458,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
             : str.length > MAX_SNAPSHOT_CHARS
               ? str.length + ':' + __hash(str)
               : str
-        if (!this._stateSnapshotStrs) this._stateSnapshotStrs = new Map()
+        this._stateSnapshotStrs ??= new Map()
         const hadKey = this._stateSnapshotStrs.has(nodeId)
         if (hadKey && this._stateSnapshotStrs.get(nodeId) === key) return
         this._stateSnapshotStrs.set(nodeId, key)
@@ -1474,7 +1484,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
           entry,
           prev,
           snapshot,
-          size + (this._lastSnapshotSize.get(nodeId) || 0),
+          size + (this._lastSnapshotSize.get(nodeId) ?? 0),
         )
         this._lastSnapshotSize.set(nodeId, size)
       } catch {
@@ -1492,7 +1502,8 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
         newValue,
         timestamp: Date.now(),
       }
-      const bytes = (approxBytes || 64) + 192
+      // 0 (an empty string) or no estimate: assume a small value.
+      const bytes = (approxBytes > 0 ? approxBytes : 64) + 192
       // seq stays runtime-internal: the server assigns its own seq (§6.4).
       this._entryInfo.set(change, { seq: ++this._timelineSeq, bytes })
       this._stateTimeline.push(change)
@@ -1574,7 +1585,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
         if (count > 0) dropped.push({ reason, count })
         this._timelineDropped[reason] = 0
       }
-      if (dropped.length) msg.dropped = dropped
+      if (dropped.length > 0) msg.dropped = dropped
       if (this._valueTooLarge > 0) msg.valueTooLarge = this._valueTooLarge
       this._valueTooLarge = 0
       return msg
@@ -1608,7 +1619,9 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       const pending = all.slice(start)
       const msgs = []
       const first = this._timelineReset || this._hasTimelineDisclosure()
-      for (let i = 0; i < pending.length || (first && i === 0); i += 200) {
+      // A first message goes out even with no pending changes (disclosure only).
+      const end = first ? Math.max(pending.length, 1) : pending.length
+      for (let i = 0; i < end; i += 200) {
         const msg = { epoch: this._epoch, changes: pending.slice(i, i + 200) }
         if (i === 0 && this._timelineReset) msg.reset = true
         if (i === 0) this._takeTimelineDisclosure(msg)
@@ -1671,20 +1684,21 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     },
 
     _isVisible() {
-      return typeof document === 'undefined' || document.visibilityState !== 'hidden'
+      if (typeof document === 'undefined') return true
+      return document.visibilityState !== 'hidden'
     },
 
     _setSubscription(data) {
       const wasActive = this._active
-      this._active = !!(data && data.active)
-      this._componentDeltas = !!(data && data.componentDeltas)
+      this._active = !!data?.active
+      this._componentDeltas = !!data?.componentDeltas
       if (!this._active) {
         this._pendingAdded.clear()
         this._pendingRemoved.clear()
       }
       // resync: the server holds no full base for this epoch (§6.5, review
       // C1), or we reconnected to a possibly restarted server.
-      const resync = this._resync || !!(data && data.resync)
+      const resync = this._resync || !!data?.resync
       this._resync = false
       if (this._active && !wasActive) this._pollBaseline()
       if (this._active && (!wasActive || resync)) {
@@ -1746,7 +1760,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
 
   // State polling and FPS sampling start on the server's subscription
   // message (§6.3) and pause while the app tab is hidden.
-  if (typeof document !== 'undefined' && document.addEventListener) {
+  if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
     document.addEventListener('visibilitychange', () => __SVELTE_DT._syncSampling())
   }
 
@@ -1758,7 +1772,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
         file: event.filename,
         line: event.lineno,
         column: event.colno,
-        stack: event.error?.stack || '',
+        stack: event.error?.stack ?? '',
         timestamp: Date.now(),
       })
     }
@@ -1766,9 +1780,11 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
   window.addEventListener('unhandledrejection', event => {
     if (import.meta.hot) {
       const reason = event.reason
+      const message = reason?.message
       import.meta.hot.send('svelte-devtools:runtime-error', {
-        message: reason?.message || String(reason),
-        stack: reason?.stack || '',
+        // No (or an empty / non-string) message: the stringified reason.
+        message: typeof message === 'string' && message !== '' ? message : String(reason),
+        stack: reason?.stack ?? '',
         timestamp: Date.now(),
       })
     }

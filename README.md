@@ -167,8 +167,8 @@ Register the plugin in your `vite.config.ts`. `svelteDevtools()` **must come bef
 ```ts
 // vite.config.ts
 import { sveltekit } from '@sveltejs/kit/vite'
-import { svelteDevtools } from 'vite-devtools-svelte'
 import { defineConfig } from 'vite'
+import { svelteDevtools } from 'vite-devtools-svelte'
 
 export default defineConfig({
   plugins: [

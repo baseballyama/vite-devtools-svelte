@@ -1,5 +1,6 @@
-import fs from 'fs'
-import path from 'path'
+import fs from 'node:fs'
+import path from 'node:path'
+
 import type { ComponentRelation } from '../types.js'
 
 export function analyzeComponents(root: string): ComponentRelation[] {
@@ -47,7 +48,7 @@ function extractSvelteImports(content: string, filePath: string): string[] {
   let match: RegExpExecArray | null
 
   while ((match = importRegex.exec(content)) !== null) {
-    const importPath = match[1]
+    const importPath = match[1]!
     const resolved = resolveImportPath(importPath, dir, filePath)
     if (resolved) imports.push(resolved)
   }

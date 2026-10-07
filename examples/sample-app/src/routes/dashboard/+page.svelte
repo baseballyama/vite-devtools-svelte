@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { resolve } from '$app/paths'
   import HeavyList from '$lib/components/HeavyList.svelte'
+
   import type { PageProps } from './$types'
 
   let { data }: PageProps = $props()
@@ -40,7 +42,7 @@
       <ul>
         {#each data.lowStock as p (p.id)}
           <li>
-            <a href="/products/{p.id}">{p.name}</a>
+            <a href={resolve('/products/[id]', { id: p.id })}>{p.name}</a>
             <strong>残 {p.stock}</strong>
           </li>
         {/each}
@@ -49,7 +51,7 @@
   </div>
 </section>
 
-<section style="margin-top:16px">
+<section style:margin-top="16px">
   <HeavyList />
 </section>
 

@@ -1,15 +1,19 @@
 <script lang="ts">
-  import ProductCard from '$lib/components/ProductCard.svelte'
   import { goto } from '$app/navigation'
+  import { resolve } from '$app/paths'
+  import ProductCard from '$lib/components/ProductCard.svelte'
+
   import type { PageProps } from './$types'
 
   let { data }: PageProps = $props()
 
   function changeCategory(e: Event) {
     const target = e.target as HTMLSelectElement
-    const params = new URLSearchParams()
-    if (target.value !== 'all') params.set('category', target.value)
-    goto(`/products?${params}`, { keepFocus: true })
+    const href =
+      target.value === 'all'
+        ? resolve('/products')
+        : resolve(`/products?${new URLSearchParams({ category: target.value })}`)
+    void goto(href, { keepFocus: true })
   }
 </script>
 
@@ -25,13 +29,7 @@
 
 <div class="grid">
   {#each data.items as p (p.id)}
-    <ProductCard
-      id={p.id}
-      name={p.name}
-      price={p.price}
-      category={p.category}
-      stock={p.stock}
-    />
+    <ProductCard id={p.id} name={p.name} price={p.price} category={p.category} stock={p.stock} />
   {/each}
 </div>
 

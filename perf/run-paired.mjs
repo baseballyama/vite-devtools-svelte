@@ -23,6 +23,7 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
+
 import { ensurePlaygroundSync, generate, DEFAULTS as FIXTURE } from './generate-large-app.mjs'
 import {
   INIT_SCRIPT,
@@ -76,7 +77,7 @@ function parseArgs(argv) {
   for (const arg of argv) {
     const m = /^--([^=]+)=(.*)$/.exec(arg)
     if (!m) throw new Error(`Unexpected argument ${arg}`)
-    const key = m[1].replace(/-([a-z])/g, (_, c) => c.toUpperCase())
+    const key = m[1].replaceAll(/-([a-z])/g, (_, c) => c.toUpperCase())
     if (!(key in opts)) throw new Error(`Unknown option --${m[1]}`)
     opts[key] = typeof opts[key] === 'number' ? Number(m[2]) : m[2]
   }
@@ -244,7 +245,7 @@ async function measureApp(app, scale, opts) {
   const churn = await page.evaluate(ms => window.__bench.churn(50, ms), opts.churnMs)
   res.churn = frameStats(churn)
   res.heapMountedMB = r1((await heapAfterGc(cdp)) / 1048576)
-  res.dom = await page.evaluate(() => document.getElementsByTagName('*').length)
+  res.dom = await page.evaluate(() => document.querySelectorAll('*').length)
   res.runtime = await runtimeState(page)
 
   // heap growth over mount/unmount cycles
@@ -302,12 +303,17 @@ async function measureUi(side, srv, scale, opts, outDir, tag) {
       })
       .catch(() => {})
     await tab.page.evaluate(
-      () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))),
+      () =>
+        new Promise(r => {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(r)
+          })
+        }),
     )
     res.panels[label] = {
       found: true,
       switchMs: r1(performance.now() - t0),
-      dom: await tab.page.evaluate(() => document.getElementsByTagName('*').length),
+      dom: await tab.page.evaluate(() => document.querySelectorAll('*').length),
       ws: wsDelta(wsB, tab.ws.snapshot()),
     }
     await tab.page.screenshot({ path: path.join(outDir, `${tag}-ui-${label.toLowerCase()}.png`) })
@@ -341,10 +347,13 @@ async function main() {
   // Hard wall-clock cap for the whole invocation: on expiry only this
   // process's own dev server and browser are closed (see `cleanup`).
   const cleanup = []
-  const watchdog = setTimeout(async () => {
+  const onWatchdog = async () => {
     console.error(`[paired] --max-min=${opts.maxMin} exceeded — closing own children and exiting`)
-    for (const fn of cleanup.reverse()) await fn().catch(() => {})
+    for (const fn of cleanup.toReversed()) await fn().catch(() => {})
     process.exit(4)
+  }
+  const watchdog = setTimeout(() => {
+    void onWatchdog()
   }, opts.maxMin * 60_000)
   watchdog.unref()
   const outDir = path.join(opts.final, 'playground/.temp/perf-results', opts.label)
@@ -354,7 +363,7 @@ async function main() {
     Object.entries(checkouts).map(([k, r]) => [k, checkoutMeta(r, k)]),
   )
   const plan = {
-    order: [...opts.order],
+    order: opts.order.split(''),
     parts: opts.parts.split(','),
     scales: opts.scaleList,
     scenarios: opts.scenarios.split(','),
@@ -465,7 +474,7 @@ async function main() {
           })
           item.server = { pid: srv.pid, coldMs: r1(srv.coldMs) }
           log(
-            `item ${n} ${side}: server pid ${srv.pid} ready in ${Math.round(srv.coldMs)} ms (cold, not compared)`,
+            `item ${item.n} ${side}: server pid ${srv.pid} ready in ${Math.round(srv.coldMs)} ms (cold, not compared)`,
           )
           try {
             item.app = []
@@ -530,7 +539,7 @@ async function main() {
             home: path.join(homeRoot, side),
           })
           try {
-            item.ui = await measureUi(sides[side], srv, largest, opts, outDir, `${n}-${side}`)
+            item.ui = await measureUi(sides[side], srv, largest, opts, outDir, `${item.n}-${side}`)
           } finally {
             await stopServer(srv)
           }
@@ -575,7 +584,9 @@ async function main() {
   log(`done → ${path.join(outDir, 'summary.md')}`)
 }
 
-main().catch(e => {
+try {
+  await main()
+} catch (e) {
   console.error(e)
   process.exit(1)
-})
+}

@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+
 import { assertOutboundUrl } from '../server/security.js'
 import type { OutboundUrlOptions } from '../server/security.js'
 import type { ApiEndpoint, ApiResponse, RouteInfo } from '../types.js'
@@ -49,7 +50,8 @@ export async function sendApiRequest(
   const duration = () => Math.round((performance.now() - start) * 100) / 100
   try {
     await assertOutboundUrl(input.url, options)
-    const parsedHeaders = input.headers ? JSON.parse(input.headers) : {}
+    // Shape is validated by fetch() itself (a TypeError lands in the catch).
+    const parsedHeaders = (input.headers ? JSON.parse(input.headers) : {}) as RequestInit['headers']
     const init: RequestInit = { method: input.method, headers: parsedHeaders, redirect: 'manual' }
     if (input.body && input.method !== 'GET' && input.method !== 'HEAD') init.body = input.body
     const res = await fetch(input.url, init)

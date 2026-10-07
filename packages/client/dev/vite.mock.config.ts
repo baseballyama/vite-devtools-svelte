@@ -17,8 +17,11 @@
  * imports `dev/`, and this file is only used via `--config`.
  */
 import fs from 'node:fs'
+import type { Server } from 'node:http'
+
 import type { Connect, Plugin, ViteDevServer } from 'vite'
 import { defineConfig, mergeConfig } from 'vite'
+
 import base from '../vite.config.js'
 import { createMockBackend, MOCK_ASSET_BASE, MOCK_ASSET_SVG, rpcType } from './mock-rpc.js'
 
@@ -32,19 +35,21 @@ function pickTransport(): 'devframe' | 'http' {
   return rpc.includes('devframe') ? 'devframe' : 'http'
 }
 
+const assets: Connect.NextHandleFunction = (_req, res) => {
+  res.setHeader('content-type', 'image/svg+xml')
+  res.end(MOCK_ASSET_SVG)
+}
+
 function mockBackend(scale: number): Plugin {
   const handlers = createMockBackend(scale)
   const transport = pickTransport()
 
-  const assets: Connect.NextHandleFunction = (_req, res) => {
-    res.setHeader('content-type', 'image/svg+xml')
-    res.end(MOCK_ASSET_SVG)
-  }
-
   const http: Connect.NextHandleFunction = (req, res) => {
     let body = ''
-    req.on('data', c => (body += c))
-    req.on('end', async () => {
+    req.on('data', c => {
+      body += c
+    })
+    const respond = async () => {
       try {
         const { method, args } = JSON.parse(body || '{}')
         const fn = handlers[method]
@@ -56,7 +61,9 @@ function mockBackend(scale: number): Plugin {
         res.statusCode = 500
         res.end(String(e))
       }
-    })
+    }
+    // `respond` settles every failure into a 500, so it never rejects.
+    req.on('end', () => void respond())
   }
 
   async function mountDevframe(server: ViteDevServer) {
@@ -72,6 +79,8 @@ function mockBackend(scale: number): Plugin {
       version: '0.0.0-mock',
       packageName: 'vite-devtools-svelte',
       importMetaUrl: import.meta.url,
+      homepage: 'https://github.com/baseballyama/vite-devtools-svelte#readme',
+      description: 'Synthetic backend for developing the Svelte DevTools client',
       setup(ctx) {
         for (const [name, handler] of Object.entries(handlers)) {
           ctx.rpc.register(
@@ -82,7 +91,9 @@ function mockBackend(scale: number): Plugin {
     })
     const instance = initDevframe(def, {
       base: MOUNT,
-      server: server.httpServer ?? undefined,
+      // Vite's https server is an HTTP/2 server with HTTP/1 fallback; it emits
+      // the same `upgrade` events devframe listens for.
+      server: (server.httpServer ?? undefined) as Server | undefined,
       distDir: false,
       mcp: false,
       auth: process.env.MOCK_AUTH === '1',
@@ -90,11 +101,11 @@ function mockBackend(scale: number): Plugin {
     // Bridge mode answers 404 for everything else under the base; only hand
     // it devframe's own routes so Vite keeps serving the SPA + HMR.
     server.middlewares.use((req, res, next) => {
-      const path = (req.url ?? '').split('?')[0]
+      const [path = ''] = (req.url ?? '').split('?')
       if (path.startsWith(MOUNT + '__')) instance.nodeMiddleware(req, res, next)
       else next()
     })
-    server.httpServer?.once('close', () => instance.close?.())
+    server.httpServer?.once('close', () => void instance.close?.())
   }
 
   return {

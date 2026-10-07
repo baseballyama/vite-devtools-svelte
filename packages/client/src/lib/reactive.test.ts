@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+
 import type {
   ReactiveGraph,
   ReactiveGraphResult,
@@ -89,7 +90,7 @@ describe('sameGraph / sameValue', () => {
 
   it('detects a value, edge, scope or disclosure change', () => {
     const v = structuredClone(base)
-    v.nodes[0].value = 99
+    v.nodes[0]!.value = 99
     expect(sameGraph(base, v)).toBe(false)
     const e = structuredClone(base)
     e.edges[0] = { from: '1:b', to: '1:a' }
@@ -134,16 +135,16 @@ describe('isValueSummary', () => {
   })
 })
 
-describe('groupByFile', () => {
-  const row = (componentId: number, file: string, changes: number): ReactiveSummaryRow => ({
-    componentId,
-    file,
-    nodes: { state: 1, derived: 2, effect: 3 },
-    changes,
-    renders: 1,
-    renderMs: 0.5,
-  })
+const row = (componentId: number, file: string, changes: number): ReactiveSummaryRow => ({
+  componentId,
+  file,
+  nodes: { state: 1, derived: 2, effect: 3 },
+  changes,
+  renders: 1,
+  renderMs: 0.5,
+})
 
+describe('groupByFile', () => {
   it('folds instances per file and sums counters', () => {
     const g = groupByFile([row(1, 'a.svelte', 2), row(2, 'b.svelte', 5), row(3, 'a.svelte', 4)])
     expect(g.map(x => x.file)).toEqual(['a.svelte', 'b.svelte'])
@@ -153,9 +154,17 @@ describe('groupByFile', () => {
       renderMs: 1,
       nodes: { state: 2, derived: 4, effect: 6 },
     })
-    expect(g[0].instances.map(r => r.componentId)).toEqual([1, 3])
+    expect(g[0]!.instances.map(r => r.componentId)).toEqual([1, 3])
   })
 })
+
+/** `m(...args)`, or `null` when the query produced no matcher. */
+function applyOrNull<A extends unknown[]>(
+  m: ((...args: A) => boolean) | null,
+  ...args: A
+): boolean | null {
+  return m ? m(...args) : null
+}
 
 describe('haystackMatcher', () => {
   it('matches exactly like matcher()', () => {
@@ -164,7 +173,7 @@ describe('haystackMatcher', () => {
       const a = matcher(q)
       const b = haystackMatcher(q)
       expect(b === null).toBe(a === null)
-      expect(b ? b(haystack(...fields)) : null).toBe(a ? a(...fields) : null)
+      expect(applyOrNull(b, haystack(...fields))).toBe(applyOrNull(a, ...fields))
     }
   })
 })
@@ -176,7 +185,7 @@ describe('baselineNotice', () => {
     )
     expect(baselineNotice({ complete: false, pendingNodes: 1 })).toContain('1 state pending')
     expect(baselineNotice({ complete: true, pendingNodes: 0 })).toBeNull()
-    expect(baselineNotice(undefined)).toBe(BASELINE_UNKNOWN)
+    expect(baselineNotice()).toBe(BASELINE_UNKNOWN)
     expect(baselineNotice(null)).toBe(BASELINE_UNKNOWN)
   })
 })

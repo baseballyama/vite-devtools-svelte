@@ -31,7 +31,7 @@ export function haystack(...fields: (string | undefined | null)[]): string {
 /** Split `text` into plain / highlighted segments for `<Highlight>`. */
 export function highlightParts(text: string, query: string): { t: string; m: boolean }[] {
   const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
-  if (!terms.length || !text) return [{ t: text, m: false }]
+  if (terms.length === 0 || !text) return [{ t: text, m: false }]
   const lower = text.toLowerCase()
   const marks = new Uint8Array(text.length)
   for (const term of terms) {

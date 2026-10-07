@@ -9,8 +9,8 @@
     "test": "pnpm --recursive --filter './packages/*' run test",
     "dev": "pnpm build && pnpm -C playground dev",
     "dev:ui": "pnpm build && pnpm -C playground dev:ui",
-    "lint": "oxlint",
-    "lint:fix": "oxlint --fix",
+    "lint": "oxlint && eslint .",
+    "lint:fix": "oxlint --fix && eslint . --fix",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "perf:fixture": "node perf/generate-large-app.mjs",
@@ -19,16 +19,41 @@
     "e2e:reactivity": "node e2e/reactivity.mjs",
     "changeset": "changeset",
     "version": "changeset version",
-    "release": "pnpm build && changeset publish"
+    "release": "pnpm build && changeset publish",
+    "typecheck": "tsc -p packages/vite-devtools-svelte/tsconfig.json && tsc -p packages/client/tsconfig.node.json && pnpm -C packages/client run check",
+    "knip": "knip",
+    "sherif": "sherif",
+    "publint": "pnpm -C packages/vite-devtools-svelte exec publint --strict && pnpm -C packages/vite-devtools-svelte exec attw --pack . --profile esm-only",
+    "sync:kit": "pnpm --filter site --filter playground --filter ./examples/sample-app --filter ./examples/strict-csp-app exec svelte-kit sync"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
     "@changesets/changelog-github": "^1.0.1",
     "@changesets/cli": "^3.0.3",
     "@typescript/native": "npm:typescript@^7.0.2",
     "axe-core": "^4.11.0",
-    "oxfmt": "^0.71.0",
-    "oxlint": "^1.67.0",
-    "playwright-core": "1.63.0"
+    "eslint": "^10.12.0",
+    "eslint-plugin-svelte": "^3.23.0",
+    "globals": "^17.13.0",
+    "knip": "^6.39.0",
+    "oxfmt": "^0.72.0",
+    "oxlint": "^1.87.0",
+    "oxlint-tsgolint": "^7.0.2003",
+    "playwright-core": "1.63.0",
+    "publint": "^0.3.25",
+    "sherif": "^1.13.0",
+    "svelte": "^5.57.1",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.71.1"
   },
-  "packageManager": "pnpm@12.9.1"
+  "packageManager": "pnpm@12.9.1",
+  "sherif": {
+    "ignorePackage": [
+      "plain-svelte"
+    ],
+    "ignoreDependency": [
+      "@sveltejs/kit",
+      "@sveltejs/adapter-auto"
+    ]
+  }
 }

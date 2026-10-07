@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { z } from 'zod'
+
 import type {
   RenderProfile,
   ReactiveGraph,
@@ -17,8 +18,9 @@ import type {
   ReactiveSummaryRequest,
   StateTimelineDelta,
 } from '../types.js'
-import { SessionStore, SESSION_ID_PATTERN } from './sessions.js'
 import { listPerformanceIssues, summarizeReactiveProblems, type IssueThresholds } from './issues.js'
+import type { SessionStore } from './sessions.js'
+import { SESSION_ID_PATTERN } from './sessions.js'
 
 export interface McpDeps {
   getProject: () => ProjectInfo
@@ -46,7 +48,7 @@ export interface McpDeps {
 /** Most timeline entries one `get_state_timeline` call returns. */
 export const MCP_TIMELINE_LIMIT = 500
 /** Default / largest JSON size of one old/new value in `get_state_timeline` output. */
-export const MCP_VALUE_CHARS = { default: 2048, max: 32768 } as const
+const MCP_VALUE_CHARS = { default: 2048, max: 32768 } as const
 
 /** A state value for MCP output: as is when small, otherwise a size summary. */
 function capValue(value: unknown, maxChars: number): unknown {
@@ -121,7 +123,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
       description: 'Top components by total render time, with render count and per-render average.',
       inputSchema: { topN: z.number().int().min(1).max(200).optional() },
     },
-    async ({ topN = 20 }) => {
+    ({ topN = 20 }) => {
       const list = [...deps.getRenderProfiles()]
         .map(p => ({
           file: p.file,
@@ -133,7 +135,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
           lastRenderTimeMs: round(p.lastRenderTime),
           lastRenderAt: p.lastRenderAt,
         }))
-        .sort((a, b) => b.totalRenderTimeMs - a.totalRenderTimeMs)
+        .toSorted((a, b) => b.totalRenderTimeMs - a.totalRenderTimeMs)
         .slice(0, topN)
       return TEXT(list)
     },
@@ -161,7 +163,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
         'Load profiles grouped by route, with timing and data size. Optionally filtered by route.',
       inputSchema: { route: z.string().optional() },
     },
-    async ({ route }) => {
+    ({ route }) => {
       let profiles = deps.getLoadProfiles()
       if (route) profiles = profiles.filter(p => p.route === route)
       const byRoute = new Map<string, LoadProfile[]>()
@@ -182,7 +184,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
           samples: ps,
         }
       })
-      return TEXT(groups.sort((a, b) => b.avgDuration - a.avgDuration))
+      return TEXT(groups.toSorted((a, b) => b.avgDuration - a.avgDuration))
     },
   )
 
@@ -196,7 +198,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
         sinceMs: z.number().optional(),
       },
     },
-    async ({ threshold = 40, sinceMs }) => {
+    ({ threshold = 40, sinceMs }) => {
       let samples = deps.getFpsSamples()
       if (sinceMs !== undefined) {
         const cutoff = Date.now() - sinceMs
@@ -207,7 +209,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
         threshold,
         sampleCount: samples.length,
         dropCount: drops.length,
-        minFps: drops.length ? Math.min(...drops.map(s => s.fps)) : null,
+        minFps: drops.length > 0 ? Math.min(...drops.map(s => s.fps)) : null,
         drops,
       })
     },
@@ -221,12 +223,19 @@ export function buildMcpServer(deps: McpDeps): McpServer {
         'Returns render profile entries matching the given component file (substring match).',
       inputSchema: { file: z.string() },
     },
-    async ({ file }) => {
+    ({ file }) => {
       const matches = deps
         .getRenderProfiles()
         .filter(p => p.file.includes(file))
         .map(p => ({
-          ...p,
+          componentId: p.componentId,
+          file: p.file,
+          name: p.name,
+          initTime: p.initTime,
+          renderCount: p.renderCount,
+          totalRenderTime: p.totalRenderTime,
+          lastRenderTime: p.lastRenderTime,
+          lastRenderAt: p.lastRenderAt,
           totalRenderTimeMs: round(p.totalRenderTime),
           avgRenderTimeMs: round(p.renderCount > 0 ? p.totalRenderTime / p.renderCount : 0),
         }))
@@ -243,7 +252,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
       description: 'Package name/version, Svelte / SvelteKit / Vite versions, dependency lists.',
       inputSchema: {},
     },
-    async () => TEXT(deps.getProject()),
+    () => TEXT(deps.getProject()),
   )
 
   server.registerTool(
@@ -253,7 +262,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
       description: 'Static analysis of the SvelteKit routes tree.',
       inputSchema: {},
     },
-    async () => TEXT(deps.getRoutes()),
+    () => TEXT(deps.getRoutes()),
   )
 
   server.registerTool(
@@ -267,7 +276,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
         limit: z.number().int().min(1).max(50000).optional(),
       },
     },
-    async ({ includeMeta, limit }) => {
+    ({ includeMeta, limit }) => {
       if (!includeMeta || !deps.getLiveSnapshot) {
         // Unchanged default: the bare array older clients expect (`limit` only when given).
         const all = deps.getLiveComponents()
@@ -292,7 +301,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
       description: 'Static import relations between .svelte components.',
       inputSchema: {},
     },
-    async () => TEXT(deps.getComponentRelations()),
+    () => TEXT(deps.getComponentRelations()),
   )
 
   // --- bounded reactivity tools (read only; every answer says what it covers) ---
@@ -359,11 +368,13 @@ export function buildMcpServer(deps: McpDeps): McpServer {
           maxValueChars: z.number().int().min(16).max(MCP_VALUE_CHARS.max).optional(),
         },
       },
-      async ({ since, limit, maxValueChars }) => {
+      ({ since, limit, maxValueChars }) => {
         const delta = getDelta(since)
         const max = limit ?? 100
         const valueChars = maxValueChars ?? MCP_VALUE_CHARS.default
         const omitted = Math.max(0, delta.changes.length - max)
+        // Copies: the entries are the collector's stored timeline, never mutate them.
+        // oxlint-disable-next-line oxc/no-map-spread -- copy-on-write of shared state is the point
         const changes = delta.changes.slice(omitted).map(c => ({
           ...c,
           oldValue: capValue(c.oldValue, valueChars),
@@ -384,7 +395,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
           'Per dataset: captured count, total (null = unknown), truncated, selection policy and dropped counts by reason. Read this before drawing conclusions from capped data.',
         inputSchema: {},
       },
-      async () => TEXT(getInfo()),
+      () => TEXT(getInfo()),
     )
   }
 
@@ -401,7 +412,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
         persist: z.boolean().optional(),
       },
     },
-    async ({ label, persist = false }) => {
+    ({ label, persist = false }) => {
       const rec = deps.sessions.start(label, persist)
       return TEXT({ id: rec.id, label: rec.label, startedAt: rec.startedAt, persist: rec.persist })
     },
@@ -417,7 +428,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
         keep: z.enum(['memory', 'disk', 'discard']).optional(),
       },
     },
-    async ({ keep = 'memory' }) => {
+    ({ keep = 'memory' }) => {
       const rec = deps.sessions.end(keep)
       const delta = rec.endedAt ? deps.sessions.delta(rec.id) : null
       return TEXT({
@@ -439,7 +450,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
         'Diff render / load / fps metrics between two ended sessions. Each section carries `verdict`: improved | regressed | unchanged.',
       inputSchema: { a: sessionId, b: sessionId },
     },
-    async ({ a, b }) => TEXT(deps.sessions.compare(a, b)),
+    ({ a, b }) => TEXT(deps.sessions.compare(a, b)),
   )
 
   server.registerTool(
@@ -449,7 +460,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
       description: 'In-memory + on-disk sessions, most recent first.',
       inputSchema: {},
     },
-    async () => TEXT(deps.sessions.list()),
+    () => TEXT(deps.sessions.list()),
   )
 
   server.registerTool(
@@ -459,7 +470,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
       description: 'Returns the full session record (including delta if ended) by id.',
       inputSchema: { id: sessionId },
     },
-    async ({ id }) => {
+    ({ id }) => {
       const rec = deps.sessions.get(id)
       if (!rec) return TEXT({ error: `Session not found: ${id}` })
       const delta = rec.endedAt ? deps.sessions.delta(id) : null
@@ -474,7 +485,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
       description: 'Removes a session from memory and disk.',
       inputSchema: { id: sessionId },
     },
-    async ({ id }) => TEXT({ deleted: deps.sessions.delete(id) }),
+    ({ id }) => TEXT({ deleted: deps.sessions.delete(id) }),
   )
 
   return server
@@ -483,7 +494,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
 export { StreamableHTTPServerTransport }
 
 function avg(xs: number[]): number {
-  if (!xs.length) return 0
+  if (xs.length === 0) return 0
   return xs.reduce((s, x) => s + x, 0) / xs.length
 }
 

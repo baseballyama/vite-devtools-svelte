@@ -1,56 +1,25 @@
 <script lang="ts">
-  import { getRoutes, openInEditor } from '../lib/rpc.js'
-  import type { RouteFile, RouteInfo } from '../lib/types.js'
-  import { resource } from '../lib/resource.svelte.js'
-  import { matcher } from '../lib/match.js'
-  import { branchKeys } from '../lib/tree.js'
-  import Panel from '../components/Panel.svelte'
-  import SplitView from '../components/SplitView.svelte'
-  import TreeView from '../components/TreeView.svelte'
+  import Badge from '../components/Badge.svelte'
+  import Button from '../components/Button.svelte'
+  import EmptyState from '../components/EmptyState.svelte'
+  import Highlight from '../components/Highlight.svelte'
   import Inspector from '../components/Inspector.svelte'
+  import Panel from '../components/Panel.svelte'
   import SearchField from '../components/SearchField.svelte'
   import Segmented from '../components/Segmented.svelte'
-  import Button from '../components/Button.svelte'
-  import Badge, { type Tone } from '../components/Badge.svelte'
-  import Highlight from '../components/Highlight.svelte'
-  import EmptyState from '../components/EmptyState.svelte'
+  import SplitView from '../components/SplitView.svelte'
+  import TreeView from '../components/TreeView.svelte'
+  import type { Tone } from '../components/types.js'
+  import { matcher } from '../lib/match.js'
+  import { resource } from '../lib/resource.svelte.js'
+  import { buildRouteTree, type RouteNode } from '../lib/route-tree.js'
+  import { getRoutes, openInEditor } from '../lib/rpc.js'
+  import { branchKeys } from '../lib/tree.js'
+  import type { RouteFile, RouteInfo } from '../lib/types.js'
 
   const routes = resource<RouteInfo[]>(getRoutes, { initial: [] })
 
-  interface Node {
-    key: string
-    segment: string
-    route: RouteInfo | null
-    children: Node[]
-  }
-
-  // Build a segment tree keyed by route id so `(group)` / `[param]`
-  // directories nest exactly like src/routes on disk.
-  const tree = $derived.by(() => {
-    const root: Node = { key: '/', segment: '/', route: null, children: [] }
-    const byKey = new Map<string, Node>([['/', root]])
-    const sorted = [...routes.data].sort((a, b) => a.id.localeCompare(b.id))
-    for (const r of sorted) {
-      if (r.id === '/') {
-        root.route = r
-        continue
-      }
-      let parent = root
-      let key = ''
-      for (const seg of r.id.split('/').filter(Boolean)) {
-        key += '/' + seg
-        let node = byKey.get(key)
-        if (!node) {
-          node = { key, segment: seg, route: null, children: [] }
-          byKey.set(key, node)
-          parent.children.push(node)
-        }
-        parent = node
-      }
-      parent.route = r
-    }
-    return { roots: [root], byKey }
-  })
+  const tree = $derived(buildRouteTree(routes.data))
 
   let query = $state('')
   let kind = $state<'all' | 'pages' | 'endpoints' | 'dynamic'>('all')
@@ -64,8 +33,8 @@
     // Small apps: open everything. Large apps: first two levels.
     expanded =
       routes.data.length <= 60
-        ? branchKeys(tree.roots, { key: (n) => n.key, children: (n) => n.children })
-        : new Set(['/', ...tree.roots[0].children.map((c) => c.key)])
+        ? branchKeys(tree.roots, { key: n => n.key, children: n => n.children })
+        : new Set(['/', ...(tree.roots[0]?.children ?? []).map(c => c.key)])
   })
 
   const kindTest = $derived(
@@ -82,19 +51,21 @@
     const m = matcher(query)
     const k = kindTest
     if (!m && !k) return null
-    return (n: Node) => !!n.route && (!k || k(n.route)) && (!m || m(n.route.path, n.route.id))
+    return (n: RouteNode) => !!n.route && (!k || k(n.route)) && (!m || m(n.route.path, n.route.id))
   })
 
   const counts = $derived({
     all: routes.data.length,
-    pages: routes.data.filter((r) => r.hasPage).length,
-    endpoints: routes.data.filter((r) => r.hasEndpoint).length,
-    dynamic: routes.data.filter((r) => r.params.length > 0).length,
+    pages: routes.data.filter(r => r.hasPage).length,
+    endpoints: routes.data.filter(r => r.hasEndpoint).length,
+    dynamic: routes.data.filter(r => r.params.length > 0).length,
   })
 
   const selectedRoute = $derived(selected ? (tree.byKey.get(selected)?.route ?? null) : null)
 
-  const fileLabels: Record<RouteFile['type'], string> = {
+  // Complete for every known type (checked by `satisfies`); a type a newer
+  // server adds falls back to its raw name.
+  const fileLabels: Partial<Record<string, string>> = {
     page: '+page.svelte',
     layout: '+layout.svelte',
     'server-page': '+page.server',
@@ -105,7 +76,7 @@
     error: '+error.svelte',
     'page-load-server': '+page.server',
     'layout-load-server': '+layout.server',
-  }
+  } satisfies Record<RouteFile['type'], string>
 
   function fileTone(t: RouteFile['type']): Tone {
     if (t === 'endpoint') return 'green'
@@ -131,7 +102,11 @@
   }
 
   function primaryFile(r: RouteInfo) {
-    return (r.files.find((f) => f.type === 'page') ?? r.files.find((f) => f.type === 'endpoint') ?? r.files[0])?.path
+    return (
+      r.files.find(f => f.type === 'page') ??
+      r.files.find(f => f.type === 'endpoint') ??
+      r.files[0]
+    )?.path
   }
 
   function open(path: string | undefined) {
@@ -152,11 +127,28 @@
       ]}
     />
     <SearchField bind:value={query} placeholder="Filter by path…" />
-    <Button icon="expand" variant="ghost" label="Expand all" onclick={() => (expanded = branchKeys(tree.roots, { key: (n) => n.key, children: (n) => n.children }))} />
-    <Button icon="collapse" variant="ghost" label="Collapse all" onclick={() => (expanded = new Set(['/']))} />
+    <Button
+      icon="expand"
+      variant="ghost"
+      label="Expand all"
+      onclick={() =>
+        (expanded = branchKeys(tree.roots, { key: n => n.key, children: n => n.children }))}
+    />
+    <Button
+      icon="collapse"
+      variant="ghost"
+      label="Collapse all"
+      onclick={() => (expanded = new Set(['/']))}
+    />
   {/snippet}
   {#snippet actions()}
-    <Button icon="refresh" variant="ghost" label="Rescan routes" disabled={routes.busy} onclick={() => routes.refresh()} />
+    <Button
+      icon="refresh"
+      variant="ghost"
+      label="Rescan routes"
+      disabled={routes.busy}
+      onclick={() => routes.refresh()}
+    />
   {/snippet}
 
   <SplitView id="routes" open={!!selectedRoute}>
@@ -164,20 +156,28 @@
       bind:expanded
       bind:selected
       roots={routes.data.length ? tree.roots : []}
-      getKey={(n) => n.key}
-      getChildren={(n) => n.children}
+      getKey={(n: RouteNode) => n.key}
+      getChildren={(n: RouteNode) => n.children}
       {filter}
       label="Route tree"
-      onactivate={(n) => n.route && open(primaryFile(n.route))}
+      onactivate={(n: RouteNode) => n.route && open(primaryFile(n.route))}
     >
-      {#snippet row(n)}
-        <span class="seg {segTone(n.segment)}" class:dir={!n.route}><Highlight text={n.segment} {query} /></span>
+      {#snippet row(n: RouteNode)}
+        <span class="seg {segTone(n.segment)}" class:dir={!n.route}
+          ><Highlight text={n.segment} {query} /></span
+        >
         {#if n.route}
           <span class="kinds">
             {#if n.route.hasPage}<span class="k page" title="+page.svelte">P</span>{/if}
             {#if n.route.hasLayout}<span class="k layout" title="+layout.svelte">L</span>{/if}
-            {#if n.route.hasServerPage || n.route.hasServerLayout}<span class="k server" title="server load">S</span>{/if}
-            {#if n.route.hasPageLoad || n.route.hasLayoutLoad}<span class="k load" title="universal load">U</span>{/if}
+            {#if n.route.hasServerPage || n.route.hasServerLayout}<span
+                class="k server"
+                title="server load">S</span
+              >{/if}
+            {#if n.route.hasPageLoad || n.route.hasLayoutLoad}<span
+                class="k load"
+                title="universal load">U</span
+              >{/if}
             {#if n.route.hasEndpoint}<span class="k api" title="+server endpoint">API</span>{/if}
           </span>
           <span class="path truncate"><Highlight text={n.route.path} {query} /></span>
@@ -187,9 +187,15 @@
         {#if routes.loading}
           <EmptyState title="Scanning src/routes…" />
         {:else if routes.error}
-          <EmptyState icon="errors" tone="error" title="Could not read routes"><p class="mono">{routes.error}</p></EmptyState>
+          <EmptyState icon="errors" tone="error" title="Could not read routes"
+            ><p class="mono">{routes.error}</p></EmptyState
+          >
         {:else if routes.data.length === 0}
-          <EmptyState icon="routes" title="No routes found"><p>Routes appear here for SvelteKit projects with a <code>src/routes</code> directory.</p></EmptyState>
+          <EmptyState icon="routes" title="No routes found"
+            ><p>
+              Routes appear here for SvelteKit projects with a <code>src/routes</code> directory.
+            </p></EmptyState
+          >
         {:else}
           <EmptyState icon="search" title="No routes match" />
         {/if}
@@ -198,7 +204,11 @@
     {#snippet aside()}
       {#if selectedRoute}
         {@const r = selectedRoute}
-        <Inspector title={r.path} subtitle={'src/routes' + (r.id === '/' ? '' : r.id)} onclose={() => (selected = null)}>
+        <Inspector
+          title={r.path}
+          subtitle={'src/routes' + (r.id === '/' ? '' : r.id)}
+          onclose={() => (selected = null)}
+        >
           {#snippet badges()}
             {#if r.hasPage}<Badge tone="accent">page</Badge>{/if}
             {#if r.hasLayout}<Badge tone="purple">layout</Badge>{/if}
@@ -206,17 +216,23 @@
             {#if r.hasServerPage || r.hasServerLayout}<Badge tone="blue">server load</Badge>{/if}
           {/snippet}
           {#snippet actions()}
-            {#if canVisit(r)}<Button icon="external" onclick={() => visit(r)}>Open page</Button>{/if}
+            {#if canVisit(r)}<Button icon="external" onclick={() => visit(r)}>Open page</Button
+              >{/if}
           {/snippet}
           <h3 class="section-title">Matching</h3>
           <dl class="kv">
-            <dt>Pattern</dt><dd class="mono">{r.pattern}</dd>
+            <dt>Pattern</dt>
+            <dd class="mono">{r.pattern}</dd>
             <dt>Params</dt>
             <dd>
               {#if r.params.length}
                 <span class="params">
                   {#each r.params as p (p.name)}
-                    <Badge tone="yellow" title={p.matcher ? `matcher: ${p.matcher}` : undefined}>{p.rest ? '...' : ''}{p.name}{p.optional ? '?' : ''}{p.matcher ? `=${p.matcher}` : ''}</Badge>
+                    <Badge tone="yellow" title={p.matcher ? `matcher: ${p.matcher}` : undefined}
+                      >{p.rest ? '...' : ''}{p.name}{p.optional ? '?' : ''}{p.matcher
+                        ? `=${p.matcher}`
+                        : ''}</Badge
+                    >
                   {/each}
                 </span>
               {:else}<span class="faint">none</span>{/if}
@@ -226,7 +242,7 @@
           <ul class="link-list">
             {#each r.files as f (f.path)}
               <li>
-                <button onclick={() => open(f.path)} title="Open {f.path} in editor">
+                <button type="button" onclick={() => open(f.path)} title="Open {f.path} in editor">
                   <Badge tone={fileTone(f.type)}>{fileLabels[f.type] ?? f.type}</Badge>
                   <span class="sub truncate mono">{f.path}</span>
                 </button>

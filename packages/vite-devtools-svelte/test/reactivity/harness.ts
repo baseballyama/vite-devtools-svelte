@@ -9,6 +9,7 @@ export interface GraphNode {
   componentId: number
   componentFile: string
   value?: unknown
+  untrackedDeps?: number
 }
 export interface Graph {
   nodes: GraphNode[]
@@ -16,18 +17,34 @@ export interface Graph {
   [k: string]: unknown
 }
 
-export const dt = (): any => (window as any).__SVELTE_DEVTOOLS__
+export const dt = (): any => (globalThis as any).__SVELTE_DEVTOOLS__
+
+// The tests run under a DOM environment, but the package type-checks against Node's
+// lib only: describe just the DOM surface the tests touch.
+interface TestElement {
+  append(...children: TestElement[]): void
+  remove(): void
+  querySelector(selector: string): { click(): void } | null
+}
+const testDocument = () =>
+  (
+    globalThis as unknown as {
+      document: { body: TestElement; createElement(tag: string): TestElement }
+    }
+  ).document
 
 export function render<P extends Record<string, any>>(Comp: Component<P>, props?: P) {
+  const document = testDocument()
   const target = document.createElement('div')
-  document.body.appendChild(target)
+  document.body.append(target)
   const app = mount(Comp, { target, props: (props ?? {}) as P })
   flushSync()
   return {
     target,
     app,
     destroy() {
-      unmount(app)
+      // Outros are not awaited: teardown is synchronous for these fixtures.
+      void unmount(app)
       flushSync()
       target.remove()
     },
@@ -49,7 +66,7 @@ export const instances = (name: string) =>
 export function instance(name: string) {
   const list = instances(name)
   if (list.length !== 1) throw new Error(`expected 1 live ${name}, found ${list.length}`)
-  return list[0]
+  return list[0]!
 }
 
 export const graph = (componentId: number | null = null): Graph =>

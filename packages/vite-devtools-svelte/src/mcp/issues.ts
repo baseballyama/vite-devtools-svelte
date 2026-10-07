@@ -1,6 +1,6 @@
 import type { RenderProfile, ReactiveGraph, LoadProfile, FpsSample } from '../types.js'
 
-export type IssueKind =
+type IssueKind =
   | 'slow-component-render'
   | 'over-rendered-component'
   | 'slow-load'
@@ -145,7 +145,7 @@ export function listPerformanceIssues(
     }
   }
 
-  return out.sort(compareSeverity)
+  return out.toSorted(compareSeverity)
 }
 
 const SEV_RANK: Record<PerformanceIssue['severity'], number> = { high: 0, medium: 1, low: 2 }

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths'
+
   import CodeBlock from '#lib/CodeBlock.svelte'
 
   const installCode = `npm install -D vite-devtools-svelte`
@@ -54,12 +55,12 @@ export default defineConfig({
     </div>
     <h1>Getting Started.</h1>
     <p class="lead">
-      Add the plugin to a Svelte 5 + SvelteKit project running on Vite 8.3.2 or
-      later. It runs only in the dev server; production builds are unaffected.
+      Add the plugin to a Svelte 5 + SvelteKit project running on Vite 8.3.2 or later. It runs only
+      in the dev server; production builds are unaffected.
     </p>
     <p class="release-note">
-      These steps need <strong>vite-devtools-svelte ≥ 0.4.0</strong> (built on
-      Devframe). Versions up to 0.3.x are documented to run inside
+      These steps need <strong>vite-devtools-svelte ≥ 0.4.0</strong> (built on Devframe). Versions
+      up to 0.3.x are documented to run inside
       <code>@vitejs/devtools</code>.
     </p>
 
@@ -124,8 +125,7 @@ export default defineConfig({
         <p>
           Add the plugin to your <code>vite.config.ts</code>. It must come
           <strong>before</strong>
-          <code>sveltekit()</code> so its transforms run before the Svelte
-          compiler.
+          <code>sveltekit()</code> so its transforms run before the Svelte compiler.
         </p>
         <CodeBlock code={configCode} lang="ts" filename="vite.config.ts" />
       </section>
@@ -138,16 +138,16 @@ export default defineConfig({
         <CodeBlock code={runCode} lang="bash" />
         <p>
           Open <code>/.svelte-devtools/</code> on your dev server, for example
-          <code>http://localhost:5173/.svelte-devtools/</code>. The first time,
-          the page asks for a one-time code: the dev server prints a 6-digit code
-          and a link in the terminal. Type the code, or open the link.
+          <code>http://localhost:5173/.svelte-devtools/</code>. The first time, the page asks for a
+          one-time code: the dev server prints a 6-digit code and a link in the terminal. Type the
+          code, or open the link.
         </p>
         <p>
-          That browser is then trusted: reloads and dev-server restarts don't ask
-          again. Trusted tokens are stored by the dev server in
-          <code>~/.svelte-devtools/devframe/auth.json</code>, shared by all
-          projects on this machine. The browser keeps its token per origin, so a
-          dev server on another port or host asks for a code again.
+          That browser is then trusted: reloads and dev-server restarts don't ask again. Trusted
+          tokens are stored by the dev server in
+          <code>~/.svelte-devtools/devframe/auth.json</code>, shared by all projects on this
+          machine. The browser keeps its token per origin, so a dev server on another port or host
+          asks for a code again.
         </p>
       </section>
 
@@ -157,19 +157,18 @@ export default defineConfig({
           <h2>Inside the Vite DevTools dock</h2>
         </header>
         <p>
-          Optional. With <code>@vitejs/devtools</code> installed, the same panels
-          open as a <strong>Svelte</strong> entry in the Vite DevTools dock
-          instead of standalone.
+          Optional. With <code>@vitejs/devtools</code> installed, the same panels open as a
+          <strong>Svelte</strong> entry in the Vite DevTools dock instead of standalone.
         </p>
         <CodeBlock code={dockInstallCode} lang="bash" />
         <p>
-          Add <code>DevTools()</code> after <code>svelteDevtools()</code> and
-          before <code>sveltekit()</code>:
+          Add <code>DevTools()</code> after <code>svelteDevtools()</code> and before
+          <code>sveltekit()</code>:
         </p>
         <CodeBlock code={dockConfigCode} lang="ts" filename="vite.config.ts" />
         <p>
-          Sign-in is handled once by Vite DevTools' own authentication. The panels
-          also stay reachable at <code>/.svelte-devtools/</code>.
+          Sign-in is handled once by Vite DevTools' own authentication. The panels also stay
+          reachable at <code>/.svelte-devtools/</code>.
         </p>
       </section>
 
@@ -346,7 +345,9 @@ export default defineConfig({
     border-left: 2px solid transparent;
     padding-left: 0.6rem;
     margin-left: -0.6rem;
-    transition: border-color 150ms var(--ease), color 150ms var(--ease);
+    transition:
+      border-color 150ms var(--ease),
+      color 150ms var(--ease);
   }
 
   .toc a:hover {
@@ -429,7 +430,9 @@ export default defineConfig({
   .next a::after {
     content: ' →';
     color: var(--text-3);
-    transition: color 200ms var(--ease), transform 200ms var(--ease);
+    transition:
+      color 200ms var(--ease),
+      transform 200ms var(--ease);
   }
 
   .next a:hover {

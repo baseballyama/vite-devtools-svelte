@@ -1,7 +1,11 @@
 <script lang="ts">
   import { icons, type IconName } from '../lib/icons.js'
 
-  let { name, size = 16, class: cls = '' }: { name: IconName; size?: number; class?: string } = $props()
+  let {
+    name,
+    size = 16,
+    class: cls = '',
+  }: { name: IconName; size?: number; class?: string } = $props()
 </script>
 
 <svg
@@ -16,6 +20,7 @@
   stroke-linejoin="round"
   aria-hidden="true"
 >
+  <!-- eslint-disable-next-line svelte/no-at-html-tags -- static, bundled SVG markup from lib/icons.ts keyed by a typed name -->
   {@html icons[name]}
 </svg>
 

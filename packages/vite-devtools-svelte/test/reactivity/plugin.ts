@@ -6,7 +6,9 @@
 // Loaded by vitest.config.ts, whose bundler has no `?raw` support: the
 // browser sources are read from disk here (the same text `?raw` inlines).
 import fs from 'node:fs'
+
 import type { Plugin } from 'vite'
+
 import { RUNTIME_MODULE_ID, RESOLVED_RUNTIME_ID, WRAPPER_MODULE_ID } from '../../src/runtime/ids.js'
 import {
   injectComponentTracking,
@@ -35,12 +37,12 @@ export function reactivityHarnessPlugin(): Plugin[] {
         ) {
           return WRAPPER_MODULE_ID
         }
-        return undefined
+        return null
       },
       load(id) {
         if (id === RESOLVED_RUNTIME_ID) return runtimeCode
         if (id === WRAPPER_MODULE_ID) return wrapperCode
-        return undefined
+        return null
       },
     },
     {
@@ -48,7 +50,7 @@ export function reactivityHarnessPlugin(): Plugin[] {
       enforce: 'post',
       transform(code, id, options) {
         if (id.includes('node_modules')) return null
-        const file = id.split('?')[0]
+        const file = id.split('?')[0]!
         const modified = file.endsWith('.svelte')
           ? injectComponentTracking(code, id)
           : SVELTE_MODULE_RE.test(file) && !options?.ssr

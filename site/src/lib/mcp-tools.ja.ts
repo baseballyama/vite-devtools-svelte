@@ -119,15 +119,16 @@ export interface McpToolGroupJa {
 }
 
 export function mcpToolsJa(): McpToolGroupJa[] {
-  const names = MCP_TOOL_GROUPS.flatMap(g => g.tools.map(t => t.name))
-  const extra = Object.keys(TOOLS_JA).filter(n => !names.includes(n))
-  if (extra.length) throw new Error(`mcp-tools.ja: unknown tools ${extra.join(', ')}`)
+  const names = new Set(MCP_TOOL_GROUPS.flatMap(g => g.tools.map(t => t.name)))
+  const extra = Object.keys(TOOLS_JA).filter(n => !names.has(n))
+  if (extra.length > 0) throw new Error(`mcp-tools.ja: unknown tools ${extra.join(', ')}`)
   return MCP_TOOL_GROUPS.map(g => {
     const group = GROUPS_JA[g.id]
     if (!group) throw new Error(`mcp-tools.ja: missing group ${g.id}`)
     return {
       id: g.id,
-      ...group,
+      title: group.title,
+      intro: group.intro,
       tools: g.tools.map(t => {
         const ja = TOOLS_JA[t.name]
         if (!ja) throw new Error(`mcp-tools.ja: missing tool ${t.name}`)

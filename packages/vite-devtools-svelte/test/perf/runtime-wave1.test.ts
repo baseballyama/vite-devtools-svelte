@@ -3,6 +3,7 @@
 // throttle + disclosure (C), and the overview aggregate (I/J).
 // Deterministic: fake timers and an injected clock, no wall-clock ratios.
 import { describe, expect, it } from 'vitest'
+
 import { countVisits, createRuntime, mountList, pollFn, type Harness } from './harness.js'
 
 const graphReplies = (h: Harness) =>
@@ -11,6 +12,18 @@ const timelineMsgs = (h: Harness) =>
   h.sent.filter(s => s.event === 'svelte-devtools:state-timeline').map(s => s.data as any)
 
 // n components, each: state a -> derived b (direct dependency).
+/** Disclosed drops across timeline messages. */
+const droppedIn = (msgs: any[]) => msgs.flatMap(m => m.dropped ?? [])
+
+/** Iteration visits of a scoped graph build in an app of `n` chains. */
+function scopedVisits(n: number) {
+  const h = createRuntime()
+  const { ids } = chainApp(h, n)
+  return countVisits(() => {
+    h.dt.getReactiveGraph(ids[0])
+  })
+}
+
 function chainApp(h: Harness, n: number) {
   const ids: number[] = []
   const sigs: any[] = []
@@ -32,20 +45,20 @@ describe('§6.7 A/D: reactive graph', () => {
   it('scoped: O(scope) work — dereferences only the scope, not the other 2 000 components', () => {
     const h = createRuntime()
     const { ids } = chainApp(h, 2000)
-    let derefs = 0
+    const counter = { derefs: 0 }
     for (const entry of h.dt._reactiveNodes.values()) {
       const inner = entry.signal
       entry.signal = {
         deref() {
-          derefs++
+          counter.derefs++
           return inner.deref()
         },
       }
     }
     const g = h.dt.getReactiveGraph(ids[7])
-    expect(g.nodes.map((n: any) => n.id).sort()).toEqual([`${ids[7]}:a`, `${ids[7]}:b`])
+    expect(g.nodes.map((n: any) => n.id).toSorted()).toEqual([`${ids[7]}:a`, `${ids[7]}:b`])
     expect(g.edges).toEqual([{ from: `${ids[7]}:a`, to: `${ids[7]}:b` }])
-    expect(derefs).toBeLessThan(10)
+    expect(counter.derefs).toBeLessThan(10)
     expect(g).toMatchObject({
       scope: ids[7],
       truncated: false,
@@ -56,12 +69,7 @@ describe('§6.7 A/D: reactive graph', () => {
   })
 
   it('scoped cost does not grow with the rest of the app (visit counting)', () => {
-    const visitsFor = (n: number) => {
-      const h = createRuntime()
-      const { ids } = chainApp(h, n)
-      return countVisits(() => h.dt.getReactiveGraph(ids[0]))
-    }
-    expect(visitsFor(4000)).toBeLessThan(visitsFor(500) + 50)
+    expect(scopedVisits(4000)).toBeLessThan(scopedVisits(500) + 50)
   })
 
   it('global: caps apply while building; edges only between included nodes; totals not guessed', () => {
@@ -70,7 +78,8 @@ describe('§6.7 A/D: reactive graph', () => {
     const g = h.dt.getReactiveGraph(null, { maxNodes: 5, maxEdges: 100 })
     expect(g.nodes).toHaveLength(5)
     const ids = new Set(g.nodes.map((n: any) => n.id))
-    for (const e of g.edges) expect(ids.has(e.from) && ids.has(e.to)).toBe(true)
+    const endpoints: unknown[] = g.edges.flatMap((e: any) => [e.from, e.to])
+    expect(endpoints.filter(id => !ids.has(id))).toEqual([])
     expect(g.truncated).toBe(true)
     expect(g.policy).toBe('global-head')
     expect(g.total).toEqual({ nodes: 20, nodesKind: 'registered', edges: null })
@@ -194,33 +203,36 @@ describe('§6.7 D: time-sliced state poll', () => {
   })
 })
 
-describe('§6.7 C: timeline throttle + disclosure', () => {
-  function setup() {
-    const h = createRuntime()
-    const id = h.dt.register('/app/src/lib/T.svelte')
-    h.dt.registered(id)
-    const sigs: any[] = []
-    const add = (n: number) => {
-      for (let i = 0; i < n; i++) {
-        const sig: any = { v: i, wv: 1 }
-        h.dt.trackState(sig, 's' + sigs.length, id)
-        sigs.push(sig)
-      }
+function setup() {
+  const h = createRuntime()
+  const id = h.dt.register('/app/src/lib/T.svelte')
+  h.dt.registered(id)
+  const sigs: any[] = []
+  const add = (n: number) => {
+    for (let i = 0; i < n; i++) {
+      const sig: any = { v: i, wv: 1 }
+      h.dt.trackState(sig, 's' + sigs.length, id)
+      sigs.push(sig)
     }
-    return { h, add, sigs, poll: () => pollFn(h)() }
   }
+  return { h, add, sigs, poll: () => pollFn(h)() }
+}
 
+const range = (from: number, to: number) => Array.from({ length: to - from }, (_, i) => from + i)
+
+describe('§6.7 C: timeline throttle + disclosure', () => {
   it('does not starve under continuous change: one pending timer, never re-armed', () => {
     const { h, add, sigs, poll } = setup()
     add(1)
     poll()
     h.flushTimers()
     h.sent.length = 0
-    let timer: unknown = null
-    for (let t = 0; t < 10; t++) {
+    sigs[0].v = 1000
+    poll() // every 200 ms
+    const timer: unknown = h.dt._timelineDebounceTimer
+    for (let t = 1; t < 10; t++) {
       sigs[0].v = 1000 + t
-      poll() // every 200 ms
-      if (t === 0) timer = h.dt._timelineDebounceTimer
+      poll()
       expect(h.dt._timelineDebounceTimer).toBe(timer) // armed once, never re-armed
     }
     expect(timer).not.toBeNull()
@@ -338,23 +350,29 @@ describe('§6.7 C: timeline throttle + disclosure', () => {
     h.sent.length = 0 // drop the activation snapshot sent at boot
     return { h, record, flush, expectMemoryBound }
   }
-  const range = (from: number, to: number) => Array.from({ length: to - from }, (_, i) => from + i)
 
-  it('ring: inactive n changes -> newest min(n, 500) in order, runtime-count = n - 500', () => {
-    for (const n of [0, 1, 500, 501, 1000, 1001]) {
+  it.each([
+    { n: 0, keptFrom: 0, dropped: [] },
+    { n: 1, keptFrom: 0, dropped: [] },
+    { n: 500, keptFrom: 0, dropped: [] },
+    { n: 501, keptFrom: 1, dropped: [{ reason: 'runtime-count', count: 1 }] },
+    { n: 1000, keptFrom: 500, dropped: [{ reason: 'runtime-count', count: 500 }] },
+    { n: 1001, keptFrom: 501, dropped: [{ reason: 'runtime-count', count: 501 }] },
+  ])(
+    'ring: inactive $n changes -> newest min(n, 500) in order, runtime-count = n - 500',
+    ({ n, keptFrom, dropped }) => {
       const { h, record, flush, expectMemoryBound } = ring()
       h.dt._active = false // record without pushing
       for (let i = 0; i < n; i++) record(i)
       expectMemoryBound() // before any read trims
-      const kept = range(Math.max(0, n - 500), n)
+      const kept = range(keptFrom, n)
       expect(h.dt.getStateTimeline().map((c: any) => c.newValue)).toEqual(kept)
       const msgs = flush()
       expect(msgs.flatMap(m => m.changes).map((c: any) => c.newValue)).toEqual(kept)
-      const dropped = msgs.flatMap(m => m.dropped ?? [])
-      expect(dropped).toEqual(n > 500 ? [{ reason: 'runtime-count', count: n - 500 }] : [])
+      expect(droppedIn(msgs)).toEqual(dropped)
       expectMemoryBound()
-    }
-  })
+    },
+  )
 
   it('ring: an entry over 4 MB is kept while newest, then dropped as runtime-bytes', () => {
     const { h, record, flush, expectMemoryBound } = ring()
@@ -365,7 +383,7 @@ describe('§6.7 C: timeline throttle + disclosure', () => {
     expect(h.dt.getStateTimeline().map((c: any) => c.newValue)).toEqual(['next'])
     const msgs = flush()
     expect(msgs.flatMap(m => m.changes).map((c: any) => c.newValue)).toEqual(['next'])
-    expect(msgs.flatMap(m => m.dropped ?? [])).toEqual([{ reason: 'runtime-bytes', count: 1 }])
+    expect(droppedIn(msgs)).toEqual([{ reason: 'runtime-bytes', count: 1 }])
     expectMemoryBound()
   })
 
@@ -409,10 +427,10 @@ describe('§6.7 I/J: reactive summary', () => {
     poll()
     // row 3 changes 3 times, row 5 once
     const states = list.signals.filter((s: any) => s.deps === null)
+    states[5].v += 100 // seen by the first poll below, like row 3's first change
     for (let t = 0; t < 3; t++) {
       now += 200
       states[3].v += 100
-      if (t === 0) states[5].v += 100
       poll()
     }
     const s = h.dt.getReactiveSummary({ topK: 1, windowMs: 10_000 })
@@ -469,9 +487,9 @@ describe('§6.7 I/J: reactive summary', () => {
 // activated it, and a click right after activation was never seen as 1 -> 2:
 // nodes registered while inactive had no sample yet. First observations are
 // seeds (no entry, no counters, review B-1); readiness is disclosed (B-2).
-describe('late activation (consumer arrives after mount)', () => {
-  const summaryOf = (h: Harness) => h.dt.getReactiveSummary({})
+const summaryOf = (h: Harness) => h.dt.getReactiveSummary({})
 
+describe('late activation (consumer arrives after mount)', () => {
   it('activation seeds: 0 entries, 0 activity, 0 drops; baseline complete', () => {
     const h = createRuntime({ active: false })
     const id = h.dt.register('/app/src/lib/Counter.svelte')

@@ -12,6 +12,7 @@ import type {
   ReactiveGraphTotal,
   ReactiveSummary,
   ReactiveSummaryRequest,
+  ReactiveSummaryRow,
   RenderProfile,
   RuntimeError,
   StateChange,
@@ -101,7 +102,7 @@ export const HOT_EVENTS = {
 const MAX_CACHED_PULLS = 32
 
 /** Defaults and bounds for `get-reactive-summary` (§6.7 I). */
-export const SUMMARY_DEFAULTS = {
+const SUMMARY_DEFAULTS = {
   topK: 50,
   maxTopK: 200,
   windowMs: 10_000,
@@ -132,6 +133,33 @@ function clampInt(value: unknown, min: number, max: number, fallback: number): n
   return Math.min(max, Math.max(min, Math.trunc(value)))
 }
 
+/** A non-negative safe integer, 0 when absent / not a number. */
+function nonNegInt(value: unknown): number {
+  return clampInt(value, 0, Number.MAX_SAFE_INTEGER, 0)
+}
+
+/** A hot-channel payload: an untrusted JSON object from the app's runtime. */
+type Payload = Record<string, unknown>
+
+function asPayload(value: unknown): Payload | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Payload)
+    : undefined
+}
+
+function isFpsSample(value: unknown): value is FpsSample {
+  const v = asPayload(value)
+  return typeof v?.timestamp === 'number' && typeof v.fps === 'number'
+}
+
+function isRuntimeError(value: unknown): value is RuntimeError {
+  return typeof asPayload(value)?.message === 'string'
+}
+
+function ringInfo(captured: number, received: number): CaptureInfo {
+  return { captured, total: received, truncated: received > captured, policy: 'tail' }
+}
+
 /** A pull request waiting for the runtime's reply, matched by `requestId` (§6.7 A, M1). */
 interface PendingPull {
   kind: 'graph' | 'summary'
@@ -151,8 +179,8 @@ export interface HotClient {
 
 export interface HotChannel {
   send(event: string, payload: unknown): void
-  on(event: string, listener: (payload: any, client: HotClient) => void): void
-  off?(event: string, listener: (payload: any, client: HotClient) => void): void
+  on(event: string, listener: (payload: unknown, client: HotClient) => void): void
+  off?(event: string, listener: (payload: unknown, client: HotClient) => void): void
 }
 
 export interface CollectorHooks {
@@ -249,7 +277,11 @@ export class Collector {
   private sweepTimer: ReturnType<typeof setTimeout> | undefined
   private stateTimelineResolvers: Array<(changes: StateChange[]) => void> = []
 
-  constructor(private readonly hooks: CollectorHooks = {}) {}
+  private readonly hooks: CollectorHooks
+
+  constructor(hooks: CollectorHooks = {}) {
+    this.hooks = hooks
+  }
 
   /**
    * Subscribe to the runtime's hot-channel events. Re-attaching (dev server
@@ -258,18 +290,30 @@ export class Collector {
   attach(hot: HotChannel): void {
     this.detach()
     this.hot = hot
-    const listeners: Array<[string, (payload: any, client: HotClient) => void]> = [
+    // Payloads come from the user's app: anything not shaped like the event's
+    // message is treated as empty (or, for single records, dropped).
+    const listeners: Array<[string, (payload: unknown, client: HotClient) => void]> = [
       [
         HOT_EVENTS.runtimeReady,
         (_, client) => client?.send(HOT_EVENTS.subscription, this.subscription),
       ],
-      [HOT_EVENTS.components, (d, client) => this.ingestComponents(d, client)],
-      [HOT_EVENTS.profiles, d => this.ingestProfiles(d)],
-      [HOT_EVENTS.stateTimeline, d => this.ingestStateTimeline(d)],
-      [HOT_EVENTS.fps, d => this.ingestFps(d)],
-      [HOT_EVENTS.runtimeError, d => this.ingestRuntimeError(d)],
-      [HOT_EVENTS.reactiveGraph, d => this.ingestReactiveGraph(d)],
-      [HOT_EVENTS.reactiveSummary, d => this.ingestReactiveSummary(d)],
+      [HOT_EVENTS.components, (d, client) => this.ingestComponents(asPayload(d), client)],
+      [HOT_EVENTS.profiles, d => this.ingestProfiles(asPayload(d))],
+      [HOT_EVENTS.stateTimeline, d => this.ingestStateTimeline(asPayload(d))],
+      [
+        HOT_EVENTS.fps,
+        d => {
+          if (isFpsSample(d)) this.ingestFps(d)
+        },
+      ],
+      [
+        HOT_EVENTS.runtimeError,
+        d => {
+          if (isRuntimeError(d)) this.ingestRuntimeError(d)
+        },
+      ],
+      [HOT_EVENTS.reactiveGraph, d => this.ingestReactiveGraph(asPayload(d))],
+      [HOT_EVENTS.reactiveSummary, d => this.ingestReactiveSummary(asPayload(d))],
     ]
     for (const [event, listener] of listeners) hot.on(event, listener)
     this.detachHot = () => {
@@ -495,7 +539,9 @@ export class Collector {
           state.components.set(id, c)
           continue
         }
-        const parentStored = c?.parentId == null || state.components.has(c.parentId)
+        const parentId = c?.parentId
+        const parentStored =
+          parentId === null || parentId === undefined || state.components.has(parentId)
         if (parentStored && state.components.size < LIMITS.liveComponents) {
           state.overflow.delete(id)
           state.components.set(id, c)
@@ -508,7 +554,7 @@ export class Collector {
     this.bump('components')
   }
 
-  ingestProfiles(data: { profiles?: unknown; epoch?: unknown; total?: unknown } | undefined): void {
+  ingestProfiles(data?: { profiles?: unknown; epoch?: unknown; total?: unknown }): void {
     const epoch = typeof data?.epoch === 'string' ? data.epoch : LEGACY_EPOCH
     const state = this.touchEpoch(epoch)
     state.profiles = tail(data?.profiles, LIMITS.renderProfiles)
@@ -524,12 +570,6 @@ export class Collector {
   getCaptureInfo(): CaptureInfoMap {
     const state = this.servedState()
     const epoch = this.servedEpoch
-    const ring = (captured: number, received: number): CaptureInfo => ({
-      captured,
-      total: received,
-      truncated: received > captured,
-      policy: 'tail',
-    })
     const drops: Record<DropReason, number> = {
       'runtime-count': 0,
       'runtime-bytes': 0,
@@ -574,10 +614,10 @@ export class Collector {
         ...(epoch !== undefined &&
           this.timelineBaseline.has(epoch) && { baseline: this.timelineBaseline.get(epoch) }),
       },
-      fpsSamples: ring(this.fpsSamples.length, this.received.fps),
-      runtimeErrors: ring(this.runtimeErrors.length, this.received.runtimeErrors),
-      loadProfiles: ring(this.loadProfiles.length, this.received.loadProfiles),
-      compilerWarnings: ring(this.compilerWarnings.length, this.received.compilerWarnings),
+      fpsSamples: ringInfo(this.fpsSamples.length, this.received.fps),
+      runtimeErrors: ringInfo(this.runtimeErrors.length, this.received.runtimeErrors),
+      loadProfiles: ringInfo(this.loadProfiles.length, this.received.loadProfiles),
+      compilerWarnings: ringInfo(this.compilerWarnings.length, this.received.compilerWarnings),
     }
     if (graph) {
       const common = {
@@ -644,7 +684,8 @@ export class Collector {
       let start = -1
       if (last) {
         for (let i = incoming.length - 1; i >= 0; i--) {
-          if (incoming[i].timestamp === last.timestamp && incoming[i].id === last.id) {
+          const entry = incoming[i]!
+          if (entry.timestamp === last.timestamp && entry.id === last.id) {
             start = i + 1
             break
           }
@@ -703,7 +744,7 @@ export class Collector {
       return { cursor, reset: true, changes: this.timeline }
     }
     let i = this.timeline.length
-    while (i > 0 && this.timeline[i - 1].seq > since) i--
+    while (i > 0 && this.timeline[i - 1]!.seq > since) i--
     return { cursor, reset: false, changes: this.timeline.slice(i) }
   }
 
@@ -740,16 +781,16 @@ export class Collector {
     let drop = Math.max(0, this.timeline.length - LIMITS.stateTimeline)
     let bytes = this.timelineBytes
     for (let i = 0; i < drop; i++) {
-      bytes -= this.timelineSizes[i]
-      this.addDrop(this.timelineEpochs[i], 'server-count', 1)
+      bytes -= this.timelineSizes[i]!
+      this.addDrop(this.timelineEpochs[i]!, 'server-count', 1)
     }
     // Keep at least the newest entry even if it alone exceeds the budget.
     while (bytes > STATE_TIMELINE_BYTES && drop < this.timeline.length - 1) {
-      this.addDrop(this.timelineEpochs[drop], 'server-bytes', 1)
-      bytes -= this.timelineSizes[drop++]
+      this.addDrop(this.timelineEpochs[drop]!, 'server-bytes', 1)
+      bytes -= this.timelineSizes[drop++]!
     }
     if (drop > 0) {
-      this.timelineTrimmedAt = this.timeline[drop - 1].seq
+      this.timelineTrimmedAt = this.timeline[drop - 1]!.seq
       this.timeline = this.timeline.slice(drop)
       this.timelineSizes = this.timelineSizes.slice(drop)
       this.timelineEpochs = this.timelineEpochs.slice(drop)
@@ -770,15 +811,9 @@ export class Collector {
    * is a whole-app graph and answers every pending graph pull, scoped ones by
    * filtering here.
    */
-  ingestReactiveGraph(data: Record<string, any> | undefined): void {
+  ingestReactiveGraph(data: Payload | undefined): void {
     const requestId = typeof data?.requestId === 'string' ? data.requestId : undefined
-    if (requestId !== undefined) {
-      const pull = this.pulls.get(requestId)
-      if (!pull || pull.kind !== 'graph') return
-      if (pull.epoch !== null && typeof data?.epoch === 'string' && data.epoch !== pull.epoch)
-        return
-      this.settle(requestId, this.normalizeGraph(data, pull.scope, pull.epoch))
-    } else {
+    if (requestId === undefined) {
       let answered = false
       for (const [id, pull] of this.pulls) {
         if (pull.kind !== 'graph') continue
@@ -786,6 +821,12 @@ export class Collector {
         this.settle(id, this.normalizeGraph(data, pull.scope, pull.epoch))
       }
       if (!answered) this.storeGraph(this.normalizeGraph(data, null, this.servedEpoch ?? null))
+    } else {
+      const pull = this.pulls.get(requestId)
+      if (pull?.kind !== 'graph') return
+      if (pull.epoch !== null && typeof data?.epoch === 'string' && data.epoch !== pull.epoch)
+        return
+      this.settle(requestId, this.normalizeGraph(data, pull.scope, pull.epoch))
     }
     this.bump('reactiveGraph')
   }
@@ -798,7 +839,7 @@ export class Collector {
    * the server had to scope its whole-app graph.
    */
   private normalizeGraph(
-    data: Record<string, any> | undefined,
+    data: Payload | undefined,
     scope: number | null,
     epoch: string | null,
   ): ReactiveGraphResult {
@@ -812,11 +853,12 @@ export class Collector {
           ? 'global-head'
           : 'scoped'
     let total: ReactiveGraphTotal | null = null
-    if (!legacy && data?.total && typeof data.total.nodes === 'number') {
+    const reportedTotal = asPayload(data?.total)
+    if (!legacy && typeof reportedTotal?.nodes === 'number') {
       total = {
-        nodes: data.total.nodes,
+        nodes: reportedTotal.nodes,
         nodesKind: 'registered',
-        edges: typeof data.total.edges === 'number' ? data.total.edges : null,
+        edges: typeof reportedTotal.edges === 'number' ? reportedTotal.edges : null,
       }
     }
     if (legacy && scope !== null) {
@@ -873,62 +915,64 @@ export class Collector {
   }
 
   /** A summary reply (§6.7 I): resolves only the matching request. */
-  ingestReactiveSummary(data: Record<string, any> | undefined): void {
+  ingestReactiveSummary(data: Payload | undefined): void {
     const requestId = typeof data?.requestId === 'string' ? data.requestId : undefined
     const pull = requestId === undefined ? undefined : this.pulls.get(requestId)
-    if (!pull || pull.kind !== 'summary') return
+    if (pull?.kind !== 'summary') return
     if (pull.epoch !== null && typeof data?.epoch === 'string' && data.epoch !== pull.epoch) return
     this.settle(requestId!, this.normalizeSummary(data, pull.epoch))
   }
 
-  private normalizeSummary(
-    data: Record<string, any> | undefined,
-    epoch: string | null,
-  ): ReactiveSummary {
-    const count = (v: unknown) => clampInt(v, 0, Number.MAX_SAFE_INTEGER, 0)
-    const rows = head<Record<string, any>>(data?.rows, SUMMARY_DEFAULTS.maxTopK).map(r => ({
-      componentId: count(r?.componentId),
-      file: typeof r?.file === 'string' ? r.file : '',
-      nodes: {
-        state: count(r?.nodes?.state),
-        derived: count(r?.nodes?.derived),
-        effect: count(r?.nodes?.effect),
-      },
-      changes: count(r?.changes),
-      renders: count(r?.renders),
-      renderMs: typeof r?.renderMs === 'number' && r.renderMs >= 0 ? r.renderMs : 0,
-      ...(r?.kind === 'module' && { kind: 'module' as const }),
-    }))
-    const w = data?.window
+  private normalizeSummary(data: Payload | undefined, epoch: string | null): ReactiveSummary {
+    const rows = head<unknown>(data?.rows, SUMMARY_DEFAULTS.maxTopK).map(raw => {
+      const r = asPayload(raw)
+      const nodes = asPayload(r?.nodes)
+      const row: ReactiveSummaryRow = {
+        componentId: nonNegInt(r?.componentId),
+        file: typeof r?.file === 'string' ? r.file : '',
+        nodes: {
+          state: nonNegInt(nodes?.state),
+          derived: nonNegInt(nodes?.derived),
+          effect: nonNegInt(nodes?.effect),
+        },
+        changes: nonNegInt(r?.changes),
+        renders: nonNegInt(r?.renders),
+        renderMs: typeof r?.renderMs === 'number' && r.renderMs >= 0 ? r.renderMs : 0,
+      }
+      if (r?.kind === 'module') row.kind = 'module'
+      return row
+    })
+    const w = asPayload(data?.window)
+    const components = asPayload(data?.components)
+    const other = asPayload(data?.other)
+    const capabilities = asPayload(data?.capabilities)
     return {
       epoch: typeof data?.epoch === 'string' ? data.epoch : epoch,
       window: {
-        ms: count(w?.ms),
-        since: count(w?.since),
-        until: count(w?.until),
-        sampledActiveMs: count(w?.sampledActiveMs),
+        ms: nonNegInt(w?.ms),
+        since: nonNegInt(w?.since),
+        until: nonNegInt(w?.until),
+        sampledActiveMs: nonNegInt(w?.sampledActiveMs),
       },
       policy: 'sampled-200ms',
       coverage: 'component-init',
       components: {
-        total: typeof data?.components?.total === 'number' ? data.components.total : null,
-        withActivity: count(data?.components?.withActivity),
+        total: typeof components?.total === 'number' ? components.total : null,
+        withActivity: nonNegInt(components?.withActivity),
       },
       rows,
       other:
-        data?.other &&
-        typeof data.other.components === 'number' &&
-        typeof data.other.nodes === 'number'
-          ? { components: data.other.components, nodes: data.other.nodes }
+        typeof other?.components === 'number' && typeof other.nodes === 'number'
+          ? { components: other.components, nodes: other.nodes }
           : null,
       truncated: data?.truncated === true,
       // Only what the runtime says it implements; never assumed.
       capabilities: {
-        valueInspection: data?.capabilities?.valueInspection === true,
-        signalHistory: data?.capabilities?.signalHistory === true,
-        writeCause: data?.capabilities?.writeCause === true,
+        valueInspection: capabilities?.valueInspection === true,
+        signalHistory: capabilities?.signalHistory === true,
+        writeCause: capabilities?.writeCause === true,
       },
-      ...(validBaseline(data?.baseline) && { baseline: { ...data!.baseline } }),
+      ...(validBaseline(data?.baseline) && { baseline: { ...data.baseline } }),
     }
   }
 
@@ -1224,8 +1268,8 @@ export class Collector {
    * {@link PULL_FRESHNESS} is reused, so several polling clients never make
    * the user's app rebuild the same data more than once a second.
    */
-  private pull<K extends 'stateTimeline', T>(
-    key: K,
+  private pull<T>(
+    key: 'stateTimeline',
     event: string,
     resolvers: Array<(value: T) => void>,
     cached: () => T,

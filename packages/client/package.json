@@ -6,12 +6,13 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
-    "check": "rsvelte-check --tsconfig ./tsconfig.json",
+    "check": "rsvelte-check --tsconfig ./tsconfig.app.json",
     "test": "vitest run"
   },
   "devDependencies": {
     "@rsvelte/svelte-check": "^0.5.32",
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "@types/node": "^25.6.2",
     "devframe": "^1.2.0",
     "svelte": "^5.57.1",
     "typescript": "^6.0.3",

@@ -6,6 +6,7 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
+
 import { summarize } from './lib/summary.mjs'
 
 const arg = name => process.argv.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3)
@@ -18,10 +19,10 @@ const previous = read('summary.json')
 const items = fs
   .readdirSync(path.join(dir, 'items'))
   .filter(f => f.endsWith('.json'))
-  .sort()
+  .toSorted()
   .map(f => read(path.join('items', f)))
 
-const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+const stamp = new Date().toISOString().replaceAll(/[:.]/g, '-')
 for (const ext of ['json', 'md']) {
   fs.copyFileSync(path.join(dir, `summary.${ext}`), path.join(dir, `summary.${stamp}.${ext}`))
 }

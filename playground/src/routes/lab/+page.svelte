@@ -3,15 +3,18 @@
   follow (e2e/reactivity.mjs checks it through MCP).
 -->
 <script lang="ts">
+  import { page } from '$app/state'
   import { untrack } from 'svelte'
   import { SvelteMap } from 'svelte/reactivity'
-  import { page } from '$app/state'
-  import { inventory, prefs } from '#lib/lab/store.svelte.js'
-  import Row from '#lib/lab/Row.svelte'
-  import Panel from '#lib/lab/Panel.svelte'
-  import Broken from '#lib/lab/Broken.svelte'
 
-  let { data } = $props()
+  import Broken from '#lib/lab/Broken.svelte'
+  import Panel from '#lib/lab/Panel.svelte'
+  import Row from '#lib/lab/Row.svelte'
+  import { inventory, prefs } from '#lib/lab/store.svelte.js'
+
+  import type { PageProps } from './$types'
+
+  let { data }: PageProps = $props()
 
   // seeded once from the load data (later navigations keep the items)
   const seed = untrack(() => data.seed)
@@ -31,8 +34,12 @@
   const summary = $derived.by(() => `${count} items / ${pieces} pcs`)
   const path = $derived(page.url.pathname)
   // read by nothing on purpose: reported as an orphan derived
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- the orphan e2e/reactivity.mjs expects
   const unusedOnPurpose = $derived(query.length * 2)
   let promise = $state(Promise.resolve(seed.length))
+  // write-only: the $effect below exists to read `pieces` (the pieces -> $effect
+  // edge e2e/reactivity.mjs checks)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- see above
   let renders = 0
 
   $effect(() => {
@@ -47,13 +54,23 @@
 <p>{path} · {prefs.compact ? 'compact' : 'full'} · {tags.size} tags · {inventory.total} total</p>
 
 <input data-testid="query" bind:value={query} placeholder="filter" />
-<button data-testid="add" onclick={() => inventory.add(`item ${inventory.items.length + 1}`)}>add</button>
-<button data-testid="compact" onclick={() => (prefs.compact = !prefs.compact)}>compact</button>
-<button data-testid="tag" onclick={() => tags.set(`t${tags.size}`, 1)}>tag</button>
-<button data-testid="panel" onclick={() => (showPanel = !showPanel)}>panel</button>
-<button data-testid="fail" onclick={() => (fail = true)}>fail</button>
-<button data-testid="tab" onclick={() => (tab = tab === 'a' ? 'b' : 'a')}>tab</button>
-<button data-testid="reload" onclick={() => (promise = Promise.resolve(inventory.items.length))}>
+<button
+  type="button"
+  data-testid="add"
+  onclick={() => inventory.add(`item ${inventory.items.length + 1}`)}>add</button
+>
+<button type="button" data-testid="compact" onclick={() => (prefs.compact = !prefs.compact)}
+  >compact</button
+>
+<button type="button" data-testid="tag" onclick={() => tags.set(`t${tags.size}`, 1)}>tag</button>
+<button type="button" data-testid="panel" onclick={() => (showPanel = !showPanel)}>panel</button>
+<button type="button" data-testid="fail" onclick={() => (fail = true)}>fail</button>
+<button type="button" data-testid="tab" onclick={() => (tab = tab === 'a' ? 'b' : 'a')}>tab</button>
+<button
+  type="button"
+  data-testid="reload"
+  onclick={() => (promise = Promise.resolve(inventory.items.length))}
+>
   reload
 </button>
 

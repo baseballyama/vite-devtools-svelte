@@ -10,10 +10,10 @@
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+
 import { ensurePlaygroundSync, generate } from './generate-large-app.mjs'
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const repoRoot = path.resolve(import.meta.dirname, '..')
 const repoArg = process.argv.find(a => a.startsWith('--repo='))
 const repo = repoArg ? path.resolve(repoArg.slice(7)) : repoRoot
 const appDir = path.join(repo, 'playground/.temp/noop-app')
@@ -39,8 +39,12 @@ function run(args, env = {}) {
       stdio: ['ignore', 'pipe', 'pipe'],
     })
     let log = ''
-    child.stdout.on('data', d => (log += d))
-    child.stderr.on('data', d => (log += d))
+    child.stdout.on('data', d => {
+      log += d
+    })
+    child.stderr.on('data', d => {
+      log += d
+    })
     child.on('exit', code =>
       code === 0 ? resolve(log) : reject(new Error(`vite ${args[0]} exited ${code}\n${log}`)),
     )
@@ -78,7 +82,9 @@ async function devMarkers() {
         const res = await fetch(`${base}/`)
         if (res.ok) html = await res.text()
       } catch {
-        await new Promise(r => setTimeout(r, 100))
+        await new Promise(r => {
+          setTimeout(r, 100)
+        })
       }
     }
     // The wrapper/runtime are pulled in by compiled components on the client.
@@ -153,7 +159,9 @@ async function main() {
   console.log('PASS: production build contains no devtools code')
 }
 
-main().catch(e => {
+try {
+  await main()
+} catch (e) {
   console.error(e)
   process.exit(1)
-})
+}

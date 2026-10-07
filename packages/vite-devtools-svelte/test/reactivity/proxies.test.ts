@@ -1,10 +1,11 @@
-import { describe, it, expect, afterEach } from 'vitest'
 import { flushSync } from 'svelte'
-import Todos from './fixtures/Todos.svelte'
+import { describe, it, expect, afterEach } from 'vitest'
+
+import { summarizeReactiveProblems } from '../../src/mcp/issues.js'
 import Shop from './fixtures/Shop.svelte'
+import Todos from './fixtures/Todos.svelte'
 import TwoLists from './fixtures/TwoLists.svelte'
 import { render, instance, instances, graph, node, incoming, outgoing } from './harness.js'
-import { summarizeReactiveProblems } from '../../src/mcp/issues.js'
 
 let cleanup: Array<() => void> = []
 afterEach(() => {
@@ -86,7 +87,7 @@ describe('proxies held by $state signals (class fields, reassigned objects)', ()
     const total = g.nodes.find(n => n.name === 'Inventory.total')!
     expect(items.componentFile).toMatch(/stock\.svelte\.ts$/)
     expect(incoming(g, total.id)).toEqual([items.id])
-    expect(outgoing(g, items.id).sort()).toEqual([total.id, `${c.id}:(template)`].sort())
+    expect(outgoing(g, items.id).toSorted()).toEqual([total.id, `${c.id}:(template)`].toSorted())
     expect(g.nodes.filter(n => n.untrackedDeps)).toEqual([])
     ;(r.app as any).api.replace()
     flushSync()

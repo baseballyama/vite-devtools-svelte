@@ -26,8 +26,8 @@
     }
     if (query.trim()) {
       const q = query.toLowerCase()
-      result = result.filter(u =>
-        u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
+      result = result.filter(
+        u => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q),
       )
     }
     return result
@@ -60,9 +60,10 @@
     {#each filtered as user (user.id)}
       <li>
         <button
+          type="button"
           class="user-item"
           class:selected={selectedUser?.id === user.id}
-          onclick={() => selectedUser = selectedUser?.id === user.id ? null : user}
+          onclick={() => (selectedUser = selectedUser?.id === user.id ? null : user)}
         >
           <span class="name">{user.name}</span>
           <span class="badge {user.role}">{user.role}</span>
@@ -81,37 +82,104 @@
 
 <style>
   .search {
-    background: #1e1e3a; border: 1px solid #2a2a4a; border-radius: 8px; padding: 16px;
+    background: #1e1e3a;
+    border: 1px solid #2a2a4a;
+    border-radius: 8px;
+    padding: 16px;
   }
-  h3 { color: #ff3e00; margin-bottom: 12px; }
-  .filters { display: flex; gap: 8px; margin-bottom: 8px; }
+  h3 {
+    color: #ff3e00;
+    margin-bottom: 12px;
+  }
+  .filters {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
   input[type='text'] {
-    flex: 1; background: #12122a; border: 1px solid #2a2a4a; border-radius: 4px;
-    padding: 6px 8px; color: #e0e0e0; font-size: 13px;
+    flex: 1;
+    background: #12122a;
+    border: 1px solid #2a2a4a;
+    border-radius: 4px;
+    padding: 6px 8px;
+    color: #e0e0e0;
+    font-size: 13px;
   }
-  input:focus { outline: none; border-color: #ff3e00; }
+  input:focus {
+    outline: none;
+    border-color: #ff3e00;
+  }
   select {
-    background: #12122a; border: 1px solid #2a2a4a; border-radius: 4px;
-    padding: 6px 8px; color: #e0e0e0; font-size: 13px;
+    background: #12122a;
+    border: 1px solid #2a2a4a;
+    border-radius: 4px;
+    padding: 6px 8px;
+    color: #e0e0e0;
+    font-size: 13px;
   }
-  .count { font-size: 11px; color: #666; margin-bottom: 8px; }
-  ul { list-style: none; max-height: 180px; overflow-y: auto; }
-  li { margin-bottom: 2px; }
+  .count {
+    font-size: 11px;
+    color: #666;
+    margin-bottom: 8px;
+  }
+  ul {
+    list-style: none;
+    max-height: 180px;
+    overflow-y: auto;
+  }
+  li {
+    margin-bottom: 2px;
+  }
   .user-item {
-    width: 100%; display: flex; justify-content: space-between; align-items: center;
-    background: none; border: 1px solid transparent; border-radius: 4px; padding: 6px 8px;
-    color: #ccc; cursor: pointer; font-family: inherit; font-size: 13px; text-align: left;
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 6px 8px;
+    color: #ccc;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 13px;
+    text-align: left;
   }
-  .user-item:hover { background: #2a2a4a; }
-  .user-item.selected { border-color: #ff3e00; background: rgba(255, 62, 0, 0.1); }
+  .user-item:hover {
+    background: #2a2a4a;
+  }
+  .user-item.selected {
+    border-color: #ff3e00;
+    background: rgba(255, 62, 0, 0.1);
+  }
   .badge {
-    font-size: 10px; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; font-weight: 600;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    font-weight: 600;
   }
-  .badge.admin { background: #4c1d95; color: #c4b5fd; }
-  .badge.editor { background: #1e3a5f; color: #93c5fd; }
-  .badge.viewer { background: #1a3a2a; color: #86efac; }
+  .badge.admin {
+    background: #4c1d95;
+    color: #c4b5fd;
+  }
+  .badge.editor {
+    background: #1e3a5f;
+    color: #93c5fd;
+  }
+  .badge.viewer {
+    background: #1a3a2a;
+    color: #86efac;
+  }
   .detail {
-    margin-top: 8px; padding: 8px; background: #12122a; border-radius: 4px;
-    display: flex; align-items: center; gap: 8px; font-size: 13px; color: #ccc;
+    margin-top: 8px;
+    padding: 8px;
+    background: #12122a;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #ccc;
   }
 </style>

@@ -3,12 +3,15 @@
 
   let theme = $state<Theme>('dark')
   let fontSize = $state(14)
-  let showPreview = $state(true)
+  // boolean, not `true`: bind:checked writes it (invisible to the type checker)
+  let showPreview = $state<boolean>(true)
 
   let effectiveTheme = $derived(
     theme === 'auto'
-      ? (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
-      : theme
+      ? typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: light)').matches
+        ? 'light'
+        : 'dark'
+      : theme,
   )
 
   let previewBg = $derived(effectiveTheme === 'light' ? '#f5f5f5' : '#1a1a2e')
@@ -21,12 +24,16 @@
   })
 
   let changeCount = $state(0)
+  // Reads its arguments, which makes them dependencies of the calling effect.
+  const track = (...deps: unknown[]) => deps.length
 
   $effect(() => {
     // Track setting changes (read the dependencies)
-    void theme; void fontSize; void showPreview
+    track(theme, fontSize, showPreview)
     // Use queueMicrotask to write state outside the effect's tracking scope
-    queueMicrotask(() => { changeCount++ })
+    queueMicrotask(() => {
+      changeCount++
+    })
   })
 </script>
 
@@ -35,8 +42,10 @@
   <div class="setting">
     <span class="label">Theme</span>
     <div class="btn-group">
-      {#each ['dark', 'light', 'auto'] as t}
-        <button class:active={theme === t} onclick={() => theme = t as Theme}>{t}</button>
+      {#each ['dark', 'light', 'auto'] as t (t)}
+        <button type="button" class:active={theme === t} onclick={() => (theme = t as Theme)}
+          >{t}</button
+        >
       {/each}
     </div>
   </div>
@@ -52,7 +61,12 @@
     </label>
   </div>
   {#if showPreview}
-    <div class="preview" style="background: {previewBg}; color: {previewFg}; font-size: {fontSize}px;">
+    <div
+      class="preview"
+      style:background={previewBg}
+      style:color={previewFg}
+      style:font-size="{fontSize}px"
+    >
       The quick brown fox jumps over the lazy dog.
     </div>
   {/if}
@@ -61,29 +75,67 @@
 
 <style>
   .switcher {
-    background: #1e1e3a; border: 1px solid #2a2a4a; border-radius: 8px; padding: 16px;
+    background: #1e1e3a;
+    border: 1px solid #2a2a4a;
+    border-radius: 8px;
+    padding: 16px;
   }
-  h3 { color: #ff3e00; margin-bottom: 12px; }
+  h3 {
+    color: #ff3e00;
+    margin-bottom: 12px;
+  }
   .setting {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 6px 0; border-bottom: 1px solid #2a2a4a;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid #2a2a4a;
   }
-  .label { font-size: 13px; color: #ccc; }
-  .btn-group { display: flex; gap: 2px; }
+  .label {
+    font-size: 13px;
+    color: #ccc;
+  }
+  .btn-group {
+    display: flex;
+    gap: 2px;
+  }
   .btn-group button {
-    background: #2a2a4a; color: #aaa; border: none; border-radius: 4px;
-    padding: 4px 10px; font-size: 11px; cursor: pointer; text-transform: capitalize;
+    background: #2a2a4a;
+    color: #aaa;
+    border: none;
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 11px;
+    cursor: pointer;
+    text-transform: capitalize;
   }
-  .btn-group button.active { background: #ff3e00; color: white; }
-  input[type='range'] { accent-color: #ff3e00; width: 100px; }
+  .btn-group button.active {
+    background: #ff3e00;
+    color: white;
+  }
+  input[type='range'] {
+    accent-color: #ff3e00;
+    width: 100px;
+  }
   .toggle {
-    font-size: 12px; color: #888; display: flex; align-items: center; gap: 6px; cursor: pointer;
+    font-size: 12px;
+    color: #888;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
   }
   .preview {
-    margin-top: 10px; padding: 12px; border-radius: 4px; border: 1px solid #2a2a4a;
+    margin-top: 10px;
+    padding: 12px;
+    border-radius: 4px;
+    border: 1px solid #2a2a4a;
     transition: all 0.3s;
   }
   .summary {
-    margin-top: 8px; font-size: 10px; color: #555; font-family: monospace;
+    margin-top: 8px;
+    font-size: 10px;
+    color: #555;
+    font-family: monospace;
   }
 </style>
