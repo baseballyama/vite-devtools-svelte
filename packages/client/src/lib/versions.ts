@@ -31,6 +31,10 @@ export function datasetVersion(
   if (!versionsSupported) return undefined
   return async () => {
     const v = await fetchVersions()
-    return v ? keys.map(k => v[k]).join(':') : undefined
+    // A counter the server does not report is unknown, not a constant ''
+    // (which would read as "unchanged" and stop the dataset from refreshing).
+    return v && keys.every(k => typeof v[k] === 'number')
+      ? keys.map(k => v[k]).join(':')
+      : undefined
   }
 }

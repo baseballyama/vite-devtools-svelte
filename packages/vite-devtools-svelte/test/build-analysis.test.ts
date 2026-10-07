@@ -2,168 +2,113 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import { describe, it, expect, afterEach } from 'vitest'
+/** Build output scan over generated temp roots (one per test: no shared state). */
+import { describe, it, expect, afterAll, vi, afterEach } from 'vitest'
 
-import { createTestHost, rpcHandlers } from './helpers.js'
+import { analyzeBuild } from '../src/analyzers/build.js'
 
-// Use an isolated tmp root per test run so this file does not race with
-// other test files that read from the shared FIXTURES_DIR (e.g. plugin.test.ts
-// asserting an empty build analysis). Vitest runs files in parallel by default.
-const FIXTURES_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'svelte-devtools-build-'))
+const roots: string[] = []
+afterAll(() => {
+  for (const d of roots) fs.rmSync(d, { recursive: true, force: true })
+})
+afterEach(() => {
+  vi.useRealTimers()
+})
 
-function setupWithRpc(root: string = FIXTURES_DIR) {
-  return rpcHandlers(createTestHost(root))
+function root(files: Record<string, string> = {}): string {
+  const r = fs.mkdtempSync(path.join(os.tmpdir(), 'sdt-build-'))
+  roots.push(r)
+  for (const [rel, content] of Object.entries(files)) {
+    const full = path.join(r, ...rel.split('/'))
+    fs.mkdirSync(path.dirname(full), { recursive: true })
+    fs.writeFileSync(full, content)
+  }
+  return r
 }
 
-// =====================================================================
-// Build Analysis
-// =====================================================================
+/** chmod 000 only locks a directory for a non-root user on POSIX. */
+const CAN_LOCK = process.platform !== 'win32' && process.getuid?.() !== 0
 
-// Note: getBuildAnalysis scans multiple directories: .svelte-kit/output, build/client, build
-// Files in build/client will be found by both the build/client scan and the build scan
-// (because `build` is walked recursively), resulting in duplicated entries.
+const summary = (r: string) =>
+  analyzeBuild(r).chunks.map(c => [c.file.split(path.sep).join('/'), c.size, c.isEntry])
 
-describe('build analysis', () => {
-  const buildDir = path.join(FIXTURES_DIR, 'build')
-  const svelteKitOutputDir = path.join(FIXTURES_DIR, '.svelte-kit', 'output')
+describe('analyzeBuild', () => {
+  it('is empty without build output, stamped with the current time', () => {
+    vi.useFakeTimers({ now: 1234 })
+    expect(analyzeBuild(root())).toEqual({ chunks: [], totalSize: 0, timestamp: 1234 })
+  })
 
-  afterEach(() => {
-    // Cleanup build directories
+  it('is empty for empty output directories', () => {
+    const r = root()
+    fs.mkdirSync(path.join(r, '.svelte-kit/output'), { recursive: true })
+    fs.mkdirSync(path.join(r, 'build/client'), { recursive: true })
+    expect(analyzeBuild(r).chunks).toEqual([])
+  })
+
+  it('lists .js/.css/.html from every output dir (nested), largest first', () => {
+    const r = root({
+      '.svelte-kit/output/client/_app/immutable/entry/start.abc.js': 'x'.repeat(30),
+      '.svelte-kit/output/client/_app/immutable/assets/app.css': 'x'.repeat(20),
+      '.svelte-kit/output/server/index.js': 'x'.repeat(40),
+      '.svelte-kit/output/prerendered/pages/about.HTML': 'x'.repeat(10),
+      '.svelte-kit/output/client/data.json': '{}',
+      '.svelte-kit/output/client/a.js.map': '{}',
+      '.svelte-kit/output/client/img.png': 'p',
+      'build/chunk.js': 'x'.repeat(5),
+    })
+    expect(summary(r)).toEqual([
+      ['.svelte-kit/output/server/index.js', 40, true],
+      ['.svelte-kit/output/client/_app/immutable/entry/start.abc.js', 30, true],
+      ['.svelte-kit/output/client/_app/immutable/assets/app.css', 20, false],
+      ['.svelte-kit/output/prerendered/pages/about.HTML', 10, false],
+      ['build/chunk.js', 5, false],
+    ])
+    expect(analyzeBuild(r).totalSize).toBe(105)
+  })
+
+  it('counts a file under build/client once (build is scanned too)', () => {
+    const r = root({ 'build/client/app.js': '123456', 'build/index.js': '12' })
+    expect(summary(r)).toEqual([
+      ['build/client/app.js', 6, false],
+      ['build/index.js', 2, true],
+    ])
+    expect(analyzeBuild(r).totalSize).toBe(8)
+  })
+
+  it('chunk entries carry name, relative file and empty modules', () => {
+    const r = root({ '.svelte-kit/output/app.js': 'abc' })
+    expect(analyzeBuild(r).chunks).toEqual([
+      {
+        name: 'app.js',
+        file: path.join('.svelte-kit', 'output', 'app.js'),
+        size: 3,
+        modules: [],
+        isEntry: false,
+      },
+    ])
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'symlinks: a file link counts once with its target; dangling links and directory links are skipped',
+    () => {
+      const r = root({ 'build/real.js': '1234', 'elsewhere/deep.js': '12345678' })
+      fs.symlinkSync(path.join(r, 'build/real.js'), path.join(r, 'build/alias.js'))
+      fs.symlinkSync(path.join(r, 'build/nope.js'), path.join(r, 'build/dangling.js'))
+      fs.symlinkSync(path.join(r, 'elsewhere'), path.join(r, 'build/linked-dir'))
+      fs.symlinkSync(path.join(r, 'build'), path.join(r, 'build/loop.js'))
+      const chunks = analyzeBuild(r).chunks
+      expect(chunks).toHaveLength(1)
+      expect(chunks[0]!.size).toBe(4)
+    },
+  )
+
+  it.skipIf(!CAN_LOCK)('an unreadable directory is skipped, the rest is still listed', () => {
+    const r = root({ 'build/locked/a.js': '1', 'build/b.js': '22' })
+    fs.chmodSync(path.join(r, 'build/locked'), 0o000)
     try {
-      fs.rmSync(buildDir, { recursive: true })
-    } catch {}
-    try {
-      fs.rmSync(path.join(FIXTURES_DIR, '.svelte-kit'), { recursive: true })
-    } catch {}
-  })
-
-  it('should return empty analysis when no build directory exists', async () => {
-    const handlers = setupWithRpc()
-    const result = await handlers.get('svelte-devtools:get-build-analysis')!()
-
-    expect(result.chunks).toEqual([])
-    expect(result.totalSize).toBe(0)
-    expect(result.timestamp).toBeGreaterThan(0)
-  })
-
-  it('should detect JS, CSS, and HTML files in build output', async () => {
-    // Use .svelte-kit/output which is only scanned once
-    fs.mkdirSync(svelteKitOutputDir, { recursive: true })
-    fs.writeFileSync(path.join(svelteKitOutputDir, 'index.html'), '<html></html>')
-    fs.writeFileSync(path.join(svelteKitOutputDir, 'app.js'), 'console.log("app")')
-    fs.writeFileSync(path.join(svelteKitOutputDir, 'style.css'), 'body { color: red }')
-
-    const handlers = setupWithRpc()
-    const result = await handlers.get('svelte-devtools:get-build-analysis')!()
-
-    expect(result.chunks.length).toBe(3)
-    expect(result.totalSize).toBeGreaterThan(0)
-
-    const jsChunk = result.chunks.find((c: any) => c.name === 'app.js')
-    expect(jsChunk).toBeDefined()
-    expect(jsChunk.size).toBeGreaterThan(0)
-
-    const cssChunk = result.chunks.find((c: any) => c.name === 'style.css')
-    expect(cssChunk).toBeDefined()
-
-    const htmlChunk = result.chunks.find((c: any) => c.name === 'index.html')
-    expect(htmlChunk).toBeDefined()
-    expect(htmlChunk.isEntry).toBe(true) // contains 'index'
-  })
-
-  it('should sort chunks by size (largest first)', async () => {
-    fs.mkdirSync(svelteKitOutputDir, { recursive: true })
-    fs.writeFileSync(path.join(svelteKitOutputDir, 'small.js'), 'x')
-    fs.writeFileSync(path.join(svelteKitOutputDir, 'large.js'), 'x'.repeat(1000))
-    fs.writeFileSync(path.join(svelteKitOutputDir, 'medium.js'), 'x'.repeat(100))
-
-    const handlers = setupWithRpc()
-    const result = await handlers.get('svelte-devtools:get-build-analysis')!()
-
-    expect(result.chunks.length).toBe(3)
-    expect(result.chunks[0].size).toBeGreaterThanOrEqual(result.chunks[1].size)
-    expect(result.chunks[1].size).toBeGreaterThanOrEqual(result.chunks[2].size)
-  })
-
-  it('should detect entry files (index, start)', async () => {
-    fs.mkdirSync(svelteKitOutputDir, { recursive: true })
-    fs.writeFileSync(path.join(svelteKitOutputDir, 'index.js'), 'main()')
-    fs.writeFileSync(path.join(svelteKitOutputDir, 'start.js'), 'start()')
-    fs.writeFileSync(path.join(svelteKitOutputDir, 'chunk-abc.js'), 'chunk()')
-
-    const handlers = setupWithRpc()
-    const result = await handlers.get('svelte-devtools:get-build-analysis')!()
-
-    const indexChunk = result.chunks.find((c: any) => c.name === 'index.js')
-    expect(indexChunk!.isEntry).toBe(true)
-
-    const startChunk = result.chunks.find((c: any) => c.name === 'start.js')
-    expect(startChunk!.isEntry).toBe(true)
-
-    const regularChunk = result.chunks.find((c: any) => c.name === 'chunk-abc.js')
-    expect(regularChunk!.isEntry).toBe(false)
-  })
-
-  it('should walk nested directories in build output', async () => {
-    const assetsDir = path.join(svelteKitOutputDir, 'assets')
-    fs.mkdirSync(assetsDir, { recursive: true })
-    fs.writeFileSync(path.join(assetsDir, 'chunk-123.js'), 'chunk()')
-    fs.writeFileSync(path.join(assetsDir, 'app.css'), 'body {}')
-
-    const handlers = setupWithRpc()
-    const result = await handlers.get('svelte-devtools:get-build-analysis')!()
-
-    expect(result.chunks.length).toBe(2)
-    expect(result.chunks.find((c: any) => c.name === 'chunk-123.js')).toBeDefined()
-    expect(result.chunks.find((c: any) => c.name === 'app.css')).toBeDefined()
-  })
-
-  it('should skip non-web files in build output', async () => {
-    fs.mkdirSync(svelteKitOutputDir, { recursive: true })
-    fs.writeFileSync(path.join(svelteKitOutputDir, 'app.js'), 'code()')
-    fs.writeFileSync(path.join(svelteKitOutputDir, 'data.json'), '{}')
-    fs.writeFileSync(path.join(svelteKitOutputDir, 'image.png'), 'binary')
-
-    const handlers = setupWithRpc()
-    const result = await handlers.get('svelte-devtools:get-build-analysis')!()
-
-    // Only .js, .css, .html should be included
-    expect(result.chunks.length).toBe(1)
-    expect(result.chunks[0].name).toBe('app.js')
-  })
-
-  it('should calculate correct totalSize', async () => {
-    fs.mkdirSync(svelteKitOutputDir, { recursive: true })
-    fs.writeFileSync(path.join(svelteKitOutputDir, 'a.js'), '12345') // 5 bytes
-    fs.writeFileSync(path.join(svelteKitOutputDir, 'b.js'), '1234567890') // 10 bytes
-
-    const handlers = setupWithRpc()
-    const result = await handlers.get('svelte-devtools:get-build-analysis')!()
-
-    expect(result.totalSize).toBe(15)
-  })
-
-  it('should scan build/client directory too', async () => {
-    const clientDir = path.join(buildDir, 'client')
-    fs.mkdirSync(clientDir, { recursive: true })
-    fs.writeFileSync(path.join(clientDir, 'app.js'), 'code()')
-
-    const handlers = setupWithRpc()
-    const result = await handlers.get('svelte-devtools:get-build-analysis')!()
-
-    // Found by both build/client scan and build/ recursive scan
-    expect(result.chunks.length).toBeGreaterThanOrEqual(1)
-    expect(result.chunks.find((c: any) => c.name === 'app.js')).toBeDefined()
-  })
-
-  it('should include file path relative to root', async () => {
-    fs.mkdirSync(svelteKitOutputDir, { recursive: true })
-    fs.writeFileSync(path.join(svelteKitOutputDir, 'app.js'), 'code()')
-
-    const handlers = setupWithRpc()
-    const result = await handlers.get('svelte-devtools:get-build-analysis')!()
-
-    expect(result.chunks[0].file).toContain('.svelte-kit')
-    expect(path.isAbsolute(result.chunks[0].file)).toBe(false)
+      expect(summary(r)).toEqual([['build/b.js', 2, false]])
+    } finally {
+      fs.chmodSync(path.join(r, 'build/locked'), 0o755)
+    }
   })
 })

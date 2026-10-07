@@ -81,7 +81,17 @@ export function injectIntoSvelteKitInternal(code: string): string | null {
   // Only patch the literal that follows the `templates: {` marker, so a
   // future `</body>` mentioned in unrelated source code won't be touched.
   const markerIdx = code.indexOf(TEMPLATE_APP_MARKER)
-  const bodyIdx = code.indexOf(BODY_CLOSE, markerIdx)
+  // SvelteKit emits the whole `app` template as one escaped string literal,
+  // i.e. on one line. The document's own `</body>` is the last one on that
+  // line: an earlier one sits in app.html's comments or inline-script strings
+  // (`<!-- </body> -->`), where the tag would never load.
+  const appIdx = code.indexOf('app:', markerIdx)
+  const lineEnd = appIdx === -1 ? -1 : code.indexOf('\n', appIdx)
+  const onAppLine =
+    appIdx === -1 ? -1 : code.lastIndexOf(BODY_CLOSE, lineEnd === -1 ? code.length : lineEnd)
+  // An unexpected shape (no `app:` line holding `</body>`): the first
+  // `</body>` after the marker, as before.
+  const bodyIdx = onAppLine > appIdx ? onAppLine : code.indexOf(BODY_CLOSE, markerIdx)
   if (bodyIdx === -1) return null
 
   return code.slice(0, bodyIdx) + INJECT_TAG + code.slice(bodyIdx)

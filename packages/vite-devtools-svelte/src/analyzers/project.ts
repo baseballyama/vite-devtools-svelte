@@ -44,7 +44,13 @@ function stringMap(v: unknown): Record<string, string> {
 }
 
 function readPackageJson(file: string): PackageJson {
-  const raw: unknown = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf-8')) : {}
+  let raw: unknown = {}
+  try {
+    raw = JSON.parse(fs.readFileSync(file, 'utf-8'))
+  } catch {
+    // Missing, unreadable or invalid (e.g. mid-edit): every RPC derives from
+    // this analysis, so a syntax error used to break all panels at once.
+  }
   const pkg = isRecord(raw) ? raw : {}
   return {
     name: nonEmpty(pkg.name),

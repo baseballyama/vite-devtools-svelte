@@ -48,9 +48,12 @@ export interface Resource<T> {
   readonly updatedAt: number | null
   /** Whether interval polling is enabled (user-togglable). */
   live: boolean
-  /** Fetch now (bypasses the version check). */
+  /**
+   * Fetch now (bypasses the version check). An in-flight request's answer is
+   * dropped and a new request follows it.
+   */
   refresh(): Promise<void>
-  /** Replace data locally (e.g. after a clear action). */
+  /** Replace data locally (e.g. after a clear action); an in-flight answer is dropped. */
   set(next: T): void
 }
 
@@ -76,19 +79,31 @@ export function resource<T>(fetcher: () => Promise<T>, opts: ResourceOptions<T>)
   // O(payload) pass (the new payload) instead of re-serialising both sides.
   let lastKey: string | null = null
   let lastVersion: string | undefined
+  // Bumped by `set()` and `refresh()`: a request started before either may
+  // answer with data from before a local change (a clear, a new scope), so
+  // its answer is dropped instead of overwriting the newer state.
+  let generation = 0
 
   function refresh(): Promise<void> {
-    return load(true)
+    generation++
+    // An in-flight request predates this refresh: fetch again once it settles.
+    return inflight ? inflight.then(() => load(true)) : load(true)
   }
 
   function load(force: boolean): Promise<void> {
     if (inflight) return inflight
     busy = true
+    const started = generation
+    let stale = false
     inflight = (async () => {
       try {
         const version = opts.version ? await opts.version() : undefined
         if (!force && version !== undefined && version === lastVersion) return
         const next = await fetcher()
+        if (started !== generation) {
+          stale = true
+          return
+        }
         lastVersion = version
         if (opts.equals) {
           if (
@@ -108,9 +123,10 @@ export function resource<T>(fetcher: () => Promise<T>, opts: ResourceOptions<T>)
         error = null
         updatedAt = Date.now()
       } catch (e) {
-        error = e instanceof Error ? e.message : String(e)
+        if (started === generation) error = e instanceof Error ? e.message : String(e)
+        else stale = true
       } finally {
-        loading = false
+        if (!stale) loading = false
         busy = false
         inflight = null
       }
@@ -166,9 +182,11 @@ export function resource<T>(fetcher: () => Promise<T>, opts: ResourceOptions<T>)
     },
     refresh,
     set(next: T) {
+      generation++
       lastKey = null
       lastVersion = undefined
       data = next
+      loading = false
     },
   }
 }

@@ -2,504 +2,375 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import { describe, it, expect } from 'vitest'
+/**
+ * Static analyzers over generated temp projects: assets, project info,
+ * component relations, reactive declaration lines. (Routes, API endpoints,
+ * OG, build and module graph have their own files.)
+ */
+import { describe, it, expect, afterAll, afterEach, vi } from 'vitest'
 
-import { analyzeAssets, MIME_TYPES } from '../src/analyzers/assets.js'
+import { analyzeAssets } from '../src/analyzers/assets.js'
 import { analyzeComponents } from '../src/analyzers/components.js'
 import { analyzeProject } from '../src/analyzers/project.js'
-import { analyzeRoutes } from '../src/analyzers/routes.js'
+import { findReactiveLine } from '../src/analyzers/source.js'
 
-const FIXTURES_DIR = path.resolve(import.meta.dirname, 'fixtures')
-const ROUTES_DIR = path.join(FIXTURES_DIR, 'src', 'routes')
-const STATIC_DIR = path.join(FIXTURES_DIR, 'static')
-
-// =====================================================================
-// Route Analyzer
-// =====================================================================
-
-describe('analyzeRoutes', () => {
-  it('should detect routes from fixture directory', () => {
-    const routes = analyzeRoutes(ROUTES_DIR)
-    expect(routes.length).toBeGreaterThan(0)
-  })
-
-  it('should detect the root page route', () => {
-    const routes = analyzeRoutes(ROUTES_DIR)
-    const root = routes.find(r => r.path === '/')
-    expect(root).toBeDefined()
-    expect(root!.hasPage).toBe(true)
-    expect(root!.hasLayout).toBe(true)
-  })
-
-  it('should detect dynamic route parameters', () => {
-    const routes = analyzeRoutes(ROUTES_DIR)
-    const slugRoute = routes.find(r => r.path.includes(':slug'))
-    expect(slugRoute).toBeDefined()
-    expect(slugRoute!.params.length).toBe(1)
-    expect(slugRoute!.params[0]!.name).toBe('slug')
-    expect(slugRoute!.params[0]!.rest).toBe(false)
-    expect(slugRoute!.params[0]!.optional).toBe(false)
-  })
-
-  it('should detect endpoints (server routes)', () => {
-    const routes = analyzeRoutes(ROUTES_DIR)
-    const apiRoute = routes.find(r => r.path.includes('hello'))
-    expect(apiRoute).toBeDefined()
-    expect(apiRoute!.hasEndpoint).toBe(true)
-  })
-
-  it('should detect page server load files', () => {
-    const routes = analyzeRoutes(ROUTES_DIR)
-    const slugRoute = routes.find(r => r.path.includes(':slug'))
-    expect(slugRoute).toBeDefined()
-    expect(slugRoute!.hasServerPage).toBe(true)
-  })
-
-  it('should return empty array for nonexistent directory', () => {
-    const routes = analyzeRoutes('/nonexistent/path')
-    expect(routes).toEqual([])
-  })
-
-  // --- SvelteKit route group syntax ---
-
-  it('should handle route group syntax (auth)', () => {
-    const routes = analyzeRoutes(ROUTES_DIR)
-    const loginRoute = routes.find(r => r.path === '/login')
-    expect(loginRoute).toBeDefined()
-    expect(loginRoute!.hasPage).toBe(true)
-    // Group (auth) should be stripped from the URL path
-    expect(loginRoute!.path).not.toContain('(auth)')
-  })
-
-  // --- Rest params ---
-
-  it('should detect rest params [...rest]', () => {
-    const routes = analyzeRoutes(ROUTES_DIR)
-    const docsRoute = routes.find(r => r.path.includes('*rest'))
-    expect(docsRoute).toBeDefined()
-    expect(docsRoute!.params.length).toBe(1)
-    expect(docsRoute!.params[0]!.name).toBe('rest')
-    expect(docsRoute!.params[0]!.rest).toBe(true)
-    expect(docsRoute!.params[0]!.optional).toBe(false)
-  })
-
-  // --- Optional params ---
-
-  it('should detect optional params [[optional]]', () => {
-    const routes = analyzeRoutes(ROUTES_DIR)
-    const settingsRoute = routes.find(r => r.path.includes('optional'))
-    expect(settingsRoute).toBeDefined()
-    expect(settingsRoute!.params.length).toBe(1)
-    expect(settingsRoute!.params[0]!.name).toBe('optional')
-    expect(settingsRoute!.params[0]!.optional).toBe(true)
-    expect(settingsRoute!.params[0]!.rest).toBe(false)
-    // Optional params become :param? in the path
-    expect(settingsRoute!.path).toContain(':optional?')
-  })
-
-  // --- Matcher params ---
-
-  it('should detect matcher params [id=integer]', () => {
-    const routes = analyzeRoutes(ROUTES_DIR)
-    const usersRoute = routes.find(r => r.path.includes(':id'))
-    expect(usersRoute).toBeDefined()
-    expect(usersRoute!.params.length).toBe(1)
-    expect(usersRoute!.params[0]!.name).toBe('id')
-    expect(usersRoute!.params[0]!.matcher).toBe('integer')
-    expect(usersRoute!.params[0]!.rest).toBe(false)
-    expect(usersRoute!.params[0]!.optional).toBe(false)
-  })
-
-  // --- Layout server ---
-
-  it('should detect layout server load files', () => {
-    const routes = analyzeRoutes(ROUTES_DIR)
-    const dashboardRoute = routes.find(r => r.path === '/dashboard')
-    expect(dashboardRoute).toBeDefined()
-    expect(dashboardRoute!.hasServerLayout).toBe(true)
-  })
-
-  // --- Universal page load ---
-
-  it('should detect universal page load files', () => {
-    const routes = analyzeRoutes(ROUTES_DIR)
-    const dashboardRoute = routes.find(r => r.path === '/dashboard')
-    expect(dashboardRoute).toBeDefined()
-    expect(dashboardRoute!.hasPageLoad).toBe(true)
-  })
-
-  // --- Multiple endpoints ---
-
-  it('should detect multiple API endpoint routes', () => {
-    const routes = analyzeRoutes(ROUTES_DIR)
-    const apiEndpoints = routes.filter(r => r.hasEndpoint)
-    expect(apiEndpoints.length).toBeGreaterThanOrEqual(2) // hello + users
-  })
-
-  // --- Route files ---
-
-  it('should include route files in the route info', () => {
-    const routes = analyzeRoutes(ROUTES_DIR)
-    const root = routes.find(r => r.path === '/')
-    expect(root).toBeDefined()
-    expect(root!.files.length).toBeGreaterThan(0)
-    const pageFile = root!.files.find(f => f.type === 'page')
-    expect(pageFile).toBeDefined()
-    expect(pageFile!.path).toContain('+page.svelte')
-  })
-
-  // --- Sort order ---
-
-  it('should return routes sorted by path', () => {
-    const routes = analyzeRoutes(ROUTES_DIR)
-    const paths = routes.map(r => r.path)
-    const sorted = paths.toSorted()
-    expect(paths).toEqual(sorted)
-  })
-
-  // --- Segments ---
-
-  it('should split path into segments', () => {
-    const routes = analyzeRoutes(ROUTES_DIR)
-    const slugRoute = routes.find(r => r.path.includes(':slug'))
-    expect(slugRoute).toBeDefined()
-    expect(slugRoute!.segments).toContain('blog')
-    expect(slugRoute!.segments).toContain(':slug')
-  })
-
-  // --- Root path segments ---
-
-  it('root route should have empty segments array', () => {
-    const routes = analyzeRoutes(ROUTES_DIR)
-    const root = routes.find(r => r.path === '/')
-    expect(root).toBeDefined()
-    expect(root!.segments.filter(Boolean)).toEqual([])
-  })
+const tmpRoots: string[] = []
+afterAll(() => {
+  for (const d of tmpRoots) fs.rmSync(d, { recursive: true, force: true })
+})
+afterEach(() => {
+  vi.useRealTimers()
 })
 
+/** chmod 000 only locks a file for a non-root user on POSIX. */
+const CAN_LOCK = process.platform !== 'win32' && process.getuid?.() !== 0
+
+/** A temp directory holding `files` (relative path → content). */
+function tree(files: Record<string, string | Buffer>): string {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sdt-an-'))
+  tmpRoots.push(root)
+  for (const [rel, content] of Object.entries(files)) {
+    const full = path.join(root, ...rel.split('/'))
+    fs.mkdirSync(path.dirname(full), { recursive: true })
+    fs.writeFileSync(full, content)
+  }
+  return root
+}
+
 // =====================================================================
-// Asset Analyzer
+// analyzeAssets
 // =====================================================================
 
 describe('analyzeAssets', () => {
-  it('should detect assets in static directory', () => {
-    const assets = analyzeAssets(STATIC_DIR)
-    expect(assets.length).toBeGreaterThan(0)
+  it.each([
+    ['a.png', 'image/png'],
+    ['a.jpg', 'image/jpeg'],
+    ['a.jpeg', 'image/jpeg'],
+    ['a.gif', 'image/gif'],
+    ['a.svg', 'image/svg+xml'],
+    ['a.webp', 'image/webp'],
+    ['a.avif', 'image/avif'],
+    ['a.ico', 'image/x-icon'],
+    ['a.woff', 'font/woff'],
+    ['a.woff2', 'font/woff2'],
+    ['a.ttf', 'font/ttf'],
+    ['a.eot', 'application/vnd.ms-fontobject'],
+    ['a.otf', 'font/otf'],
+    ['a.mp4', 'video/mp4'],
+    ['a.webm', 'video/webm'],
+    ['a.mp3', 'audio/mpeg'],
+    ['a.wav', 'audio/wav'],
+    ['a.ogg', 'audio/ogg'],
+    ['a.json', 'application/json'],
+    ['a.xml', 'application/xml'],
+    ['a.pdf', 'application/pdf'],
+    ['a.txt', 'text/plain'],
+    ['a.css', 'text/css'],
+    ['a.js', 'text/javascript'],
+    ['a.html', 'text/html'],
+    ['A.PNG', 'image/png'],
+    ['a.tar.gz', 'application/octet-stream'],
+    ['a.xyz', 'application/octet-stream'],
+    ['noext', 'application/octet-stream'],
+  ])('%s is served as %s', (name, type) => {
+    const dir = tree({ [name]: 'x' })
+    expect(analyzeAssets(dir).map(a => [a.name, a.type])).toEqual([[name, type]])
   })
 
-  it('should detect favicon.png', () => {
-    const assets = analyzeAssets(STATIC_DIR)
-    const favicon = assets.find(a => a.name === 'favicon.png')
-    expect(favicon).toBeDefined()
-    expect(favicon!.type).toBe('image/png')
-    expect(favicon!.size).toBeGreaterThan(0)
+  const dir = tree({
+    'favicon.png': '12345678',
+    '.hidden': 'h',
+    'fonts/custom.woff2': 'w',
+    'fonts/.DS_Store': 'x',
+    '.well-known/security.txt': 's',
+    'img/my logo.svg': '<svg/>',
+    'img/日本.png': 'p',
+  })
+  fs.symlinkSync(path.join(dir, 'favicon.png'), path.join(dir, 'link.png'))
+  fs.symlinkSync(path.join(dir, 'missing.png'), path.join(dir, 'dangling.png'))
+  fs.symlinkSync(path.join(dir, 'fonts'), path.join(dir, 'fonts-link'))
+
+  it('lists files recursively, sorted, skipping hidden files and non-file links', () => {
+    expect(analyzeAssets(dir).map(a => a.relativePath)).toEqual(
+      [
+        '.well-known/security.txt',
+        'favicon.png',
+        'fonts/custom.woff2',
+        'img/my logo.svg',
+        'img/日本.png',
+        'link.png',
+      ]
+        .map(p => p.split('/').join(path.sep))
+        .toSorted((a, b) => a.localeCompare(b)),
+    )
   })
 
-  it('should detect svg files', () => {
-    const assets = analyzeAssets(STATIC_DIR)
-    const svg = assets.find(a => a.name === 'logo.svg')
-    expect(svg).toBeDefined()
-    expect(svg!.type).toBe('image/svg+xml')
+  it('records absolute path, size and mtime', () => {
+    const favicon = analyzeAssets(dir).find(a => a.name === 'favicon.png')!
+    expect(favicon.path).toBe(path.join(dir, 'favicon.png'))
+    expect(favicon.size).toBe(8)
+    expect(favicon.mtime).toBe(fs.statSync(favicon.path).mtimeMs)
+    // a symlinked file reports its target's size
+    expect(analyzeAssets(dir).find(a => a.name === 'link.png')!.size).toBe(8)
   })
 
-  it('should return empty array for nonexistent directory', () => {
-    const assets = analyzeAssets('/nonexistent/path')
-    expect(assets).toEqual([])
+  it.each([
+    ['/', '/img/my%20logo.svg'],
+    ['/base', '/base/img/my%20logo.svg'],
+    ['/base/', '/base/img/my%20logo.svg'],
+    ['https://cdn.example/x/', 'https://cdn.example/x/img/my%20logo.svg'],
+  ])('URL under public base %j is %s', (base, url) => {
+    expect(analyzeAssets(dir, base).find(a => a.name === 'my logo.svg')!.url).toBe(url)
   })
 
-  // --- Hidden files ---
-
-  it('should skip hidden files (starting with .)', () => {
-    const assets = analyzeAssets(STATIC_DIR)
-    const hidden = assets.find(a => a.name === '.hidden')
-    expect(hidden).toBeUndefined()
+  it('percent-encodes each path segment', () => {
+    expect(analyzeAssets(dir).find(a => a.name === '日本.png')!.url).toBe(
+      `/img/${encodeURIComponent('日本.png')}`,
+    )
   })
 
-  // --- Nested directories ---
-
-  it('should detect files in nested subdirectories', () => {
-    const assets = analyzeAssets(STATIC_DIR)
-    const font = assets.find(a => a.name === 'custom.woff2')
-    expect(font).toBeDefined()
-    expect(font!.type).toBe('font/woff2')
-    expect(font!.relativePath).toContain('fonts')
-  })
-
-  // --- JSON files ---
-
-  it('should detect JSON files with correct MIME type', () => {
-    const assets = analyzeAssets(STATIC_DIR)
-    const json = assets.find(a => a.name === 'data.json')
-    expect(json).toBeDefined()
-    expect(json!.type).toBe('application/json')
-  })
-
-  // --- Unknown file extension ---
-
-  it('should use application/octet-stream for unknown extensions', () => {
-    const assets = analyzeAssets(STATIC_DIR)
-    const unknown = assets.find(a => a.name === 'unknown.xyz')
-    expect(unknown).toBeDefined()
-    expect(unknown!.type).toBe('application/octet-stream')
-  })
-
-  // --- Sort order ---
-
-  it('should return assets sorted by relative path', () => {
-    const assets = analyzeAssets(STATIC_DIR)
-    const paths = assets.map(a => a.relativePath)
-    const sorted = paths.toSorted()
-    expect(paths).toEqual(sorted)
-  })
-
-  // --- Full path ---
-
-  it('should include absolute path for each asset', () => {
-    const assets = analyzeAssets(STATIC_DIR)
-    for (const asset of assets) {
-      expect(path.isAbsolute(asset.path)).toBe(true)
-      expect(fs.existsSync(asset.path)).toBe(true)
-    }
-  })
-
-  // --- mtime ---
-
-  it('should include modification time for each asset', () => {
-    const assets = analyzeAssets(STATIC_DIR)
-    for (const asset of assets) {
-      expect(asset.mtime).toBeGreaterThan(0)
-    }
-  })
-})
-
-// =====================================================================
-// MIME Types
-// =====================================================================
-
-describe('MIME_TYPES', () => {
-  it('should have common web types', () => {
-    expect(MIME_TYPES['.html']).toBe('text/html')
-    expect(MIME_TYPES['.js']).toBe('text/javascript')
-    expect(MIME_TYPES['.css']).toBe('text/css')
-    expect(MIME_TYPES['.json']).toBe('application/json')
-    expect(MIME_TYPES['.png']).toBe('image/png')
-    expect(MIME_TYPES['.svg']).toBe('image/svg+xml')
-  })
-
-  it('should have image types', () => {
-    expect(MIME_TYPES['.jpg']).toBe('image/jpeg')
-    expect(MIME_TYPES['.jpeg']).toBe('image/jpeg')
-    expect(MIME_TYPES['.gif']).toBe('image/gif')
-    expect(MIME_TYPES['.webp']).toBe('image/webp')
-    expect(MIME_TYPES['.avif']).toBe('image/avif')
-    expect(MIME_TYPES['.ico']).toBe('image/x-icon')
-  })
-
-  it('should have font types', () => {
-    expect(MIME_TYPES['.woff']).toBe('font/woff')
-    expect(MIME_TYPES['.woff2']).toBe('font/woff2')
-    expect(MIME_TYPES['.ttf']).toBe('font/ttf')
-    expect(MIME_TYPES['.otf']).toBe('font/otf')
-    expect(MIME_TYPES['.eot']).toBe('application/vnd.ms-fontobject')
-  })
-
-  it('should have media types', () => {
-    expect(MIME_TYPES['.mp4']).toBe('video/mp4')
-    expect(MIME_TYPES['.webm']).toBe('video/webm')
-    expect(MIME_TYPES['.mp3']).toBe('audio/mpeg')
-    expect(MIME_TYPES['.wav']).toBe('audio/wav')
-    expect(MIME_TYPES['.ogg']).toBe('audio/ogg')
-  })
-
-  it('should have document types', () => {
-    expect(MIME_TYPES['.pdf']).toBe('application/pdf')
-    expect(MIME_TYPES['.xml']).toBe('application/xml')
-    expect(MIME_TYPES['.txt']).toBe('text/plain')
+  it('returns [] when the directory does not exist', () => {
+    expect(analyzeAssets(path.join(dir, 'nope'))).toEqual([])
   })
 })
 
 // =====================================================================
-// Project Analyzer
+// analyzeProject
 // =====================================================================
 
 describe('analyzeProject', () => {
-  it('should read project info from package.json', () => {
-    const info = analyzeProject(FIXTURES_DIR)
-    expect(info.name).toBe('test-fixture')
-    expect(info.version).toBe('1.0.0')
+  it('reads name, version and dependency maps from package.json', () => {
+    const root = tree({
+      'package.json': JSON.stringify({
+        name: 'app',
+        version: '1.2.3',
+        dependencies: { svelte: '^5.0.0', '@sveltejs/kit': '^2.0.0', bad: 1 },
+        devDependencies: { vite: '^8.0.0' },
+      }),
+    })
+    expect(analyzeProject(root)).toEqual({
+      name: 'app',
+      version: '1.2.3',
+      svelteVersion: '^5.0.0',
+      sveltekitVersion: '^2.0.0',
+      viteVersion: '^8.0.0',
+      dependencies: { svelte: '^5.0.0', '@sveltejs/kit': '^2.0.0' },
+      devDependencies: { vite: '^8.0.0' },
+      routesDir: path.join(root, 'src', 'routes'),
+      staticDir: path.join(root, 'static'),
+    })
   })
 
-  it('should detect routesDir', () => {
-    const info = analyzeProject(FIXTURES_DIR)
-    expect(info.routesDir).toContain('src')
-    expect(info.routesDir).toContain('routes')
+  it.each<[label: string, files: Record<string, string>]>([
+    ['missing package.json', {}],
+    ['invalid JSON (mid-edit)', { 'package.json': '{ "name": "app", ' }],
+    ['JSON array', { 'package.json': '[1, 2]' }],
+    ['JSON null', { 'package.json': 'null' }],
+    [
+      'wrong field types',
+      {
+        'package.json': JSON.stringify({
+          name: 5,
+          version: '',
+          dependencies: [1],
+          devDependencies: 'x',
+        }),
+      },
+    ],
+  ])('%s falls back to defaults', (_label, files) => {
+    const root = tree(files)
+    expect(analyzeProject(root)).toMatchObject({
+      name: path.basename(root),
+      version: '0.0.0',
+      svelteVersion: 'unknown',
+      sveltekitVersion: 'unknown',
+      viteVersion: 'unknown',
+      dependencies: {},
+      devDependencies: {},
+    })
   })
 
-  it('should detect staticDir', () => {
-    const info = analyzeProject(FIXTURES_DIR)
-    expect(info.staticDir).toContain('static')
+  it('prefers installed versions, then dependencies, then devDependencies', () => {
+    const root = tree({
+      'package.json': JSON.stringify({
+        dependencies: { svelte: '^5.0.0', vite: '' },
+        devDependencies: { svelte: '^4.0.0', vite: '^8.0.0', '@sveltejs/kit': '^2.0.0' },
+      }),
+      'node_modules/svelte/package.json': JSON.stringify({ version: '5.1.0' }),
+      'node_modules/@sveltejs/kit/package.json': '{ broken',
+      'node_modules/vite/package.json': JSON.stringify({ version: 8 }),
+    })
+    expect(analyzeProject(root)).toMatchObject({
+      svelteVersion: '5.1.0',
+      sveltekitVersion: '^2.0.0', // unreadable installed manifest
+      viteVersion: '^8.0.0', // non-string installed version; empty dependency entry skipped
+    })
   })
 
-  it('should extract dependencies', () => {
-    const info = analyzeProject(FIXTURES_DIR)
-    expect(info.dependencies).toHaveProperty('svelte')
-    expect(info.dependencies).toHaveProperty('@sveltejs/kit')
+  it.each<[label: string, dirs: string[], routes: string, statics: string]>([
+    ['defaults when nothing exists', [], 'src/routes', 'static'],
+    ['src/routes and static', ['src/routes', 'static'], 'src/routes', 'static'],
+    ['src/pages and public', ['src/pages', 'public'], 'src/pages', 'public'],
+    ['src/routes wins over src/pages', ['src/routes', 'src/pages'], 'src/routes', 'static'],
+    ['static wins over public', ['public', 'static'], 'src/routes', 'static'],
+  ])('directories: %s', (_label, dirs, routes, statics) => {
+    const root = tree(Object.fromEntries(dirs.map(d => [`${d}/.keep`, ''])))
+    const info = analyzeProject(root)
+    expect(info.routesDir).toBe(path.join(root, ...routes.split('/')))
+    expect(info.staticDir).toBe(path.join(root, statics))
   })
 
-  it('should extract devDependencies', () => {
-    const info = analyzeProject(FIXTURES_DIR)
-    expect(info.devDependencies).toHaveProperty('vite')
-  })
-
-  it('should return svelte version from package.json deps', () => {
-    const info = analyzeProject(FIXTURES_DIR)
-    // Without node_modules, it falls back to deps
-    expect(info.svelteVersion).toBe('^5.0.0')
-  })
-
-  it('should return sveltekit version from package.json deps', () => {
-    const info = analyzeProject(FIXTURES_DIR)
-    expect(info.sveltekitVersion).toBe('^2.0.0')
-  })
-
-  it('should return vite version from devDependencies', () => {
-    const info = analyzeProject(FIXTURES_DIR)
-    expect(info.viteVersion).toBe('^8.0.0')
-  })
-
-  it('should handle missing package.json gracefully', () => {
-    const info = analyzeProject('/tmp/nonexistent-project-dir-12345')
-    expect(info.name).toBeDefined()
-    expect(info.version).toBe('0.0.0')
-    expect(info.dependencies).toEqual({})
-    expect(info.devDependencies).toEqual({})
-  })
-
-  it('should return routesDir as src/routes when it exists', () => {
-    const info = analyzeProject(FIXTURES_DIR)
-    const expectedRoutesDir = path.join(FIXTURES_DIR, 'src', 'routes')
-    expect(info.routesDir).toBe(expectedRoutesDir)
-  })
-
-  it('should return staticDir as static when it exists', () => {
-    const info = analyzeProject(FIXTURES_DIR)
-    const expectedStaticDir = path.join(FIXTURES_DIR, 'static')
-    expect(info.staticDir).toBe(expectedStaticDir)
-  })
-
-  it('should cache results for the same root', () => {
-    // First call
-    const info1 = analyzeProject(FIXTURES_DIR)
-    // Second call should be cached
-    const info2 = analyzeProject(FIXTURES_DIR)
-    expect(info1).toBe(info2) // Same reference = cached
-  })
-
-  it('should invalidate cache for different root', () => {
-    const info1 = analyzeProject(FIXTURES_DIR)
-    const info2 = analyzeProject('/tmp/different-root-12345')
-    expect(info1).not.toBe(info2)
+  it('caches per root for 5 seconds', () => {
+    vi.useFakeTimers({ now: 1_000_000 })
+    const root = tree({ 'package.json': JSON.stringify({ name: 'v1' }) })
+    const first = analyzeProject(root)
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'v2' }))
+    vi.setSystemTime(1_000_000 + 4999)
+    expect(analyzeProject(root)).toBe(first)
+    vi.setSystemTime(1_000_000 + 5000)
+    const second = analyzeProject(root)
+    expect(second.name).toBe('v2')
+    // another root is never served from the cache
+    const other = tree({ 'package.json': JSON.stringify({ name: 'other' }) })
+    expect(analyzeProject(other).name).toBe('other')
+    expect(analyzeProject(root)).not.toBe(second) // the cache holds one root
   })
 })
 
 // =====================================================================
-// Component Analyzer
+// analyzeComponents
 // =====================================================================
 
 describe('analyzeComponents', () => {
-  it('should find svelte component files', () => {
-    const components = analyzeComponents(FIXTURES_DIR)
-    expect(components.length).toBeGreaterThan(0)
+  const root = tree({
+    'package.json': '{}',
+    'src/lib/Counter.svelte': '<p>c</p>',
+    'src/lib/Nested/Deep.svelte': "<script>import Counter from '../Counter.svelte'</script>",
+    'src/routes/+page.svelte': [
+      '<script>',
+      "  import Counter from '$lib/Counter.svelte'",
+      '  import Deep from "#lib/Nested/Deep.svelte"',
+      "  import { default as Again } from './../lib/Counter.svelte'",
+      "  import * as $NS from './Local.svelte'",
+      "  import Missing from './Missing.svelte'",
+      "  import Pkg from 'some-pkg/Button.svelte'",
+      "  import data from './data.js'",
+      '</script>',
+    ].join('\n'),
+    'src/routes/Local.svelte': '',
+    'src/node_modules/x/X.svelte': '',
+    'src/.svelte-kit/generated/Root.svelte': '',
+    // a nested package must not change where $lib resolves
+    'src/routes/nested-pkg/package.json': '{}',
+    'src/routes/nested-pkg/Uses.svelte': "<script>import C from '$lib/Counter.svelte'</script>",
+    'src/notes.md': '',
   })
 
-  it('should detect Counter component', () => {
-    const components = analyzeComponents(FIXTURES_DIR)
-    const counter = components.find(c => c.name === 'Counter')
-    expect(counter).toBeDefined()
-    expect(counter!.file).toContain('Counter.svelte')
+  const byFile = () => new Map(analyzeComponents(root).map(c => [c.file, c]))
+
+  it('lists .svelte files under src (without node_modules / .svelte-kit)', () => {
+    expect([...byFile().keys()].toSorted()).toEqual(
+      [
+        'src/lib/Counter.svelte',
+        'src/lib/Nested/Deep.svelte',
+        'src/routes/+page.svelte',
+        'src/routes/Local.svelte',
+        'src/routes/nested-pkg/Uses.svelte',
+      ].map(p => p.split('/').join(path.sep)),
+    )
   })
 
-  it('should detect route page components', () => {
-    const components = analyzeComponents(FIXTURES_DIR)
-    const page = components.find(c => c.name === '+page')
-    expect(page).toBeDefined()
+  it('names a component after its file', () => {
+    expect(byFile().get(path.join('src', 'lib', 'Nested', 'Deep.svelte'))!.name).toBe('Deep')
   })
 
-  it('should detect layout components', () => {
-    const components = analyzeComponents(FIXTURES_DIR)
-    const layout = components.find(c => c.name === '+layout')
-    expect(layout).toBeDefined()
+  it('resolves relative, $lib and #lib imports once each; skips unresolvable ones', () => {
+    const page = byFile().get(path.join('src', 'routes', '+page.svelte'))!
+    expect(page.imports.toSorted()).toEqual(
+      [
+        path.join('src', 'lib', 'Counter.svelte'),
+        path.join('src', 'lib', 'Nested', 'Deep.svelte'),
+        path.join('src', 'routes', 'Local.svelte'),
+      ].toSorted(),
+    )
+    expect(byFile().get(path.join('src', 'lib', 'Nested', 'Deep.svelte'))!.imports).toEqual([
+      path.join('src', 'lib', 'Counter.svelte'),
+    ])
   })
 
-  it('should detect nested components', () => {
-    const components = analyzeComponents(FIXTURES_DIR)
-    const deep = components.find(c => c.name === 'DeepComponent')
-    expect(deep).toBeDefined()
-    expect(deep!.file).toContain('Nested')
+  it('resolves $lib from the analysed root, not the nearest package.json', () => {
+    const uses = byFile().get(path.join('src', 'routes', 'nested-pkg', 'Uses.svelte'))!
+    expect(uses.imports).toEqual([path.join('src', 'lib', 'Counter.svelte')])
   })
 
-  it('should detect components with relative svelte imports', () => {
-    const components = analyzeComponents(FIXTURES_DIR)
-    const deep = components.find(c => c.name === 'DeepComponent')
-    expect(deep).toBeDefined()
-    expect(deep!.imports.length).toBeGreaterThan(0)
-    expect(deep!.imports.some(i => i.includes('Counter.svelte'))).toBe(true)
+  it('$lib to a missing file resolves to nothing', () => {
+    const r = tree({ 'src/A.svelte': "<script>import X from '$lib/X.svelte'</script>" })
+    expect(analyzeComponents(r)).toEqual([
+      { file: path.join('src', 'A.svelte'), name: 'A', imports: [] },
+    ])
   })
 
-  it('should detect components with $lib imports', () => {
-    const components = analyzeComponents(FIXTURES_DIR)
-    const withLib = components.find(c => c.name === 'WithLibImport')
-    expect(withLib).toBeDefined()
-    expect(withLib!.imports.length).toBeGreaterThan(0)
-    expect(withLib!.imports.some(i => i.includes('Counter.svelte'))).toBe(true)
+  it('returns [] without a src directory', () => {
+    expect(analyzeComponents(tree({}))).toEqual([])
   })
 
-  it('should detect components with #lib subpath imports (SvelteKit 3)', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sdt-hashlib-'))
+  it.skipIf(!CAN_LOCK)('lists an unreadable component without imports instead of throwing', () => {
+    const r = tree({ 'src/Secret.svelte': "<script>import X from './X.svelte'</script>" })
+    fs.chmodSync(path.join(r, 'src', 'Secret.svelte'), 0o000)
     try {
-      fs.writeFileSync(
-        path.join(root, 'package.json'),
-        JSON.stringify({ name: 'k3', imports: { '#lib/*': './src/lib/*' } }),
-      )
-      fs.mkdirSync(path.join(root, 'src', 'lib'), { recursive: true })
-      fs.mkdirSync(path.join(root, 'src', 'routes'), { recursive: true })
-      fs.writeFileSync(path.join(root, 'src', 'lib', 'Counter.svelte'), '<p>c</p>')
-      fs.writeFileSync(
-        path.join(root, 'src', 'routes', '+page.svelte'),
-        "<script>\n  import Counter from '#lib/Counter.svelte'\n</script>\n<Counter />",
-      )
-      const page = analyzeComponents(root).find(c => c.file === 'src/routes/+page.svelte')
-      expect(page?.imports.some(i => i.includes('Counter.svelte'))).toBe(true)
+      expect(analyzeComponents(r)).toEqual([
+        { file: path.join('src', 'Secret.svelte'), name: 'Secret', imports: [] },
+      ])
     } finally {
-      fs.rmSync(root, { recursive: true, force: true })
+      fs.chmodSync(path.join(r, 'src', 'Secret.svelte'), 0o644)
     }
   })
+})
 
-  it('should return relative file paths', () => {
-    const components = analyzeComponents(FIXTURES_DIR)
-    for (const c of components) {
-      expect(path.isAbsolute(c.file)).toBe(false)
-      expect(c.file.startsWith('src/')).toBe(true)
-    }
+// =====================================================================
+// findReactiveLine
+// =====================================================================
+
+describe('findReactiveLine', () => {
+  const source = [
+    '<script>', // 1
+    '  let count = $state(0)', // 2
+    '  const doubled = $derived(count * 2)', // 3
+    '  var legacy = 1', // 4
+    '  let countdown = 0', // 5
+    '  $effect.pre(() => {})', // 6
+    '  $effect(() => {})', // 7
+    '  let $odd.name = 1', // 8
+    '  let a, b = 1', // 9
+    '  let a$ = 2', // 10
+    '  let a$b = 3', // 11
+    '  outlet zz', // 12
+    '</script>',
+  ].join('\n')
+
+  it.each<[name: string, type: string, line: number]>([
+    ['count', 'state', 2],
+    ['doubled', 'derived', 3],
+    ['legacy', 'state', 4],
+    ['countdown', 'state', 5], // `count` must not match `countdown` and vice versa
+    ['anything', 'effect', 6], // the first effect of either kind
+    ['$odd.name', 'state', 8], // regex metacharacters are escaped
+    ['missing', 'state', 0],
+    ['b', 'state', 0], // only the first declarator of a statement
+    ['', 'state', 0],
+    ['a', 'state', 9],
+    ['a$', 'state', 10], // a trailing `$` still ends the name
+    ['a$b', 'state', 11],
+    ['zz', 'state', 0], // `let` must start a word
+  ])('%s (%s) → line %i', (name, type, line) => {
+    expect(findReactiveLine(source, name, type)).toBe(line)
   })
 
-  it('should extract component name from filename', () => {
-    const components = analyzeComponents(FIXTURES_DIR)
-    for (const c of components) {
-      expect(c.name).not.toContain('.svelte')
-      expect(c.name.length).toBeGreaterThan(0)
-    }
+  it('returns 0 for an effect when the source has none', () => {
+    expect(findReactiveLine('let a = 1', 'a', 'effect')).toBe(0)
   })
 
-  it('should return empty array when src directory does not exist', () => {
-    const components = analyzeComponents('/nonexistent/path')
-    expect(components).toEqual([])
-  })
-
-  it('should not include node_modules files', () => {
-    const components = analyzeComponents(FIXTURES_DIR)
-    for (const c of components) {
-      expect(c.file).not.toContain('node_modules')
-    }
+  it('handles CRLF sources', () => {
+    expect(findReactiveLine('<script>\r\n  let x = $state(1)\r\n', 'x', 'state')).toBe(2)
   })
 })

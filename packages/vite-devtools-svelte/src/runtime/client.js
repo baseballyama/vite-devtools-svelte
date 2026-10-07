@@ -833,7 +833,10 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
         const instance = this._instances.get(cid)
         cid = instance ? instance.parentId : null
       }
-      for (const cid of named.keys()) if (this._modules.has(cid)) scopes.push(cid)
+      // Module scopes holding the name. Iterated from the module list, not
+      // from `named`: a name shared by every row of a list (one scope per
+      // instance) made this O(instances) per source, O(n²) per graph build.
+      for (const cid of this._modules.keys()) if (named.has(cid)) scopes.push(cid)
       for (const cid of scopes) {
         const ids = named.get(cid)
         const found = ids ? fits(ids) : []

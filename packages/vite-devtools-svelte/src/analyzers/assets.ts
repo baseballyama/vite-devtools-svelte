@@ -3,7 +3,7 @@ import path from 'node:path'
 
 import type { AssetInfo } from '../types.js'
 
-export const MIME_TYPES: Record<string, string> = {
+const MIME_TYPES: Record<string, string> = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
@@ -59,7 +59,15 @@ function scanDir(dir: string, rootDir: string, base: string, assets: AssetInfo[]
     // Skip hidden files
     if (entry.name.startsWith('.')) continue
 
-    const stat = fs.statSync(fullPath)
+    // Follows symlinks; a dangling link or one to a directory is not an asset
+    // (statSync used to throw and fail the whole listing).
+    let stat: fs.Stats
+    try {
+      stat = fs.statSync(fullPath)
+    } catch {
+      continue
+    }
+    if (!stat.isFile()) continue
     const ext = path.extname(entry.name).toLowerCase()
 
     const relativePath = path.relative(rootDir, fullPath)

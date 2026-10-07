@@ -49,12 +49,21 @@ export function componentName(file: string | undefined | null, fallback = 'Unkno
   return last.replace(/\.svelte$/, '') || fallback
 }
 
-/** Human-readable byte size: `512 B`, `1.4 KB`, `2.31 MB`. */
+const BYTE_UNITS = ['KB', 'MB', 'GB', 'TB'] as const
+
+/** Human-readable byte size: `512 B`, `1.4 KB`, `2.31 MB`, `1.50 GB`. */
 export function formatBytes(bytes: number | undefined | null): string {
   if (typeof bytes !== 'number' || !Number.isFinite(bytes)) return '—'
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+  // The unit follows the magnitude (a negative delta of 2 MB is `-2.00 MB`,
+  // not `-2097152 B`), and sizes past 1 GB no longer read as `1048576.00 MB`.
+  if (Math.abs(bytes) < 1024) return `${bytes} B`
+  let v = bytes / 1024
+  let unit = 0
+  while (Math.abs(v) >= 1024 && unit < BYTE_UNITS.length - 1) {
+    v /= 1024
+    unit++
+  }
+  return `${v.toFixed(unit === 0 ? 1 : 2)} ${BYTE_UNITS[unit]}`
 }
 
 /** Millisecond duration with precision that adapts to magnitude. */
@@ -90,6 +99,9 @@ export function toText(v: unknown): string {
 /** Compact one-line rendering of an arbitrary value (JSON-ish, truncated). */
 export function formatValue(v: unknown, max = 80): string {
   if (v === undefined) return 'undefined'
+  // JSON has no NaN / ±Infinity (`JSON.stringify(NaN) === 'null'`): showing
+  // `null` for them would misreport the value.
+  if (typeof v === 'number' && !Number.isFinite(v)) return String(v)
   let s: string
   try {
     s = typeof v === 'string' ? JSON.stringify(v) : (JSON.stringify(v) ?? toText(v))
@@ -102,6 +114,7 @@ export function formatValue(v: unknown, max = 80): string {
 /** Pretty multi-line rendering of an arbitrary value for inspectors. */
 export function prettyValue(v: unknown): string {
   if (v === undefined) return 'undefined'
+  if (typeof v === 'number' && !Number.isFinite(v)) return String(v) // see formatValue
   try {
     return JSON.stringify(v, null, 2) ?? toText(v)
   } catch {

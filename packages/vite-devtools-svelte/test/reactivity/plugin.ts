@@ -49,11 +49,11 @@ export function reactivityHarnessPlugin(): Plugin[] {
       name: 'reactivity-harness:tracking',
       enforce: 'post',
       transform(code, id, options) {
-        if (id.includes('node_modules')) return null
+        if (id.includes('node_modules') || options?.ssr) return null
         const file = id.split('?')[0]!
         const modified = file.endsWith('.svelte')
-          ? injectComponentTracking(code, id)
-          : SVELTE_MODULE_RE.test(file) && !options?.ssr
+          ? injectComponentTracking(code, file)
+          : SVELTE_MODULE_RE.test(file)
             ? injectModuleTracking(code, file)
             : null
         return modified === null ? null : { code: modified, map: null }

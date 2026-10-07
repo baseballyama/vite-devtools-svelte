@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
+import { getRpcHandler } from 'devframe/rpc'
 import { describe, it, expect, vi } from 'vitest'
 
 import {
@@ -316,5 +317,258 @@ describe('send-api-request', () => {
       expect.objectContaining({ method: 'POST', body: 'x', redirect: 'manual' }),
     )
     fetchMock.mockRestore()
+  })
+})
+
+// =====================================================================
+// Every RPC through devframe's validating handler (as the wire calls it)
+// =====================================================================
+
+/** A small generated project: one page, one endpoint, one static file, one component. */
+function projectRoot(): string {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sdt-rpc-'))
+  const files: Record<string, string> = {
+    'package.json': JSON.stringify({ name: 'rpc-app', version: '2.0.0' }),
+    'src/routes/+page.svelte':
+      "<script>\n  import C from '$lib/C.svelte'\n  let n = $state(0)\n</script>",
+    'src/routes/api/+server.ts': 'export const GET = () => new Response()',
+    'src/lib/C.svelte': '<p>c</p>',
+    'static/a.txt': 'a',
+  }
+  for (const [rel, content] of Object.entries(files)) {
+    fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true })
+    fs.writeFileSync(path.join(root, rel), content)
+  }
+  return root
+}
+
+async function validated(host: ReturnType<typeof createTestHost>) {
+  const map = new Map<string, (...args: any[]) => Promise<any>>()
+  for (const fn of createRpcFunctions(host)) map.set(fn.name, await getRpcHandler(fn as any, {}))
+  return map
+}
+
+describe('every RPC with valid input', () => {
+  it('answers JSON-serializable data for each registered function', async () => {
+    const root = projectRoot()
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(() => Promise.resolve(new Response('<title>t</title>')))
+    const host = createTestHost(root, { serverOrigins: () => ['http://localhost:5173'] })
+    const rpc = await validated(host)
+    const calls: Record<string, [args: unknown[], check: (r: any) => void]> = {
+      'get-project': [[], r => expect(r).toMatchObject({ name: 'rpc-app', version: '2.0.0' })],
+      'get-routes': [[], r => expect(r.map((x: any) => x.id).toSorted()).toEqual(['/', 'api'])],
+      'get-assets': [[], r => expect(r.map((a: any) => a.url)).toEqual(['/a.txt'])],
+      'get-component-relations': [[], r => expect(r).toHaveLength(2)],
+      'get-svelte-files': [
+        [],
+        r => expect(r.map((f: any) => f.name).toSorted()).toEqual(['+page', 'C']),
+      ],
+      'get-live-components': [[], r => expect(r).toEqual([])],
+      'get-live-components-meta': [
+        [],
+        r => expect(r).toMatchObject({ total: 0, kept: 0, truncated: false }),
+      ],
+      'set-active': [[{ client: 'c', active: false }], r => expect(r).toBeUndefined()],
+      'open-in-editor': [
+        [{ file: 'src/lib/C.svelte', line: 2 }],
+        () => expect(host.opened.at(-1)).toMatch(/C\.svelte:2$/),
+      ],
+      'open-reactive-in-editor': [
+        [{ file: 'src/routes/+page.svelte', name: 'n', type: 'state' }],
+        () => expect(host.opened.at(-1)).toMatch(/\+page\.svelte:3$/),
+      ],
+      'get-render-profiles': [[], r => expect(r).toEqual([])],
+      'get-reactive-graph': [[], r => expect(r).toMatchObject({ nodes: [], edges: [] })],
+      'get-reactive-summary': [[{ topK: 1 }], r => expect(r).toBeTypeOf('object')],
+      'get-capture-info': [[], r => expect(r).toBeTypeOf('object')],
+      'get-load-profiles': [[], r => expect(r).toEqual([])],
+      'clear-load-profiles': [[], () => {}],
+      'get-state-timeline': [[], r => expect(r).toEqual([])],
+      'get-state-timeline-delta': [[{}], r => expect(r).toMatchObject({ changes: [] })],
+      'get-versions': [[], r => expect(r).toBeTypeOf('object')],
+      'clear-state-timeline': [[], () => {}],
+      'get-api-endpoints': [
+        [],
+        r => expect(r).toEqual([expect.objectContaining({ route: 'api', methods: ['GET'] })]),
+      ],
+      'send-api-request': [
+        [{ url: 'http://localhost:5173/api', method: 'GET', headers: '', body: '' }],
+        r => expect(r.status).toBe(200),
+      ],
+      'get-compiler-warnings': [[], r => expect(r).toEqual([])],
+      'get-runtime-errors': [[], r => expect(r).toEqual([])],
+      'clear-errors': [[], () => {}],
+      'inspect-file': [
+        [{ file: 'src/lib/C.svelte' }],
+        r => expect(r).toEqual({ source: '<p>c</p>', compiled: '', file: 'src/lib/C.svelte' }),
+      ],
+      'get-module-graph': [[], r => expect(r).toEqual({ modules: [], cycles: [] })],
+      'get-og-preview': [[{ url: 'http://localhost:5173/' }], r => expect(r.title).toBe('t')],
+      'get-build-analysis': [[], r => expect(r.chunks).toEqual([])],
+      'get-fps': [[], r => expect(r).toEqual([])],
+      'clear-fps': [[], () => {}],
+    }
+    expect(Object.keys(calls).toSorted()).toEqual([...rpc.keys()].toSorted())
+    for (const [name, [args, check]] of Object.entries(calls)) {
+      const result = await rpc.get(name)!(...args)
+      expect(jsonRoundTrip(result)).toEqual(result)
+      check(result)
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    fetchMock.mockRestore()
+    fs.rmSync(root, { recursive: true, force: true })
+  })
+})
+
+const long = (n: number) => 'x'.repeat(n)
+/** The value after a JSON round trip (`undefined`, an action's void, stays as is). */
+const jsonRoundTrip = (v: unknown): unknown => (v === undefined ? v : JSON.parse(JSON.stringify(v)))
+
+describe('RPC input validation', () => {
+  const host = createTestHost(FIXTURES_DIR)
+  it.each<[name: string, args: unknown[]]>([
+    ['set-active', [{ client: '', active: true }]],
+    ['set-active', [{ client: long(65), active: true }]],
+    ['set-active', [{ client: 'c', active: 'yes' }]],
+    ['set-active', [undefined]],
+    ['open-in-editor', [{ file: '' }]],
+    ['open-in-editor', [{ file: long(4097) }]],
+    ['open-in-editor', [{ file: 'a', line: -1 }]],
+    ['open-in-editor', [{ file: 'a', line: 1.5 }]],
+    ['open-in-editor', [{ file: 1 }]],
+    ['open-reactive-in-editor', [{ file: 'a', name: long(257), type: 'state' }]],
+    ['open-reactive-in-editor', [{ file: 'a', name: 'x', type: long(33) }]],
+    ['open-reactive-in-editor', [{ file: 'a', type: 'state' }]],
+    ['get-reactive-graph', [{ componentId: -1 }]],
+    ['get-reactive-graph', [{ componentId: 1.5 }]],
+    ['get-reactive-graph', [{ epoch: long(201) }]],
+    ['get-reactive-graph', [{ maxNodes: 0 }]],
+    ['get-reactive-graph', [{ maxEdges: -5 }]],
+    ['get-reactive-summary', [{ topK: 0 }]],
+    ['get-reactive-summary', [{ windowMs: 1.5 }]],
+    ['get-state-timeline-delta', [{ since: -1 }]],
+    ['get-state-timeline-delta', [{ since: 0.5 }]],
+    ['get-state-timeline-delta', [undefined]],
+    ['send-api-request', [{ url: long(8193), method: 'GET', headers: '', body: '' }]],
+    ['send-api-request', [{ url: 'https://e.com', method: 'TRACE', headers: '', body: '' }]],
+    ['send-api-request', [{ url: 'https://e.com', method: 'get', headers: '', body: '' }]],
+    ['send-api-request', [{ url: 'https://e.com', method: 'GET', headers: long(65537), body: '' }]],
+    [
+      'send-api-request',
+      [{ url: 'https://e.com', method: 'GET', headers: '', body: long(1_000_001) }],
+    ],
+    ['send-api-request', [{ url: 'https://e.com', method: 'GET' }]],
+    ['inspect-file', [{ file: '' }]],
+    ['inspect-file', [{}]],
+    ['get-og-preview', [{ url: long(8193) }]],
+    ['get-og-preview', [{ url: 5 }]],
+  ])('%s rejects %j before the handler runs', async (name, args) => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    const rpc = await validated(host)
+    const opened = host.opened.length
+    await expect(rpc.get(name)!(...args)).rejects.toThrow(/invalid argument/)
+    expect(host.opened.length).toBe(opened)
+    expect(fetchMock).not.toHaveBeenCalled()
+    fetchMock.mockRestore()
+  })
+
+  it.each<[name: string, args: unknown[]]>([
+    ['set-active', [{ client: long(64), active: true }]],
+    ['open-in-editor', [{ file: 'src/lib/components/Counter.svelte', line: 0 }]],
+    ['get-reactive-graph', [undefined]],
+    ['get-reactive-graph', [{ componentId: 0, epoch: long(200), maxNodes: 1, maxEdges: 1 }]],
+    ['get-reactive-summary', [undefined]],
+    ['get-state-timeline-delta', [{ since: 0 }]],
+  ])('%s accepts the boundary %j', async (name, args) => {
+    const rpc = await validated(host)
+    await expect(rpc.get(name)!(...args)).resolves.not.toThrow()
+  })
+})
+
+describe('RPC behaviour details', () => {
+  it('open-in-editor without a line (or line 0) opens just the file', () => {
+    const host = createTestHost(FIXTURES_DIR)
+    const rpc = rpcHandlers(host)
+    rpc.get('svelte-devtools:open-in-editor')!({ file: COUNTER, line: 0 })
+    rpc.get('svelte-devtools:open-in-editor')!({ file: COUNTER })
+    expect(host.opened).toEqual([fs.realpathSync(COUNTER), fs.realpathSync(COUNTER)])
+  })
+
+  it.each([
+    ['a missing declaration', COUNTER, 'nope'],
+    ['an empty name', COUNTER, ''],
+    ['a directory (unreadable as a file)', path.join(FIXTURES_DIR, 'src/lib'), 'count'],
+  ])('open-reactive-in-editor with %s opens the file without a line', (_label, file, name) => {
+    const host = createTestHost(FIXTURES_DIR)
+    rpcHandlers(host).get('svelte-devtools:open-reactive-in-editor')!({ file, name, type: 'state' })
+    expect(host.opened).toEqual([fs.realpathSync(file)])
+  })
+
+  it('get-reactive-graph / get-reactive-summary forward the request (empty when omitted)', async () => {
+    const host = createTestHost(FIXTURES_DIR)
+    const graph = vi.spyOn(host.collector, 'requestReactiveGraph')
+    const summary = vi.spyOn(host.collector, 'requestReactiveSummary')
+    const rpc = rpcHandlers(host)
+    await rpc.get('svelte-devtools:get-reactive-graph')!()
+    await rpc.get('svelte-devtools:get-reactive-graph')!({ componentId: 2, epoch: 'e' })
+    await rpc.get('svelte-devtools:get-reactive-summary')!()
+    await rpc.get('svelte-devtools:get-reactive-summary')!({ topK: 3 })
+    expect(graph.mock.calls).toEqual([[{}], [{ componentId: 2, epoch: 'e' }]])
+    expect(summary.mock.calls).toEqual([[{}], [{ topK: 3 }]])
+  })
+
+  it.each<[label: string, result: any, expected: Record<string, unknown>]>([
+    ['null result', null, { compiled: '', mappings: undefined, sources: undefined }],
+    ['no map', { code: 'c' }, { compiled: 'c', mappings: undefined, sources: undefined }],
+    [
+      'object map',
+      { code: 'c', map: { mappings: 'AA', sources: ['a'] } },
+      { mappings: 'AA', sources: ['a'] },
+    ],
+    [
+      'JSON string map',
+      { code: 'c', map: '{"mappings":"AB","sources":["s"]}' },
+      { mappings: 'AB', sources: ['s'] },
+    ],
+    [
+      'JSON map with bad fields',
+      { code: 'c', map: '{"mappings":1,"sources":[1]}' },
+      { compiled: 'c', mappings: undefined, sources: undefined },
+    ],
+    [
+      'JSON non-object map',
+      { code: 'c', map: '5' },
+      { compiled: 'c', mappings: undefined, sources: undefined },
+    ],
+    ['invalid JSON map', { code: 'c', map: '{oops' }, { compiled: '// Transform failed' }],
+  ])('inspect-file with a transform giving %s', async (_label, result, expected) => {
+    const r = rpcHandlers(
+      createTestHost(FIXTURES_DIR, { transformRequest: () => Promise.resolve(result) }),
+    )
+    const out = await r.get('svelte-devtools:inspect-file')!({ file: COUNTER })
+    expect(out.source).toContain('$state')
+    expect(out).toMatchObject(expected)
+  })
+
+  it('inspect-file of a missing file is empty', async () => {
+    const r = rpcHandlers(createTestHost(FIXTURES_DIR))
+    expect(await r.get('svelte-devtools:inspect-file')!({ file: 'nope.svelte' })).toEqual({
+      source: '',
+      compiled: '',
+      file: 'nope.svelte',
+    })
+  })
+
+  it('send-api-request passes the dev server origins as the allow list', async () => {
+    const r = rpcHandlers(createTestHost(FIXTURES_DIR, { serverOrigins: () => [] }))
+    const res = await r.get('svelte-devtools:send-api-request')!({
+      url: 'http://localhost:5173/',
+      method: 'GET',
+      headers: '',
+      body: '',
+    })
+    expect(res.statusText).toMatch(/Blocked: internal hostname/)
   })
 })

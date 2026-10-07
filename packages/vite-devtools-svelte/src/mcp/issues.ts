@@ -20,15 +20,18 @@ export interface PerformanceIssue {
 }
 
 export interface IssueThresholds {
-  /** Per-render time (ms) above which a component render is considered slow. */
+  /** Per-render time (ms) at or above which a component render is considered slow. */
   avgRenderTimeMs?: number
-  /** Render count above which a component is considered over-rendered. */
+  /** Render count at or above which a component is considered over-rendered. */
   renderCount?: number
-  /** Load duration (ms) above which a SvelteKit load is slow. */
+  /** Load duration (ms) at or above which a SvelteKit load is slow. */
   loadDurationMs?: number
-  /** FPS below which we record a drop. */
+  /** FPS strictly below which we record a drop. */
   fpsDropThreshold?: number
-  /** Outgoing edge count from an effect above which it is over-connected. */
+  /**
+   * Dependency count (incoming edges: what the effect reads) at or above
+   * which an effect is over-connected.
+   */
   effectMaxDeps?: number
 }
 
@@ -38,6 +41,21 @@ const DEFAULTS: Required<IssueThresholds> = {
   loadDurationMs: 200,
   fpsDropThreshold: 40,
   effectMaxDeps: 8,
+}
+
+/**
+ * Thresholds over the defaults. An `undefined` value keeps the default: a
+ * plain spread let `{ effectMaxDeps: undefined }` (what get_reactive_graph_problems
+ * passes when the argument is omitted) disable the check, as `n >= undefined`
+ * is always false.
+ */
+function withDefaults(thresholds: IssueThresholds): Required<IssueThresholds> {
+  const t = { ...DEFAULTS }
+  for (const key of Object.keys(DEFAULTS) as Array<keyof IssueThresholds>) {
+    const value = thresholds[key]
+    if (value !== undefined) t[key] = value
+  }
+  return t
 }
 
 export interface IssueInputs {
@@ -51,7 +69,7 @@ export function listPerformanceIssues(
   inputs: IssueInputs,
   thresholds: IssueThresholds = {},
 ): PerformanceIssue[] {
-  const t = { ...DEFAULTS, ...thresholds }
+  const t = withDefaults(thresholds)
   const out: PerformanceIssue[] = []
 
   for (const p of inputs.renderProfiles) {
@@ -111,7 +129,8 @@ export function listPerformanceIssues(
 
   const fpsDrops = inputs.fpsSamples.filter(s => s.fps < t.fpsDropThreshold)
   if (fpsDrops.length > 0) {
-    const min = Math.min(...fpsDrops.map(s => s.fps))
+    // reduce, not Math.min(...): spreading a long sample list overflows the stack
+    const min = fpsDrops.reduce((m, s) => Math.min(m, s.fps), Infinity)
     out.push({
       id: `fps-drops:${inputs.fpsSamples[0]?.timestamp ?? 0}`,
       kind: 'fps-drop',
@@ -123,10 +142,7 @@ export function listPerformanceIssues(
   }
 
   // Reactive graph: count incoming (dependency) edges per node
-  const inDegree = new Map<string, number>()
-  for (const e of inputs.reactiveGraph.edges) {
-    inDegree.set(e.to, (inDegree.get(e.to) ?? 0) + 1)
-  }
+  const { inDegree } = degrees(inputs.reactiveGraph)
   for (const node of inputs.reactiveGraph.nodes) {
     if (node.type === 'effect') {
       const deps = inDegree.get(node.id) ?? 0
@@ -154,6 +170,24 @@ function compareSeverity(a: PerformanceIssue, b: PerformanceIssue): number {
   return SEV_RANK[a.severity] - SEV_RANK[b.severity]
 }
 
+/** In / out degree per node over distinct edges (a repeated edge is one dependency). */
+function degrees(graph: ReactiveGraph): {
+  inDegree: Map<string, number>
+  outDegree: Map<string, number>
+} {
+  const inDegree = new Map<string, number>()
+  const outDegree = new Map<string, number>()
+  const seen = new Set<string>()
+  for (const e of graph.edges) {
+    const key = JSON.stringify([e.from, e.to])
+    if (seen.has(key)) continue
+    seen.add(key)
+    inDegree.set(e.to, (inDegree.get(e.to) ?? 0) + 1)
+    outDegree.set(e.from, (outDegree.get(e.from) ?? 0) + 1)
+  }
+  return { inDegree, outDegree }
+}
+
 function round(n: number): number {
   return Math.round(n * 100) / 100
 }
@@ -177,13 +211,8 @@ export function summarizeReactiveProblems(
   graph: ReactiveGraph,
   t: IssueThresholds = {},
 ): ReactiveProblems {
-  const thresh = { ...DEFAULTS, ...t }
-  const inDegree = new Map<string, number>()
-  const outDegree = new Map<string, number>()
-  for (const e of graph.edges) {
-    inDegree.set(e.to, (inDegree.get(e.to) ?? 0) + 1)
-    outDegree.set(e.from, (outDegree.get(e.from) ?? 0) + 1)
-  }
+  const thresh = withDefaults(t)
+  const { inDegree, outDegree } = degrees(graph)
   const effects: ReactiveProblems['effects'] = []
   const orphanDeriveds: ReactiveProblems['orphanDeriveds'] = []
   const isolatedNodes: ReactiveProblems['isolatedNodes'] = []

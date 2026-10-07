@@ -92,12 +92,14 @@ export function buildMcpServer(deps: McpDeps): McpServer {
       title: 'List performance issues',
       description:
         'Cross-cuts render/reactive/load/fps metrics and returns ranked issues. The entry point for AI-driven performance audits. Each issue carries `suggestedTool` naming the detail tool to call next.',
+      // Bounded like the detail tools: 0 or a negative threshold flagged
+      // every component / load, including never-rendered ones.
       inputSchema: {
-        avgRenderTimeMs: z.number().optional(),
-        renderCount: z.number().optional(),
-        loadDurationMs: z.number().optional(),
-        fpsDropThreshold: z.number().optional(),
-        effectMaxDeps: z.number().optional(),
+        avgRenderTimeMs: z.number().positive().optional(),
+        renderCount: z.number().int().min(1).optional(),
+        loadDurationMs: z.number().positive().optional(),
+        fpsDropThreshold: z.number().min(1).max(120).optional(),
+        effectMaxDeps: z.number().int().min(1).optional(),
       },
     },
     async args => {
@@ -179,7 +181,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
           file: ps[0]?.file,
           count: ps.length,
           avgDuration: round(avg(durations)),
-          maxDuration: round(Math.max(...durations)),
+          maxDuration: round(durations.reduce((m, d) => Math.max(m, d), -Infinity)),
           totalDataBytes: ps.reduce((s, p) => s + p.dataSize, 0),
           samples: ps,
         }
@@ -195,7 +197,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
       description: 'Samples whose FPS fell below `threshold`. Returns timestamp + fps for each.',
       inputSchema: {
         threshold: z.number().min(1).max(120).optional(),
-        sinceMs: z.number().optional(),
+        sinceMs: z.number().nonnegative().optional(),
       },
     },
     ({ threshold = 40, sinceMs }) => {
@@ -209,7 +211,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
         threshold,
         sampleCount: samples.length,
         dropCount: drops.length,
-        minFps: drops.length > 0 ? Math.min(...drops.map(s => s.fps)) : null,
+        minFps: drops.length > 0 ? drops.reduce((m, s) => Math.min(m, s.fps), Infinity) : null,
         drops,
       })
     },
@@ -408,7 +410,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
       description:
         'Begin capturing metrics under a labelled session. Required before compare_sessions. Set `persist:true` to write to disk on end; otherwise the session lives in memory only.',
       inputSchema: {
-        label: z.string(),
+        label: z.string().max(256),
         persist: z.boolean().optional(),
       },
     },
@@ -430,7 +432,8 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     },
     ({ keep = 'memory' }) => {
       const rec = deps.sessions.end(keep)
-      const delta = rec.endedAt ? deps.sessions.delta(rec.id) : null
+      // From the record: a discarded session is no longer in the store.
+      const delta = deps.sessions.deltaOf(rec)
       return TEXT({
         id: rec.id,
         label: rec.label,
@@ -472,8 +475,9 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     },
     ({ id }) => {
       const rec = deps.sessions.get(id)
-      if (!rec) return TEXT({ error: `Session not found: ${id}` })
-      const delta = rec.endedAt ? deps.sessions.delta(id) : null
+      // An error result (it used to be a successful one carrying `{ error }`).
+      if (!rec) return { ...TEXT(`Session not found: ${id}`), isError: true }
+      const delta = rec.endedAt === undefined ? null : deps.sessions.deltaOf(rec)
       return TEXT({ ...rec, delta })
     },
   )

@@ -11,8 +11,13 @@ export function analyzeComponents(root: string): ComponentRelation[] {
   findSvelteFiles(srcDir, svelteFiles)
 
   return svelteFiles.map(file => {
-    const content = fs.readFileSync(file, 'utf-8')
-    const imports = extractSvelteImports(content, file)
+    let content = ''
+    try {
+      content = fs.readFileSync(file, 'utf-8')
+    } catch {
+      /* unreadable (permissions, removed meanwhile): listed without imports */
+    }
+    const imports = extractSvelteImports(content, file, root)
     const name = getComponentName(file)
 
     return {
@@ -38,34 +43,32 @@ function findSvelteFiles(dir: string, files: string[]): void {
   }
 }
 
-function extractSvelteImports(content: string, filePath: string): string[] {
-  const imports: string[] = []
+function extractSvelteImports(content: string, filePath: string, root: string): string[] {
+  const imports = new Set<string>() // a component imported twice is one relation
   const dir = path.dirname(filePath)
 
   // Match: import X from './Component.svelte'
   // Match: import X from '$lib/Component.svelte' (SvelteKit 2) or '#lib/…' (SvelteKit 3)
-  const importRegex = /import\s+[\w{}\s,*]+\s+from\s+['"]([^'"]+\.svelte)['"]/g
+  const importRegex = /import\s+[\w${}\s,*]+\s+from\s+['"]([^'"]+\.svelte)['"]/g
   let match: RegExpExecArray | null
 
   while ((match = importRegex.exec(content)) !== null) {
     const importPath = match[1]!
-    const resolved = resolveImportPath(importPath, dir, filePath)
-    if (resolved) imports.push(resolved)
+    const resolved = resolveImportPath(importPath, dir, root)
+    if (resolved) imports.add(resolved)
   }
 
-  return imports
+  return [...imports]
 }
 
-function resolveImportPath(importPath: string, dir: string, fromFile: string): string | null {
+function resolveImportPath(importPath: string, dir: string, root: string): string | null {
   // $lib alias (SvelteKit 2) or the `#lib/*` subpath import SvelteKit 3 uses
-  // instead, both conventionally mapped to src/lib
+  // instead, both conventionally mapped to <root>/src/lib. Resolved from the
+  // analysed root: the nearest package.json above the importing file (used
+  // before) may belong to a nested package under src/.
   if (importPath.startsWith('$lib/') || importPath.startsWith('#lib/')) {
-    const root = findProjectRoot(fromFile)
-    if (root) {
-      const libPath = path.join(root, 'src', 'lib', importPath.slice(5))
-      if (fs.existsSync(libPath)) return libPath
-    }
-    return null
+    const libPath = path.join(root, 'src', 'lib', importPath.slice(5))
+    return fs.existsSync(libPath) ? libPath : null
   }
 
   // Relative import
@@ -74,15 +77,6 @@ function resolveImportPath(importPath: string, dir: string, fromFile: string): s
     if (fs.existsSync(resolved)) return resolved
   }
 
-  return null
-}
-
-function findProjectRoot(filePath: string): string | null {
-  let dir = path.dirname(filePath)
-  while (dir !== path.dirname(dir)) {
-    if (fs.existsSync(path.join(dir, 'package.json'))) return dir
-    dir = path.dirname(dir)
-  }
   return null
 }
 

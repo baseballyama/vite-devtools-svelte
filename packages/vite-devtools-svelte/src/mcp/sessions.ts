@@ -275,8 +275,17 @@ export class SessionStore {
   delta(id: string): SessionDelta {
     const rec = this.get(id)
     if (!rec) throw new Error(`Session not found: ${id}`)
+    return this.deltaOf(rec)
+  }
+
+  /**
+   * The delta of a record in hand. `end('discard')` removes the record from
+   * the store, so end_session must not look it up again by id (it used to,
+   * and failed with "Session not found" for every discarded session).
+   */
+  deltaOf(rec: SessionRecord): SessionDelta {
     if (!rec.endSnapshot || rec.endedAt === undefined) {
-      throw new Error(`Session ${id} has not been ended yet`)
+      throw new Error(`Session ${rec.id} has not been ended yet`)
     }
     const startMap = new Map(rec.startSnapshot.renderProfiles.map(p => [p.componentId, p]))
     const components = rec.endSnapshot.renderProfiles
@@ -304,7 +313,8 @@ export class SessionStore {
 
     const fpsValues = rec.fpsSamples.map(s => s.fps)
     const fpsAvg = avg(fpsValues)
-    const fpsMin = fpsValues.length > 0 ? Math.min(...fpsValues) : 0
+    // reduce, not Math.min(...): a long session can hold more samples than fit in a call
+    const fpsMin = fpsValues.length > 0 ? fpsValues.reduce((m, f) => Math.min(m, f), Infinity) : 0
     const fpsDrops = fpsValues.filter(f => f < FPS_DROP_THRESHOLD).length
 
     return {
@@ -370,10 +380,10 @@ export class SessionStore {
     try {
       const raw = fs.readFileSync(this.pathFor(id), 'utf-8')
       const rec: unknown = JSON.parse(raw)
-      // A file whose content claims another id is not served under this one.
-      return typeof rec === 'object' && rec !== null && 'id' in rec && rec.id === id
-        ? (rec as SessionRecord)
-        : undefined
+      // A file whose content claims another id is not served under this one;
+      // one missing fields delta()/list() read is not served at all (it used
+      // to crash them with a TypeError).
+      return isRecordShape(rec) && rec.id === id ? rec : undefined
     } catch {
       return undefined
     }
@@ -385,9 +395,50 @@ function avg(xs: number[]): number {
   return xs.reduce((s, x) => s + x, 0) / xs.length
 }
 
+/**
+ * Nearest-rank percentile: the smallest value with at least `p`% of the
+ * values at or below it. (`floor(p/100 * n)` used before was one rank too
+ * high: the p95 of 20 values was the maximum.)
+ */
 function percentile(xs: number[], p: number): number {
   if (xs.length === 0) return 0
   const sorted = xs.toSorted((a, b) => a - b)
-  const idx = Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))
-  return sorted[idx]!
+  const rank = Math.max(1, Math.ceil((p / 100) * sorted.length))
+  return sorted[rank - 1]!
+}
+
+const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null
+const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+
+function isSnapshot(v: unknown): v is SessionSnapshot {
+  return (
+    isObject(v) &&
+    Array.isArray(v.renderProfiles) &&
+    v.renderProfiles.every(
+      p =>
+        isObject(p) &&
+        isNum(p.componentId) &&
+        typeof p.file === 'string' &&
+        typeof p.name === 'string' &&
+        isNum(p.renderCount) &&
+        isNum(p.totalRenderTime),
+    )
+  )
+}
+
+/** The fields a persisted session must carry to be listed, loaded and diffed. */
+function isRecordShape(v: unknown): v is SessionRecord {
+  return (
+    isObject(v) &&
+    typeof v.id === 'string' &&
+    typeof v.label === 'string' &&
+    isNum(v.startedAt) &&
+    (v.endedAt === undefined || isNum(v.endedAt)) &&
+    isSnapshot(v.startSnapshot) &&
+    (v.endSnapshot === undefined || isSnapshot(v.endSnapshot)) &&
+    Array.isArray(v.loadProfiles) &&
+    v.loadProfiles.every(l => isObject(l) && isNum(l.duration)) &&
+    Array.isArray(v.fpsSamples) &&
+    v.fpsSamples.every(s => isObject(s) && isNum(s.fps))
+  )
 }

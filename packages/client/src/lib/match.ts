@@ -32,7 +32,17 @@ export function haystack(...fields: (string | undefined | null)[]): string {
 export function highlightParts(text: string, query: string): { t: string; m: boolean }[] {
   const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
   if (terms.length === 0 || !text) return [{ t: text, m: false }]
-  const lower = text.toLowerCase()
+  // Offsets in `lower` must be offsets in `text`. A few characters lowercase
+  // to more code units ('İ' → 'i̇'), which would shift every later mark; then
+  // lowercase per code unit, keeping the ones that would change length.
+  let lower = text.toLowerCase()
+  if (lower.length !== text.length) {
+    lower = Array.from({ length: text.length }, (_, i) => {
+      const c = text.charAt(i)
+      const l = c.toLowerCase()
+      return l.length === 1 ? l : c
+    }).join('')
+  }
   const marks = new Uint8Array(text.length)
   for (const term of terms) {
     let i = lower.indexOf(term)

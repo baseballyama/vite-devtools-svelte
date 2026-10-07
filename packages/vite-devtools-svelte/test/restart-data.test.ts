@@ -1,7 +1,6 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { setTimeout as sleep } from 'node:timers/promises'
 
 import { connectDevframe } from 'devframe/client'
 import type { DevframeRpcClient } from 'devframe/client'
@@ -19,6 +18,8 @@ import type { ViteDevServer } from 'vite'
  * deltas. A devframe client (browser globals shimmed) plays the DevTools tab.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+
+import { authTokenPersisted, waitFor } from './helpers.js'
 
 /** The plugin's RPC names are not in devframe's typed registry, so call them by name. */
 type UntypedCall = (method: string, ...args: unknown[]) => Promise<unknown>
@@ -43,21 +44,6 @@ function shimBrowser(url: string) {
       removeItem: (k: string) => store.delete(k),
     },
   })
-}
-
-async function waitFor<T>(
-  read: () => T | Promise<T>,
-  ok: (v: T) => boolean,
-  ms = 5000,
-): Promise<T> {
-  const end = Date.now() + ms
-  for (;;) {
-    const v = await read()
-    if (ok(v)) return v
-    if (Date.now() > end)
-      throw new Error(`timed out; last value: ${JSON.stringify(v)?.slice(0, 300)}`)
-    await sleep(50)
-  }
 }
 
 interface Comp {
@@ -199,8 +185,8 @@ beforeAll(async () => {
   )
   if (!(await ui.requestTrustWithCode(getTempAuthCode())))
     throw new Error('DevTools tab could not be trusted')
-  // flush the debounced token store before the restart test needs it
-  await sleep(300)
+  // the debounced token store must be on disk before the restart tests
+  await waitFor(() => authTokenPersisted(tmpHome, store))
 }, 30_000)
 
 afterAll(async () => {
@@ -261,7 +247,8 @@ describe('live data across a config-file restart (review B1)', () => {
     before.close()
     const after = new FakeRuntime(hmrUrl(), [7, 8])
     await after.connect() // app first …
-    await sleep(200)
+    // … and seen by the restarted server (it answered runtime-ready) …
+    await waitFor(() => after.log.length > 0)
     ui.close?.()
     ui = await connectUi() // … DevTools tab later (reconnect backoff)
     await waitFor(
@@ -316,9 +303,18 @@ describe('live data across a config-file restart (review B1)', () => {
     await new Promise<void>(resolve => {
       half.ws.addEventListener('open', () => resolve(), { once: true })
     })
+    const replies: unknown[] = []
+    half.ws.addEventListener('message', e => {
+      replies.push(JSON.parse(String(e.data)))
+    })
     half.send('svelte-devtools:profiles', { epoch: half.epoch, profiles: [] })
     half.send('svelte-devtools:state-timeline', { epoch: half.epoch, changes: [] })
-    await sleep(300)
+    // Barrier: one socket is processed in order, so once runtime-ready is
+    // answered, both payloads above have been ingested.
+    half.send('svelte-devtools:runtime-ready', {})
+    await waitFor(() =>
+      replies.some(m => (m as { event?: string }).event === 'svelte-devtools:subscription'),
+    )
     expect(await liveIds()).toContain(51)
     tab.close()
     half.close()

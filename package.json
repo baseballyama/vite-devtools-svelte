@@ -24,7 +24,8 @@
     "knip": "knip",
     "sherif": "sherif",
     "publint": "pnpm -C packages/vite-devtools-svelte exec publint --strict && pnpm -C packages/vite-devtools-svelte exec attw --pack . --profile esm-only",
-    "sync:kit": "pnpm --filter site --filter playground --filter ./examples/sample-app --filter ./examples/strict-csp-app exec svelte-kit sync"
+    "sync:kit": "pnpm --filter site --filter playground --filter ./examples/sample-app --filter ./examples/strict-csp-app exec svelte-kit sync",
+    "test:coverage": "pnpm --recursive --filter './packages/*' run test:coverage"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",
