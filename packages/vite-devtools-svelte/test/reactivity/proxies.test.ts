@@ -106,4 +106,14 @@ describe('same proxy name in parent and child', () => {
     expect(incoming(g, node(g, child.id, 'fromParent').id)).toEqual([`${parent.id}:items`])
     expect(incoming(g, node(g, child.id, 'own').id)).toEqual([`${child.id}:items`])
   })
+
+  it('quoted property labels (unescaped quote / backslash in the key) resolve by value', async () => {
+    mountIt((await import('./fixtures/QuotedKeys.svelte')).default)
+    const parent = instance('QuotedKeys')
+    const child = instance('QuotedKeysChild')
+    const g = graph(child.id)
+    expect(incoming(g, node(g, child.id, 'quote').id)).toEqual([`${parent.id}:items`])
+    expect(incoming(g, node(g, child.id, 'backslash').id)).toEqual([`${parent.id}:items`])
+    expect(incoming(g, node(g, child.id, 'own').id)).toEqual([`${child.id}:items`])
+  })
 })
