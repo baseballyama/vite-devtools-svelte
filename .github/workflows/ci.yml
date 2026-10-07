@@ -167,12 +167,14 @@ jobs:
       # built site fails the step. The live site ('before') and vite.dev
       # ('reference') are captured best effort for comparison only.
       - name: Install Chromium (workspace playwright-core)
-        # The apt mirror occasionally stalls mid-download (a 10-minute job
-        # timeout on main): cap each attempt and retry.
+        # The apt mirror occasionally stalls mid-download (a job timeout on
+        # main). apt runs as root under sudo, so `timeout` cannot stop it:
+        # make apt give up on a stalled connection itself, and retry.
         run: |
+          printf 'Acquire::http::Timeout "30";\nAcquire::https::Timeout "30";\nAcquire::Retries "5";\n' | sudo tee /etc/apt/apt.conf.d/99-ci-network
           for attempt in 1 2 3; do
-            timeout 180 pnpm exec playwright-core install --with-deps chromium && exit 0
-            echo "Chromium install attempt $attempt failed or timed out; retrying"
+            pnpm exec playwright-core install --with-deps chromium && exit 0
+            echo "Chromium install attempt $attempt failed; retrying"
           done
           exit 1
 
@@ -296,12 +298,14 @@ jobs:
         run: node e2e/compat/prepare.mjs ${{ matrix.profile }}
 
       - name: Install Chromium (workspace playwright-core)
-        # The apt mirror occasionally stalls mid-download (a 10-minute job
-        # timeout on main): cap each attempt and retry.
+        # The apt mirror occasionally stalls mid-download (a job timeout on
+        # main). apt runs as root under sudo, so `timeout` cannot stop it:
+        # make apt give up on a stalled connection itself, and retry.
         run: |
+          printf 'Acquire::http::Timeout "30";\nAcquire::https::Timeout "30";\nAcquire::Retries "5";\n' | sudo tee /etc/apt/apt.conf.d/99-ci-network
           for attempt in 1 2 3; do
-            timeout 180 pnpm exec playwright-core install --with-deps chromium && exit 0
-            echo "Chromium install attempt $attempt failed or timed out; retrying"
+            pnpm exec playwright-core install --with-deps chromium && exit 0
+            echo "Chromium install attempt $attempt failed; retrying"
           done
           exit 1
 
@@ -342,12 +346,14 @@ jobs:
         run: pnpm build
 
       - name: Install Chromium (workspace playwright-core)
-        # The apt mirror occasionally stalls mid-download (a 10-minute job
-        # timeout on main): cap each attempt and retry.
+        # The apt mirror occasionally stalls mid-download (a job timeout on
+        # main). apt runs as root under sudo, so `timeout` cannot stop it:
+        # make apt give up on a stalled connection itself, and retry.
         run: |
+          printf 'Acquire::http::Timeout "30";\nAcquire::https::Timeout "30";\nAcquire::Retries "5";\n' | sudo tee /etc/apt/apt.conf.d/99-ci-network
           for attempt in 1 2 3; do
-            timeout 180 pnpm exec playwright-core install --with-deps chromium && exit 0
-            echo "Chromium install attempt $attempt failed or timed out; retrying"
+            pnpm exec playwright-core install --with-deps chromium && exit 0
+            echo "Chromium install attempt $attempt failed; retrying"
           done
           exit 1
 
@@ -385,12 +391,14 @@ jobs:
         run: pnpm build
 
       - name: Install Chromium (workspace playwright-core)
-        # The apt mirror occasionally stalls mid-download (a 10-minute job
-        # timeout on main): cap each attempt and retry.
+        # The apt mirror occasionally stalls mid-download (a job timeout on
+        # main). apt runs as root under sudo, so `timeout` cannot stop it:
+        # make apt give up on a stalled connection itself, and retry.
         run: |
+          printf 'Acquire::http::Timeout "30";\nAcquire::https::Timeout "30";\nAcquire::Retries "5";\n' | sudo tee /etc/apt/apt.conf.d/99-ci-network
           for attempt in 1 2 3; do
-            timeout 180 pnpm exec playwright-core install --with-deps chromium && exit 0
-            echo "Chromium install attempt $attempt failed or timed out; retrying"
+            pnpm exec playwright-core install --with-deps chromium && exit 0
+            echo "Chromium install attempt $attempt failed; retrying"
           done
           exit 1
 
