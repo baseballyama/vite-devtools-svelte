@@ -95,3 +95,14 @@ describe('proxies held by $state signals (class fields, reassigned objects)', ()
     expect(g2.nodes.filter(n => n.untrackedDeps)).toEqual([])
   })
 })
+
+describe('same proxy name in parent and child', () => {
+  it('a child reading the parent proxy through a prop is not resolved to its own', async () => {
+    mountIt((await import('./fixtures/Shadow.svelte')).default)
+    const parent = instance('Shadow')
+    const child = instance('ShadowChild')
+    const g = graph(child.id)
+    expect(incoming(g, node(g, child.id, 'fromParent').id)).toEqual([`${parent.id}:items`])
+    expect(incoming(g, node(g, child.id, 'own').id)).toEqual([`${child.id}:items`])
+  })
+})

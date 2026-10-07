@@ -470,7 +470,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     // _instances / the component tree, and live as long as the page.
     _modules: new Map(),
     _moduleByFile: new Map(),
-    // $state node name -> Set<nodeId>: resolves a proxy's property source
+    // $state node name -> (scope id -> Set<nodeId>): resolves a proxy's property source
     // (labelled '<name>.prop' by Svelte in dev) to the node of its proxy —
     // a tag_proxy node, or a state signal holding a proxy (reassigned object
     // state, class fields)
@@ -631,8 +631,10 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       if (proxy && this._idByProxy.get(proxy) === nodeId) this._idByProxy.delete(proxy);
       if (entry && entry.meta.type === 'state') {
         const named = this._proxyNames.get(entry.meta.name);
-        if (named) {
-          named.delete(nodeId);
+        const inScope = named && named.get(entry.meta.componentId);
+        if (inScope) {
+          inScope.delete(nodeId);
+          if (inScope.size === 0) named.delete(entry.meta.componentId);
           if (named.size === 0) this._proxyNames.delete(entry.meta.name);
         }
       }
@@ -1078,7 +1080,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       const nodeId = this._nodeIdFor(signal, this._idBySignal, componentId, name);
       this._registerNode(nodeId, componentId, 'state', name, new WeakRef(signal), owner);
       this._idBySignal.set(signal, nodeId);
-      this._nameProxyRoot(nodeId, name);
+      this._nameProxyRoot(nodeId, name, componentId);
       this._pollAdd(nodeId);
     },
 
@@ -1092,7 +1094,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       this._registerNode(nodeId, componentId, 'state', name, { deref: () => marker }, owner);
       this._idBySignal.set(marker, nodeId);
       this._idByProxy.set(proxy, nodeId);
-      this._nameProxyRoot(nodeId, name);
+      this._nameProxyRoot(nodeId, name, componentId);
       this._pollAdd(nodeId);
     },
 
@@ -1167,48 +1169,62 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
 
     // The tracked node a proxy's property source belongs to. Svelte (dev)
     // labels a proxy's sources after the proxy's path ('todos[0].text',
-    // 'cart.items.length', 'todos version'); the root name is a tag_proxy
-    // node name. Several live nodes may share the name (one per instance):
-    // candidates are narrowed by the source's value at that path (identity
-    // for objects), then the reader's component, its nearest ancestor,
-    // a module scope. null when unresolved.
+    // 'cart.items.length', 'todos version'); the root name is a $state node
+    // name. Many live nodes may share the name (one per instance), so the
+    // candidates are looked up per scope: the reader's component, then its
+    // ancestors (props flow down), then module scopes, then all — each
+    // narrowed by the source's value at that path (identity for objects).
+    // Cost O(label + ancestry depth) for the common cases. null when
+    // unresolved.
     _sourceOwner(source, readerCid, liveSignal) {
       const label = source.label;
       if (typeof label !== 'string' || this._proxyNames.size === 0) return null;
-      let root = null;
+      let named = null;
       let rest = '';
       for (let i = label.length; i > 0; i--) {
         const ch = i === label.length ? '' : label[i];
         if (ch !== '' && ch !== '.' && ch !== '[' && ch !== ' ') continue;
-        const named = this._proxyNames.get(label.slice(0, i));
+        named = this._proxyNames.get(label.slice(0, i));
         if (named) {
-          root = named;
           rest = label.slice(i);
           break;
         }
       }
-      if (!root) return null;
-      let candidates = [...root].filter((id) => liveSignal(id));
-      if (candidates.length > 1) {
-        const path = this._labelPath(rest);
-        if (path) {
-          const v = source.v;
-          const same = candidates.filter((id) => {
-            const at = this._valueAt(this._rootValue(id), path);
-            return at !== __NO_VALUE && (Object.is(at, v) || (typeof v === 'symbol' && at === undefined));
-          });
-          if (same.length > 0) candidates = same;
-        }
-      }
-      if (candidates.length <= 1) return candidates[0] || null;
-      const byScope = new Map(candidates.map((id) => [this._reactiveNodes.get(id).meta.componentId, id]));
+      if (!named) return null;
+      let path;
+      // live candidates whose value at the source's path is the source's
+      // value; without a property path (' version'), all live candidates
+      const fits = (ids) => {
+        const live = [...ids].filter((id) => liveSignal(id));
+        if (live.length === 0) return live;
+        if (path === undefined) path = this._labelPath(rest);
+        if (!path) return live;
+        const v = source.v;
+        return live.filter((id) => {
+          const at = this._valueAt(this._rootValue(id), path);
+          return at !== __NO_VALUE && (Object.is(at, v) || (typeof v === 'symbol' && at === undefined));
+        });
+      };
+      const scopes = [];
       for (let cid = readerCid; cid !== null && cid !== undefined; ) {
-        if (byScope.has(cid)) return byScope.get(cid);
+        scopes.push(cid);
         const instance = this._instances.get(cid);
         cid = instance ? instance.parentId : null;
       }
-      for (const [cid, id] of byScope) if (this._modules.has(cid)) return id;
-      return candidates[0];
+      for (const cid of named.keys()) if (this._modules.has(cid)) scopes.push(cid);
+      for (const cid of scopes) {
+        const ids = named.get(cid);
+        const found = ids ? fits(ids) : [];
+        if (found.length > 0) return found[0];
+      }
+      // not in the reader's ancestry or a module: any matching node, else the
+      // nearest live one by name
+      const all = [];
+      for (const ids of named.values()) for (const id of ids) all.push(id);
+      const found = fits(all);
+      if (found.length > 0) return found[0];
+      for (const cid of scopes) for (const id of named.get(cid) || []) if (liveSignal(id)) return id;
+      return all.find((id) => liveSignal(id)) || null;
     },
 
     // '.items[0].text' -> ['items', '0', 'text']; null for ' version' and
@@ -1236,13 +1252,18 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       return v;
     },
 
-    _nameProxyRoot(nodeId, name) {
+    _nameProxyRoot(nodeId, name, componentId) {
       let named = this._proxyNames.get(name);
       if (!named) {
-        named = new Set();
+        named = new Map();
         this._proxyNames.set(name, named);
       }
-      named.add(nodeId);
+      let inScope = named.get(componentId);
+      if (!inScope) {
+        inScope = new Set();
+        named.set(componentId, inScope);
+      }
+      inScope.add(nodeId);
     },
 
     // The proxy a $state node holds now (tag_proxy: the proxy itself; a
