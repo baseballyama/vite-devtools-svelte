@@ -1,5 +1,27 @@
 # vite-devtools-svelte
 
+## 0.6.1
+
+### Patch Changes
+
+- [#119](https://github.com/baseballyama/vite-devtools-svelte/pull/119) [`054e835`](https://github.com/baseballyama/vite-devtools-svelte/commit/054e835b9d284cd3c8973ee0bc90ba55ddd8401d) Thanks [@baseballyama](https://github.com/baseballyama)! - Static analysis reads code with a parser instead of regular expressions. Jump-to-declaration no longer lands on a `let` in a comment or string, finds destructured bindings, later declarators and `$state` class fields (`Counter.count`), and opens the N-th `$effect` for `effect_N`. The component graph ignores commented-out, string and markup look-alike imports and type-only imports, and now includes re-exports, side-effect imports and literal `import()`s. The OG preview ignores `<meta>` / `<title>` inside comments, scripts and SVG, takes the charset only from a `charset` / `http-equiv` meta tag, and no longer turns `&constructor;` into source text.
+
+- [#115](https://github.com/baseballyama/vite-devtools-svelte/pull/115) [`f7b430a`](https://github.com/baseballyama/vite-devtools-svelte/commit/f7b430a64508a9977a2a8a018e0b60d1577c704f) Thanks [@baseballyama](https://github.com/baseballyama)! - Code panes highlight a `<style>` rule whose selector has a pseudo-class (`button:focus-visible {`) as a selector instead of as a `property: value` declaration.
+
+- [#123](https://github.com/baseballyama/vite-devtools-svelte/pull/123) [`6af48f1`](https://github.com/baseballyama/vite-devtools-svelte/commit/6af48f1156e9799d21a465c3180376316c41ec97) Thanks [@baseballyama](https://github.com/baseballyama)! - Reactivity graph: a fitted graph is centred in the view (it sat 80 units off to the side), a changed markup node pulses purple instead of with the `$effect` red glow, and object or array values on nodes read as JSON instead of `[object Object]`. Overview: the Modules tile no longer says "no cycles" when the module graph could not be read.
+
+- [#121](https://github.com/baseballyama/vite-devtools-svelte/pull/121) [`8d1aa11`](https://github.com/baseballyama/vite-devtools-svelte/commit/8d1aa118566ad45b6ba53da12c4200038de60f76) Thanks [@baseballyama](https://github.com/baseballyama)! - A component snapshot entry that is not an object with a numeric `id` (e.g. `null` from an out-of-spec runtime) is ignored instead of being listed as a live component.
+
+- [#126](https://github.com/baseballyama/vite-devtools-svelte/pull/126) [`abf4789`](https://github.com/baseballyama/vite-devtools-svelte/commit/abf47899ea2d6660f3748249f1153968d3b06a98) Thanks [@baseballyama](https://github.com/baseballyama)! - Panels no longer mistake a failed load for "nothing recorded": Problems, Render, Load functions, Frame rate, Build, API and Compiled output now show the error. The selected problem or load call stays selected when new entries arrive or old ones are dropped, a kind filter (Modules, Assets) stays visible after its last item goes away, two app tabs reporting a frame drop in the same millisecond no longer break the Frame rate chart, and a Reactivity graph filtered to nothing says no signal matches.
+
+- [#122](https://github.com/baseballyama/vite-devtools-svelte/pull/122) [`ed7e6f7`](https://github.com/baseballyama/vite-devtools-svelte/commit/ed7e6f7dcbc29b0ee43dfa67996631186f2b0116) Thanks [@baseballyama](https://github.com/baseballyama)! - Component names drop only the trailing `.svelte` (`Item.sveltekit.svelte` is no longer shown as `Itemkit.svelte`), and an unhandled rejection whose reason cannot be converted to a string no longer makes the devtools listener throw.
+
+- [#117](https://github.com/baseballyama/vite-devtools-svelte/pull/117) [`00477e3`](https://github.com/baseballyama/vite-devtools-svelte/commit/00477e35becda66d4aa2b2c843897e3701e13794) Thanks [@baseballyama](https://github.com/baseballyama)! - Component tracking no longer corrupts markup when a line of a component's text starts with `$.push($$props` (e.g. inside `<pre>`), and the reactive graph now attributes reads of object keys containing a quote or backslash (`obj["it's"]`) to the right `$state`.
+
+- [#116](https://github.com/baseballyama/vite-devtools-svelte/pull/116) [`3ec87f1`](https://github.com/baseballyama/vite-devtools-svelte/commit/3ec87f196e0e566dfa4bdd6a20840ffe2801fac8) Thanks [@baseballyama](https://github.com/baseballyama)! - Compiler warnings are now captured: they are taken from vite-plugin-svelte's `onwarn` as structured warnings (code, file, line, column) instead of being parsed out of Vite's logger, which vite-plugin-svelte's dev warnings never reach. A component compiled for both client and SSR lists each warning once.
+
+  SvelteKit load profiling finds the exported `load` with a parser instead of text matching: an `export const load` mentioned in a comment or string no longer breaks the module, names declared together with `load` (`export const ssr = false, load = …`) stay exported, and the route is taken from `<root>/src/routes` (a project path containing `routes` no longer garbles it).
+
 ## 0.6.0
 
 ### Minor Changes
