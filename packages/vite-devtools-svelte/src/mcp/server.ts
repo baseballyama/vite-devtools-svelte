@@ -144,7 +144,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     {
       title: 'Reactive graph problems',
       description:
-        'Classified reactive graph issues: over-connected effects, orphan deriveds, isolated nodes. Returns categories instead of the full graph.',
+        'Classified reactive graph issues: over-connected effects, orphan deriveds (declared but never evaluated so far — may still be read later, e.g. in a branch not shown yet), isolated nodes (no tracked dependency or reader; reads from the markup count as readers). Returns categories instead of the full graph.',
       inputSchema: { effectMaxDeps: z.number().int().min(1).optional() },
     },
     async ({ effectMaxDeps }) => {
@@ -304,7 +304,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
       {
         title: 'Reactive overview (top components)',
         description:
-          'Busiest component instances from runtime counters over all instances, without capturing the graph. Counts are sampled state changes (at most one per state per 200 ms) and renders within the window, not rates. Only state created during component init is tracked. `rows` + `other` add up to the totals; null means unknown. Use get_reactive_scope with a componentId to look at one instance. The same request is answered from a cache for up to 1 s; `window.until` says when the answer was computed.',
+          'Busiest component instances from runtime counters over all instances, without capturing the graph. Counts are sampled state changes (at most one per state per 200 ms) and renders within the window, not rates. Tracked: state created during component init and shared state of .svelte.js/.ts modules (rows with kind "module"; their componentId is a module scope id, usable with get_reactive_scope). `rows` + `other` add up to the totals; null means unknown. Use get_reactive_scope with a componentId to look at one instance. The same request is answered from a cache for up to 1 s; `window.until` says when the answer was computed.',
         inputSchema: {
           topK: z.number().int().min(1).max(200).optional(),
           windowMs: z.number().int().min(1000).max(60000).optional(),

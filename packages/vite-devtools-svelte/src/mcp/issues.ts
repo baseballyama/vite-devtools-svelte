@@ -6,7 +6,6 @@ export type IssueKind =
   | 'slow-load'
   | 'fps-drop'
   | 'effect-overconnected'
-  | 'derived-orphan'
 
 export interface PerformanceIssue {
   id: string
@@ -123,11 +122,7 @@ export function listPerformanceIssues(
     })
   }
 
-  // Reactive graph: count outgoing edges per node
-  const outDegree = new Map<string, number>()
-  for (const e of inputs.reactiveGraph.edges) {
-    outDegree.set(e.from, (outDegree.get(e.from) ?? 0) + 1)
-  }
+  // Reactive graph: count incoming (dependency) edges per node
   const inDegree = new Map<string, number>()
   for (const e of inputs.reactiveGraph.edges) {
     inDegree.set(e.to, (inDegree.get(e.to) ?? 0) + 1)
@@ -144,20 +139,6 @@ export function listPerformanceIssues(
           summary: `effect "${node.name}" depends on ${deps} reactive values`,
           file: node.componentFile,
           metric: { depCount: deps },
-          suggestedTool: 'get_reactive_graph_problems',
-        })
-      }
-    }
-    if (node.type === 'derived') {
-      const fanout = outDegree.get(node.id) ?? 0
-      if (fanout === 0 && (inDegree.get(node.id) ?? 0) > 0) {
-        out.push({
-          id: `derived-orphan:${node.id}`,
-          kind: 'derived-orphan',
-          severity: 'low',
-          summary: `derived "${node.name}" has dependencies but is unused`,
-          file: node.componentFile,
-          metric: { fanout },
           suggestedTool: 'get_reactive_graph_problems',
         })
       }
@@ -179,7 +160,16 @@ function round(n: number): number {
 
 export interface ReactiveProblems {
   effects: Array<{ id: string; name: string; file: string; depCount: number }>
+  /**
+   * `$derived` values nothing has read so far (never evaluated). A derived
+   * read only imperatively (event handler, plain function) is evaluated and
+   * is not listed: having no effect/markup reader is not "unused".
+   */
   orphanDeriveds: Array<{ id: string; name: string; file: string }>
+  /**
+   * Nodes without any dependency or tracked reader (markup reads included).
+   * A node depending only on untracked signals (`untrackedDeps`) is not listed.
+   */
   isolatedNodes: Array<{ id: string; name: string; type: string; file: string }>
 }
 
@@ -203,10 +193,10 @@ export function summarizeReactiveProblems(
     if (node.type === 'effect' && ind >= thresh.effectMaxDeps) {
       effects.push({ id: node.id, name: node.name, file: node.componentFile, depCount: ind })
     }
-    if (node.type === 'derived' && outd === 0 && ind > 0) {
+    if (node.type === 'template') continue
+    if (node.type === 'derived' && node.unevaluated) {
       orphanDeriveds.push({ id: node.id, name: node.name, file: node.componentFile })
-    }
-    if (ind === 0 && outd === 0) {
+    } else if (ind === 0 && outd === 0 && !node.untrackedDeps) {
       isolatedNodes.push({
         id: node.id,
         name: node.name,

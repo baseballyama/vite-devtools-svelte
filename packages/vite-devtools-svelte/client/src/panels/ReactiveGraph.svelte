@@ -281,12 +281,15 @@
   const current = $derived(selected ? (byId.get(selected) ?? null) : null)
 
   const counts = $derived.by(() => {
-    const c = { state: 0, derived: 0, effect: 0 }
+    const c = { state: 0, derived: 0, effect: 0, template: 0 }
     for (const n of data.nodes) c[n.type]++
     return c
   })
 
-  const tones: Record<ReactiveNode['type'], Tone> = { state: 'blue', derived: 'green', effect: 'red' }
+  const tones: Record<ReactiveNode['type'], Tone> = { state: 'blue', derived: 'green', effect: 'red', template: 'purple' }
+  // 'template' is the synthetic node for a component's markup (all reads
+  // from {expr}, attributes, block conditions and <svelte:head>)
+  const kindLabel = (t: ReactiveNode['type']) => (t === 'template' ? 'markup' : `$${t}`)
 
   const columns: Column<ReactiveNode>[] = [
     { id: 'type', label: 'Kind', width: '68px', sort: (a, b) => a.type.localeCompare(b.type) },
@@ -359,6 +362,7 @@
           { value: 'state', label: '$state', count: counts.state },
           { value: 'derived', label: '$derived', count: counts.derived },
           { value: 'effect', label: '$effect', count: counts.effect },
+          { value: 'template', label: 'markup', count: counts.template },
         ]}
       />
       <SearchField bind:value={query} placeholder="Filter the {data.nodes.length.toLocaleString()} loaded signals…" count={nodes.length} />
@@ -444,7 +448,7 @@
       <dl class="record" aria-label="What this overview covers">
         <div><dt>Window</dt><dd>last {Math.round(s.window.ms / 1000)} s · sampled while active for {Math.round(s.window.sampledActiveMs / 1000)} s</dd></div>
         <div><dt>Changes</dt><dd>$state sampled every 200 ms; several writes within one sample count once</dd></div>
-        <div><dt>Coverage</dt><dd>state created during component init; module-level <code>.svelte.ts</code> state is not tracked</dd></div>
+        <div><dt>Coverage</dt><dd>state created during component init and in <code>.svelte.js/.ts</code> module bodies; reads from the markup appear as the component's <em>markup</em> node</dd></div>
         <div><dt>Components</dt><dd>{s.components.withActivity.toLocaleString()} active of {totalLabel(s.components.total)} registered</dd></div>
         <div>
           <dt>Not available yet</dt>
@@ -593,7 +597,7 @@
         {:else}
           <DataTable items={nodes} {columns} getKey={(n) => n.id} bind:sort bind:selected label="Reactive signals" onactivate={open}>
             {#snippet row(n, { visible })}
-              <span><Badge tone={tones[n.type]}>{n.type}</Badge></span>
+              <span><Badge tone={tones[n.type]}>{n.type === 'template' ? 'markup' : n.type}</Badge></span>
               <span class="truncate mono name" class:flash={changed.has(n.id)}><Highlight text={n.name} {query} /></span>
               {#if visible.has('component')}<span class="truncate muted"><Highlight text={componentName(n.componentFile)} {query} /></span>{/if}
               <span class="truncate mono value">{n.value === undefined ? '' : nodeValueText(n.value, 120)}</span>
@@ -608,15 +612,22 @@
       {#if current}
         <Inspector title={current.name} subtitle={shortPath(current.componentFile, 3)} onclose={() => (selected = null)}>
           {#snippet badges()}
-            <Badge tone={tones[current.type]}>${current.type}</Badge>
+            <Badge tone={tones[current.type]}>{kindLabel(current.type)}</Badge>
             <Badge>component #{current.componentId}</Badge>
           {/snippet}
           {#snippet actions()}
-            <Button icon="editor" onclick={() => open(current)}>Go to definition (by name)</Button>
+            <Button icon="editor" onclick={() => open(current)}>{current.type === 'template' ? 'Open component' : 'Go to definition (by name)'}</Button>
             {#if (tab === 'full' || current.componentId !== scope?.componentId) && data.epoch}
               <Button icon="reactive" onclick={() => scopeTo(current)}>Show this component</Button>
             {/if}
           {/snippet}
+          {#if current.type === 'template'}
+            <p class="none">All reads from this component's markup: <code>{'{expressions}'}</code>, attributes, block conditions and <code>&lt;svelte:head&gt;</code>.</p>
+          {/if}
+          {#if current.unevaluated}
+            <h3 class="section-title">Current value</h3>
+            <p class="none">Not evaluated yet: nothing has read this $derived so far (Svelte computes deriveds on first read).</p>
+          {/if}
           {#if current.value !== undefined}
             <h3 class="section-title">Current value</h3>
             <pre class="code-block" class:flash={changed.has(current.id)}>{isValueSummary(current.value) ? current.value : prettyValue(current.value)}</pre>
@@ -639,7 +650,7 @@
               Sampled changes of all signals (latest 500) are in the
               <button class="link" onclick={() => router.go('timeline')}>State timeline</button>.
             {:else}
-              Not recorded for ${current.type}.
+              Not recorded for {kindLabel(current.type)}.
             {/if}
           </p>
         </Inspector>
@@ -657,7 +668,7 @@
         {#if n}
           <li>
             <button onclick={() => (selected = id)}>
-              <Badge tone={tones[n.type]}>{n.type}</Badge>
+              <Badge tone={tones[n.type]}>{n.type === 'template' ? 'markup' : n.type}</Badge>
               <span class="truncate mono">{n.name}</span>
               <span class="sub truncate">{componentName(n.componentFile)}{tab === 'local' && n.componentId !== scope?.componentId ? ' · other component' : ''}</span>
             </button>

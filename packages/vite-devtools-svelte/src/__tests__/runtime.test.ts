@@ -90,8 +90,8 @@ describe('wrapper code structure', () => {
     expect(wrapperCode).toContain('__svelte_original.proxy.apply')
     expect(wrapperCode).toContain('__svelte_original.tag.apply')
     expect(wrapperCode).toContain('__svelte_original.tag_proxy.apply')
-    expect(wrapperCode).toContain('__svelte_original.user_effect.apply')
-    expect(wrapperCode).toContain('__svelte_original.user_pre_effect.apply')
+    expect(wrapperCode).toContain('__trackUserEffect(__svelte_original.user_effect,')
+    expect(wrapperCode).toContain('__trackUserEffect(__svelte_original.user_pre_effect,')
   })
 
   it('should use __dt() helper for devtools access', () => {
@@ -142,9 +142,9 @@ describe('wrapper code structure', () => {
     expect(wrapperCode).toContain('dt.trackProxy(')
   })
 
-  it('user_effect should call trackEffect()', () => {
-    expect(wrapperCode).toContain('dt.trackEffect(')
-    expect(wrapperCode).toContain('dt._effectCounter')
+  it('user_effect registers the node and binds the effect on its first run', () => {
+    expect(wrapperCode).toContain('dt.trackUserEffect(')
+    expect(wrapperCode).toContain('dt.bindEffect(')
   })
 
   it('should be parseable JavaScript', () => {
@@ -219,8 +219,8 @@ describe('runtime code structure', () => {
     expect(runtimeCode).toContain('_pendingFile: null')
   })
 
-  it('should have _effectCounter property', () => {
-    expect(runtimeCode).toContain('_effectCounter: 0')
+  it('should number effects per component', () => {
+    expect(runtimeCode).toContain('_effectSeq: new Map()')
   })
 
   it('should have register() method', () => {
@@ -228,10 +228,11 @@ describe('runtime code structure', () => {
   })
 
   it('should have trackState/trackDerived/trackProxy/trackEffect methods', () => {
-    expect(runtimeCode).toContain('trackState(signal, name, componentId)')
-    expect(runtimeCode).toContain('trackDerived(signal, name, componentId)')
-    expect(runtimeCode).toContain('trackProxy(proxy, name, componentId)')
+    expect(runtimeCode).toContain('trackState(signal, name, componentId, owner)')
+    expect(runtimeCode).toContain('trackDerived(signal, name, componentId, owner)')
+    expect(runtimeCode).toContain('trackProxy(proxy, name, componentId, owner)')
     expect(runtimeCode).toContain('trackEffect(effect, name, componentId)')
+    expect(runtimeCode).toContain('trackUserEffect(kind, componentId, owner)')
   })
 
   it('trackProxy should NOT use probeSignals (simplified)', () => {

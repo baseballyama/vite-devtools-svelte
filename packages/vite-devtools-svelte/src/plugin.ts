@@ -55,6 +55,50 @@ function collectModules(server: ViteDevServer): GraphModuleLike[] {
   return modules
 }
 
+/**
+ * Component-tracking transform for one compiled client `.svelte` module:
+ * imports the runtime and names the file for the wrapper's next `push()`.
+ * `null` when the module has no component (`$.push(`) to track.
+ *
+ * Nothing is inserted as a new line, so every original line keeps its
+ * number (`map: null` = mappings unchanged; stack traces and the
+ * compiler's sourcemap stay aligned).
+ */
+export function injectComponentTracking(code: string, id: string): string | null {
+  if (!code.includes('$.push(')) return null
+  const safeId = JSON.stringify(id)
+  return (
+    `import '${RUNTIME_MODULE_ID}';` +
+    code.replace(
+      /(\$\.push\([^)]+\);?)/,
+      `if (typeof window !== 'undefined' && window.__SVELTE_DEVTOOLS__) { window.__SVELTE_DEVTOOLS__._pendingFile = ${safeId}; } $1`,
+    )
+  )
+}
+
+/** A Svelte module (`.svelte.js` / `.svelte.ts`, runes outside components). */
+export const SVELTE_MODULE_RE = /\.svelte\.[cm]?[jt]s$/
+
+/**
+ * Module-scope transform for one client Svelte module: signals created while
+ * its body runs (shared state, `export const cart = $state(...)`) are tracked
+ * under a scope named after the file. The body is bracketed by enter/leave
+ * calls; nothing is inserted as a new line. The bracket is plain JS, so it
+ * works before or after vite-plugin-svelte compiles the module (with
+ * `svelteDevtools()` listed before `sveltekit()`, a `.svelte.ts` module is
+ * compiled after this transform). `null` for a server-compiled module.
+ */
+export function injectModuleTracking(code: string, id: string): string | null {
+  if (code.includes('svelte/internal/server')) return null
+  const safeId = JSON.stringify(id)
+  const dt = `(typeof window !== 'undefined' && window.__SVELTE_DEVTOOLS__)`
+  return (
+    `import '${RUNTIME_MODULE_ID}';if (${dt}) { window.__SVELTE_DEVTOOLS__._enterModule(${safeId}); }` +
+    code +
+    `\n;if (${dt}) { window.__SVELTE_DEVTOOLS__._leaveModule(); }\n`
+  )
+}
+
 export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
   const { componentTracking = true } = options
 
@@ -281,16 +325,23 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     },
 
     // Inject the runtime into the user's app
-    transformIndexHtml() {
-      if (config.command !== 'serve') return []
-      return [
-        {
-          tag: 'script',
-          attrs: { type: 'module' },
-          children: `import '${RUNTIME_MODULE_ID}'`,
-          injectTo: 'head-prepend',
-        },
-      ]
+    // 'pre': the tag is injected before Vite's own HTML processing, which
+    // rewrites the inline module's bare `virtual:` import to a URL the browser
+    // can load (as a normal-order hook, the browser requested
+    // 'virtual:svelte-devtools-runtime' itself and failed with a CORS error).
+    transformIndexHtml: {
+      order: 'pre',
+      handler() {
+        if (config.command !== 'serve') return []
+        return [
+          {
+            tag: 'script',
+            attrs: { type: 'module' },
+            children: `import '${RUNTIME_MODULE_ID}'`,
+            injectTo: 'head-prepend',
+          },
+        ]
+      },
     },
 
     // Vite DevTools integration: only invoked by `@vitejs/devtools`. The kit
@@ -314,25 +365,17 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     enforce: 'post',
     apply: 'serve',
 
-    transform(code, id) {
+    transform(code, id, options) {
       if (!componentTracking) return null
-      if (!id.endsWith('.svelte')) return null
       if (id.includes('node_modules')) return null
       if (config?.command !== 'serve') return null
-      if (!code.includes('$.push(')) return null
-
-      const safeId = JSON.stringify(id)
-
-      const importLine = `import '${RUNTIME_MODULE_ID}';\n`
-
-      const modified =
-        importLine +
-        code.replace(
-          /(\$\.push\([^)]+\);?)/,
-          `if (typeof window !== 'undefined' && window.__SVELTE_DEVTOOLS__) { window.__SVELTE_DEVTOOLS__._pendingFile = ${safeId}; }\n$1`,
-        )
-
-      return { code: modified, map: null }
+      const file = id.split('?')[0]
+      const modified = file.endsWith('.svelte')
+        ? injectComponentTracking(code, id)
+        : SVELTE_MODULE_RE.test(file) && !options?.ssr
+          ? injectModuleTracking(code, file)
+          : null
+      return modified === null ? null : { code: modified, map: null }
     },
   }
 

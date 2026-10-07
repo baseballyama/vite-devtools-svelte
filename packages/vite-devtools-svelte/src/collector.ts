@@ -897,6 +897,7 @@ export class Collector {
       changes: count(r?.changes),
       renders: count(r?.renders),
       renderMs: typeof r?.renderMs === 'number' && r.renderMs >= 0 ? r.renderMs : 0,
+      ...(r?.kind === 'module' && { kind: 'module' as const }),
     }))
     const w = data?.window
     return {

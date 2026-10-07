@@ -435,12 +435,15 @@ describe('§6.7 I/J: reactive summary', () => {
     expect(s.window.sampledActiveMs).toBeGreaterThan(0)
   })
 
-  it('counts follow unmount and re-tracking under the same name', () => {
+  it('counts follow unmount, re-tracking a signal, and same-name signals', () => {
     const h = createRuntime()
     const list = mountList(h, 3, 2)
     expect(h.dt._nodeTotals).toEqual({ state: 6, derived: 3, effect: 3 })
-    h.dt.trackDerived({ v: 0, deps: null }, 's0', list.ids[0]) // same id, other type
+    h.dt.trackDerived(list.signals[0], 's0', list.ids[0]) // same signal, other type
     expect(h.dt._nodeTotals).toEqual({ state: 5, derived: 4, effect: 3 })
+    // another signal under a taken name ({@const} in {#each}): a new node
+    h.dt.trackDerived({ v: 0, deps: null }, 's0', list.ids[0])
+    expect(h.dt._nodeTotals).toEqual({ state: 5, derived: 5, effect: 3 })
     h.dt.unmount(list.ids[0])
     expect(h.dt._nodeCounts.has(list.ids[0])).toBe(false)
   })
