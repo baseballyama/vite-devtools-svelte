@@ -26,11 +26,6 @@ function __segmentEnd(label, i) {
   return i === label.length || label[i] === '.' || label[i] === '['
 }
 
-// Last path segment of a file path.
-function __baseName(file) {
-  return file.slice(file.lastIndexOf('/') + 1)
-}
-
 // Dense id lists (an array plus id -> position) for cursor-driven sweeps.
 function __denseAdd(ids, index, id) {
   if (index.has(id)) return
@@ -226,7 +221,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
           : this._stack.length > 0
             ? this._stack.at(-1)
             : null
-      const baseName = __baseName(file)
+      const baseName = file.slice(file.lastIndexOf('/') + 1)
       const name = baseName.endsWith('.svelte') ? baseName.slice(0, -'.svelte'.length) : baseName
       // children is a Set so unmounting one row of a 5 000-row list is O(1).
       this._instances.set(id, {
