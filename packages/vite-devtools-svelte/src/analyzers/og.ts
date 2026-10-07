@@ -1,46 +1,20 @@
 import { assertOutboundUrl } from '../server/security.js'
 import type { OutboundUrlOptions } from '../server/security.js'
 import type { OGPreview, OGTag } from '../types.js'
+import { HTML_WHITESPACE, collapseWhitespace, decodeEntities, htmlTags } from './html.js'
 import { fetchWithTimeout } from './http.js'
-
-const NAMED_ENTITIES: Record<string, string> = {
-  amp: '&',
-  lt: '<',
-  gt: '>',
-  quot: '"',
-  apos: "'",
-  nbsp: ' ',
-}
-
-/** Decode the character references that show up in attribute values and titles. */
-export function decodeEntities(s: string): string {
-  return s.replaceAll(/&(?:#(\d+)|#x([0-9a-f]+)|([a-z]+));/gi, (m, dec, hex, name) => {
-    if (name) return NAMED_ENTITIES[(name as string).toLowerCase()] ?? m
-    const code = dec ? Number(dec) : Number.parseInt(hex as string, 16)
-    return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : m
-  })
-}
-
-/** `<meta …>` tags; quoted values may contain `>`. */
-const META = /<meta\b((?:[^>"']|"[^"]*"|'[^']*')*)>/gi
-const ATTR = /([^\s=/>"']+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/g
 
 /**
  * Meta tags with a `property` (or `name`) and a `content` attribute, in
- * document order. Attributes are matched as whole names in any order and
- * quoting style (the old regex also matched `data-content=` and stopped a
- * double-quoted value at an apostrophe), and values are entity-decoded.
+ * document order, values entity-decoded. Read with an HTML tokenizer, so a
+ * `<meta>` inside a comment or a `<script>` does not count.
  */
 export function parseMetaTags(html: string): OGTag[] {
   const tags: OGTag[] = []
-  for (const meta of html.matchAll(META)) {
-    const attrs = new Map<string, string>()
-    for (const a of meta[1]!.matchAll(ATTR)) {
-      const name = a[1]!.toLowerCase()
-      if (!attrs.has(name)) attrs.set(name, a[2] ?? a[3] ?? a[4] ?? '')
-    }
-    const property = attrs.get('property') ?? attrs.get('name')
-    const content = attrs.get('content')
+  for (const tag of htmlTags(html)) {
+    if (tag.name !== 'meta' || tag.closing) continue
+    const property = tag.attrs.get('property') ?? tag.attrs.get('name')
+    const content = tag.attrs.get('content')
     if (property && content !== undefined) {
       tags.push({ property: decodeEntities(property), content: decodeEntities(content) })
     }
@@ -48,9 +22,58 @@ export function parseMetaTags(html: string): OGTag[] {
   return tags
 }
 
-/** Charset from a Content-Type value or a `<meta charset>` / `http-equiv` tag. */
-function charsetIn(text: string | null): string | undefined {
-  return text?.match(/charset\s*=\s*["']?\s*([\w.:-]+)/i)?.[1]
+/** The document title: the first `<title>` outside an `<svg>`, whitespace collapsed. */
+function documentTitle(html: string): string | undefined {
+  let svgDepth = 0
+  for (const tag of htmlTags(html)) {
+    if (tag.name === 'svg' && !tag.selfClosing) svgDepth += tag.closing ? -1 : 1
+    if (tag.name === 'title' && tag.text !== undefined && svgDepth <= 0) {
+      return collapseWhitespace(decodeEntities(tag.text))
+    }
+  }
+  return undefined
+}
+
+/**
+ * The value of the `charset` parameter in a Content-Type value (HTML's
+ * "extracting a character encoding from a meta element").
+ */
+function charsetParam(value: string | undefined | null): string | undefined {
+  if (!value) return undefined
+  const lower = value.toLowerCase()
+  for (let at = lower.indexOf('charset'); at !== -1; at = lower.indexOf('charset', at + 1)) {
+    let i = at + 'charset'.length
+    while (HTML_WHITESPACE.has(value[i]!)) i++
+    if (value[i] !== '=') continue
+    i++
+    while (HTML_WHITESPACE.has(value[i]!)) i++
+    let label: string
+    const quote = value[i]
+    if (quote === '"' || quote === "'") {
+      const close = value.indexOf(quote, i + 1)
+      if (close === -1) return undefined
+      label = value.slice(i + 1, close).trim()
+    } else {
+      let end = i
+      while (end < value.length && !HTML_WHITESPACE.has(value[end]!) && value[end] !== ';') end++
+      label = value.slice(i, end)
+    }
+    return label === '' ? undefined : label
+  }
+  return undefined
+}
+
+/** The charset a `<meta charset>` or `<meta http-equiv=content-type>` in `head` declares. */
+function metaCharset(head: string): string | undefined {
+  for (const tag of htmlTags(head)) {
+    if (tag.name !== 'meta' || tag.closing) continue
+    const charset = tag.attrs.get('charset')?.trim()
+    if (charset) return charset
+    if (tag.attrs.get('http-equiv')?.toLowerCase() !== 'content-type') continue
+    const declared = charsetParam(tag.attrs.get('content'))
+    if (declared !== undefined) return declared
+  }
+  return undefined
 }
 
 /**
@@ -60,8 +83,7 @@ function charsetIn(text: string | null): string | undefined {
  */
 export function decodeBody(bytes: Uint8Array, contentType: string | null): string {
   const head = new TextDecoder('latin1').decode(bytes.subarray(0, 1024))
-  const sniffed = /<meta\b[^>]*charset[^>]*>/i.exec(head)?.[0] ?? null
-  const label = charsetIn(contentType) ?? charsetIn(sniffed) ?? 'utf-8'
+  const label = charsetParam(contentType) ?? metaCharset(head) ?? 'utf-8'
   let decoder: TextDecoder
   try {
     decoder = new TextDecoder(label)
@@ -119,10 +141,7 @@ export async function getOGPreview(
     preview.description = first('og:description') ?? ''
     const image = first('og:image')
     preview.image = image ? resolveUrl(image, url) : ''
-    if (!preview.title) {
-      const titleMatch = /<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(html)
-      if (titleMatch) preview.title = decodeEntities(titleMatch[1]!).replaceAll(/\s+/g, ' ').trim()
-    }
+    if (!preview.title) preview.title = documentTitle(html) ?? ''
     if (!preview.description) preview.description = first('description') ?? ''
     if (!preview.title) preview.issues.push('Missing og:title or <title>')
     if (!preview.description) preview.issues.push('Missing og:description or meta description')

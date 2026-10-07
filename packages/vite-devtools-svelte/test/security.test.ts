@@ -99,6 +99,7 @@ const PUBLIC_IPS = [
   ['[2001:4860:4860::8888]', 'public IPv6, bracketed'],
   ['::ffff:8.8.8.8', 'IPv4-mapped public'],
   ['::ffff:808:808', 'IPv4-mapped public, hex'],
+  ['::808:808', 'IPv4-compatible public'],
   ['64:ff9b::808:808', 'NAT64 of a public address'],
   ['2002:808:808::1', '6to4 of a public address'],
 ] as const

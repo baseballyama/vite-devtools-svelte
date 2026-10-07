@@ -4,20 +4,15 @@ import path from 'node:path'
 import type { ProjectInfo } from '../types.js'
 
 const CACHE_TTL_MS = 5000
-let _cachedResult: ProjectInfo | null = null
-let _cachedRoot: string | null = null
-let _cachedAt = 0
+let cache: { root: string; at: number; info: ProjectInfo } | undefined
 
+/** Project metadata, cached for {@link CACHE_TTL_MS} per root (every RPC derives from it). */
 export function analyzeProject(root: string): ProjectInfo {
   const now = Date.now()
-  if (_cachedResult && _cachedRoot === root && now - _cachedAt < CACHE_TTL_MS) {
-    return _cachedResult
+  if (cache?.root !== root || now - cache.at >= CACHE_TTL_MS) {
+    cache = { root, at: now, info: analyzeProjectUncached(root) }
   }
-  const result = _analyzeProjectUncached(root)
-  _cachedResult = result
-  _cachedRoot = root
-  _cachedAt = now
-  return result
+  return cache.info
 }
 
 interface PackageJson {
@@ -60,51 +55,40 @@ function readPackageJson(file: string): PackageJson {
   }
 }
 
-function _analyzeProjectUncached(root: string): ProjectInfo {
+function analyzeProjectUncached(root: string): ProjectInfo {
   const pkg = readPackageJson(path.join(root, 'package.json'))
   const deps = pkg.dependencies
   const devDeps = pkg.devDependencies
-  const declared = (name: string) => nonEmpty(deps[name]) ?? nonEmpty(devDeps[name])
+  // installed, else declared
+  const versionOf = (name: string) =>
+    getInstalledVersion(root, name) ?? nonEmpty(deps[name]) ?? nonEmpty(devDeps[name]) ?? 'unknown'
 
   return {
     name: pkg.name ?? path.basename(root),
     version: pkg.version ?? '0.0.0',
-    svelteVersion: getInstalledVersion(root, 'svelte') ?? declared('svelte') ?? 'unknown',
-    sveltekitVersion:
-      getInstalledVersion(root, '@sveltejs/kit') ?? declared('@sveltejs/kit') ?? 'unknown',
-    viteVersion: getInstalledVersion(root, 'vite') ?? declared('vite') ?? 'unknown',
+    svelteVersion: versionOf('svelte'),
+    sveltekitVersion: versionOf('@sveltejs/kit'),
+    viteVersion: versionOf('vite'),
     dependencies: deps,
     devDependencies: devDeps,
-    routesDir: findRoutesDir(root),
-    staticDir: findStaticDir(root),
+    routesDir: firstExisting(root, 'src/routes', 'src/pages'),
+    staticDir: firstExisting(root, 'static', 'public'),
   }
 }
 
 function getInstalledVersion(root: string, pkg: string): string | undefined {
   try {
-    const pkgJsonPath = path.join(root, 'node_modules', pkg, 'package.json')
-    if (fs.existsSync(pkgJsonPath)) {
-      const pkgJson: unknown = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf-8'))
-      return isRecord(pkgJson) ? nonEmpty(pkgJson.version) : undefined
-    }
+    const pkgJson: unknown = JSON.parse(
+      fs.readFileSync(path.join(root, 'node_modules', pkg, 'package.json'), 'utf-8'),
+    )
+    return isRecord(pkgJson) ? nonEmpty(pkgJson.version) : undefined
   } catch {
-    // ignore
+    return undefined // not installed, or an unreadable manifest
   }
-  return undefined
 }
 
-function findRoutesDir(root: string): string {
-  const candidates = [path.join(root, 'src', 'routes'), path.join(root, 'src', 'pages')]
-  for (const dir of candidates) {
-    if (fs.existsSync(dir)) return dir
-  }
-  return path.join(root, 'src', 'routes')
-}
-
-function findStaticDir(root: string): string {
-  const candidates = [path.join(root, 'static'), path.join(root, 'public')]
-  for (const dir of candidates) {
-    if (fs.existsSync(dir)) return dir
-  }
-  return path.join(root, 'static')
+/** The first of `dirs` (under `root`) that exists, else the first. */
+function firstExisting(root: string, ...dirs: string[]): string {
+  const paths = dirs.map(d => path.join(root, d))
+  return paths.find(p => fs.existsSync(p)) ?? paths[0]!
 }
