@@ -1,6 +1,6 @@
 ---
-name: vite-devtools-svelte:perf-fix
-description: Use to apply a single, scoped performance fix to a Svelte/SvelteKit app and verify the change with before/after measurements. Pairs with /vite-devtools-svelte:perf-audit (which identifies issues). One issue per invocation. Requires the vite-devtools-svelte MCP server.
+name: vite-devtools-svelte-perf-fix
+description: Use to apply a single, scoped performance fix to a Svelte/SvelteKit app and verify the change with before/after measurements. Pairs with /vite-devtools-svelte-perf-audit (which identifies issues). One issue per invocation. Requires the vite-devtools-svelte MCP server.
 ---
 
 # Svelte performance fix
@@ -9,7 +9,7 @@ You are about to fix exactly **one** performance issue and verify it with measur
 
 ## Inputs
 
-The user will name an issue. Resolve it to a target by calling the matching detail tool — `get_component_hotspots`, `get_reactive_graph_problems`, `get_load_waterfall`, `get_fps_drops`, or `get_render_profile` — based on the issue `kind` / `suggestedTool` from `/vite-devtools-svelte:perf-audit`.
+The user will name an issue. Resolve it to a target by calling the matching detail tool — `get_component_hotspots`, `get_reactive_graph_problems`, `get_load_waterfall`, `get_fps_drops`, or `get_render_profile` — based on the issue `kind` / `suggestedTool` from `/vite-devtools-svelte-perf-audit`.
 
 ## Workflow
 

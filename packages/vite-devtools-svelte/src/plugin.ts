@@ -36,6 +36,20 @@ export interface SvelteDevtoolsOptions {
    * @default true
    */
   componentTracking?: boolean
+  /**
+   * Require the one-time code before a browser can use the standalone
+   * DevTools (`/.svelte-devtools/`). Set `false` to skip it on a trusted,
+   * single-user machine.
+   *
+   * Beware: without it, any page or device that can reach the dev server
+   * can read files in your project through the DevTools (including other
+   * devices when the dev server listens on a LAN address, `--host`).
+   * Inside the Vite DevTools dock this option has no effect: use
+   * `DevTools({ clientAuth: false })` from `@vitejs/devtools` instead.
+   * The MCP endpoint keeps its own token either way.
+   * @default true
+   */
+  clientAuth?: boolean
 }
 
 /** Name of `@vitejs/devtools`' config plugin; its presence means the hub will call our `devtools.setup`. */
@@ -76,7 +90,7 @@ function collectModules(server: ViteDevServer): GraphModuleLike[] {
 }
 
 export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
-  const { componentTracking = true } = options
+  const { componentTracking = true, clientAuth = true } = options
 
   let config: ResolvedConfig
   let server: ViteDevServer | undefined
@@ -154,7 +168,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       })
 
       if (!hostedByViteDevtools) {
-        const dispose = mountStandalone(devServer, devframe)
+        const dispose = mountStandalone(devServer, devframe, { auth: clientAuth })
         if (dispose) middlewareModeMounts.push({ generation, dispose })
       }
 
