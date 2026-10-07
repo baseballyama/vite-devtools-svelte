@@ -66,26 +66,36 @@
 </script>
 
 <div class="table" style:--cols={template} bind:clientWidth={width}>
-  <div class="head" role="row">
-    {#each shown as col (col.id)}
-      <div class="th" class:end={col.align === 'end'} role="columnheader" aria-sort={ariaSort(col)}>
-        {#if col.sort}
-          <button
-            type="button"
-            class="sort"
-            class:active={sort?.id === col.id}
-            onclick={() => toggleSort(col)}
-          >
+  <!-- The header row needs a table owner (an orphaned `row`/`columnheader` is
+       invalid ARIA); the rows themselves are the listbox below. -->
+  <div class="cols" role="table" aria-label="{label} columns">
+    <div class="head" role="row">
+      {#each shown as col (col.id)}
+        <div
+          class="th"
+          class:end={col.align === 'end'}
+          role="columnheader"
+          aria-sort={ariaSort(col)}
+        >
+          {#if col.sort}
+            <button
+              type="button"
+              class="sort"
+              class:active={sort?.id === col.id}
+              onclick={() => toggleSort(col)}
+            >
+              <span class="truncate">{col.label}</span>
+              {#if sort?.id === col.id}
+                <span class="dir" class:desc={sort.desc}><Icon name="chevronDown" size={11} /></span
+                >
+              {/if}
+            </button>
+          {:else}
             <span class="truncate">{col.label}</span>
-            {#if sort?.id === col.id}
-              <span class="dir" class:desc={sort.desc}><Icon name="chevronDown" size={11} /></span>
-            {/if}
-          </button>
-        {:else}
-          <span class="truncate">{col.label}</span>
-        {/if}
-      </div>
-    {/each}
+          {/if}
+        </div>
+      {/each}
+    </div>
   </div>
   <div class="body">
     <VirtualList
@@ -121,6 +131,9 @@
     align-items: center;
     width: 100%;
     min-width: 0;
+  }
+  .cols {
+    flex-shrink: 0;
   }
   .head {
     flex-shrink: 0;

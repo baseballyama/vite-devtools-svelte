@@ -30,9 +30,12 @@
 <label class="search">
   <Icon name="search" size={13} />
   <span class="sr-only">{label}</span>
+  <!-- Named explicitly: the hit count sits inside the <label> and would
+       otherwise become part of the field's accessible name while filtering. -->
   <input
     bind:this={input}
     bind:value
+    aria-label={label}
     data-panel-search
     type="search"
     {placeholder}

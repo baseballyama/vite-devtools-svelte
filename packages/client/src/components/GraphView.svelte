@@ -263,12 +263,21 @@
   onpointercancel={handlePointerUp}
   class:dragging
 >
+  <!-- Named controls: "−" / "+" / "100%" alone do not say what the buttons do. -->
   <div class="zoom-controls">
-    <button type="button" class="zoom-btn" onclick={zoomOut} title="Zoom out">−</button>
-    <button type="button" class="zoom-label" onclick={zoomReset} title="Fit to view"
-      >{zoomPercent}%</button
+    <button type="button" class="zoom-btn" onclick={zoomOut} title="Zoom out" aria-label="Zoom out"
+      >−</button
     >
-    <button type="button" class="zoom-btn" onclick={zoomIn} title="Zoom in">+</button>
+    <button
+      type="button"
+      class="zoom-label"
+      onclick={zoomReset}
+      title="Fit to view"
+      aria-label="Fit to view (zoom {zoomPercent}%)">{zoomPercent}%</button
+    >
+    <button type="button" class="zoom-btn" onclick={zoomIn} title="Zoom in" aria-label="Zoom in"
+      >+</button
+    >
   </div>
 
   {#if nodes.length === 0}
@@ -383,8 +392,14 @@
             onclick={() => handleNodeClick(node)}
             role="button"
             tabindex="0"
+            aria-label="{node.type} {node.name}"
+            aria-pressed={selectedNodeId === node.id}
             onkeydown={e => {
-              if (e.key === 'Enter') handleNodeClick(node)
+              // Buttons activate on Space too (not only Enter).
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                handleNodeClick(node)
+              }
             }}
           >
             {#if isAffected}
