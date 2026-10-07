@@ -365,6 +365,14 @@ try {
     after.length === before.length && !after.some(r => before.includes(r.id)),
     { before, after: after.map(r => r.id) },
   )
+  // the graph may come from the collector's cache (up to 1 s, see
+  // get_reactive_scope): judge an answer computed after the HMR update
+  const hmrAt = Date.now()
+  g = await until(
+    () => tool('get_reactive_scope', {}),
+    r => (r.computedAt ?? 0) > hmrAt,
+    5000,
+  )
   const ghostNodes = g.nodes.filter(
     n => !comps.some(c => c.id === n.componentId) && !file(n).endsWith('.svelte.ts'),
   )
