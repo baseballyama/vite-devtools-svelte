@@ -96,6 +96,11 @@ export function toText(v: unknown): string {
   return typeof v === 'string' ? v : String(v)
 }
 
+/** The message of a thrown value (anything can be thrown, not only an `Error`). */
+export function errorMessage(e: unknown): string {
+  return e instanceof Error ? e.message : String(e)
+}
+
 /** Compact one-line rendering of an arbitrary value (JSON-ish, truncated). */
 export function formatValue(v: unknown, max = 80): string {
   if (v === undefined) return 'undefined'

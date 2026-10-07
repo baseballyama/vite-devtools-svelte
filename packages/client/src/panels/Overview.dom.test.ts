@@ -117,6 +117,14 @@ describe('Overview panel', () => {
     expect(tile('Problems').textContent).toContain('— errors · 0 warnings')
   })
 
+  it('does not claim "no cycles" when the module graph could not be read', async () => {
+    vi.mocked(rpc.getModuleGraph).mockRejectedValue(new Error('no graph'))
+    render(Overview)
+    await settle()
+    expect(tile('Modules').textContent).toContain('—')
+    expect(tile('Modules').textContent).not.toContain('cycles')
+  })
+
   it('updates the mounted components once the app reports them, only when they changed', async () => {
     vi.useFakeTimers()
     onTestFinished(() => void vi.useRealTimers())

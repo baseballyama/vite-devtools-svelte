@@ -1,6 +1,7 @@
 import { connectDevframe } from 'devframe/client'
 import type { DevframeConnectionStatus, DevframeRpcClient } from 'devframe/client'
 
+import { errorMessage } from './format.js'
 import type {
   RouteInfo,
   AssetInfo,
@@ -159,7 +160,7 @@ async function getClient(): Promise<DevframeRpcClient> {
     })
     .catch((e: unknown) => {
       // `__connection.json` unreachable (server down / restarting).
-      setState({ status: 'error', error: e instanceof Error ? e.message : String(e) })
+      setState({ status: 'error', error: errorMessage(e) })
       scheduleReconnect()
       throw e
     })
@@ -175,7 +176,7 @@ async function call<T>(method: string, ...args: unknown[]): Promise<T> {
     // The scoped view prefixes `svelte-devtools:` and accepts our untyped ids.
     return (await c.scope(NAMESPACE).rpc.call(method, ...args)) as T
   } catch (e) {
-    throw new Error(`RPC ${method} failed: ${e instanceof Error ? e.message : String(e)}`, {
+    throw new Error(`RPC ${method} failed: ${errorMessage(e)}`, {
       cause: e,
     })
   }

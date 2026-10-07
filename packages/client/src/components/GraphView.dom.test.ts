@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/svelte'
 import { userEvent } from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
+import { layoutGraph } from '../lib/graph-layout.js'
 import type { ReactiveEdge, ReactiveNode } from '../lib/types.js'
 import { layout, settle } from '../test/dom.js'
 import GraphView from './GraphView.svelte'
@@ -108,6 +109,14 @@ describe('GraphView', () => {
     expect(onSelectNode).toHaveBeenCalledTimes(4)
   })
 
+  it('shows non-string values as JSON, not `[object Object]`', () => {
+    const obj = node('3:o', 'state', 'o', 'A.svelte', { a: 1 })
+    const list = node('3:l', 'state', 'l', 'A.svelte', [[1], 2])
+    render(GraphView, { nodes: [obj, list], edges: [] })
+    expect(nodeButton('o').textContent).toContain('= {"a":1}')
+    expect(nodeButton('l').textContent).toContain('= [[1],2]')
+  })
+
   it('follows a selection set from outside', async () => {
     const view = render(GraphView, { nodes, edges, selectedNodeId: log.id })
     expect(nodeButton('log').getAttribute('aria-pressed')).toBe('true')
@@ -129,6 +138,15 @@ describe('GraphView', () => {
       r.style.getPropertyValue('--node-delay'),
     )
     expect(delays).toEqual(['0ms', '700ms', '1400ms', '1400ms'])
+    // Each kind glows in its own colour: the markup node is not an effect.
+    const filters = [...container.querySelectorAll('.glow-ring')].map(r => r.getAttribute('filter'))
+    expect(filters).toEqual([
+      'url(#glow-state)',
+      'url(#glow-derived)',
+      'url(#glow-effect)',
+      'url(#glow-template)',
+    ])
+    for (const f of filters) expect(container.querySelector(f!.slice(4, -1))).not.toBeNull()
   })
 
   it('zooms with the buttons and resets to fit', async () => {
@@ -176,6 +194,21 @@ describe('GraphView', () => {
     await fireEvent.pointerDown(nodeButton('count'), { clientX: 0, clientY: 0 })
     expect(surface.classList.contains('dragging')).toBe(false)
     expect(viewBox(container).split(' ').map(Number).slice(0, 2)).toEqual([x1, y1])
+  })
+
+  it('fits the graph centred in the view', async () => {
+    layout(() => ({ width: 800, height: 400 }))
+    const { container } = render(GraphView, { nodes, edges })
+    await settle()
+    const { width, height } = layoutGraph(nodes, edges)
+    const [x, y, w, h] = viewBox(container).split(' ').map(Number) as [
+      number,
+      number,
+      number,
+      number,
+    ]
+    expect(x + w / 2).toBeCloseTo(width / 2)
+    expect(y + h / 2).toBeCloseTo(height / 2)
   })
 
   it('waits for the container to have a size before fitting', async () => {

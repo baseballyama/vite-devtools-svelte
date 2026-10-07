@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { toText } from '../lib/format.js'
+  import { formatValue } from '../lib/format.js'
   import { layoutGraph, NODE_H, NODE_W, propagate, shortFile } from '../lib/graph-layout.js'
   import type { ReactiveNode, ReactiveEdge } from '../lib/types.js'
 
@@ -113,12 +113,9 @@
     vbW = targetW
     vbH = targetH
 
-    // Center the visible window over the graph's center, accounting for the
-    // padding we added so the graph isn't pinned to a corner.
-    const cx = (layout.width - PAD * 2) / 2 - PAD
-    const cy = (layout.height - PAD * 2) / 2 - PAD
-    vbX = cx + PAD - vbW / 2
-    vbY = cy + PAD - vbH / 2
+    // Center the visible window over the graph.
+    vbX = (layout.width - vbW) / 2
+    vbY = (layout.height - vbH) / 2
     fitVbW = vbW
   }
 
@@ -172,11 +169,10 @@
     dragging = false
   }
 
-  function formatValue(v: unknown): string {
-    if (v === undefined) return ''
-    const s = toText(v)
-    return s.length > 14 ? s.slice(0, 13) + '…' : s
-  }
+  /** Fits a node label: at most `max` characters. */
+  const clip = (s: string, max = 14) => (s.length > max ? s.slice(0, max - 1) + '…' : s)
+  /** Node value label: strings as they are, anything else as compact JSON. */
+  const valueLabel = (v: unknown) => clip(typeof v === 'string' ? v : formatValue(v))
 
   const layout = $derived(layoutGraph(nodes, edges))
 
@@ -186,14 +182,9 @@
 
   const propagation = $derived(propagate(nodes, edges, changedNodeIds))
 
-  const affectedNodeIds = $derived(propagation.affected)
-  const affectedEdgeKeys = $derived(propagation.edgeKeys)
-  const nodeDepths = $derived(propagation.depths)
-
   // Node glow starts at: depth * (NODE_GLOW_MS + EDGE_TRAVEL_MS)
   function nodeDelayMs(nodeId: string): number {
-    const depth = nodeDepths.get(nodeId) ?? 0
-    return depth * (NODE_GLOW_MS + EDGE_TRAVEL_MS)
+    return (propagation.depths.get(nodeId) ?? 0) * (NODE_GLOW_MS + EDGE_TRAVEL_MS)
   }
 
   // Edge animation starts after the source node finishes glowing:
@@ -202,33 +193,12 @@
     return nodeDelayMs(fromId) + NODE_GLOW_MS
   }
 
-  function nodeColor(type: ReactiveNode['type']): string {
-    switch (type) {
-      case 'state':
-        return 'var(--color-info)'
-      case 'derived':
-        return 'var(--color-success)'
-      case 'effect':
-        return 'var(--color-error)'
-      case 'template':
-        return 'var(--purple)'
-      default:
-        return 'var(--color-text-muted)'
-    }
-  }
-  function nodeGlowColor(type: ReactiveNode['type']): string {
-    switch (type) {
-      case 'state':
-        return '#3b82f6'
-      case 'derived':
-        return '#22c55e'
-      case 'effect':
-        return '#ef4444'
-      case 'template':
-        return '#a855f7'
-      default:
-        return '#999'
-    }
+  /** Per kind: theme colour for outlines and edges, and the glow (an SVG filter needs a literal). */
+  const KINDS: Record<ReactiveNode['type'], { color: string; glow: string }> = {
+    state: { color: 'var(--blue)', glow: '#3b82f6' },
+    derived: { color: 'var(--green)', glow: '#22c55e' },
+    effect: { color: 'var(--red)', glow: '#ef4444' },
+    template: { color: 'var(--purple)', glow: '#a855f7' },
   }
 
   function handleNodeClick(node: ReactiveNode) {
@@ -285,24 +255,14 @@
   {:else}
     <svg width="100%" height="100%" viewBox="{vbX} {vbY} {vbW} {vbH}">
       <defs>
-        <filter id="glow-blue" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="6" result="blur" />
-          <feFlood flood-color="#3b82f6" flood-opacity="0.7" />
-          <feComposite in2="blur" operator="in" />
-          <feMerge><feMergeNode /><feMergeNode in="SourceGraphic" /></feMerge>
-        </filter>
-        <filter id="glow-green" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="6" result="blur" />
-          <feFlood flood-color="#22c55e" flood-opacity="0.7" />
-          <feComposite in2="blur" operator="in" />
-          <feMerge><feMergeNode /><feMergeNode in="SourceGraphic" /></feMerge>
-        </filter>
-        <filter id="glow-red" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="6" result="blur" />
-          <feFlood flood-color="#ef4444" flood-opacity="0.7" />
-          <feComposite in2="blur" operator="in" />
-          <feMerge><feMergeNode /><feMergeNode in="SourceGraphic" /></feMerge>
-        </filter>
+        {#each Object.entries(KINDS) as [type, { glow }] (type)}
+          <filter id="glow-{type}" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="6" result="blur" />
+            <feFlood flood-color={glow} flood-opacity="0.7" />
+            <feComposite in2="blur" operator="in" />
+            <feMerge><feMergeNode /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+        {/each}
       </defs>
 
       <!-- Component group backgrounds -->
@@ -331,30 +291,19 @@
           {@const y2 = toPos.y + NODE_H / 2}
           {@const cx = (x1 + x2) / 2}
           {@const isHighlighted = selectedNodeId === edge.from || selectedNodeId === edge.to}
-          {@const fromNode = nodeMap.get(edge.from)}
-          {@const edgeKey = `${edge.from}→${edge.to}`}
-          {@const isPulsing = affectedEdgeKeys.has(edgeKey)}
-          {@const edgeMs = edgeDelayMs(edge.from)}
+          {@const kind = KINDS[nodeMap.get(edge.from)!.type]}
+          {@const stroke = isHighlighted ? 'var(--accent)' : kind.color}
           {@const pathD = `M ${x1} ${y1} C ${cx} ${y1}, ${cx} ${y2}, ${x2} ${y2}`}
           <!-- Base edge line -->
-          <path
-            d={pathD}
-            class="edge"
-            class:highlighted={isHighlighted}
-            stroke={isHighlighted
-              ? 'var(--color-accent)'
-              : fromNode
-                ? nodeColor(fromNode.type)
-                : 'var(--color-text-muted)'}
-          />
+          <path d={pathD} class="edge" class:highlighted={isHighlighted} {stroke} />
           <!-- Bright overlay that sweeps left-to-right -->
-          {#if isPulsing}
+          {#if propagation.edgeKeys.has(`${edge.from}→${edge.to}`)}
             {#key pulseKey}
               <path
                 d={pathD}
                 class="edge-sweep"
-                stroke={fromNode ? nodeGlowColor(fromNode.type) : '#fff'}
-                style:--sweep-delay="{edgeMs}ms"
+                stroke={kind.glow}
+                style:--sweep-delay="{edgeDelayMs(edge.from)}ms"
                 style:--sweep-dur="{EDGE_TRAVEL_MS}ms"
               />
             {/key}
@@ -363,11 +312,7 @@
             points="{x2 - 8},{y2 - 5} {x2},{y2} {x2 - 8},{y2 + 5}"
             class="arrow"
             class:highlighted={isHighlighted}
-            fill={isHighlighted
-              ? 'var(--color-accent)'
-              : fromNode
-                ? nodeColor(fromNode.type)
-                : 'var(--color-text-muted)'}
+            fill={stroke}
           />
         {/if}
       {/each}
@@ -376,15 +321,7 @@
       {#each nodes as node (node.id)}
         {@const pos = layout.positions.get(node.id)}
         {#if pos}
-          {@const hasValue = node.value !== undefined && node.type !== 'effect'}
-          {@const isAffected = affectedNodeIds.has(node.id)}
-          {@const nodeMs = nodeDelayMs(node.id)}
-          {@const glowFilter =
-            node.type === 'state'
-              ? 'url(#glow-blue)'
-              : node.type === 'derived'
-                ? 'url(#glow-green)'
-                : 'url(#glow-red)'}
+          {@const kind = KINDS[node.type]}
           <g
             class="node"
             class:selected={selectedNodeId === node.id}
@@ -402,7 +339,7 @@
               }
             }}
           >
-            {#if isAffected}
+            {#if propagation.affected.has(node.id)}
               {#key pulseKey}
                 <rect
                   x="-4"
@@ -412,11 +349,11 @@
                   rx="10"
                   ry="10"
                   fill="none"
-                  stroke={nodeGlowColor(node.type)}
+                  stroke={kind.glow}
                   stroke-width="2"
                   class="glow-ring"
-                  filter={glowFilter}
-                  style:--node-delay="{nodeMs}ms"
+                  filter="url(#glow-{node.type})"
+                  style:--node-delay="{nodeDelayMs(node.id)}ms"
                 />
               {/key}
             {/if}
@@ -425,11 +362,11 @@
               height={NODE_H}
               rx="6"
               ry="6"
-              fill="var(--color-surface)"
-              stroke={nodeColor(node.type)}
+              fill="var(--bg-elevated)"
+              stroke={kind.color}
               stroke-width={selectedNodeId === node.id ? 2.5 : 1.5}
             />
-            <circle cx="12" cy="16" r="4" fill={nodeColor(node.type)} />
+            <circle cx="12" cy="16" r="4" fill={kind.color} />
             <text
               x="22"
               y="16"
@@ -438,7 +375,7 @@
               font-size="11"
               font-family="DM Mono, monospace"
             >
-              {node.name.length > 14 ? node.name.slice(0, 13) + '…' : node.name}
+              {clip(node.name)}
             </text>
             <text
               x={NODE_W - 6}
@@ -455,7 +392,7 @@
             <text x="12" y="36" class="node-meta" font-size="9" font-family="DM Mono, monospace">
               {shortFile(node.componentFile)}
             </text>
-            {#if hasValue}
+            {#if node.value !== undefined && node.type !== 'effect'}
               <text
                 x={NODE_W - 6}
                 y="36"
@@ -465,7 +402,7 @@
                 font-family="DM Mono, monospace"
                 font-weight="500"
               >
-                = {formatValue(node.value)}
+                = {valueLabel(node.value)}
               </text>
             {/if}
             <line x1="6" y1="24" x2={NODE_W - 6} y2="24" class="node-divider" stroke-width="0.5" />
@@ -480,9 +417,9 @@
   .graph-container {
     overflow: hidden;
     flex: 1;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    background: var(--color-base);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
     position: relative;
     cursor: grab;
     touch-action: none;
@@ -493,9 +430,9 @@
   }
 
   .empty {
-    padding: var(--space-4);
-    color: var(--color-text-muted);
-    font-size: var(--text-sm);
+    padding: 16px;
+    color: var(--fg-muted);
+    font-size: var(--fs-sm);
     cursor: default;
   }
 
@@ -510,8 +447,8 @@
     right: 8px;
     display: flex;
     align-items: center;
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
     border-radius: 6px;
     z-index: 10;
     overflow: hidden;
@@ -521,7 +458,7 @@
   .zoom-label {
     background: none;
     border: none;
-    color: var(--color-text-muted);
+    color: var(--fg-muted);
     font-size: 13px;
     padding: 4px 10px;
     cursor: pointer;
@@ -530,26 +467,26 @@
   }
   .zoom-btn:hover,
   .zoom-label:hover {
-    background: var(--color-surface-active);
-    color: var(--color-text);
+    background: var(--bg-active);
+    color: var(--fg);
   }
   .zoom-label {
     min-width: 44px;
     text-align: center;
-    border-left: 1px solid var(--color-border);
-    border-right: 1px solid var(--color-border);
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
     font-size: 10px;
   }
 
   /* --- Component group boxes --- */
   .component-box {
-    fill: var(--color-surface-active);
-    stroke: var(--color-border);
+    fill: var(--bg-active);
+    stroke: var(--border);
     stroke-width: 1;
     stroke-dasharray: 4 3;
   }
   .component-label {
-    fill: var(--color-accent-400);
+    fill: var(--accent-hover);
     font-size: 9px;
     font-family: var(--font-mono);
     font-weight: 600;
@@ -557,19 +494,19 @@
 
   /* --- Node text — themed via CSS vars so light mode flips automatically --- */
   .node-name {
-    fill: var(--color-text);
+    fill: var(--fg);
   }
   .node-type {
-    fill: var(--color-text-muted);
+    fill: var(--fg-muted);
   }
   .node-meta {
-    fill: var(--color-text-faint);
+    fill: var(--fg-faint);
   }
   .node-value {
-    fill: var(--color-accent-400);
+    fill: var(--accent-hover);
   }
   .node-divider {
-    stroke: var(--color-border);
+    stroke: var(--border);
     opacity: 1;
   }
 

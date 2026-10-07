@@ -93,14 +93,14 @@ describe('App shell', () => {
 
   it('reports a panel that fails to load', async () => {
     await renderApp('#/og')
-    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy())
+    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy(), { timeout: 4000 })
     expect(within(screen.getByRole('alert')).getByText('Could not load panel')).toBeTruthy()
   })
 
   it('contains a panel that crashes while rendering and offers a reload', async () => {
     await renderApp('#/fps')
-    // The panel module loads lazily: give a loaded machine more than the 1 s default.
-    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy(), { timeout: 5000 })
+    // Panel modules load lazily: give a loaded machine more than the 1 s default.
+    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy(), { timeout: 4000 })
     const alert = screen.getByRole('alert')
     expect(within(alert).getByText('Frame rate crashed')).toBeTruthy()
     expect(within(alert).getByText('kaboom')).toBeTruthy()

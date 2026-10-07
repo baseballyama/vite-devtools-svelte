@@ -2,6 +2,7 @@ import * as fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 
 import {
+  errorMessage,
   basename,
   componentName,
   formatAgo,
@@ -185,6 +186,14 @@ describe('toText', () => {
     [{}, '[object Object]'],
   ])('toText(%s) → %j', (v, expected) => {
     expect(toText(v)).toBe(expected)
+  })
+})
+
+describe('errorMessage', () => {
+  it('is the message of an Error, and the string form of anything else thrown', () => {
+    expect(errorMessage(new TypeError('boom'))).toBe('boom')
+    expect(errorMessage('plain')).toBe('plain')
+    expect(errorMessage(42)).toBe('42')
   })
 })
 

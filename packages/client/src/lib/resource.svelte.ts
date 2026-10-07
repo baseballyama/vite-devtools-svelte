@@ -12,6 +12,8 @@
  */
 import { getContext, untrack } from 'svelte'
 
+import { errorMessage } from './format.js'
+
 export const PANEL_ACTIVE = Symbol('panel-active')
 
 type PanelActive = () => boolean
@@ -123,7 +125,7 @@ export function resource<T>(fetcher: () => Promise<T>, opts: ResourceOptions<T>)
         error = null
         updatedAt = Date.now()
       } catch (e) {
-        if (started === generation) error = e instanceof Error ? e.message : String(e)
+        if (started === generation) error = errorMessage(e)
         else stale = true
       } finally {
         if (!stale) loading = false

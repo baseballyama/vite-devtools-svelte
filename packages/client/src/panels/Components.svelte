@@ -123,14 +123,9 @@
     untrack(() => (expanded = new Set([...expanded, ...keys])))
   })
 
-  const treeFilter = $derived.by(() => {
-    const m = matcher(query)
-    return m ? (n: LiveNode) => m(n.c.name, n.c.file) : null
-  })
-
-  const treeMatches = $derived(
-    treeFilter ? liveList.filter(c => treeFilter({ c } as LiveNode)).length : null,
-  )
+  const match = $derived(matcher(query))
+  const treeFilter = $derived(match && ((n: LiveNode) => match(n.c.name, n.c.file)))
+  const treeMatches = $derived(match && liveList.filter(c => match(c.name, c.file)).length)
 
   const selectedNode = $derived(
     treeSelected != null ? (tree.byKey.get(treeSelected) ?? null) : null,
@@ -174,10 +169,9 @@
 
   const relationByFile = $derived(new Map(relations.data.map(r => [r.file, r])))
 
-  const fileRows = $derived.by(() => {
-    const m = matcher(query)
-    return m ? relations.data.filter(r => m(r.name, r.file)) : relations.data
-  })
+  const fileRows = $derived(
+    match ? relations.data.filter(r => match(r.name, r.file)) : relations.data,
+  )
 
   let fileSort = $state<SortState | null>({ id: 'name', desc: false })
   let fileSelected = $state<string | null>(null)
@@ -345,6 +339,7 @@
           {@const c = selectedNode.c}
           {@const rel = relationByFile.get(c.file)}
           {@const ancestors = ancestorsOf(c.id)}
+          {@const sameFile = instancesPerFile.get(c.file) ?? 1}
           <Inspector title="<{c.name}>" subtitle={c.file} onclose={() => (treeSelected = null)}>
             {#snippet badges()}
               <Badge tone={c.mounted ? 'green' : 'neutral'}
@@ -382,11 +377,7 @@
               <dt>Same file</dt>
               <dd>
                 <button type="button" class="link" onclick={() => showFile(c.file)}>
-                  {instancesPerFile.get(c.file) ?? 1} mounted instance{(instancesPerFile.get(
-                    c.file,
-                  ) ?? 1) === 1
-                    ? ''
-                    : 's'}
+                  {sameFile} mounted instance{sameFile === 1 ? '' : 's'}
                 </button>
               </dd>
             </dl>
@@ -410,17 +401,7 @@
 
             {#if rel && rel.imports.length}
               <h3 class="section-title">Imports <span class="num">{rel.imports.length}</span></h3>
-              <ul class="link-list">
-                {#each rel.imports as imp (imp)}
-                  <li>
-                    <button type="button" onclick={() => open(imp)} title="Open {imp}"
-                      ><span class="truncate">{componentName(imp)}</span><span class="sub truncate"
-                        >{shortPath(imp)}</span
-                      ></button
-                    >
-                  </li>
-                {/each}
-              </ul>
+              {@render importList(rel.imports, open)}
             {/if}
           </Inspector>
         {/if}
@@ -481,20 +462,9 @@
               Imports <span class="num">{selectedFile.imports.length}</span>
             </h3>
             {#if selectedFile.imports.length}
-              <ul class="link-list">
-                {#each selectedFile.imports as imp (imp)}
-                  <li>
-                    <button
-                      type="button"
-                      onclick={() => (relationByFile.has(imp) ? (fileSelected = imp) : open(imp))}
-                    >
-                      <span class="truncate">{componentName(imp)}</span><span class="sub truncate"
-                        >{shortPath(imp)}</span
-                      >
-                    </button>
-                  </li>
-                {/each}
-              </ul>
+              {@render importList(selectedFile.imports, imp =>
+                relationByFile.has(imp) ? (fileSelected = imp) : open(imp),
+              )}
             {:else}<p class="section-note">Imports no other components.</p>{/if}
             <h3 class="section-title">Used by <span class="num">{users.length}</span></h3>
             {#if users.length}
@@ -516,6 +486,20 @@
     </SplitView>
   {/if}
 </Panel>
+
+{#snippet importList(files: string[], onpick: (file: string) => void)}
+  <ul class="link-list">
+    {#each files as file (file)}
+      <li>
+        <button type="button" onclick={() => onpick(file)} title={file}
+          ><span class="truncate">{componentName(file)}</span><span class="sub truncate"
+            >{shortPath(file)}</span
+          ></button
+        >
+      </li>
+    {/each}
+  </ul>
+{/snippet}
 
 <style>
   .tag {

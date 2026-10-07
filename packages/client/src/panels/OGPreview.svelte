@@ -4,6 +4,7 @@
   import EmptyState from '../components/EmptyState.svelte'
   import Icon from '../components/Icon.svelte'
   import Panel from '../components/Panel.svelte'
+  import { errorMessage } from '../lib/format.js'
   import { resource } from '../lib/resource.svelte.js'
   import { getOGPreview, getRoutes } from '../lib/rpc.js'
   import type { OGPreview } from '../lib/types.js'
@@ -31,7 +32,7 @@
       preview = await getOGPreview(target)
     } catch (e) {
       preview = null
-      error = e instanceof Error ? e.message : String(e)
+      error = errorMessage(e)
     } finally {
       loading = false
     }

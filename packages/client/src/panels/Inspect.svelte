@@ -9,7 +9,7 @@
   import SplitView from '../components/SplitView.svelte'
   import type { CodePaneApi } from '../components/types.js'
   import VirtualList from '../components/VirtualList.svelte'
-  import { shortPath } from '../lib/format.js'
+  import { errorMessage, shortPath } from '../lib/format.js'
   import { highlightJS, highlightSvelte } from '../lib/highlight.js'
   import { matcher } from '../lib/match.js'
   import { resource } from '../lib/resource.svelte.js'
@@ -64,7 +64,7 @@
       if (my !== token) return
       result = null
       maps = null
-      error = e instanceof Error ? e.message : String(e)
+      error = errorMessage(e)
     } finally {
       if (my === token) loading = false
     }
