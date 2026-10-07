@@ -80,8 +80,12 @@ export function injectComponentTracking(code: string, id: string): string | null
   return `import '${RUNTIME_MODULE_ID}';` + code.slice(0, at) + hint + code.slice(at)
 }
 
-/** A Svelte module (`.svelte.js` / `.svelte.ts`, runes outside components). */
-export const SVELTE_MODULE_RE = /\.svelte\.[cm]?[jt]s$/
+const SVELTE_MODULE_SUFFIXES = ['js', 'ts', 'mjs', 'mts', 'cjs', 'cts'].map(ext => `.svelte.${ext}`)
+
+/** A Svelte module (`.svelte.js` / `.svelte.ts`, runes outside components); `file` has no query. */
+export function isSvelteModule(file: string): boolean {
+  return SVELTE_MODULE_SUFFIXES.some(suffix => file.endsWith(suffix))
+}
 
 /**
  * Module-scope transform for one client Svelte module: signals created while
