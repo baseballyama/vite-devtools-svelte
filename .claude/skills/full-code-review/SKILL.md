@@ -12,9 +12,12 @@ PR を提出する前に、リポジトリ全体のコードオーナー視点�
 
 ```
 packages/vite-devtools-svelte/
-  src/                    Vite プラグイン本体（plugin.ts / runtime.ts / analyzers / types.ts）
-  src/__tests__/          vp test 用テスト
-  client/src/             DevTools UI（Svelte 5 SPA）
+  src/                    Vite プラグイン本体（plugin.ts / types.ts）
+  src/runtime/            ブラウザに注入されるコード（client.js / wrapper.js）と変換
+  src/server/             dev server 側（collector / devframe RPC / mount / security）
+  src/analyzers/ src/mcp/ 解析器と MCP サーバー
+  test/                   vitest テスト（unit / reactivity / perf）
+packages/client/src/      DevTools UI（Svelte 5 SPA、ビルド先は plugin の dist/client）
     panels/               各パネル（Components, Routes, Reactive, ...）
     components/           共通 UI（Card, ListItem, ScrollList, ...）
     lib/                  rpc.ts, types.ts, design-system.css
@@ -65,10 +68,10 @@ git log --oneline ${BASE_BRANCH}...HEAD
 
 変更ファイルを以下のカテゴリに分類する（`scripts/plan-review-chunks.mjs` と同じ規則）：
 
-- **plugin**: `packages/vite-devtools-svelte/src/` 配下（`__tests__/` を除く）
-- **runtime**: `packages/vite-devtools-svelte/src/runtime.ts`（browser-injected コードは独立してレビュー）
-- **client**: `packages/vite-devtools-svelte/client/` 配下
-- **tests**: `packages/vite-devtools-svelte/src/__tests__/` 配下
+- **plugin**: `packages/vite-devtools-svelte/src/` 配下
+- **runtime**: `packages/vite-devtools-svelte/src/runtime/`（client.js / wrapper.js）（browser-injected コードは独立してレビュー）
+- **client**: `packages/client/` 配下
+- **tests**: `packages/vite-devtools-svelte/test/` 配下と `packages/client/src/**/*.test.ts`
 - **playground**: `playground/` 配下
 - **site**: `site/` 配下
 - **config**: ルート直下（`package.json` / `pnpm-workspace.yaml` / `tsconfig*.json` / `*.config.*`）
@@ -280,7 +283,7 @@ Skill ツールを使って `security-review` を呼び出してください。
 - ユーザー入力由来のパスを `path.join` ではなく `path.resolve` で扱っているか（絶対パスがリテラルに連結されて壊れる罠）
 - `execFile` / `spawn` の引数にユーザー入力を直接渡していないか（コマンドインジェクション）
 - ユーザー入力 RegExp の `g`/`y` フラグを剥がしているか（`RegExp.test()` がステートフルになる罠）
-- 注入される runtime コード（runtime.ts / wrapper） に XSS / プロトタイプ汚染リスクがないか
+- 注入される runtime コード（runtime/client.js / runtime/wrapper.js） に XSS / プロトタイプ汚染リスクがないか
 ```
 
 ##### Agent 2: 実装レビュー（チャンクのカテゴリに応じて切り替え）
@@ -311,8 +314,8 @@ Vite プラグイン / runtime 実装のコードレビューを、以下の対�
 - 大量データを扱うバッファに長さ上限のキャッピングがあるか
 - Promise resolver の漏れ（タイムアウト時に `splice` で resolver 配列から取り除く）
 - Vite v8 の environments API への対応（moduleGraph 取得時のフォールバック）
-- runtime.ts: postMessage / window グローバルへの書き込みが既存の `window.__SVELTE_DEVTOOLS__` 名前空間に集約されているか
-- runtime.ts: 注入されるコードがユーザーのコードを破壊しないか（global 衝突、prototype 拡張禁止）
+- runtime/client.js: postMessage / window グローバルへの書き込みが既存の `window.__SVELTE_DEVTOOLS__` 名前空間に集約されているか
+- runtime/client.js: 注入されるコードがユーザーのコードを破壊しないか（global 衝突、prototype 拡張禁止）
 
 ## 出力フォーマット
 ファイルごとに指摘事項を報告。各指摘に **[Critical/Major/Minor]** [ファイル:行番号] [指摘内容] → [改善案] を含める。
@@ -367,7 +370,7 @@ DevTools UI（Svelte 5 SPA）のコードレビューを、以下の対象ファ
 ## 特に重視する観点
 - 新規追加された RPC ハンドラ / analyzer / runtime ロジックに対応するテストが存在するか
 - `vitest run` で動くこと
-- フィクスチャ（`src/__tests__/fixtures`）を流用しているか、ad-hoc な fs モックを書きすぎていないか
+- フィクスチャ（`test/fixtures`）を流用しているか、ad-hoc な fs モックを書きすぎていないか
 - 外部 URL fetch を含むテストはモックしているか（実ネットワークアクセスを発生させていない）
 - セキュリティ系（SSRF / パストラバーサル）の負例テストが含まれているか
 - コメントとアサーションが矛盾していないか（「〜されないことを確認」と書きながら toBeDefined() のようなパターン）

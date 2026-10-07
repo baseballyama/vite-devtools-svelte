@@ -266,6 +266,30 @@ importers:
         specifier: workspace:*
         version: link:../../packages/vite-devtools-svelte
 
+  packages/client:
+    devDependencies:
+      '@rsvelte/svelte-check':
+        specifier: ^0.5.32
+        version: 0.5.32
+      '@sveltejs/vite-plugin-svelte':
+        specifier: ^7.3.1
+        version: 7.3.1(svelte@5.57.1)(vite@8.3.2)
+      devframe:
+        specifier: ^1.2.0
+        version: 1.2.0(@devframes/agentic@1.2.0)(cac@7.0.0)(srvx@1.0.5)
+      svelte:
+        specifier: ^5.57.1
+        version: 5.57.1
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vite:
+        specifier: ^8.3.2
+        version: 8.3.2(@types/node@25.9.9)(@vitejs/devtools@0.7.6)(yaml@2.9.1)
+      vitest:
+        specifier: ^5.0.3
+        version: 5.0.3(@types/node@25.9.9)(happy-dom@20.14.5)(vite@8.3.2)
+
   packages/vite-devtools-svelte:
     dependencies:
       '@modelcontextprotocol/sdk':
@@ -305,27 +329,6 @@ importers:
       vitest:
         specifier: ^5.0.3
         version: 5.0.3(@types/node@25.9.9)(happy-dom@20.14.5)(vite@8.3.2)
-
-  packages/vite-devtools-svelte/client:
-    devDependencies:
-      '@rsvelte/svelte-check':
-        specifier: ^0.5.32
-        version: 0.5.32
-      '@sveltejs/vite-plugin-svelte':
-        specifier: ^7.3.1
-        version: 7.3.1(svelte@5.57.1)(vite@8.3.2)
-      devframe:
-        specifier: ^1.2.0
-        version: 1.2.0(@devframes/agentic@1.2.0)(cac@7.0.0)(srvx@1.0.5)
-      svelte:
-        specifier: ^5.57.1
-        version: 5.57.1
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-      vite:
-        specifier: ^8.3.2
-        version: 8.3.2(@types/node@25.9.9)(@vitejs/devtools@0.7.6)(yaml@2.9.1)
 
   playground:
     devDependencies:

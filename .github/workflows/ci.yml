@@ -37,7 +37,7 @@ jobs:
         run: pnpm format:check
 
       - name: Client typecheck (rsvelte-check)
-        run: pnpm -C packages/vite-devtools-svelte/client check
+        run: pnpm -C packages/client check
 
       - name: Plugin typecheck (tsc)
         run: pnpm -C packages/vite-devtools-svelte exec tsc --noEmit -p tsconfig.json
@@ -48,7 +48,7 @@ jobs:
       - name: Client typecheck (svelte-check --tsgo, TypeScript 7, additive)
         run: |
           node node_modules/@typescript/native/bin/tsc -v
-          pnpm -C examples/sample-app exec svelte-check --tsgo --workspace ../../packages/vite-devtools-svelte/client --tsconfig ./tsconfig.json
+          pnpm -C examples/sample-app exec svelte-check --tsgo --workspace ../../packages/client --tsconfig ./tsconfig.json
 
       - name: Plugin typecheck (tsc, TypeScript 7, additive)
         run: node node_modules/@typescript/native/bin/tsc --noEmit -p packages/vite-devtools-svelte/tsconfig.json
@@ -197,7 +197,7 @@ jobs:
           pnpm -C examples/strict-csp-app exec svelte-kit sync
           pnpm -C examples/sample-app exec svelte-check --workspace ../strict-csp-app --tsconfig ./tsconfig.json
 
-  # Compatibility smoke tests (compat/README.md): the plugin in a plain
+  # Compatibility smoke tests (e2e/compat/README.md): the plugin in a plain
   # Svelte + Vite app, the existing SvelteKit 2 sample and a SvelteKit 3
   # fixture, each standalone and inside the Vite DevTools dock. One profile
   # at a time; every step is bounded.
@@ -237,23 +237,23 @@ jobs:
         run: pnpm build
 
       - name: Prepare profile
-        run: node scripts/compat/prepare.mjs ${{ matrix.profile }}
+        run: node e2e/compat/prepare.mjs ${{ matrix.profile }}
 
       - name: Install Chromium (workspace playwright-core)
         run: pnpm exec playwright-core install --with-deps chromium
 
       - name: Smoke test
-        run: node scripts/compat/smoke.mjs ${{ matrix.profile }} ${{ matrix.mode == 'dock' && '--dock' || '' }} --tier=2
+        run: node e2e/compat/smoke.mjs ${{ matrix.profile }} ${{ matrix.mode == 'dock' && '--dock' || '' }} --tier=2
 
       # The smoke test must leave the repo as it found it: the workspace
-      # lockfile and the existing examples untouched. (compat/kit3's own
+      # lockfile and the existing examples untouched. (e2e/compat/kit3's own
       # lockfile entry for the freshly packed plugin tarball is expected to
       # change in CI and is not checked here.)
       - name: Repo unchanged
         if: always()
         run: git diff --exit-code -- pnpm-lock.yaml examples/ playground/ packages/
 
-  # Reactivity end to end through MCP (scripts/reactivity-e2e.mjs): the
+  # Reactivity end to end through MCP (e2e/reactivity.mjs): the
   # playground's /lab page (module/class state, context, props, bind:,
   # {#each}/{@const}, snippets, {#key}, {#await}, <svelte:boundary>, HMR) in
   # Chromium; checks the component tree, graph edges, problems and timeline.
@@ -282,7 +282,7 @@ jobs:
         run: pnpm exec playwright-core install --with-deps chromium
 
       - name: Reactivity e2e
-        run: node scripts/reactivity-e2e.mjs
+        run: node e2e/reactivity.mjs
 
       # the HMR edit is undone by the script
       - name: Repo unchanged

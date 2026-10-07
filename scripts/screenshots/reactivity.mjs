@@ -223,7 +223,7 @@ const manifest = {
   app: 'examples/sample-app (SvelteKit 2, vite.standalone.config.ts) — synthetic demo app, real runtime',
   commit: git('rev-parse', 'HEAD'),
   // Tree hash of the client UI sources the images show.
-  clientTree: git('rev-parse', 'HEAD:packages/vite-devtools-svelte/client/src'),
+  clientTree: git('rev-parse', 'HEAD:packages/client/src'),
   runner: `${process.platform} ${process.arch}, Node ${process.version}`,
   viewport: '1440x900 @2x',
   theme: 'dark',

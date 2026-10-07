@@ -1,6 +1,6 @@
 import fs from 'node:fs'
-import { assertOutboundUrl } from '../security.js'
-import type { OutboundUrlOptions } from '../security.js'
+import { assertOutboundUrl } from '../server/security.js'
+import type { OutboundUrlOptions } from '../server/security.js'
 import type { ApiEndpoint, ApiResponse, RouteInfo } from '../types.js'
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']

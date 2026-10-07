@@ -3,9 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build:client": "pnpm -C packages/vite-devtools-svelte/client build",
+    "build:client": "pnpm -C packages/client build",
     "build:plugin": "pnpm -C packages/vite-devtools-svelte build",
     "build": "pnpm build:plugin && pnpm build:client",
+    "test": "pnpm --recursive --filter './packages/*' run test",
     "dev": "pnpm build && pnpm -C playground dev",
     "dev:ui": "pnpm build && pnpm -C playground dev:ui",
     "lint": "oxlint",
@@ -15,7 +16,7 @@
     "perf:fixture": "node perf/generate-large-app.mjs",
     "perf:bench": "node perf/bench-browser.mjs",
     "perf:noop": "node perf/check-prod-noop.mjs",
-    "e2e:reactivity": "node scripts/reactivity-e2e.mjs",
+    "e2e:reactivity": "node e2e/reactivity.mjs",
     "changeset": "changeset",
     "version": "changeset version",
     "release": "pnpm build && changeset publish"

@@ -43,13 +43,13 @@
       "pinDigests": true
     },
     {
-      "description": "compat/kit3 depends on the packed tarball (compat/.pack), which does not exist in Renovate's checkout, so its lockfile cannot be regenerated from scratch. Skip lock file maintenance there only; dependency updates still apply. Refresh it by hand (compat/README.md).",
-      "matchFileNames": ["compat/kit3/package.json"],
+      "description": "e2e/compat/kit3 depends on the packed tarball (e2e/compat/.pack), which does not exist in Renovate's checkout, so its lockfile cannot be regenerated from scratch. Skip lock file maintenance there only; dependency updates still apply. Refresh it by hand (e2e/compat/README.md).",
+      "matchFileNames": ["e2e/compat/kit3/package.json"],
       "matchUpdateTypes": ["lockFileMaintenance"],
       "enabled": false
     },
     {
-      "description": "examples/sample-app is the SvelteKit 2 compat profile (compat/matrix.json). Keep it on Kit 2: no major updates of Kit or its adapter there; minor/patch still apply.",
+      "description": "examples/sample-app is the SvelteKit 2 compat profile (e2e/compat/matrix.json). Keep it on Kit 2: no major updates of Kit or its adapter there; minor/patch still apply.",
       "matchFileNames": ["examples/sample-app/package.json"],
       "matchPackageNames": ["@sveltejs/kit", "@sveltejs/adapter-auto"],
       "matchUpdateTypes": ["major"],
@@ -76,5 +76,9 @@
     "schedule": ["at any time"]
   },
   "postUpdateOptions": ["pnpmDedupe"],
-  "ignorePaths": ["**/node_modules/**", "**/dist/**", "**/__tests__/fixtures/**"]
+  "ignorePaths": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "packages/vite-devtools-svelte/test/**/fixtures/**"
+  ]
 }

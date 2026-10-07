@@ -58,20 +58,21 @@ const files = raw
   .filter(f => f.path && f.lines >= 0)
 
 // vite-devtools-svelte 固有のカテゴリ分類:
-// - runtime: src/runtime.ts は browser-injected コードで独立してレビューしたいため別カテゴリ
-// - plugin: src/ 配下の他のファイル (plugin.ts / analyzers / types.ts)
-// - tests:  src/__tests__/ 配下
-// - client: client/ 配下 (DevTools UI)
+// - runtime: src/runtime/ は browser-injected コードで独立してレビューしたいため別カテゴリ
+// - plugin: src/ 配下の他のファイル (plugin.ts / server / analyzers / mcp / types.ts)
+// - tests:  test/ 配下と client のテスト
+// - client: packages/client/ 配下 (DevTools UI)
 // - playground / site: デモアプリ
 // - config: ルート直下の package.json / tsconfig / *.config.*
 // - docs:   README / ROADMAP / docs/
 // - other:  その他
 const PKG_PREFIX = 'packages/vite-devtools-svelte/'
 function categoryOf(path) {
-  if (path === `${PKG_PREFIX}src/runtime.ts`) return 'runtime'
-  if (path.startsWith(`${PKG_PREFIX}src/__tests__/`)) return 'tests'
+  if (path.startsWith(`${PKG_PREFIX}src/runtime/`)) return 'runtime'
+  if (path.startsWith(`${PKG_PREFIX}test/`) || /^packages\/client\/.*\.test\.ts$/.test(path))
+    return 'tests'
   if (path.startsWith(`${PKG_PREFIX}src/`)) return 'plugin'
-  if (path.startsWith(`${PKG_PREFIX}client/`)) return 'client'
+  if (path.startsWith('packages/client/')) return 'client'
   if (path.startsWith('playground/')) return 'playground'
   if (path.startsWith('site/')) return 'site'
   if (path.startsWith('docs/') || path === 'README.md' || path === 'ROADMAP.md') return 'docs'

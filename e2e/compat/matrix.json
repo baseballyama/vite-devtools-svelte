@@ -1,0 +1,153 @@
+{
+  "$comment": "Compatibility profiles for e2e/compat (CI job `compat`). Versions are exact and must match the fixture's package.json; update by hand (e2e/compat/README.md). One profile per framework line, not a cross product. `configs` names the Vite config per mode (passed as --config); dock mode on a profile without a dock config sets SVELTE_DEVTOOLS_DOCK=1. `smoke` tells smoke.mjs what to edit (HMR) and which route to check (SSR / load). `status.state` is one of verified (with evidence = CI run id + date), written-not-run, untested; evidence from one profile never counts for another. `smoke.stateChange` = one scripted click (a CSS selector, or {role, name} for an accessible-name lookup) and the component-init $state it must change (seen through MCP after the 200 ms sampling); null = not defined yet → reported NOT RUN, never PASS.",
+  "profiles": [
+    {
+      "id": "plain-svelte",
+      "dir": "examples/plain-svelte",
+      "workspace": true,
+      "framework": "svelte",
+      "modes": ["standalone", "dock"],
+      "configs": {
+        "standalone": "vite.config.ts",
+        "dock": "vite.config.ts"
+      },
+      "versions": {
+        "svelte": "5.57.1",
+        "vite": "8.3.2",
+        "@sveltejs/vite-plugin-svelte": "7.3.1",
+        "@vitejs/devtools": "0.7.6"
+      },
+      "smoke": {
+        "hmr": {
+          "file": "src/App.svelte",
+          "from": "<h1>plain-svelte</h1>",
+          "to": "<h1>plain-svelte (smoke)</h1>",
+          "text": "plain-svelte (smoke)"
+        },
+        "stateChange": {
+          "path": "/",
+          "click": "[data-testid=\"increment\"]",
+          "file": "src/lib/Counter.svelte",
+          "state": "count",
+          "from": 1,
+          "to": 2
+        }
+      },
+      "status": {
+        "state": "written-not-run",
+        "evidence": null
+      }
+    },
+    {
+      "id": "kit2",
+      "dir": "examples/sample-app",
+      "workspace": true,
+      "framework": "kit",
+      "modes": ["standalone", "dock"],
+      "configs": {
+        "standalone": "vite.standalone.config.ts",
+        "dock": "vite.config.ts"
+      },
+      "versions": {
+        "@sveltejs/kit": "2.70.3",
+        "svelte": "5.57.1",
+        "vite": "8.3.2",
+        "@sveltejs/vite-plugin-svelte": "7.3.1",
+        "@vitejs/devtools": "0.7.6"
+      },
+      "smoke": {
+        "hmr": {
+          "file": "src/routes/+page.svelte",
+          "from": "<h1>devtools-shop</h1>",
+          "to": "<h1>devtools-shop (smoke)</h1>",
+          "text": "devtools-shop (smoke)"
+        },
+        "ssr": {
+          "path": "/products",
+          "contains": "<"
+        },
+        "load": {
+          "path": "/products"
+        },
+        "stateChange": {
+          "path": "/",
+          "click": {
+            "role": "button",
+            "name": "一時停止"
+          },
+          "file": "src/lib/components/FpsCanvas.svelte",
+          "state": "running",
+          "from": true,
+          "to": false
+        }
+      },
+      "status": {
+        "state": "written-not-run",
+        "evidence": null
+      }
+    },
+    {
+      "id": "kit3",
+      "dir": "e2e/compat/kit3",
+      "workspace": false,
+      "framework": "kit",
+      "node": ">=22.17",
+      "modes": ["standalone", "dock"],
+      "configs": {
+        "standalone": "vite.config.ts",
+        "dock": "vite.config.ts"
+      },
+      "versions": {
+        "@sveltejs/kit": "3.0.0",
+        "svelte": "5.57.1",
+        "vite": "8.3.2",
+        "@sveltejs/vite-plugin-svelte": "7.3.1",
+        "@sveltejs/adapter-auto": "8.0.0",
+        "@vitejs/devtools": "0.7.6"
+      },
+      "smoke": {
+        "hmr": {
+          "file": "src/routes/+page.svelte",
+          "from": "<h1>kit3 compat</h1>",
+          "to": "<h1>kit3 compat (smoke)</h1>",
+          "text": "kit3 compat (smoke)"
+        },
+        "ssr": {
+          "path": "/",
+          "contains": "kit3 compat"
+        },
+        "load": {
+          "path": "/"
+        },
+        "stateChange": {
+          "path": "/",
+          "click": "[data-testid=\"count-button\"]",
+          "file": "src/routes/+page.svelte",
+          "state": "clicks",
+          "from": 0,
+          "to": 1
+        }
+      },
+      "status": {
+        "state": "verified",
+        "evidence": "CI run 37193781813 (head a42a9e4), 2026-10-04: standalone and dock cells passed"
+      }
+    }
+  ],
+  "existingUnchanged": [
+    {
+      "dir": "examples/sample-app",
+      "note": "Used as the kit2 profile; its vite.config.ts (dock) is unchanged. Standalone uses the additive vite.standalone.config.ts."
+    },
+    {
+      "dir": "examples/strict-csp-app",
+      "kit": "3.0.0",
+      "note": "Existing strict-CSP example, not a compat profile. Built and type-checked in the CI job \"Playground production build\"."
+    },
+    {
+      "dir": "playground",
+      "kit": "3.0.0",
+      "note": "Built and type-checked in the CI job \"Playground production build\"."
+    }
+  ]
+}
