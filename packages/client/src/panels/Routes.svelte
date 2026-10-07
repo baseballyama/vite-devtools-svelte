@@ -5,6 +5,7 @@
   import Highlight from '../components/Highlight.svelte'
   import Inspector from '../components/Inspector.svelte'
   import Panel from '../components/Panel.svelte'
+  import RefreshButton from '../components/RefreshButton.svelte'
   import SearchField from '../components/SearchField.svelte'
   import Segmented from '../components/Segmented.svelte'
   import SplitView from '../components/SplitView.svelte'
@@ -142,13 +143,7 @@
     />
   {/snippet}
   {#snippet actions()}
-    <Button
-      icon="refresh"
-      variant="ghost"
-      label="Rescan routes"
-      disabled={routes.busy}
-      onclick={() => routes.refresh()}
-    />
+    <RefreshButton res={routes} label="Rescan routes" />
   {/snippet}
 
   <SplitView id="routes" open={!!selectedRoute}>
@@ -187,9 +182,7 @@
         {#if routes.loading}
           <EmptyState title="Scanning src/routes…" />
         {:else if routes.error}
-          <EmptyState icon="errors" tone="error" title="Could not read routes"
-            ><p class="mono">{routes.error}</p></EmptyState
-          >
+          <EmptyState title="Could not read routes" error={routes.error} />
         {:else if routes.data.length === 0}
           <EmptyState icon="routes" title="No routes found"
             ><p>

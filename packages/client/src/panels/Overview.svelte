@@ -159,8 +159,7 @@
   {#if project.loading}
     <div class="wrap"><div class="skeleton"></div></div>
   {:else if project.error || !project.data}
-    <EmptyState icon="errors" tone="error" title="Dev server not reachable">
-      <p class="mono">{project.error}</p>
+    <EmptyState title="Dev server not reachable" error={project.error ?? ''}>
       <p>
         This panel needs a running Vite dev server with <code>vite-devtools-svelte</code> installed.
       </p>

@@ -226,8 +226,10 @@
           <PanelHost component={Comp} active={router.current === id} />
           {#snippet failed(error: unknown, reset: () => void)}
             <div class="host" hidden={router.current !== id}>
-              <EmptyState icon="errors" tone="error" title="{panelById(id).label} crashed">
-                <p class="mono">{error instanceof Error ? error.message : String(error)}</p>
+              <EmptyState
+                title="{panelById(id).label} crashed"
+                error={error instanceof Error ? error.message : String(error)}
+              >
                 <Button icon="refresh" onclick={reset}>Reload panel</Button>
               </EmptyState>
             </div>
@@ -236,9 +238,7 @@
       {:else if router.current === id}
         <div class="host">
           {#if loadError[id]}
-            <EmptyState icon="errors" tone="error" title="Could not load panel">
-              <p class="mono">{loadError[id]}</p>
-            </EmptyState>
+            <EmptyState title="Could not load panel" error={loadError[id]} />
           {:else}
             <div class="loading" aria-busy="true" aria-label="Loading panel"></div>
           {/if}

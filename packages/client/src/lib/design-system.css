@@ -282,6 +282,13 @@ textarea.input {
   gap: 6px;
 }
 
+.section-note {
+  margin: 0;
+  padding: 0 14px;
+  color: var(--fg-faint);
+  font-size: var(--fs-sm);
+}
+
 .kv {
   display: grid;
   grid-template-columns: minmax(72px, max-content) 1fr;

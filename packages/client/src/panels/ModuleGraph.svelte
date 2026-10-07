@@ -7,6 +7,7 @@
   import Icon from '../components/Icon.svelte'
   import Inspector from '../components/Inspector.svelte'
   import Panel from '../components/Panel.svelte'
+  import RefreshButton from '../components/RefreshButton.svelte'
   import SearchField from '../components/SearchField.svelte'
   import Segmented from '../components/Segmented.svelte'
   import SplitView from '../components/SplitView.svelte'
@@ -128,13 +129,7 @@
     {/if}
   {/snippet}
   {#snippet actions()}
-    <Button
-      icon="refresh"
-      variant="ghost"
-      label="Refresh module graph"
-      disabled={graph.busy}
-      onclick={() => graph.refresh()}
-    />
+    <RefreshButton res={graph} label="Refresh module graph" />
   {/snippet}
 
   <SplitView id="modules" open={!!current}>
@@ -167,9 +162,7 @@
         {#if graph.loading}
           <EmptyState title="Reading module graph…" />
         {:else if graph.error}
-          <EmptyState icon="errors" tone="error" title="Could not read module graph"
-            ><p class="mono">{graph.error}</p></EmptyState
-          >
+          <EmptyState title="Could not read module graph" error={graph.error} />
         {:else}
           <EmptyState
             icon="modules"

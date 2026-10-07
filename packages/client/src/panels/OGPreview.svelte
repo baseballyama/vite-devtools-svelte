@@ -77,9 +77,7 @@
   {/snippet}
 
   {#if error}
-    <EmptyState icon="errors" tone="error" title="Could not fetch the page"
-      ><p class="mono">{error}</p></EmptyState
-    >
+    <EmptyState title="Could not fetch the page" {error} />
   {:else if !preview}
     <EmptyState icon="og" title="Check how a page unfurls">
       <p>

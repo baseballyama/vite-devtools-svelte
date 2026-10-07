@@ -6,6 +6,7 @@
   import Highlight from '../components/Highlight.svelte'
   import Inspector from '../components/Inspector.svelte'
   import Panel from '../components/Panel.svelte'
+  import RefreshButton from '../components/RefreshButton.svelte'
   import SearchField from '../components/SearchField.svelte'
   import Segmented from '../components/Segmented.svelte'
   import SplitView from '../components/SplitView.svelte'
@@ -99,13 +100,7 @@
     {#if build.data?.timestamp}<span class="stamp"
         >built {new Date(build.data.timestamp).toLocaleString()}</span
       >{/if}
-    <Button
-      icon="refresh"
-      variant="ghost"
-      label="Re-read build output"
-      disabled={build.busy}
-      onclick={() => build.refresh()}
-    />
+    <RefreshButton res={build} label="Re-read build output" />
   {/snippet}
 
   {#if !build.loading && chunks.length === 0}

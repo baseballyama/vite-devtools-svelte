@@ -2,6 +2,7 @@
   import { formatAgo } from '../lib/format.js'
   import type { Resource } from '../lib/resource.svelte.js'
   import Button from './Button.svelte'
+  import RefreshButton from './RefreshButton.svelte'
 
   /** Live/paused toggle + manual refresh for polling resources. */
   let { res, onclear }: { res: Resource<unknown>; onclear?: () => void } = $props()
@@ -24,13 +25,7 @@
   <span class="dot" aria-hidden="true"></span>
   {res.live ? 'Live' : 'Paused'}
 </button>
-<Button
-  icon="refresh"
-  variant="ghost"
-  label="Refresh (updated {formatAgo(res.updatedAt, now)})"
-  disabled={res.busy}
-  onclick={() => res.refresh()}
-/>
+<RefreshButton {res} label="Refresh (updated {formatAgo(res.updatedAt, now)})" />
 {#if onclear}
   <Button icon="trash" variant="ghost" label="Clear recorded data" onclick={onclear} />
 {/if}

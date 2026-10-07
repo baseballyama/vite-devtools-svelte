@@ -1,30 +1,21 @@
 <script lang="ts">
   import { untrack } from 'svelte'
 
-  import Badge from '../components/Badge.svelte'
   import Button from '../components/Button.svelte'
   import CaptureNotice from '../components/CaptureNotice.svelte'
   import DataTable from '../components/DataTable.svelte'
   import EmptyState from '../components/EmptyState.svelte'
   import GraphView from '../components/GraphView.svelte'
   import Highlight from '../components/Highlight.svelte'
-  import Inspector from '../components/Inspector.svelte'
   import LiveControls from '../components/LiveControls.svelte'
   import Panel from '../components/Panel.svelte'
   import SearchField from '../components/SearchField.svelte'
   import Segmented from '../components/Segmented.svelte'
   import SplitView from '../components/SplitView.svelte'
-  import type { Column, SortState, TableRowState, Tone } from '../components/types.js'
+  import type { Column, SortState, TableRowState } from '../components/types.js'
   import { captureInfo } from '../lib/capture.svelte.js'
   import { groupBy } from '../lib/collections.js'
-  import {
-    componentName,
-    formatClock,
-    formatMs,
-    formatValue,
-    prettyValue,
-    shortPath,
-  } from '../lib/format.js'
+  import { componentName, formatClock } from '../lib/format.js'
   import { haystack, haystackMatcher } from '../lib/match.js'
   import { persisted } from '../lib/persisted.svelte.js'
   import { reactiveScope } from '../lib/reactive-selection.svelte.js'
@@ -34,26 +25,28 @@
     fetchGraph,
     fetchSummary,
     fileNeighbourhood,
-    groupByFile,
+    hotStates,
     isEpochChanged,
-    isValueSummary,
-    nodeCount,
     nodeValueText,
     sameGraph,
     sameValue,
+    staleLabel,
+    totalLabel,
   } from '../lib/reactive.js'
   import { resource } from '../lib/resource.svelte.js'
   import { router } from '../lib/router.svelte.js'
-  import { openReactiveInEditor } from '../lib/rpc.js'
-  import { getLiveComponentsMeta, getStateTimelineDelta } from '../lib/rpc.js'
+  import { getStateTimelineDelta, openReactiveInEditor } from '../lib/rpc.js'
   import type {
     ReactiveGraphResult,
     ReactiveNode,
     ReactiveSummary,
-    ReactiveSummaryRow,
+    StateTimelineEntry,
   } from '../lib/types.js'
-  import type { StateTimelineEntry } from '../lib/types.js'
   import { datasetVersion } from '../lib/versions.js'
+  import ComponentsOverview from './reactive/ComponentsOverview.svelte'
+  import HotStates from './reactive/HotStates.svelte'
+  import KindBadge from './reactive/KindBadge.svelte'
+  import SignalInspector from './reactive/SignalInspector.svelte'
 
   /*
    * Information design (docs/ui-status.md "UI information design v2",
@@ -96,92 +89,9 @@
   })
 
   let group = $state<'file' | 'instance'>('file')
-  let summarySort = $state<SortState | null>({ id: 'changes', desc: true })
-  let summarySelected = $state<string | null>(null)
 
-  interface OverviewRow {
-    key: string
-    file: string
-    instances: ReactiveSummaryRow[]
-    nodes: ReactiveSummaryRow['nodes']
-    changes: number
-    renders: number
-    renderMs: number
-  }
-
-  const overviewRows = $derived.by<OverviewRow[]>(() => {
-    const rows = summary.data?.rows ?? []
-    if (group === 'file') return groupByFile(rows).map(g => ({ key: g.file, ...g }))
-    return rows.map(r => ({
-      key: `#${r.componentId}`,
-      file: r.file,
-      instances: [r],
-      nodes: r.nodes,
-      changes: r.changes,
-      renders: r.renders,
-      renderMs: r.renderMs,
-    }))
-  })
-  const overviewCurrent = $derived(
-    summarySelected ? (overviewRows.find(r => r.key === summarySelected) ?? null) : null,
-  )
-
-  const overviewColumns: Column<OverviewRow>[] = [
-    {
-      id: 'component',
-      label: 'Component',
-      width: 'minmax(0, 1fr)',
-      sort: (a, b) => a.file.localeCompare(b.file),
-    },
-    {
-      id: 'instances',
-      label: 'Inst.',
-      width: '52px',
-      align: 'end',
-      descFirst: true,
-      minWidth: 560,
-      sort: (a, b) => a.instances.length - b.instances.length,
-    },
-    {
-      id: 'nodes',
-      label: 'Signals',
-      width: '72px',
-      align: 'end',
-      descFirst: true,
-      minWidth: 640,
-      sort: (a, b) => nodeCount(a.nodes) - nodeCount(b.nodes),
-    },
-    {
-      id: 'changes',
-      label: 'Changes',
-      width: '84px',
-      align: 'end',
-      descFirst: true,
-      sort: (a, b) => a.changes - b.changes,
-    },
-    {
-      id: 'renders',
-      label: 'Renders',
-      width: '72px',
-      align: 'end',
-      descFirst: true,
-      sort: (a, b) => a.renders - b.renders,
-    },
-    {
-      id: 'renderMs',
-      label: 'Render time',
-      width: '96px',
-      align: 'end',
-      descFirst: true,
-      minWidth: 720,
-      sort: (a, b) => a.renderMs - b.renderMs,
-    },
-  ]
-
-  // Hot states: the server's timeline buffer grouped by signal. It is the
-  // latest changes across all signals, sampled every 200 ms, so counts are
-  // "seen in the buffer", not totals or rates. Read from the server buffer
-  // only (the app is not asked).
+  // Hot states: the server's timeline buffer grouped by signal (read from the
+  // server buffer only; the app is not asked).
   const timeline = resource<StateTimelineEntry[]>(
     async () => (await getStateTimelineDelta(undefined)).changes,
     {
@@ -192,101 +102,13 @@
     },
   )
 
-  interface HotState {
-    key: string
-    name: string
-    file: string
-    componentId: number | null
-    changes: number
-    last: StateTimelineEntry
-  }
-
-  /** One state's timeline entries (non-empty, buffer order) folded into a row. */
-  function hotState(id: string, [first, ...rest]: StateTimelineEntry[]): HotState {
-    // Node ids are `<componentId>:<name>` (runtime trackState).
-    const cid = Number(id.slice(0, id.indexOf(':')))
-    return {
-      key: id,
-      name: first!.name,
-      file: first!.componentFile,
-      componentId: Number.isInteger(cid) ? cid : null,
-      changes: rest.length + 1,
-      // Latest write; the first one wins a tie, like the buffer order.
-      last: rest.reduce((last, c) => (c.seq > last.seq ? c : last), first!),
-    }
-  }
-
-  const hotStates = $derived(
-    [...groupBy(timeline.data, c => c.id)].map(([id, entries]) => hotState(id, entries)),
-  )
+  const states = $derived(hotStates(timeline.data))
   // Baseline disclosure for the States view (capture info of the timeline).
   const statesCapture = captureInfo(
     SUMMARY_POLL_MS,
     () => tab === 'overview' && overviewOf === 'states',
   )
   const statesBaseline = $derived(baselineNotice(statesCapture.data.stateTimeline?.baseline))
-  const bufferSince = $derived(timeline.data.length ? timeline.data[0]!.timestamp : null)
-  let stateSort = $state<SortState | null>({ id: 'changes', desc: true })
-  let stateSelected = $state<string | null>(null)
-
-  const stateColumns: Column<HotState>[] = [
-    {
-      id: 'name',
-      label: 'State',
-      width: 'minmax(120px, 1fr)',
-      sort: (a, b) => a.name.localeCompare(b.name),
-    },
-    {
-      id: 'component',
-      label: 'Component',
-      width: 'minmax(0, 1fr)',
-      minWidth: 560,
-      sort: (a, b) => a.file.localeCompare(b.file),
-    },
-    {
-      id: 'changes',
-      label: 'Changes',
-      width: '84px',
-      align: 'end',
-      descFirst: true,
-      sort: (a, b) => a.changes - b.changes,
-    },
-    { id: 'value', label: 'Last value', width: 'minmax(0, 1fr)', minWidth: 680 },
-    {
-      id: 'at',
-      label: 'Last seen',
-      width: '96px',
-      align: 'end',
-      descFirst: true,
-      sort: (a, b) => a.last.seq - b.last.seq,
-    },
-  ]
-
-  // Timeline entries carry no page-load id, so the selection takes the served
-  // epoch at the moment of the click; the server refuses the scoped request if
-  // it no longer matches (staleReason 'epoch-changed').
-  async function selectState(h: HotState) {
-    if (h.componentId === null) return
-    const epoch = (await getLiveComponentsMeta().catch(() => null))?.epoch
-    if (!epoch) return
-    reactiveScope.set({
-      componentId: h.componentId,
-      epoch,
-      label: `<${componentName(h.file)}>`,
-      file: h.file,
-    })
-  }
-
-  /** Scoped selections need the page load the id belongs to; without one there is nothing to validate. */
-  function select(r: ReactiveSummaryRow, epoch: string | null) {
-    if (!epoch) return
-    reactiveScope.set({
-      componentId: r.componentId,
-      epoch,
-      label: `<${componentName(r.file)}>`,
-      file: r.file,
-    })
-  }
 
   // --- Graph (component / full) ------------------------------------------
 
@@ -297,15 +119,17 @@
 
   /** Which graph the current tab asks for: an instance id, `null` = whole app, `undefined` = none. */
   const request = $derived<number | null | undefined>(
-    tab === 'full' ? null : tab === 'local' && scope?.epoch ? scope.componentId : undefined,
+    tab === 'full' ? null : tab === 'local' && scope ? scope.componentId : undefined,
   )
 
   const graph = resource<ReactiveGraphResult>(
     async () => {
+      // A component request implies a scope (see `request`).
       const want = untrack(() => request)
-      const epoch = untrack(() => scope?.epoch)
-      if (want === undefined || (want !== null && !epoch)) return EMPTY_GRAPH
-      const g = await fetchGraph(want === null ? null : { componentId: want, epoch: epoch! })
+      if (want === undefined) return EMPTY_GRAPH
+      const g = await fetchGraph(
+        want === null ? null : { componentId: want, epoch: untrack(() => scope!.epoch) },
+      )
       const valued = g.nodes.filter(n => n.value !== undefined)
       const diff = new Set(
         valued
@@ -359,7 +183,7 @@
   /** Ids restart per page load: a scope from another epoch would point at a different instance. */
   const epochMismatch = $derived(
     tab === 'local' &&
-      !!scope?.epoch &&
+      !!scope &&
       (isEpochChanged(graph.data) || (!!graph.data.epoch && graph.data.epoch !== scope.epoch)),
   )
   /** A reply for another request (still loading after a switch) is not shown. */
@@ -432,16 +256,6 @@
     return c
   })
 
-  const tones: Record<ReactiveNode['type'], Tone> = {
-    state: 'blue',
-    derived: 'green',
-    effect: 'red',
-    template: 'purple',
-  }
-  // 'template' is the synthetic node for a component's markup (all reads
-  // from {expr}, attributes, block conditions and <svelte:head>)
-  const kindLabel = (t: ReactiveNode['type']) => (t === 'template' ? 'markup' : `$${t}`)
-
   const columns: Column<ReactiveNode>[] = [
     { id: 'type', label: 'Kind', width: '68px', sort: (a, b) => a.type.localeCompare(b.type) },
     {
@@ -482,26 +296,13 @@
       writeCause: false,
     },
   )
-  const totalLabel = (n: number | null | undefined) => (n == null ? 'unknown' : n.toLocaleString())
-  const staleLabel = (s?: { stale?: boolean; staleReason?: string } | null) =>
-    s?.stale
-      ? s.staleReason === 'no-runtime'
-        ? 'no app page is connected'
-        : 'the app did not answer in time; showing the previous reply'
-      : null
 
   function open(n: ReactiveNode) {
     openReactiveInEditor(n.componentFile, n.name, n.type).catch(() => {})
   }
 
   function scopeTo(n: ReactiveNode) {
-    if (!data.epoch) return
-    reactiveScope.set({
-      componentId: n.componentId,
-      epoch: data.epoch,
-      label: `<${componentName(n.componentFile)}>`,
-      file: n.componentFile,
-    })
+    if (data.epoch) reactiveScope.scopeTo(n.componentId, n.componentFile, data.epoch)
   }
 
   function clearScope() {
@@ -515,7 +316,7 @@
   count={tab !== 'overview'
     ? data.nodes.length
     : overviewOf === 'states'
-      ? hotStates.length
+      ? states.length
       : (summary.data?.components.total ?? undefined)}
 >
   {#snippet toolbar()}
@@ -612,7 +413,11 @@
   {/snippet}
 
   {#if tab === 'overview'}
-    {@render overview()}
+    {#if overviewOf === 'states'}
+      <HotStates {timeline} {states} baseline={statesBaseline} />
+    {:else}
+      <ComponentsOverview {summary} {group} onfullgraph={() => (tab = 'full')} />
+    {/if}
   {:else if tab === 'local' && !scope}
     <EmptyState icon="reactive" title="Pick a component">
       <p>
@@ -624,14 +429,6 @@
           >Components</button
         > inspector. Only that component's signals and the signals they are directly linked to are loaded.
       </p>
-    </EmptyState>
-  {:else if tab === 'local' && scope && !scope.epoch}
-    <EmptyState icon="warning" title="This selection has no page-load id">
-      <p>
-        Component ids are only valid within one page load. Pick {scope.label} again in Components once
-        the tree has refreshed.
-      </p>
-      <Button icon="close" onclick={clearScope}>Clear selection</Button>
     </EmptyState>
   {:else if epochMismatch}
     <EmptyState icon="warning" title="The app page reloaded">
@@ -645,217 +442,6 @@
     {@render local()}
   {/if}
 </Panel>
-
-{#snippet overview()}
-  {#if overviewOf === 'states'}
-    {@render hotStatesView()}
-  {:else}
-    {@render componentsOverview()}
-  {/if}
-{/snippet}
-
-{#snippet componentsOverview()}
-  {@const s = summary.data}
-  {#if !s && summary.error}
-    <EmptyState icon="warning" title="Overview not available">
-      <p>
-        The dev server did not return per-component activity ({summary.error}). Pick a component in
-        Components (Show reactivity) or open the full graph.
-      </p>
-      <Button icon="graph" onclick={() => (tab = 'full')}>Full graph</Button>
-    </EmptyState>
-  {:else if !s}
-    <EmptyState title="Reading activity…" />
-  {:else}
-    <div class="overview">
-      <!-- role="group": `aria-label` is ignored on a role-less <dl>. -->
-      <dl class="record" role="group" aria-label="What this overview covers">
-        <div>
-          <dt>Window</dt>
-          <dd>
-            last {Math.round(s.window.ms / 1000)} s · sampled while active for {Math.round(
-              s.window.sampledActiveMs / 1000,
-            )} s
-          </dd>
-        </div>
-        <div>
-          <dt>Changes</dt>
-          <dd>$state sampled every 200 ms; several writes within one sample count once</dd>
-        </div>
-        <div>
-          <dt>Coverage</dt>
-          <dd>
-            state created during component init and in <code>.svelte.js/.ts</code> module bodies;
-            reads from the markup appear as the component's <em>markup</em> node
-          </dd>
-        </div>
-        <div>
-          <dt>Components</dt>
-          <dd>
-            {s.components.withActivity.toLocaleString()} active of {totalLabel(s.components.total)} registered
-          </dd>
-        </div>
-        <div>
-          <dt>Not available yet</dt>
-          <dd>
-            {[
-              !s.capabilities.valueInspection && 'full values',
-              !s.capabilities.signalHistory && 'per-signal history',
-              !s.capabilities.writeCause && 'update cause',
-            ]
-              .filter(Boolean)
-              .join(', ') || 'none'}
-            (not reported by this dev server)
-          </dd>
-        </div>
-        {#if baselineNotice(s.baseline)}<div class="warn">
-            <dt>Baseline</dt>
-            <dd>{baselineNotice(s.baseline)}</dd>
-          </div>{/if}
-        {#if staleLabel(s)}<div class="warn">
-            <dt>Stale</dt>
-            <dd>{staleLabel(s)}</dd>
-          </div>{/if}
-      </dl>
-      <div class="table">
-        <SplitView id="reactive-overview" open={!!overviewCurrent}>
-          <DataTable
-            items={overviewRows}
-            columns={overviewColumns}
-            getKey={(r: OverviewRow) => r.key}
-            bind:sort={summarySort}
-            bind:selected={summarySelected}
-            label="Most active components"
-            onactivate={(r: OverviewRow) =>
-              r.instances.length === 1 && select(r.instances[0]!, s.epoch)}
-          >
-            {#snippet row(r: OverviewRow, { visible }: TableRowState)}
-              <span class="truncate">
-                <span class="mono">{componentName(r.file)}</span>
-                {#if group === 'instance'}<span class="faint num"
-                    >{` #${r.instances[0]!.componentId}`}</span
-                  >{/if}
-              </span>
-              {#if visible.has('instances')}<span class="end num">{r.instances.length}</span>{/if}
-              {#if visible.has('nodes')}
-                <span
-                  class="end num faint"
-                  title="registered: {r.nodes.state} $state · {r.nodes.derived} $derived · {r.nodes
-                    .effect} $effect">{nodeCount(r.nodes)}</span
-                >
-              {/if}
-              <span
-                class="end num"
-                title="at least this many changes in the window (sampled every 200 ms); not a rate"
-                >≥ {r.changes.toLocaleString()}</span
-              >
-              <span class="end num">{r.renders.toLocaleString()}</span>
-              {#if visible.has('renderMs')}<span class="end num faint">{formatMs(r.renderMs)}</span
-                >{/if}
-            {/snippet}
-            {#snippet empty()}<EmptyState
-                icon="reactive"
-                title="No component was active in the window"
-              />{/snippet}
-          </DataTable>
-          {#snippet aside()}
-            {#if overviewCurrent}
-              <Inspector
-                title="<{componentName(overviewCurrent.file)}>"
-                subtitle={shortPath(overviewCurrent.file, 3)}
-                onclose={() => (summarySelected = null)}
-              >
-                <h3 class="section-title">
-                  Listed instances <span class="num">{overviewCurrent.instances.length}</span>
-                </h3>
-                <ul class="link-list">
-                  {#each overviewCurrent.instances as r (r.componentId)}
-                    <li>
-                      <button type="button" disabled={!s.epoch} onclick={() => select(r, s.epoch)}>
-                        <span class="mono">#{r.componentId}</span>
-                        <span class="sub"
-                          >≥ {r.changes.toLocaleString()} changes · {r.renders.toLocaleString()} renders</span
-                        >
-                      </button>
-                    </li>
-                  {/each}
-                </ul>
-                <p class="note">
-                  {s.epoch
-                    ? 'Select an instance to load its signals and the signals they are directly linked to.'
-                    : 'The dev server reported no page-load id, so instances cannot be selected here; use Show reactivity in Components.'}
-                </p>
-              </Inspector>
-            {/if}
-          {/snippet}
-        </SplitView>
-      </div>
-      <p class="foot">
-        Listed: {s.rows.length.toLocaleString()}
-        {s.rows.length === 1 ? 'component' : 'components'} ({s.truncated
-          ? `top ${s.rows.length} of ${s.components.withActivity.toLocaleString()} active`
-          : 'all active'}).
-        {#if s.other}Other: {s.other.components.toLocaleString()} components with {s.other.nodes.toLocaleString()}
-          signals.{:else}Other: unknown.{/if}
-        Total registered: {totalLabel(s.components.total)}. Counts restart when the app page
-        reloads.
-      </p>
-    </div>
-  {/if}
-{/snippet}
-
-{#snippet hotStatesView()}
-  {#if !timeline.data.length && timeline.error}
-    <EmptyState icon="warning" title="State timeline not available">
-      <p>The dev server did not return the timeline buffer ({timeline.error}).</p>
-    </EmptyState>
-  {:else}
-    <div class="overview">
-      {#if statesBaseline}<p class="baseline" role="status">{statesBaseline}</p>{/if}
-      <div class="table">
-        <DataTable
-          items={hotStates}
-          columns={stateColumns}
-          getKey={(h: HotState) => h.key}
-          bind:sort={stateSort}
-          bind:selected={stateSelected}
-          label="Most changed states in the timeline buffer"
-          onactivate={selectState}
-        >
-          {#snippet row(h: HotState, { visible }: TableRowState)}
-            <span class="truncate mono name">{h.name}</span>
-            {#if visible.has('component')}<span class="truncate muted"
-                >{componentName(h.file)}{#if h.componentId !== null}<span class="faint num"
-                    >{` #${h.componentId}`}</span
-                  >{/if}</span
-              >{/if}
-            <span
-              class="end num"
-              title="changes of this state in the buffer (sampled every 200 ms); not a total or a rate"
-              >≥ {h.changes.toLocaleString()}</span
-            >
-            {#if visible.has('value')}<span class="truncate mono value"
-                >{formatValue(h.last.newValue, 80)}</span
-              >{/if}
-            <span class="end num faint">{formatClock(h.last.timestamp)}</span>
-          {/snippet}
-          {#snippet empty()}<EmptyState
-              icon="timeline"
-              title={timeline.loading ? 'Reading the timeline…' : 'No $state changes in the buffer'}
-            />{/snippet}
-        </DataTable>
-      </div>
-      <p class="foot">
-        From the State timeline buffer: the latest {timeline.data.length.toLocaleString()} sampled changes
-        (every 200 ms) across all signals, since
-        {bufferSince === null ? 'unknown (buffer empty)' : formatClock(bufferSince)}. Older changes
-        and signals that changed less recently may be missing; counts are not totals or rates.
-        Activate a row to open its component.
-        {#if timeline.error}Last refresh failed ({timeline.error}); showing the previous buffer.{/if}
-      </p>
-    </div>
-  {/if}
-{/snippet}
 
 {#snippet local()}
   <SplitView id="reactive" open={!!current}>
@@ -913,10 +499,7 @@
             onactivate={open}
           >
             {#snippet row(n: ReactiveNode, { visible }: TableRowState)}
-              <span
-                ><Badge tone={tones[n.type]}>{n.type === 'template' ? 'markup' : n.type}</Badge
-                ></span
-              >
+              <span><KindBadge type={n.type} /></span>
               <span class="truncate mono name" class:flash={changed.has(n.id)}
                 ><Highlight text={n.name} {query} /></span
               >
@@ -938,103 +521,23 @@
     </div>
     {#snippet aside()}
       {#if current}
-        <Inspector
-          title={current.name}
-          subtitle={shortPath(current.componentFile, 3)}
+        <SignalInspector
+          node={current}
+          {byId}
+          deps={links.deps.get(current.id) ?? []}
+          dependents={links.dependents.get(current.id) ?? []}
+          flash={changed.has(current.id)}
+          {capabilities}
+          scopedTo={tab === 'local' && scope ? scope.componentId : null}
+          canScope={!!data.epoch}
+          onselect={(id: string) => (selected = id)}
+          onopen={open}
+          onscope={scopeTo}
           onclose={() => (selected = null)}
-        >
-          {#snippet badges()}
-            <Badge tone={tones[current.type]}>{kindLabel(current.type)}</Badge>
-            <Badge>component #{current.componentId}</Badge>
-          {/snippet}
-          {#snippet actions()}
-            <Button icon="editor" onclick={() => open(current)}
-              >{current.type === 'template'
-                ? 'Open component'
-                : 'Go to definition (by name)'}</Button
-            >
-            {#if (tab === 'full' || current.componentId !== scope?.componentId) && data.epoch}
-              <Button icon="reactive" onclick={() => scopeTo(current)}>Show this component</Button>
-            {/if}
-          {/snippet}
-          {#if current.type === 'template'}
-            <p class="none">
-              All reads from this component's markup: <code>{'{expressions}'}</code>, attributes,
-              block conditions and <code>&lt;svelte:head&gt;</code>.
-            </p>
-          {/if}
-          {#if current.unevaluated}
-            <h3 class="section-title">Current value</h3>
-            <p class="none">
-              Not evaluated yet: nothing has read this $derived so far (Svelte computes deriveds on
-              first read).
-            </p>
-          {/if}
-          {#if current.value !== undefined}
-            <h3 class="section-title">Current value</h3>
-            <pre class="code-block" class:flash={changed.has(current.id)}>{isValueSummary(
-                current.value,
-              )
-                ? current.value
-                : prettyValue(current.value)}</pre>
-            {#if !capabilities.valueInspection && isValueSummary(current.value)}
-              <p class="none">
-                Full value: not available yet. This dev server reports only a summary for objects
-                and arrays.
-              </p>
-            {/if}
-          {/if}
-          <h3 class="section-title">Cause</h3>
-          <p class="none">
-            {capabilities.writeCause
-              ? 'Recorded writes appear here.'
-              : 'Not recorded. This dev server does not capture which write changed a signal; the links below are dependencies, not causes.'}
-          </p>
-          {@render rel('Reads (can affect this)', links.deps.get(current.id) ?? [])}
-          {@render rel('Can affect', links.dependents.get(current.id) ?? [])}
-          <h3 class="section-title">History</h3>
-          <p class="none">
-            {#if current.type === 'state'}
-              {#if !capabilities.signalHistory}Per-signal history: not available yet.{/if}
-              Sampled changes of all signals (latest 500) are in the
-              <button type="button" class="link" onclick={() => router.go('timeline')}
-                >State timeline</button
-              >.
-            {:else}
-              Not recorded for {kindLabel(current.type)}.
-            {/if}
-          </p>
-        </Inspector>
+        />
       {/if}
     {/snippet}
   </SplitView>
-{/snippet}
-
-{#snippet rel(title: string, ids: string[])}
-  <h3 class="section-title">{title} <span class="num">{ids.length}</span></h3>
-  {#if ids.length}
-    <ul class="link-list">
-      {#each ids as id (id)}
-        {@const n = byId.get(id)}
-        {#if n}
-          <li>
-            <button type="button" onclick={() => (selected = id)}>
-              <Badge tone={tones[n.type]}>{n.type === 'template' ? 'markup' : n.type}</Badge>
-              <span class="truncate mono">{n.name}</span>
-              <span class="sub truncate"
-                >{componentName(n.componentFile)}{tab === 'local' &&
-                n.componentId !== scope?.componentId
-                  ? ' · other component'
-                  : ''}</span
-              >
-            </button>
-          </li>
-        {/if}
-      {/each}
-    </ul>
-  {:else}
-    <p class="none">None</p>
-  {/if}
 {/snippet}
 
 <style>
@@ -1046,62 +549,22 @@
     color: var(--fg-faint);
     white-space: nowrap;
   }
-  .overview,
   .local {
     display: flex;
     flex-direction: column;
     height: 100%;
     min-height: 0;
   }
-  .table,
   .body {
     flex: 1;
     min-height: 0;
   }
-  .record {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px 20px;
-    margin: 0;
-    padding: 8px 14px;
-    border-bottom: 1px solid var(--border);
-    font-size: var(--fs-xs);
-  }
-  .record div {
-    display: flex;
-    gap: 6px;
-  }
-  .record dt {
-    color: var(--fg-faint);
-  }
-  .record dd {
-    margin: 0;
-    color: var(--fg-muted);
-  }
-  .record .warn dd {
-    color: var(--yellow);
-  }
-  .foot,
-  .legend,
-  .note {
-    margin: 0;
-    padding: 6px 14px;
-    font-size: var(--fs-xs);
-    color: var(--fg-faint);
-  }
-  .foot {
-    border-top: 1px solid var(--border);
-  }
-  .baseline {
-    margin: 0;
-    padding: 6px 14px;
-    border-bottom: 1px solid var(--border);
-    background: var(--yellow-bg);
-    color: var(--yellow);
-    font-size: var(--fs-xs);
-  }
   .legend {
+    margin: 0;
+    padding: 6px 14px;
     border-bottom: 1px solid var(--border);
+    font-size: var(--fs-xs);
+    color: var(--fg-faint);
   }
   .scope-bar {
     display: flex;
@@ -1140,11 +603,5 @@
       background: var(--yellow-bg);
       color: var(--yellow);
     }
-  }
-  .none {
-    margin: 0;
-    padding: 0 14px;
-    color: var(--fg-faint);
-    font-size: var(--fs-sm);
   }
 </style>

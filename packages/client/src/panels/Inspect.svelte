@@ -134,9 +134,7 @@
   <SplitView id="inspect" side="start" initial={280} min={180} open>
     <div class="code" class:stacked bind:clientWidth={codeWidth} aria-busy={loading}>
       {#if error}
-        <EmptyState icon="errors" tone="error" title="Could not compile this file"
-          ><p class="mono">{error}</p></EmptyState
-        >
+        <EmptyState title="Could not compile this file" {error} />
       {:else if !result}
         <EmptyState icon="inspect" title={loading ? 'Compiling…' : 'Pick a component'}>
           {#if !loading}<p>
