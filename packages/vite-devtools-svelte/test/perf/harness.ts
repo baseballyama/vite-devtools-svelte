@@ -23,6 +23,8 @@ export interface Harness {
   flushTimers: () => void
   /** deliver a server → runtime hot event */
   emit: (event: string, data?: unknown) => void
+  /** dispatch a window event (error, unhandledrejection) to the runtime's listeners */
+  dispatchWindow: (type: string, event: unknown) => void
   /** delays (ms) of currently pending setTimeout timers */
   pendingDelays: () => number[]
   document: { visibilityState: 'visible' | 'hidden'; dispatch: () => void }
@@ -58,8 +60,11 @@ export function createRuntime(
       handlers.set(event, [...(handlers.get(event) ?? []), cb])
     },
   }
+  const windowListeners = new Map<string, Array<(event: unknown) => void>>()
   const window: Record<string, any> = {
-    addEventListener() {},
+    addEventListener(type: string, cb: (event: unknown) => void) {
+      windowListeners.set(type, [...(windowListeners.get(type) ?? []), cb])
+    },
     removeEventListener() {},
   }
   const visibilityListeners: Array<() => void> = []
@@ -134,7 +139,11 @@ export function createRuntime(
   if (opts.active !== false) {
     emit('svelte-devtools:subscription', { active: true, componentDeltas: opts.deltas !== false })
   }
+  const dispatchWindow = (type: string, event: unknown) => {
+    for (const cb of windowListeners.get(type) ?? []) cb(event)
+  }
   return {
+    dispatchWindow,
     dt: window.__SVELTE_DEVTOOLS__,
     window,
     sent,
@@ -171,7 +180,7 @@ export function mountList(h: Harness, n: number, statesPer = 2) {
     const derived = { v: i * 2, deps: [signals.at(-1)] }
     signals.push(derived)
     dt.trackDerived(derived, 'd', id)
-    dt.trackEffect({ deps: [derived] }, '$effect', id)
+    dt.bindEffect(dt.trackUserEffect('effect', id, null), { deps: [derived], fn() {} })
     dt.endInit(id)
     dt.registered(id)
     ids.push(id)
