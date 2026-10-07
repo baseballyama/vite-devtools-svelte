@@ -7,6 +7,7 @@
  * Never bundled: only `dev/vite.mock.config.ts` imports it.
  */
 import { compile } from 'svelte/compiler'
+
 import type {
   ComponentInstance,
   ComponentRelation,
@@ -15,10 +16,11 @@ import type {
   RenderProfile,
   RouteInfo,
   StateChange,
-} from '../../src/types.js'
+} from '../src/lib/types.js'
 
 function rng(seed: number) {
   return () => {
+    // oxlint-disable-next-line unicorn/prefer-math-trunc -- `| 0` is the int32 wrap mulberry32 relies on; Math.trunc would not wrap
     seed = (seed + 0x6d2b79f5) | 0
     let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
@@ -33,10 +35,17 @@ const WORDS =
 
 export const MOCK_ASSET_BASE = '/__mock-static/'
 
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+
+/** Echo side-effect RPCs (open-in-editor, …) to the dev server terminal. */
+function log(...args: unknown[]): void {
+  // oxlint-disable-next-line no-console -- the dev server terminal is this mock's only output for side-effect calls
+  console.log('[mock]', ...args)
+}
+
 export function createMockBackend(scale = 5000) {
   const r = rng(42)
-  const pick = <T>(a: readonly T[]) => a[Math.floor(r() * a.length)]
-  const cap = (s: string) => s[0].toUpperCase() + s.slice(1)
+  const pick = <T>(a: readonly T[]) => a.at(Math.floor(r() * a.length))!
   const root = '/Users/dev/acme-store'
 
   // ---- component files & relations
@@ -59,7 +68,7 @@ export function createMockBackend(scale = 5000) {
     ...f,
     imports: Array.from(
       { length: Math.floor(r() * 6) },
-      () => files[Math.min(files.length - 1, i + 1 + Math.floor(r() * 40))].file,
+      () => files.at(Math.min(files.length - 1, i + 1 + Math.floor(r() * 40)))!.file,
     ).filter((v, j, a) => a.indexOf(v) === j && v !== f.file),
   }))
 
@@ -137,7 +146,11 @@ export function createMockBackend(scale = 5000) {
     const hasPage = !hasEndpoint || r() < 0.3
     const params = segs
       .filter(s => s.startsWith('['))
-      .map(s => ({ name: s.replace(/[[\].]/g, ''), optional: false, rest: s.startsWith('[...') }))
+      .map(s => ({
+        name: s.replaceAll(/[[\].]/g, ''),
+        optional: false,
+        rest: s.startsWith('[...'),
+      }))
     const dir = `src/routes${id}`
     const filesR: RouteInfo['files'] = []
     if (hasPage) filesR.push({ type: 'page', path: `${dir}/+page.svelte` })
@@ -149,7 +162,8 @@ export function createMockBackend(scale = 5000) {
     routes.push({
       id,
       path,
-      pattern: '^' + path.replace(/\[\.\.\.\w+\]/g, '(.*)').replace(/\[\w+\]/g, '([^/]+?)') + '/?$',
+      pattern:
+        '^' + path.replaceAll(/\[\.\.\.\w+\]/g, '(.*)').replaceAll(/\[\w+\]/g, '([^/]+?)') + '/?$',
       segments: segs,
       hasPage,
       hasLayout: filesR.some(f => f.type === 'layout'),
@@ -171,7 +185,7 @@ export function createMockBackend(scale = 5000) {
     const t = i < files.length ? 'svelte' : pick(types)
     const id =
       i < files.length
-        ? files[i].file
+        ? files.at(i)!.file
         : `${pick(['src/lib', 'src/lib/stores', 'node_modules/.vite/deps', 'src/lib/utils'])}/${pick(WORDS)}-${i}.${t === 'other' ? 'json' : t}`
     modules.push({
       id: '/' + id,
@@ -182,13 +196,13 @@ export function createMockBackend(scale = 5000) {
       size: Math.floor(200 + r() * r() * 90000),
     })
   }
-  for (let i = 0; i < modules.length; i++) {
+  for (const [i, m] of modules.entries()) {
     const k = Math.floor(r() * 7)
     for (let j = 0; j < k; j++) {
-      const t = modules[Math.min(modules.length - 1, i + 1 + Math.floor(r() * 200))]
-      if (t === modules[i] || modules[i].imports.includes(t.id)) continue
-      modules[i].imports.push(t.id)
-      t.importedBy.push(modules[i].id)
+      const t = modules.at(Math.min(modules.length - 1, i + 1 + Math.floor(r() * 200)))!
+      if (t === m || m.imports.includes(t.id)) continue
+      m.imports.push(t.id)
+      t.importedBy.push(m.id)
     }
   }
   const cycles: string[][] = []
@@ -234,7 +248,7 @@ export function createMockBackend(scale = 5000) {
   // the Reactivity auto-pause above 2 000); default ≈ 60 components' worth.
   const GRAPH_SCALE = Number(process.env.MOCK_GRAPH_SCALE) || 0
   for (let c = 0; GRAPH_SCALE ? rnodes.length < GRAPH_SCALE : c < Math.min(60, files.length); c++) {
-    const f = files[c % files.length]
+    const f = files.at(c % files.length)!
     const lap = Math.floor(c / files.length)
     const base = rnodes.length
     const k = 2 + Math.floor(r() * 5)
@@ -252,7 +266,10 @@ export function createMockBackend(scale = 5000) {
         value: type === 'effect' ? undefined : Math.floor(r() * 100),
       })
       if (j > 0)
-        redges.push({ from: rnodes[base + Math.floor(r() * j)].id, to: rnodes[base + j].id })
+        redges.push({
+          from: rnodes.at(base + Math.floor(r() * j))!.id,
+          to: rnodes.at(base + j)!.id,
+        })
     }
   }
 
@@ -418,7 +435,7 @@ export function createMockBackend(scale = 5000) {
     'svelte-devtools:get-state-timeline-delta': (args?: { since?: number }) => {
       const since = args?.since
       const oldest = timeline[0]?.seq ?? seq + 1
-      if (since == null || since < oldest - 1 || since > seq)
+      if (since === undefined || since < oldest - 1 || since > seq)
         return { cursor: seq, reset: true, changes: timeline }
       return { cursor: seq, reset: false, changes: timeline.filter(e => e.seq > since) }
     },
@@ -478,6 +495,7 @@ export function createMockBackend(scale = 5000) {
       }
       const nodes = pool
         .slice(0, maxNodes)
+        // oxlint-disable-next-line oxc/no-map-spread -- copy on purpose: `rnodes` is the persistent pool; sampled values must not leak into it
         .map(n => (n.type === 'effect' || r() > 0.1 ? n : { ...n, value: Math.floor(r() * 100) }))
       const kept = new Set(nodes.map(n => n.id))
       const inside = edgePool.filter(e => kept.has(e.from) && kept.has(e.to))
@@ -509,7 +527,7 @@ export function createMockBackend(scale = 5000) {
           derived: 0,
           effect: 0,
         }
-        c[n.type]++
+        if (n.type !== 'template') c[n.type]++
         byComponent.set(n.componentId, c)
       }
       const all = [...byComponent].map(([componentId, c]) => ({
@@ -606,11 +624,11 @@ export function createMockBackend(scale = 5000) {
     },
     'svelte-devtools:clear-fps': () => ((fps = []), versions.fps++),
     'svelte-devtools:open-in-editor': ({ file, line }: { file: string; line?: number }) =>
-      console.log('[mock] open-in-editor', file, line ?? ''),
+      log('open-in-editor', file, line ?? ''),
     'svelte-devtools:set-active': ({ client, active }: { client: string; active: boolean }) =>
-      console.log('[mock] set-active', client, active),
+      log('set-active', client, active),
     'svelte-devtools:open-reactive-in-editor': ({ file, name }: { file: string; name: string }) =>
-      console.log('[mock] open-reactive', file, name),
+      log('open-reactive', file, name),
   }
 
   return handlers

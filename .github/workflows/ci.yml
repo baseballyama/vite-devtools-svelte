@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   lint:
-    name: Lint + format + typecheck
+    name: Lint + format + dead code
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -30,28 +30,69 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Lint (oxlint)
-        run: pnpm lint
+      # Type-aware lint resolves each SvelteKit app's tsconfig, which extends
+      # the generated .svelte-kit/tsconfig.json.
+      - name: SvelteKit sync
+        run: pnpm sync:kit
+
+      - name: Lint (oxlint, type-aware)
+        run: pnpm exec oxlint
+
+      - name: Lint Svelte components (ESLint + eslint-plugin-svelte)
+        if: ${{ !cancelled() }}
+        run: pnpm exec eslint .
 
       - name: Format check (oxfmt)
+        if: ${{ !cancelled() }}
         run: pnpm format:check
 
-      - name: Client typecheck (rsvelte-check)
-        run: pnpm -C packages/client check
+      - name: Unused files, exports and dependencies (knip)
+        if: ${{ !cancelled() }}
+        run: pnpm knip
 
-      - name: Plugin typecheck (tsc)
-        run: pnpm -C packages/vite-devtools-svelte exec tsc --noEmit -p tsconfig.json
+      - name: Workspace dependency consistency (sherif)
+        if: ${{ !cancelled() }}
+        run: pnpm sherif
+
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Plugin + tests (tsc)
+        run: pnpm exec tsc -p packages/vite-devtools-svelte/tsconfig.json
+
+      - name: Client node-side code (tsc)
+        if: ${{ !cancelled() }}
+        run: pnpm exec tsc -p packages/client/tsconfig.node.json
+
+      - name: Client UI (rsvelte-check)
+        if: ${{ !cancelled() }}
+        run: pnpm -C packages/client run check
 
       # Additive TypeScript 7 check (plugin + client only). The packages keep
       # typescript ^6.0.3 for peers and API consumers; the TS 7 native compiler
       # is the root @typescript/native alias, which svelte-check finds via --tsgo.
-      - name: Client typecheck (svelte-check --tsgo, TypeScript 7, additive)
+      - name: Client UI (svelte-check --tsgo, TypeScript 7, additive)
+        if: ${{ !cancelled() }}
         run: |
           node node_modules/@typescript/native/bin/tsc -v
-          pnpm -C examples/sample-app exec svelte-check --tsgo --workspace ../../packages/client --tsconfig ./tsconfig.json
+          pnpm -C examples/sample-app exec svelte-check --tsgo --workspace ../../packages/client --tsconfig ./tsconfig.app.json
 
-      - name: Plugin typecheck (tsc, TypeScript 7, additive)
-        run: node node_modules/@typescript/native/bin/tsc --noEmit -p packages/vite-devtools-svelte/tsconfig.json
+      - name: Plugin + tests (tsc, TypeScript 7, additive)
+        if: ${{ !cancelled() }}
+        run: node node_modules/@typescript/native/bin/tsc -p packages/vite-devtools-svelte/tsconfig.json
 
   test:
     name: Tests + build
@@ -77,6 +118,10 @@ jobs:
 
       - name: Build client UI
         run: pnpm build:client
+
+      # The published package: exports, files and types as consumers see them.
+      - name: Package lint (publint + are-the-types-wrong)
+        run: pnpm publint
 
   build-site:
     name: Site build

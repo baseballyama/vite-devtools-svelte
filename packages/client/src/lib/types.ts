@@ -2,7 +2,6 @@
 // This avoids type duplication between server and client.
 export type {
   RouteInfo,
-  ParamInfo,
   RouteFile,
   AssetInfo,
   ProjectInfo,
@@ -21,7 +20,6 @@ export type {
   InspectResult,
   ModuleNode,
   ModuleGraphData,
-  OGTag,
   OGPreview,
   BuildChunk,
   BuildAnalysis,
@@ -31,14 +29,10 @@ export type {
   DatasetVersions,
   LiveComponentsMeta,
   ReactiveGraphRequest,
-  ReactiveGraphTotal,
   ReactiveGraphResult,
   ReactiveSummaryRequest,
   ReactiveSummaryRow,
   ReactiveSummary,
-  CaptureKey,
-  DropReason,
   CaptureInfo,
   CaptureInfoMap,
-  TimelineBaseline,
 } from '../../../vite-devtools-svelte/src/types.js'

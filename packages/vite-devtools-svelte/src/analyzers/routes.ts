@@ -1,5 +1,6 @@
-import fs from 'fs'
-import path from 'path'
+import fs from 'node:fs'
+import path from 'node:path'
+
 import type { RouteInfo, ParamInfo, RouteFile } from '../types.js'
 
 export function analyzeRoutes(routesDir: string): RouteInfo[] {
@@ -7,7 +8,7 @@ export function analyzeRoutes(routesDir: string): RouteInfo[] {
 
   const routes: RouteInfo[] = []
   scanDirectory(routesDir, routesDir, routes)
-  return routes.sort((a, b) => a.path.localeCompare(b.path))
+  return routes.toSorted((a, b) => a.path.localeCompare(b.path))
 }
 
 function scanDirectory(dir: string, rootDir: string, routes: RouteInfo[]): void {
@@ -114,7 +115,7 @@ function extractParams(relativePath: string): ParamInfo[] {
     } else {
       const matcherSplit = inner.split('=')
       params.push({
-        name: matcherSplit[0],
+        name: matcherSplit[0]!,
         optional: false,
         rest: false,
         matcher: matcherSplit[1],

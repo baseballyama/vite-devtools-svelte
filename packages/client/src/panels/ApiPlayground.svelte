@@ -1,22 +1,32 @@
 <script lang="ts">
+  import Badge from '../components/Badge.svelte'
+  import Button from '../components/Button.svelte'
+  import EmptyState from '../components/EmptyState.svelte'
+  import Highlight from '../components/Highlight.svelte'
+  import Panel from '../components/Panel.svelte'
+  import SearchField from '../components/SearchField.svelte'
+  import SplitView from '../components/SplitView.svelte'
+  import type { Tone } from '../components/types.js'
+  import VirtualList from '../components/VirtualList.svelte'
+  import { formatBytes, formatMs } from '../lib/format.js'
+  import { matcher } from '../lib/match.js'
+  import { resource } from '../lib/resource.svelte.js'
   import { getApiEndpoints, sendApiRequest, openInEditor } from '../lib/rpc.js'
   import type { ApiEndpoint, ApiResponse } from '../lib/types.js'
-  import { resource } from '../lib/resource.svelte.js'
-  import { matcher } from '../lib/match.js'
-  import { formatBytes, formatMs } from '../lib/format.js'
-  import Panel from '../components/Panel.svelte'
-  import SplitView from '../components/SplitView.svelte'
-  import VirtualList from '../components/VirtualList.svelte'
-  import SearchField from '../components/SearchField.svelte'
-  import Button from '../components/Button.svelte'
-  import Badge, { type Tone } from '../components/Badge.svelte'
-  import Highlight from '../components/Highlight.svelte'
-  import EmptyState from '../components/EmptyState.svelte'
 
   const endpoints = resource<ApiEndpoint[]>(getApiEndpoints, { initial: [] })
 
   const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
-  const methodTone = (m: string): Tone => (m === 'GET' ? 'blue' : m === 'POST' ? 'green' : m === 'DELETE' ? 'red' : m === 'HEAD' || m === 'OPTIONS' ? 'neutral' : 'yellow')
+  const methodTone = (m: string): Tone =>
+    m === 'GET'
+      ? 'blue'
+      : m === 'POST'
+        ? 'green'
+        : m === 'DELETE'
+          ? 'red'
+          : m === 'HEAD' || m === 'OPTIONS'
+            ? 'neutral'
+            : 'yellow'
 
   let query = $state('')
   let selected = $state<string | null>(null)
@@ -31,15 +41,19 @@
 
   const rows = $derived.by(() => {
     const m = matcher(query)
-    return m ? endpoints.data.filter((e) => m(e.path, e.route, e.methods.join(' '))) : endpoints.data
+    return m ? endpoints.data.filter(e => m(e.path, e.route, e.methods.join(' '))) : endpoints.data
   })
-  const current = $derived(selected ? (endpoints.data.find((e) => e.route === selected) ?? null) : null)
+  const current = $derived(
+    selected ? (endpoints.data.find(e => e.route === selected) ?? null) : null,
+  )
 
   const headersError = $derived.by(() => {
     if (!headers.trim()) return null
     try {
-      const v = JSON.parse(headers)
-      return v && typeof v === 'object' && !Array.isArray(v) ? null : 'Headers must be a JSON object'
+      const v: unknown = JSON.parse(headers)
+      return v && typeof v === 'object' && !Array.isArray(v)
+        ? null
+        : 'Headers must be a JSON object'
     } catch (e) {
       return (e as Error).message
     }
@@ -49,7 +63,8 @@
 
   const pretty = $derived.by(() => {
     if (!response?.body) return ''
-    const ct = Object.entries(response.headers).find(([k]) => k.toLowerCase() === 'content-type')?.[1] ?? ''
+    const ct =
+      Object.entries(response.headers).find(([k]) => k.toLowerCase() === 'content-type')?.[1] ?? ''
     if (ct.includes('json') || /^\s*[[{]/.test(response.body)) {
       try {
         return JSON.stringify(JSON.parse(response.body), null, 2)
@@ -83,12 +98,18 @@
   function onkeydown(e: KeyboardEvent) {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault()
-      send()
+      void send()
     }
   }
 
   function statusTone(s: number): Tone {
-    return s >= 200 && s < 300 ? 'green' : s >= 300 && s < 400 ? 'yellow' : s >= 400 ? 'red' : 'neutral'
+    return s >= 200 && s < 300
+      ? 'green'
+      : s >= 300 && s < 400
+        ? 'yellow'
+        : s >= 400
+          ? 'red'
+          : 'neutral'
   }
 </script>
 
@@ -97,7 +118,13 @@
     <SearchField bind:value={query} placeholder="Filter endpoints…" count={rows.length} />
   {/snippet}
   {#snippet actions()}
-    <Button icon="refresh" variant="ghost" label="Rescan endpoints" disabled={endpoints.busy} onclick={() => endpoints.refresh()} />
+    <Button
+      icon="refresh"
+      variant="ghost"
+      label="Rescan endpoints"
+      disabled={endpoints.busy}
+      onclick={() => endpoints.refresh()}
+    />
   {/snippet}
 
   <SplitView id="api" side="start" initial={300} min={200}>
@@ -105,54 +132,96 @@
     <div class="client" {onkeydown}>
       <form
         class="bar"
-        onsubmit={(e) => {
+        onsubmit={e => {
           e.preventDefault()
-          send()
+          void send()
         }}
       >
         <select class="select method" bind:value={method} aria-label="HTTP method">
-          {#each current?.methods.length ? current.methods : METHODS as m (m)}<option>{m}</option>{/each}
+          {#each current?.methods.length ? current.methods : METHODS as m (m)}<option>{m}</option
+            >{/each}
         </select>
-        <input class="input url mono" bind:value={url} placeholder="http://localhost:5173/api/…" aria-label="Request URL" spellcheck="false" />
-        <Button type="submit" variant="primary" icon="send" disabled={!url || !!headersError || sending} title="Send (⌘↵)">
+        <input
+          class="input url mono"
+          bind:value={url}
+          placeholder="http://localhost:5173/api/…"
+          aria-label="Request URL"
+          spellcheck="false"
+        />
+        <Button
+          type="submit"
+          variant="primary"
+          icon="send"
+          disabled={!url || !!headersError || sending}
+          title="Send (⌘↵)"
+        >
           {sending ? 'Sending…' : 'Send'}
         </Button>
       </form>
 
       <div class="tabs" role="tablist" aria-label="Request parts">
-        <button role="tab" aria-selected={tab === 'body'} onclick={() => (tab = 'body')}>Body</button>
-        <button role="tab" aria-selected={tab === 'headers'} onclick={() => (tab = 'headers')}>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'body'}
+          onclick={() => (tab = 'body')}>Body</button
+        >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'headers'}
+          onclick={() => (tab = 'headers')}
+        >
           Headers {#if headersError}<span class="err-dot" title={headersError}></span>{/if}
         </button>
         {#if current}
-          <button class="file mono" onclick={() => openInEditor(current.file).catch(() => {})} title="Open handler in editor">{current.file}</button>
+          <button
+            type="button"
+            class="file mono"
+            onclick={() => openInEditor(current.file).catch(() => {})}
+            title="Open handler in editor">{current.file}</button
+          >
         {/if}
       </div>
       <div class="req" role="tabpanel">
         {#if tab === 'body'}
           {#if hasBody}
-            <textarea class="input editor" bind:value={body} placeholder={'{ "name": "value" }'} aria-label="Request body" spellcheck="false"></textarea>
+            <textarea
+              class="input editor"
+              bind:value={body}
+              placeholder={'{ "name": "value" }'}
+              aria-label="Request body"
+              spellcheck="false"></textarea>
           {:else}
             <p class="hint">{method} requests have no body.</p>
           {/if}
         {:else}
-          <textarea class="input editor" bind:value={headers} aria-label="Request headers as JSON" aria-invalid={!!headersError} spellcheck="false"></textarea>
+          <textarea
+            class="input editor"
+            bind:value={headers}
+            aria-label="Request headers as JSON"
+            aria-invalid={!!headersError}
+            spellcheck="false"></textarea>
           {#if headersError}<p class="hint error">{headersError}</p>{/if}
         {/if}
       </div>
 
       <section class="res" aria-label="Response" aria-live="polite">
         {#if requestError}
-          <EmptyState icon="errors" tone="error" title="Request failed"><p class="mono">{requestError}</p></EmptyState>
+          <EmptyState icon="errors" tone="error" title="Request failed"
+            ><p class="mono">{requestError}</p></EmptyState
+          >
         {:else if response}
           <header class="res-head">
-            <Badge tone={statusTone(response.status)}>{response.status} {response.statusText}</Badge>
+            <Badge tone={statusTone(response.status)}>{response.status} {response.statusText}</Badge
+            >
             <span class="num muted">{formatMs(response.duration)}</span>
             <span class="num muted">{formatBytes(new Blob([response.body]).size)}</span>
             <details class="hdrs">
               <summary>{Object.keys(response.headers).length} headers</summary>
               <dl class="kv">
-                {#each Object.entries(response.headers) as [k, v] (k)}<dt class="mono">{k}</dt><dd class="mono">{v}</dd>{/each}
+                {#each Object.entries(response.headers) as [k, v] (k)}<dt class="mono">{k}</dt>
+                  <dd class="mono">{v}</dd>{/each}
               </dl>
             </details>
           </header>
@@ -166,8 +235,14 @@
     </div>
 
     {#snippet aside()}
-      <VirtualList items={rows} getKey={(e) => e.route} bind:selected label="API endpoints" onselect={pick}>
-        {#snippet row(e)}
+      <VirtualList
+        items={rows}
+        getKey={(e: ApiEndpoint) => e.route}
+        bind:selected
+        label="API endpoints"
+        onselect={pick}
+      >
+        {#snippet row(e: ApiEndpoint)}
           <span class="methods">
             {#each e.methods.slice(0, 3) as m (m)}<Badge tone={methodTone(m)}>{m}</Badge>{/each}
             {#if e.methods.length > 3}<Badge>+{e.methods.length - 3}</Badge>{/if}
@@ -178,7 +253,10 @@
           {#if endpoints.loading}
             <EmptyState title="Scanning +server files…" />
           {:else}
-            <EmptyState icon="api" title={endpoints.data.length ? 'No endpoints match' : 'No +server endpoints'} />
+            <EmptyState
+              icon="api"
+              title={endpoints.data.length ? 'No endpoints match' : 'No +server endpoints'}
+            />
           {/if}
         {/snippet}
       </VirtualList>

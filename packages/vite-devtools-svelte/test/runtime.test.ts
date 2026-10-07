@@ -1,4 +1,7 @@
+import vm from 'node:vm'
+
 import { describe, it, expect } from 'vitest'
+
 import {
   RUNTIME_MODULE_ID,
   RESOLVED_RUNTIME_ID,
@@ -150,11 +153,12 @@ describe('wrapper code structure', () => {
   it('should be parseable JavaScript', () => {
     expect(() => {
       const testCode = wrapperCode
-        .replace(/import .* from .*/g, '// import removed')
-        .replace(/export \* from .*/g, '// re-export removed')
-        .replace(/export \{[^}]*\}/g, '// alias export removed')
-        .replace(/export function/g, 'function')
-      new Function(testCode)
+        .replaceAll(/import .* from .*/g, '// import removed')
+        .replaceAll(/export \* from .*/g, '// re-export removed')
+        .replaceAll(/export \{[^}]*\}/g, '// alias export removed')
+        .replaceAll('export function', 'function')
+      // Compile only (never run): a syntax error throws here.
+      return new vm.Script(testCode)
     }).not.toThrow()
   })
 })
@@ -291,8 +295,9 @@ describe('runtime code structure', () => {
 
   it('should be parseable JavaScript', () => {
     expect(() => {
-      const testCode = runtimeCode.replace(/import\.meta\.hot/g, 'null')
-      new Function(testCode)
+      const testCode = runtimeCode.replaceAll('import.meta.hot', 'null')
+      // Compile only (never run): a syntax error throws here.
+      return new vm.Script(testCode)
     }).not.toThrow()
   })
 })

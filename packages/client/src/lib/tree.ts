@@ -108,10 +108,10 @@ function withSiblingPositions<N>(rows: TreeRow<N>[]): TreeRow<N>[] {
 export function branchKeys<N>(roots: readonly N[], access: TreeAccess<N>): Set<string> {
   const out = new Set<string>()
   const stack = [...roots]
-  while (stack.length) {
+  while (stack.length > 0) {
     const n = stack.pop()!
     const kids = access.children(n)
-    if (kids.length) {
+    if (kids.length > 0) {
       out.add(access.key(n))
       for (const k of kids) stack.push(k)
     }
@@ -221,7 +221,7 @@ export function defaultExpansion<N>(
     if (d >= depth) return
     for (const n of nodes) {
       const children = childrenOf(n)
-      if (!children.length) continue
+      if (children.length === 0) continue
       out.push(keyOf(n))
       walk(children, d + 1)
     }

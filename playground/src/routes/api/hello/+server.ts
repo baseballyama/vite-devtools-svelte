@@ -1,11 +1,18 @@
-import { json } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
 
-export const GET: RequestHandler = async () => {
-  return json({ message: 'Hello from the API!' })
+export const GET: RequestHandler = () => {
+  return Response.json({ message: 'Hello from the API!' })
 }
 
 export const POST: RequestHandler = async ({ request }) => {
-  const body = await request.json()
-  return json({ message: `Hello, ${body.name || 'World'}!` })
+  const body: unknown = await request.json()
+  const name =
+    typeof body === 'object' &&
+    body !== null &&
+    'name' in body &&
+    typeof body.name === 'string' &&
+    body.name !== ''
+      ? body.name
+      : 'World'
+  return Response.json({ message: `Hello, ${name}!` })
 }

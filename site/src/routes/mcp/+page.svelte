@@ -1,9 +1,10 @@
 <script lang="ts">
   import { resolve } from '$app/paths'
-  import { image } from '#lib/paths.ts'
+
   import CodeBlock from '#lib/CodeBlock.svelte'
-  import { MCP_TOOL_COUNT, MCP_TOOL_GROUPS } from '#lib/mcp-tools.ts'
   import { MCP_EXAMPLES, MCP_EXAMPLES_SOURCE, type McpExample } from '#lib/mcp-examples.ts'
+  import { MCP_TOOL_COUNT, MCP_TOOL_GROUPS } from '#lib/mcp-tools.ts'
+  import { image } from '#lib/paths.ts'
 
   const printedCode = `  svelte-devtools MCP ready — register with Claude Code:
     claude mcp add --transport http svelte http://localhost:5173/__svelte-devtools/mcp --header x-svelte-devtools-token:<token>`
@@ -50,11 +51,12 @@ and what changed when I edited the tax rate.`
   ]
 
   const ex = (id: string): McpExample => {
-    const e = MCP_EXAMPLES.find((x) => x.id === id)
+    const e = MCP_EXAMPLES.find(x => x.id === id)
     if (!e) throw new Error(`missing MCP example ${id}`)
     return e
   }
-  const request = (e: McpExample) => JSON.stringify({ name: e.tool, arguments: e.arguments }, null, 2)
+  const request = (e: McpExample) =>
+    JSON.stringify({ name: e.tool, arguments: e.arguments }, null, 2)
   const response = (e: McpExample) => JSON.stringify(e.response, null, 2)
 
   const walkthrough = [
@@ -136,13 +138,13 @@ and what changed when I edited the tax rate.`
     </div>
     <h1>MCP.</h1>
     <p class="lead">
-      The dev server also speaks the Model Context Protocol. Coding agents such as
-      Claude Code read the same render, reactivity, load and frame-rate data as the
-      panels, and every answer says what it covers.
+      The dev server also speaks the Model Context Protocol. Coding agents such as Claude Code read
+      the same render, reactivity, load and frame-rate data as the panels, and every answer says
+      what it covers.
     </p>
     <p class="release-note">
-      This guide describes <strong>vite-devtools-svelte ≥ 0.4.0</strong>. Set it up
-      first with <a href={resolve('/getting-started')}>Getting Started</a>.
+      This guide describes <strong>vite-devtools-svelte ≥ 0.4.0</strong>. Set it up first with
+      <a href={resolve('/getting-started')}>Getting Started</a>.
     </p>
   </div>
 </section>
@@ -171,18 +173,17 @@ and what changed when I edited the tax rate.`
         </header>
         <p>
           While <code>vite dev</code> runs, the plugin serves an MCP endpoint at
-          <code>/__svelte-devtools/mcp</code> (Streamable HTTP). Agents call tools on it
-          to read what the panels show: the busiest components, the reactive graph of one
-          instance, sampled state changes, render profiles, load functions and frame
-          rate. They can also run measurement sessions to compare before and after a
-          change.
+          <code>/__svelte-devtools/mcp</code> (Streamable HTTP). Agents call tools on it to read what
+          the panels show: the busiest components, the reactive graph of one instance, sampled state changes,
+          render profiles, load functions and frame rate. They can also run measurement sessions to compare
+          before and after a change.
         </p>
         <p>
-          No tool changes your app's code or state. Two things do happen: a call keeps the
-          runtime in the page sampling for about a minute, and the session tools keep
-          measurement sessions (in memory; on disk only when asked, and
-          <code>delete_session</code> removes them). Runtime data comes from the app page
-          open in a browser, so keep the app open while the agent works.
+          No tool changes your app's code or state. Two things do happen: a call keeps the runtime
+          in the page sampling for about a minute, and the session tools keep measurement sessions
+          (in memory; on disk only when asked, and
+          <code>delete_session</code> removes them). Runtime data comes from the app page open in a browser,
+          so keep the app open while the agent works.
         </p>
       </section>
 
@@ -192,8 +193,8 @@ and what changed when I edited the tax rate.`
           <h2>Connect Claude Code</h2>
         </header>
         <p>
-          Start the dev server. Once it listens, it prints the exact command to register
-          the server with Claude Code, including the port and a token:
+          Start the dev server. Once it listens, it prints the exact command to register the server
+          with Claude Code, including the port and a token:
         </p>
         <CodeBlock code={printedCode} lang="text" filename="terminal (npm run dev)" />
         <p>
@@ -203,16 +204,16 @@ and what changed when I edited the tax rate.`
         </p>
         <h3 class="content-h2">The token changes on every start</h3>
         <p>
-          The token is random per dev-server start (also when Vite restarts after a
-          config change). After a restart, register again with the newly printed line:
+          The token is random per dev-server start (also when Vite restarts after a config change).
+          After a restart, register again with the newly printed line:
         </p>
         <CodeBlock code={reRegisterCode} lang="bash" />
         <h3 class="content-h2">Project file instead of the command</h3>
         <p>
           <code>claude mcp add</code> registers the server for you only (local scope). A
-          <code>.mcp.json</code> file in the project is shared with everyone who opens the
-          project (project scope), so never write the token into it. Claude Code expands
-          environment variables in that file, so read the token from one:
+          <code>.mcp.json</code> file in the project is shared with everyone who opens the project (project
+          scope), so never write the token into it. Claude Code expands environment variables in that
+          file, so read the token from one:
         </p>
         <CodeBlock code={mcpJsonCode} lang="json" filename=".mcp.json" />
         <p>Set it from the line the dev server printed, then start Claude Code:</p>
@@ -234,17 +235,19 @@ and what changed when I edited the tax rate.`
           <h2>Other MCP clients</h2>
         </header>
         <p>
-          Any client that supports Streamable HTTP with custom headers can connect. It
-          needs two values:
+          Any client that supports Streamable HTTP with custom headers can connect. It needs two
+          values:
         </p>
         <ul>
           <li>URL: <code>http://localhost:&lt;port&gt;/__svelte-devtools/mcp</code></li>
-          <li>Header: <code>x-svelte-devtools-token: &lt;token&gt;</code> (from the printed line)</li>
+          <li>
+            Header: <code>x-svelte-devtools-token: &lt;token&gt;</code> (from the printed line)
+          </li>
         </ul>
         <p>
-          The server is stateless and answers with JSON. Only the Claude Code command is
-          printed by the dev server; for other clients, use their own configuration
-          format with these two values. To check the endpoint by hand:
+          The server is stateless and answers with JSON. Only the Claude Code command is printed by
+          the dev server; for other clients, use their own configuration format with these two
+          values. To check the endpoint by hand:
         </p>
         <CodeBlock code={curlCode} lang="bash" />
       </section>
@@ -279,8 +282,8 @@ and what changed when I edited the tax rate.`
           <h2>Walkthrough: why did it update?</h2>
         </header>
         <p>
-          Real calls against the example app (<code>examples/sample-app</code>, a synthetic
-          shop) with one item in the cart. Absolute paths are replaced by
+          Real calls against the example app (<code>examples/sample-app</code>, a synthetic shop)
+          with one item in the cart. Absolute paths are replaced by
           <code>&lt;project&gt;</code>; long answers are shortened where marked.
         </p>
         <p class="provenance">{MCP_EXAMPLES_SOURCE}</p>
@@ -291,13 +294,17 @@ and what changed when I edited the tax rate.`
               <h3>{step.title}</h3>
               <p>{step.text}</p>
               <CodeBlock code={request(e)} lang="json" filename="→ {e.tool}" />
-              <CodeBlock code={response(e)} lang="json" filename="← response{e.shortened ? ' (shortened)' : ''}" />
+              <CodeBlock
+                code={response(e)}
+                lang="json"
+                filename="← response{e.shortened ? ' (shortened)' : ''}"
+              />
             </li>
           {/each}
         </ol>
         <p>
-          In a large app the same order keeps every answer small: summary first, then
-          one instance, then only the new timeline entries.
+          In a large app the same order keeps every answer small: summary first, then one instance,
+          then only the new timeline entries.
         </p>
       </section>
 
@@ -307,13 +314,18 @@ and what changed when I edited the tax rate.`
           <h2>Measure a change</h2>
         </header>
         <p>
-          Start a session, use the app, end it; do the same after your change, then
-          compare. Each section of the comparison has a verdict. In this run nothing heavy changed between the two sessions, so every verdict is unchanged.
+          Start a session, use the app, end it; do the same after your change, then compare. Each
+          section of the comparison has a verdict. In this run nothing heavy changed between the two
+          sessions, so every verdict is unchanged.
         </p>
         {#each ['session-start', 'session-compare'] as id (id)}
           {@const e = ex(id)}
           <CodeBlock code={request(e)} lang="json" filename="→ {e.tool}" />
-          <CodeBlock code={response(e)} lang="json" filename="← response{e.shortened ? ' (shortened)' : ''}" />
+          <CodeBlock
+            code={response(e)}
+            lang="json"
+            filename="← response{e.shortened ? ' (shortened)' : ''}"
+          />
         {/each}
         <p>
           Sessions live in memory for the life of the dev server.
@@ -329,44 +341,43 @@ and what changed when I edited the tax rate.`
         </header>
         <ul class="limits">
           <li>
-            <strong>Sampled.</strong> State is checked every 200 ms; several writes within
-            one sample count once. Counts are not totals or rates.
+            <strong>Sampled.</strong> State is checked every 200 ms; several writes within one sample
+            count once. Counts are not totals or rates.
           </li>
           <li>
-            <strong>Component state only.</strong> State created during a component's
-            init is tracked; module-level state in <code>.svelte.ts</code> files is not.
+            <strong>Component state only.</strong> State created during a component's init is
+            tracked; module-level state in <code>.svelte.ts</code> files is not.
           </li>
           <li>
-            <strong>Can affect, not caused.</strong> Edges are current dependencies. Which
-            write changed a value is not recorded.
+            <strong>Can affect, not caused.</strong> Edges are current dependencies. Which write changed
+            a value is not recorded.
           </li>
           <li>
-            <strong>Some dependencies are missing.</strong> An <code>$effect</code> may show
-            no incoming edges even when it reads state.
+            <strong>Some dependencies are missing.</strong> An <code>$effect</code> may show no incoming
+            edges even when it reads state.
           </li>
           <li>
             <strong>Values are summaries in the graph.</strong> Objects and arrays appear as
-            <code>(object)</code>, <code>[n]</code> or <code>{'{n}'}</code>. The timeline
-            includes values up to <code>maxValueChars</code>.
+            <code>(object)</code>, <code>[n]</code> or <code>{'{n}'}</code>. The timeline includes
+            values up to <code>maxValueChars</code>.
           </li>
           <li>
-            <strong>No per-signal history.</strong> The timeline keeps the latest 500
-            sampled changes across all signals.
+            <strong>No per-signal history.</strong> The timeline keeps the latest 500 sampled changes
+            across all signals.
           </li>
           <li>
-            <strong>Caps.</strong> Graphs stop at 5000 nodes and 20000 edges and say so
-            (<code>truncated</code>, <code>total</code>, <code>edgesOmitted</code>);
+            <strong>Caps.</strong> Graphs stop at 5000 nodes and 20000 edges and say so (<code
+              >truncated</code
+            >, <code>total</code>, <code>edgesOmitted</code>);
             <code>get_capture_info</code> reports what was dropped and why.
           </li>
           <li>
-            <strong>One page load.</strong> Component ids are valid within one epoch.
-            Answers may come from a cache for up to 1 s; <code>computedAt</code> and
+            <strong>One page load.</strong> Component ids are valid within one epoch. Answers may
+            come from a cache for up to 1 s; <code>computedAt</code> and
             <code>window.until</code> say when they were computed.
           </li>
         </ul>
-        <p>
-          Performance with very large apps has not been measured; no size is promised.
-        </p>
+        <p>Performance with very large apps has not been measured; no size is promised.</p>
       </section>
 
       <section id="panel" class="step">
@@ -375,8 +386,8 @@ and what changed when I edited the tax rate.`
           <h2>The same data in the panel</h2>
         </header>
         <p>
-          The Reactivity panel shows the answers above to people. Screenshots of the real
-          runtime on the example app, taken in CI.
+          The Reactivity panel shows the answers above to people. Screenshots of the real runtime on
+          the example app, taken in CI.
         </p>
         <div class="shots">
           {#each shots as s (s.src)}
@@ -387,10 +398,9 @@ and what changed when I edited the tax rate.`
           {/each}
         </div>
         <p class="provenance">
-          Captured by <code>scripts/screenshots/reactivity.mjs</code> in CI run 37193781813
-          (Linux, headless Chromium, 1440×900) on the PR merge commit 623e27a, whose client
-          sources are those of a42a9e4, on <code>examples/sample-app</code> (a synthetic demo
-          app) with the real runtime.
+          Captured by <code>scripts/screenshots/reactivity.mjs</code> in CI run 37193781813 (Linux,
+          headless Chromium, 1440×900) on the PR merge commit 623e27a, whose client sources are
+          those of a42a9e4, on <code>examples/sample-app</code> (a synthetic demo app) with the real runtime.
         </p>
       </section>
 
@@ -403,8 +413,8 @@ and what changed when I edited the tax rate.`
           <div>
             <dt><code>403 Forbidden</code></dt>
             <dd>
-              The token is missing or from an earlier start. Register again with the line
-              the dev server printed last.
+              The token is missing or from an earlier start. Register again with the line the dev
+              server printed last.
             </dd>
           </div>
           <div>
@@ -414,8 +424,9 @@ and what changed when I edited the tax rate.`
           <div>
             <dt><code>staleReason: "timeout"</code></dt>
             <dd>
-              The app page did not answer within 1 s. The answer is the previous one (with
-              its own <code>computedAt</code>) or empty; call again.
+              The app page did not answer within 1 s. The answer is the previous one (with its own <code
+                >computedAt</code
+              >) or empty; call again.
             </dd>
           </div>
           <div>
@@ -432,8 +443,8 @@ and what changed when I edited the tax rate.`
           <div>
             <dt>No components or reactive nodes</dt>
             <dd>
-              Check that <code>componentTracking</code> is not set to <code>false</code> and
-              that the plugin comes before <code>sveltekit()</code> in
+              Check that <code>componentTracking</code> is not set to <code>false</code> and that
+              the plugin comes before <code>sveltekit()</code> in
               <code>vite.config.ts</code>.
             </dd>
           </div>
@@ -452,21 +463,21 @@ and what changed when I edited the tax rate.`
         <ul class="limits">
           <li>The endpoint exists only in the dev server. Production builds don't contain it.</li>
           <li>
-            Every request needs the token. It is random per start and printed only in your
-            terminal. Treat it like a password and don't commit it.
+            Every request needs the token. It is random per start and printed only in your terminal.
+            Treat it like a password and don't commit it.
           </li>
           <li>
-            The token is separate from the browser sign-in of the panels (the one-time
-            code). MCP clients are local processes, so the browser origin is not checked;
-            the token is the gate.
+            The token is separate from the browser sign-in of the panels (the one-time code). MCP
+            clients are local processes, so the browser origin is not checked; the token is the
+            gate.
           </li>
           <li>
-            <code>get_state_timeline</code> returns real state values of your running app,
-            so the agent sees them. Keep secrets out of dev state, or don't use that tool.
+            <code>get_state_timeline</code> returns real state values of your running app, so the agent
+            sees them. Keep secrets out of dev state, or don't use that tool.
           </li>
           <li>
-            When the dev server listens on the network (<code>--host</code>), so does the
-            endpoint. Prefer localhost.
+            When the dev server listens on the network (<code>--host</code>), so does the endpoint.
+            Prefer localhost.
           </li>
           <li>
             Sessions are written to disk only with <code>persist</code> or
@@ -496,8 +507,9 @@ and what changed when I edited the tax rate.`
           <div>
             <dt>MCP</dt>
             <dd>
-              Streamable HTTP, stateless, JSON responses. CI calls the endpoint with plain
-              HTTP (<code>initialize</code>, <code>tools/list</code>,
+              Streamable HTTP, stateless, JSON responses. CI calls the endpoint with plain HTTP (<code
+                >initialize</code
+              >, <code>tools/list</code>,
               <code>tools/call</code>).
             </dd>
           </div>
@@ -508,7 +520,9 @@ and what changed when I edited the tax rate.`
         <h2 class="content-h2">Next steps</h2>
         <ul>
           <li><a href={resolve('/getting-started')}>Set up the plugin</a></li>
-          <li><a href={resolve('/panels/[slug]', { slug: 'reactive' })}>The Reactivity panel</a></li>
+          <li>
+            <a href={resolve('/panels/[slug]', { slug: 'reactive' })}>The Reactivity panel</a>
+          </li>
         </ul>
       </section>
     </article>
@@ -615,7 +629,9 @@ and what changed when I edited the tax rate.`
     border-left: 2px solid transparent;
     padding-left: 0.6rem;
     margin-left: -0.6rem;
-    transition: border-color 150ms var(--ease), color 150ms var(--ease);
+    transition:
+      border-color 150ms var(--ease),
+      color 150ms var(--ease);
   }
 
   .toc a:hover {

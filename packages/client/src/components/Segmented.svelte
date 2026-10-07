@@ -8,18 +8,22 @@
 
   let {
     options,
+    // eslint-disable-next-line @typescript-eslint/no-useless-default-assignment -- `$bindable()` marks the required prop bindable; it is not a default value
     value = $bindable(),
     label,
   }: { options: readonly Option[]; value: V; label: string } = $props()
 
   function onkeydown(e: KeyboardEvent) {
-    const i = options.findIndex((o) => o.value === value)
+    const i = options.findIndex(o => o.value === value)
     let next = i
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = (i + 1) % options.length
-    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = (i - 1 + options.length) % options.length
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp')
+      next = (i - 1 + options.length) % options.length
     else return
+    const option = options[next]
+    if (!option) return
     e.preventDefault()
-    value = options[next].value
+    value = option.value
     const group = e.currentTarget as HTMLElement
     queueMicrotask(() => group.querySelector<HTMLElement>('[aria-checked="true"]')?.focus())
   }

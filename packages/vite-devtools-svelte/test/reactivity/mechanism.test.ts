@@ -1,8 +1,9 @@
-import { describe, it, expect, afterEach } from 'vitest'
 import { flushSync } from 'svelte'
-import Effects from './fixtures/Effects.svelte'
-import EachConst from './fixtures/EachConst.svelte'
+import { describe, it, expect, afterEach } from 'vitest'
+
 import Classes from './fixtures/Classes.svelte'
+import EachConst from './fixtures/EachConst.svelte'
+import Effects from './fixtures/Effects.svelte'
 import Tree from './fixtures/Tree.svelte'
 import { render, instance, instances, graph, node, incoming, dt, poll } from './harness.js'
 
@@ -11,6 +12,12 @@ afterEach(() => {
   for (const c of cleanup) c()
   cleanup = []
 })
+const effectNames = (id: number) =>
+  graph(id)
+    .nodes.filter(n => n.type === 'effect')
+    .map(n => n.name)
+    .toSorted()
+
 function mountIt(C: any, props?: any) {
   const r = render(C, props)
   cleanup.push(() => r.destroy())
@@ -23,27 +30,22 @@ describe('effects', () => {
     const c = instance('Effects')
     const g = graph(c.id)
     const effects = g.nodes.filter(n => n.type === 'effect')
-    expect(effects.map(e => e.name).sort()).toEqual(
-      ['effect_1', 'effect_2', 'effect_3', 'effect_pre_1'].sort(),
+    expect(effects.map(e => e.name).toSorted()).toEqual(
+      ['effect_1', 'effect_2', 'effect_3', 'effect_pre_1'].toSorted(),
     )
     const a = node(g, c.id, 'a').id
     const b = node(g, c.id, 'b').id
     expect(incoming(g, node(g, c.id, 'effect_1').id)).toEqual([a])
     expect(incoming(g, node(g, c.id, 'effect_pre_1').id)).toEqual([b])
     // the nested effect is created while effect_2 runs, still owned by Effects
-    expect(incoming(g, node(g, c.id, 'effect_3').id).sort()).toEqual([a, b].sort())
+    expect(incoming(g, node(g, c.id, 'effect_3').id).toSorted()).toEqual([a, b].toSorted())
   })
 
   it('effect names are numbered per component (stable across instances)', () => {
     mountIt(Effects)
     mountIt(Effects)
     const [x, y] = instances('Effects')
-    const names = (id: number) =>
-      graph(id)
-        .nodes.filter(n => n.type === 'effect')
-        .map(n => n.name)
-        .sort()
-    expect(names(x.id)).toEqual(names(y.id))
+    expect(effectNames(x!.id)).toEqual(effectNames(y!.id))
   })
 })
 
@@ -74,7 +76,7 @@ describe('node identity', () => {
     const c = instance('EachConst')
     const counts = dt()._nodeCounts.get(c.id)
     const g = graph(c.id)
-    const own = g.nodes.filter(n => n.componentId === c.id && n.type !== 'template')
+    const own = g.nodes.filter(n => n.componentId === c.id).filter(n => n.type !== 'template')
     expect(counts.state + counts.derived + counts.effect).toBe(own.length)
   })
 })

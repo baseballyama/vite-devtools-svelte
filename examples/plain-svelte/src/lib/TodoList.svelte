@@ -15,7 +15,7 @@
 </script>
 
 <form
-  onsubmit={(e) => {
+  onsubmit={e => {
     e.preventDefault()
     if (draft.trim()) onadd(draft.trim())
     draft = ''
@@ -27,7 +27,10 @@
 <ul data-testid="todos">
   {#each todos as todo (todo.id)}
     <li>
-      <label><input type="checkbox" checked={todo.done} onchange={() => ontoggle(todo.id)} /> {todo.text}</label>
+      <label
+        ><input type="checkbox" checked={todo.done} onchange={() => ontoggle(todo.id)} />
+        {todo.text}</label
+      >
     </li>
   {/each}
 </ul>

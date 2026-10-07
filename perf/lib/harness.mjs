@@ -11,28 +11,31 @@
 import { execFileSync, spawn } from 'node:child_process'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
+import { createRequire } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
-import { createRequire } from 'node:module'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { pathToFileURL } from 'node:url'
 
-export const perfDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const perfDir = path.resolve(import.meta.dirname, '..')
 export const repoRoot = path.resolve(perfDir, '..')
 
-export const sleep = ms => new Promise(r => setTimeout(r, ms))
+export const sleep = ms =>
+  new Promise(r => {
+    setTimeout(r, ms)
+  })
 export const r1 = n => Math.round(n * 10) / 10
 // Mathematical median: the mean of the two middle values for an even count.
 // (Until 2026-10-04 03:3x this returned the lower middle value; the slot A
 // summary was re-aggregated from the unchanged raw items with this version.)
 export const median = xs => {
-  const s = [...xs].sort((a, b) => a - b)
+  const s = xs.toSorted((a, b) => a - b)
   if (s.length === 0) return NaN
   const mid = s.length >> 1
   return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2
 }
-export const pct = (xs, p) => {
-  const s = [...xs].sort((a, b) => a - b)
-  return s.length ? s[Math.min(s.length - 1, Math.floor((p / 100) * s.length))] : NaN
+const pct = (xs, p) => {
+  const s = xs.toSorted((a, b) => a - b)
+  return s.length > 0 ? s[Math.min(s.length - 1, Math.floor((p / 100) * s.length))] : NaN
 }
 
 // ---------------------------------------------------------------- deps
@@ -84,7 +87,8 @@ export function sha256Tree(dir) {
     }
   }
   walk(dir)
-  files.sort()
+  // code-unit order, same as the default sort (the hash depends on it)
+  files.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
   for (const f of files) {
     hash.update(path.relative(dir, f))
     hash.update(fs.readFileSync(f))
@@ -109,7 +113,7 @@ export function checkoutMeta(repo, label) {
     ? fs
         .readdirSync(clientAssets)
         .filter(f => f.endsWith('.js'))
-        .sort()
+        .toSorted()
         .map(f => ({ file: f, sha256: sha256File(path.join(clientAssets, f)) }))
     : []
   let git = null
@@ -201,7 +205,7 @@ export function envSnapshot() {
   return out
 }
 
-export function gateOk(env, gate) {
+function gateOk(env, gate) {
   const reasons = []
   if (env.load[0] > gate.load1Max) reasons.push(`load1 ${env.load[0]} > ${gate.load1Max}`)
   if (env.cpu && env.cpu.idle < gate.idleMin)
@@ -226,7 +230,7 @@ export async function waitForGate(gate, waitS, log = () => {}) {
 
 // ---------------------------------------------------------------- server
 
-const ANSI = /\x1b\[[0-9;]*m/g // oxlint-disable-line no-control-regex -- strip terminal colors
+const ANSI = /\u001B\[[0-9;]*m/g // oxlint-disable-line no-control-regex -- strip terminal colors
 
 /**
  * Start `vite dev` for the fixture of `repo`. HOME is isolated (devframe keeps
@@ -248,8 +252,13 @@ export async function startServer({ appDir, port, withDevtools, home }) {
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   let log = ''
-  child.stdout.on('data', d => (log += d))
-  child.stderr.on('data', d => (log += d))
+  const cleanLog = () => log.replace(ANSI, '')
+  child.stdout.on('data', d => {
+    log += d
+  })
+  child.stderr.on('data', d => {
+    log += d
+  })
   const base = `http://localhost:${port}`
   for (let i = 0; i < 1800; i++) {
     if (child.exitCode !== null) throw new Error(`vite exited early:\n${log.replace(ANSI, '')}`)
@@ -262,7 +271,7 @@ export async function startServer({ appDir, port, withDevtools, home }) {
           pid: child.pid,
           base,
           coldMs: performance.now() - t0,
-          log: () => log.replace(ANSI, ''),
+          log: cleanLog,
         }
       }
     } catch {
@@ -303,7 +312,7 @@ export const INIT_SCRIPT = `
 })();
 `
 
-export async function cdpMetrics(cdp) {
+async function cdpMetrics(cdp) {
   const { metrics } = await cdp.send('Performance.getMetrics')
   return Object.fromEntries(metrics.map(m => [m.name, m.value]))
 }
@@ -414,11 +423,12 @@ export function frameStats(durations) {
 }
 
 /** Runtime-internal sizes and subscription state of the app page. */
-export async function runtimeState(page) {
+export function runtimeState(page) {
   return page.evaluate(() => {
     const key = Object.keys(window).find(k => k.startsWith('__SVELTE_') && k.endsWith('DEVTOOLS__'))
     const dt = key ? window[key] : null
     if (!dt) return null
+    // oxlint-disable-next-line unicorn/consistent-function-scoping -- runs in the browser via page.evaluate; cannot reference module scope
     const size = x =>
       x && typeof x.size === 'number' ? x.size : Array.isArray(x) ? x.length : null
     return {

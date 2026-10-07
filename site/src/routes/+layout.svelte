@@ -1,9 +1,11 @@
 <script lang="ts">
   import '../app.css'
-  import Header from '#lib/Header.svelte'
   import Footer from '#lib/Footer.svelte'
+  import Header from '#lib/Header.svelte'
 
-  let { children } = $props()
+  import type { LayoutProps } from './$types'
+
+  let { children }: LayoutProps = $props()
 </script>
 
 <a class="skip" href="#main">Skip to content</a>

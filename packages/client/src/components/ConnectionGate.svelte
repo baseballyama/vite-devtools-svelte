@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte'
+
   import { connection } from '../lib/connection.svelte.js'
   import { OTP_HASH, router } from '../lib/router.svelte.js'
   import Button from './Button.svelte'
@@ -31,7 +32,7 @@
 
   $effect(() => {
     if (status === 'unauthorized') {
-      tick().then(() => input?.focus())
+      void tick().then(() => input?.focus())
       if (!requested) {
         requested = true
         connection.requestCode().catch(() => {})
@@ -44,18 +45,23 @@
   // fires `hashchange`; devframe reads the code on a full page load only.
   // While the gate is open, consume it through the public submit path,
   // once per code, and take the code out of the URL (back to the panel).
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- consumed-code bookkeeping, read only in the hash handler and never rendered: intentionally non-reactive
   const linkCodes = new Set<string>()
   $effect(() => {
     if (status !== 'unauthorized' || !connection.canAuth) return
     const onHash = () => {
       const m = OTP_HASH.exec(location.hash)
       if (!m) return
-      history.replaceState(history.state, '', `${location.pathname}${location.search}#/${router.current}`)
-      const c = m[1]
+      history.replaceState(
+        history.state,
+        '',
+        `${location.pathname}${location.search}#/${router.current}`,
+      )
+      const c = m[1]!
       if (linkCodes.has(c) || busy) return
       linkCodes.add(c)
       code = c
-      verify(c)
+      void verify(c)
     }
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
@@ -88,28 +94,41 @@
 {#if status === 'unauthorized' && connection.canAuth}
   <div class="scrim">
     <div role="dialog" aria-modal="true" aria-labelledby="auth-title" aria-describedby="auth-desc">
-    <form class="card" onsubmit={submit}>
-      <span class="lock"><Icon name="command" size={20} /></span>
-      <h2 id="auth-title">Authorize this browser</h2>
-      <p id="auth-desc">Enter the 6-digit code printed in the terminal running your dev server.</p>
-      <input
-        bind:this={input}
-        bind:value={code}
-        class="otp mono"
-        inputmode="numeric"
-        autocomplete="one-time-code"
-        maxlength="7"
-        placeholder="000000"
-        aria-label="One-time code"
-        aria-invalid={failed}
-        oninput={() => (failed = false)}
-      />
-      {#if failed}<p class="err" role="alert">That code did not work — check the terminal and try again.</p>{/if}
-      <Button type="submit" variant="primary" disabled={busy || code.replace(/\D/g, '').length < 6}>
-        {busy ? 'Verifying…' : 'Connect'}
-      </Button>
-      <button type="button" class="link" onclick={() => connection.requestCode({ reissue: true }).catch(() => {})}>Print a new code</button>
-    </form>
+      <form class="card" onsubmit={submit}>
+        <span class="lock"><Icon name="command" size={20} /></span>
+        <h2 id="auth-title">Authorize this browser</h2>
+        <p id="auth-desc">
+          Enter the 6-digit code printed in the terminal running your dev server.
+        </p>
+        <input
+          bind:this={input}
+          bind:value={code}
+          class="otp mono"
+          inputmode="numeric"
+          autocomplete="one-time-code"
+          maxlength="7"
+          placeholder="000000"
+          aria-label="One-time code"
+          aria-invalid={failed}
+          oninput={() => (failed = false)}
+        />
+        {#if failed}<p class="err" role="alert">
+            That code did not work — check the terminal and try again.
+          </p>{/if}
+        <Button
+          type="submit"
+          variant="primary"
+          disabled={busy || code.replace(/\D/g, '').length < 6}
+        >
+          {busy ? 'Verifying…' : 'Connect'}
+        </Button>
+        <button
+          type="button"
+          class="link"
+          onclick={() => connection.requestCode({ reissue: true }).catch(() => {})}
+          >Print a new code</button
+        >
+      </form>
     </div>
   </div>
 {:else if showDown && status !== 'connected' && status !== 'unauthorized'}
@@ -118,7 +137,9 @@
     {#if status === 'connecting'}
       Connecting to the dev server…
     {:else}
-      Dev server unreachable — reconnecting automatically{connection.state.error ? ` (${connection.state.error})` : ''}.
+      Dev server unreachable — reconnecting automatically{connection.state.error
+        ? ` (${connection.state.error})`
+        : ''}.
     {/if}
   </div>
 {/if}

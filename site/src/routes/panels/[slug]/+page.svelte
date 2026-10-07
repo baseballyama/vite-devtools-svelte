@@ -1,7 +1,9 @@
 <script lang="ts">
   import { resolve } from '$app/paths'
-  import { image } from '#lib/paths.ts'
+
   import { panels, taglineParts, taglineText } from '#lib/panels.ts'
+  import { image } from '#lib/paths.ts'
+
   import type { PageProps } from './$types'
 
   let { data }: PageProps = $props()
@@ -33,7 +35,10 @@
       </div>
 
       <h1>{panel.title}</h1>
-      <p class="tagline">{#each taglineParts(panel.tagline) as part, i (i)}{#if part.code}<code>{part.text}</code>{:else}{part.text}{/if}{/each}</p>
+      <p class="tagline">
+        {#each taglineParts(panel.tagline) as part, i (i)}{#if part.code}<code>{part.text}</code
+            >{:else}{part.text}{/if}{/each}
+      </p>
     </header>
 
     <hr class="divider" />
@@ -54,9 +59,9 @@
 
         <h2 class="content-h2">Try it</h2>
         <p>
-          Add the plugin to your project
-          (<a class="inline-link" href={resolve('/getting-started')}>Getting Started</a>)
-          to use this panel in your own dev server.
+          Add the plugin to your project (<a class="inline-link" href={resolve('/getting-started')}
+            >Getting Started</a
+          >) to use this panel in your own dev server.
         </p>
       </section>
 
@@ -64,7 +69,9 @@
         {#each panel.images as src, i (src)}
           <figure class="shot">
             <div class="shot-chrome mono">
-              <span class="shot-title">{panel.slug}{panel.images.length > 1 ? ` · ${i + 1}` : ''}</span>
+              <span class="shot-title"
+                >{panel.slug}{panel.images.length > 1 ? ` · ${i + 1}` : ''}</span
+              >
             </div>
             <img
               src={image(src)}
@@ -154,7 +161,9 @@
 
   .tagline {
     font-family: var(--font-display);
-    font-variation-settings: 'opsz' 144, 'SOFT' 80;
+    font-variation-settings:
+      'opsz' 144,
+      'SOFT' 80;
     font-weight: 350;
     font-size: clamp(1.15rem, 1.6vw, 1.5rem);
     color: var(--text-2);
@@ -314,7 +323,9 @@
 
   .pager-title {
     font-family: var(--font-display);
-    font-variation-settings: 'opsz' 144, 'SOFT' 50;
+    font-variation-settings:
+      'opsz' 144,
+      'SOFT' 50;
     font-weight: 400;
     font-size: 1.3rem;
     color: var(--text);

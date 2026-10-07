@@ -36,13 +36,13 @@ import { spawn, spawnSync } from 'node:child_process'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import http from 'node:http'
+import { createRequire } from 'node:module'
 import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
-import { createRequire } from 'node:module'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { pathToFileURL } from 'node:url'
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
+const repoRoot = path.resolve(import.meta.dirname, '../..')
 
 // ------------------------------------------------------------------ options
 const argv = process.argv.slice(2)
@@ -156,23 +156,25 @@ function set(stepName, status, detail = {}) {
       own[k] = v
     else facts[k] = v
   }
-  if (Object.keys(facts).length) own.facts = facts
+  if (Object.keys(facts).length > 0) own.facts = facts
   const e = { ...own, step: stepName, status, ms: Date.now() - t0 }
   ledger.set(stepName, e)
-  say(`${status} ${stepName}${Object.keys(detail).length ? ' ' + JSON.stringify(detail) : ''}`)
+  say(`${status} ${stepName}${Object.keys(detail).length > 0 ? ' ' + JSON.stringify(detail) : ''}`)
 }
 
-const sleep = ms => new Promise(r => setTimeout(r, ms))
+const sleep = ms =>
+  new Promise(r => {
+    setTimeout(r, ms)
+  })
 
 async function withTimeout(label, ms, fn) {
   let timer
   try {
     return await Promise.race([
       fn(),
-      new Promise(
-        (_, rej) =>
-          (timer = setTimeout(() => rej(new Error(`${label}: timeout after ${ms} ms`)), ms)),
-      ),
+      new Promise((_, rej) => {
+        timer = setTimeout(() => rej(new Error(`${label}: timeout after ${ms} ms`)), ms)
+      }),
     ])
   } finally {
     clearTimeout(timer)
@@ -189,6 +191,7 @@ let lastStep = null
 async function step(name, ms, fn) {
   if (!ledger.has(name)) throw new Error(`step not in PLAN: ${name}`)
   currentStep = name
+  let result // undefined on FAIL
   try {
     const r = (await withTimeout(name, ms, fn)) ?? {}
     if (r.unverified) set(name, 'UNVERIFIED', { reason: r.unverified })
@@ -196,14 +199,14 @@ async function step(name, ms, fn) {
     else if (r.notRun) set(name, 'NOT RUN', { reason: r.notRun })
     else if (r.expectedFail) set(name, 'EXPECTED-FAIL', { reason: r.expectedFail })
     else set(name, 'PASS', r)
-    return r
+    result = r
   } catch (e) {
     set(name, 'FAIL', { error: mask(String(e?.message ?? e)).slice(0, 2000) }) // incl. Playwright call log
-    return undefined
   } finally {
     currentStep = null
     lastStep = name
   }
+  return result
 }
 
 // --- page error diagnostics (bounded, masked; never change a status)
@@ -218,7 +221,7 @@ const urlPath = u => {
 }
 // keeps a trailing :line:col (stack frames put it after the query)
 const stripUrls = text =>
-  String(text).replace(/https?:\/\/[^\s)'"]+/g, m => {
+  String(text).replaceAll(/https?:\/\/[^\s)'"]+/g, m => {
     const lc = m.match(/(:\d+:\d+)$/)?.[1] ?? ''
     return urlPath(lc ? m.slice(0, -lc.length) : m) + lc
   })
@@ -251,28 +254,37 @@ function mask(text) {
   let t = String(text)
   for (const s of secrets) if (s) t = t.split(s).join('<secret>')
   return t
-    .replace(/claude mcp add[^\n]*/g, '<mcp add line>')
-    .replace(/x-svelte-devtools-token:\s*\S+/gi, 'x-svelte-devtools-token:<secret>')
-    .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '<uuid>')
-    .replace(/(auth code\s+)\d{6}/g, '$1<code>')
-    .replace(/devframe_otp=\d{6}/g, 'devframe_otp=<code>')
+    .replaceAll(/claude mcp add[^\n]*/g, '<mcp add line>')
+    .replaceAll(/x-svelte-devtools-token:\s*\S+/gi, 'x-svelte-devtools-token:<secret>')
+    .replaceAll(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '<uuid>')
+    .replaceAll(/(auth code\s+)\d{6}/g, '$1<code>')
+    .replaceAll(/devframe_otp=\d{6}/g, 'devframe_otp=<code>')
     .replaceAll(repoRoot, '<repo>')
-    .replace(CI_DIRS, '<ci>')
+    .replaceAll(CI_DIRS, '<ci>')
     .replaceAll(os.tmpdir(), '<tmp>')
-    .replace(/\/Users\/[^/\s]+|\/home\/[^/\s]+|[A-Za-z]:\\Users\\[^\\\s]+/g, '<home>')
+    .replaceAll(/\/Users\/[^/\s]+|\/home\/[^/\s]+|[A-Za-z]:\\Users\\[^\\\s]+/g, '<home>')
 }
 // CI workspace / temp dirs (public CI logs): GitHub's runner paths when set.
 const CI_DIRS = new RegExp(
   ['GITHUB_WORKSPACE', 'RUNNER_TEMP', 'RUNNER_TOOL_CACHE']
     .map(k => process.env[k])
     .filter(v => v && v.length > 3)
-    .map(v => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .map(v => v.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&'))
     .join('|') || '(?!)',
   'g',
 )
 
 // ------------------------------------------------------------------ processes
 const cleanup = []
+// Runs (and empties) the cleanup stack, newest first; a failing entry never
+// stops the rest.
+async function runCleanup() {
+  for (const fn of cleanup.splice(0).toReversed()) {
+    try {
+      await fn()
+    } catch {}
+  }
+}
 
 function freePort() {
   return new Promise((resolve, reject) => {
@@ -332,8 +344,12 @@ function startDev(p, { port, home }) {
     },
   )
   const srv = { child, port, base: `http://127.0.0.1:${port}`, log: '' }
-  child.stdout.on('data', d => (srv.log += d))
-  child.stderr.on('data', d => (srv.log += d))
+  child.stdout.on('data', d => {
+    srv.log += d
+  })
+  child.stderr.on('data', d => {
+    srv.log += d
+  })
   cleanup.push(() => stopDev(srv))
   return srv
 }
@@ -461,7 +477,7 @@ function scanDir(dir, hits, root = dir) {
 
 function prodBuild(p, home) {
   const outDir = fs.mkdtempSync(path.join(os.tmpdir(), `compat-${p.id}-dist-`))
-  cleanup.push(async () => fs.rmSync(outDir, { recursive: true, force: true }))
+  cleanup.push(() => fs.rmSync(outDir, { recursive: true, force: true }))
   const args = [viteBin(p.appDir), 'build', ...configArgs(p), '--logLevel', 'warn']
   // Kit writes to .svelte-kit/output (gitignored); plain Vite gets a temp outDir.
   if (!p.kit) args.push('--outDir', outDir, '--emptyOutDir')
@@ -472,7 +488,10 @@ function prodBuild(p, home) {
     timeout: 180_000,
   })
   if (res.status !== 0)
-    throw new Error(`vite build exit ${res.status}: ${mask(res.stderr || res.stdout).slice(-400)}`)
+    // stderr when it has anything, else stdout
+    throw new Error(
+      `vite build exit ${res.status}: ${mask((res.stderr?.length ?? 0) > 0 ? res.stderr : res.stdout).slice(-400)}`,
+    )
   const hits = []
   scanDir(p.kit ? path.join(p.appDir, '.svelte-kit/output') : outDir, hits)
   return hits
@@ -505,7 +524,7 @@ function hmrEdit(p) {
       fs.rmSync(backupPath(p))
     }
   }
-  cleanup.push(async () => restore())
+  cleanup.push(restore)
   process.once('exit', restore)
   fs.writeFileSync(file, original.replace(h.from, h.to))
   return restore
@@ -516,10 +535,11 @@ function gitStatus(paths) {
     cwd: repoRoot,
     encoding: 'utf8',
   })
-  return r.status === 0 ? r.stdout.split('\n').filter(Boolean).sort() : null
+  return r.status === 0 ? r.stdout.split('\n').filter(Boolean).toSorted() : null
 }
 
 // ------------------------------------------------------------------ fixture facts
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
 const fileBase = f =>
   String(f ?? '')
     .split(/[\\/]/)
@@ -551,7 +571,7 @@ async function fixtureComponentsListed(p, srv, ms) {
 }
 
 // ------------------------------------------------------------------ UI
-const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g')
+const ANSI = new RegExp(`${String.fromCodePoint(27)}\\[[0-9;]*m`, 'g')
 const DOCK_FRAME = 'iframe[data-iframe-pane="svelte-devtools"]'
 
 // Opens (or re-opens after a reload) the Svelte entry in the dock; the hub's
@@ -600,7 +620,7 @@ async function expandDock(page) {
 // own root) is the button or a descendant, and click there — a normal
 // Playwright click that still checks the hit target. No force, no JS
 // dispatch. null = no clear point found (the click then fails with the call log).
-async function unobscuredPoint(target) {
+function unobscuredPoint(target) {
   return target
     .evaluate(el => {
       const r = el.getBoundingClientRect()
@@ -647,11 +667,12 @@ async function clickInDock(page, target) {
 // Text-only dump of the dock for a failure message: anchor class, button
 // names / aria-expanded / box / opacity / pointer-events, iframe panes and
 // the number of inputs. Never input values, codes or screenshots.
-async function dockDump(page) {
+function dockDump(page) {
   return page
     .evaluate(() => {
       const host = document.querySelector('devframes-dock-embedded')
       const root = host?.shadowRoot ?? document
+      // oxlint-disable-next-line unicorn/consistent-function-scoping -- runs in the page (serialized by evaluate); it cannot reference module scope
       const vis = el => {
         const r = el.getBoundingClientRect()
         const cs = getComputedStyle(el)
@@ -661,14 +682,16 @@ async function dockDump(page) {
       return {
         host: !!host,
         shadowRoot: !!host?.shadowRoot,
-        anchor: anchor ? { class: String(anchor.className).slice(0, 120), box: vis(anchor) } : null,
+        anchor: anchor
+          ? { class: (anchor.getAttribute('class') ?? '').slice(0, 120), box: vis(anchor) }
+          : null,
         buttons: [...root.querySelectorAll('button')].slice(0, 30).map(b => ({
-          name: (b.getAttribute('aria-label') || b.textContent || '').trim().slice(0, 40),
+          name: ((b.getAttribute('aria-label') ?? '') || (b.textContent ?? '')).trim().slice(0, 40),
           expanded: b.getAttribute('aria-expanded'),
           box: vis(b),
         })),
         iframes: [...root.querySelectorAll('iframe'), ...document.querySelectorAll('iframe')].map(
-          f => f.getAttribute('data-iframe-pane'),
+          f => f.dataset.iframePane ?? null,
         ),
         inputs: root.querySelectorAll('input').length,
       }
@@ -682,6 +705,7 @@ async function withDockDump(page, fn) {
   } catch (e) {
     throw new Error(
       `${String(e?.message ?? e).slice(0, 1200)} | dock: ${JSON.stringify(await dockDump(page))}`,
+      { cause: e },
     )
   }
 }
@@ -750,6 +774,7 @@ async function uiShowsFixture(frame, p) {
       // same 20 s wait as before; on a miss, say what the UI showed instead
       throw new Error(
         `${String(e?.message ?? e).slice(0, 600)} | ui: ${JSON.stringify(await uiDump(frame))}`,
+        { cause: e },
       )
     }
   }
@@ -838,12 +863,13 @@ async function dockUi(page, srv, p) {
 // Text-only dump of the standalone UI tab for a failure message: hash route,
 // connection status text, gate presence/visibility, active nav, first 300
 // chars of the body text (masked by the caller). No inputs, no screenshots.
-async function uiDump(ui) {
+function uiDump(ui) {
   // Page or FrameLocator (dock iframe): evaluate on its <html>, never waiting long
   return ui
     .locator('html')
     .evaluate(
       () => {
+        // oxlint-disable-next-line unicorn/consistent-function-scoping -- runs in the page (serialized by evaluate); it cannot reference module scope
         const visible = el => {
           if (!el) return false
           const r = el.getBoundingClientRect()
@@ -851,14 +877,14 @@ async function uiDump(ui) {
         }
         const conn = document.querySelector('span.conn[role=status]')
         const gate = [...document.querySelectorAll('[role=dialog]')].find(d =>
-          /Authorize this browser/.test(d.getAttribute('aria-label') ?? d.textContent ?? ''),
+          (d.getAttribute('aria-label') ?? d.textContent ?? '').includes('Authorize this browser'),
         )
         return {
           hash: location.hash,
           connection: conn ? (conn.textContent ?? '').trim() : null,
           gate: gate ? (visible(gate) ? 'visible' : 'present, hidden') : 'absent',
           nav: document.querySelector('nav [aria-current=page]')?.textContent?.trim() ?? null,
-          body: (document.body?.innerText ?? '').replace(/\b\d{6}\b/g, '<code>').slice(0, 300),
+          body: (document.body?.innerText ?? '').replaceAll(/\b\d{6}\b/g, '<code>').slice(0, 300),
         }
       },
       null,
@@ -890,7 +916,7 @@ async function uiServed(srv) {
   })
   const html = await r.text()
   if (r.status !== 200) return { served: false, why: `status ${r.status}` }
-  if (!/<title>Svelte DevTools<\/title>/.test(html) || !html.includes('id="app"'))
+  if (!html.includes('<title>Svelte DevTools</title>') || !html.includes('id="app"'))
     return { served: false, why: 'not the DevTools UI HTML (fallback page?)' }
   return { served: true }
 }
@@ -933,8 +959,7 @@ async function main() {
   const gitBefore = gitStatus([p.dir, 'pnpm-lock.yaml'])
 
   const home = fs.mkdtempSync(path.join(os.tmpdir(), `compat-${p.id}-home-`))
-  if (!flag('keep-home'))
-    cleanup.push(async () => fs.rmSync(home, { recursive: true, force: true }))
+  if (!flag('keep-home')) cleanup.push(() => fs.rmSync(home, { recursive: true, force: true }))
   const port = await freePort()
   let srv = startDev(p, { port, home })
   const getSrv = () => srv
@@ -984,7 +1009,7 @@ async function main() {
       const { result } = await mcp(srv, 'tools/list')
       const names = result.tools.map(t => t.name)
       const missing = REQUIRED_TOOLS.filter(n => !names.includes(n))
-      if (missing.length) throw new Error(`missing tools: ${missing.join(', ')}`)
+      if (missing.length > 0) throw new Error(`missing tools: ${missing.join(', ')}`)
       return { required: REQUIRED_TOOLS.length, listed: names.length }
     })
     await step('T1 MCP session id traversal rejected (C-7)', 20_000, async () => {
@@ -1035,10 +1060,10 @@ async function main() {
         const want = [...new Set([p.targets.ssr?.path, p.targets.load?.path].filter(Boolean))]
         const text = JSON.stringify(list)
         const missing = want.filter(r => !text.includes(`"${r}"`))
-        if (missing.length) throw new Error(`routes missing ${missing.join(', ')}`)
+        if (missing.length > 0) throw new Error(`routes missing ${missing.join(', ')}`)
         return { routes: list.length, checked: want }
       }
-      if (list.length !== 0) throw new Error(`plain Svelte profile: ${list.length} routes`)
+      if (list.length > 0) throw new Error(`plain Svelte profile: ${list.length} routes`)
       return { routes: 0 }
     })
     await step('T1 get_capture_info', 15_000, async () => {
@@ -1062,20 +1087,23 @@ async function main() {
     await stopDev(srv)
   }
 
-  await step('T1 production build has no DevTools code', 200_000, async () => {
+  await step('T1 production build has no DevTools code', 200_000, () => {
     const hits = prodBuild(p, home)
-    if (hits.length) throw new Error(`markers in build: ${JSON.stringify(hits.slice(0, 5))}`)
+    if (hits.length > 0) throw new Error(`markers in build: ${JSON.stringify(hits.slice(0, 5))}`)
     return { markers: 0 }
   })
-  for (const fn of cleanup.splice(0).reverse()) await fn().catch(() => {}) // HMR restore etc. before the git check
-  await step('repo: pnpm-lock.yaml and the profile dir unchanged by the run', 10_000, async () => {
+  await runCleanup() // HMR restore etc. before the git check
+  await step('repo: pnpm-lock.yaml and the profile dir unchanged by the run', 10_000, () => {
     const after = gitStatus([p.dir, 'pnpm-lock.yaml'])
     if (gitBefore === null || after === null) return { unverified: 'git status unavailable' }
     const added = after.filter(l => !gitBefore.includes(l))
-    if (added.length) throw new Error(`new changes: ${added.slice(0, 5).join(' | ')}`)
+    if (added.length > 0) throw new Error(`new changes: ${added.slice(0, 5).join(' | ')}`)
     return { preExisting: gitBefore.length }
   })
 }
+
+// Page-side probe (serialized by waitForFunction): a DevTools runtime global exists.
+const hasRuntime = () => Object.keys(window).some(k => /^__SVELTE_.*DEVTOOLS__$/.test(k))
 
 // T2 browser + the app's first view. Runs BEFORE any authorized MCP call:
 // those take the collector's 60 s MCP lease (plugin.ts) and would activate
@@ -1112,7 +1140,6 @@ async function openApp(getSrv) {
   page.on('framenavigated', f => {
     if (f === page.mainFrame()) navigations++
   })
-  const hasRuntime = () => Object.keys(window).some(k => /^__SVELTE_.*DEVTOOLS__$/.test(k))
   const runtimeActive = () =>
     page.evaluate(
       () => window[Object.keys(window).find(k => /^__SVELTE_.*DEVTOOLS__$/.test(k))]?._active,
@@ -1126,7 +1153,6 @@ async function openApp(getSrv) {
     consoleErrorCount: () => consoleErrorCount,
     viteLog,
     navigations: () => navigations,
-    hasRuntime,
     runtimeActive,
   }
 
@@ -1146,7 +1172,7 @@ async function openApp(getSrv) {
 }
 
 async function tier2(p, getSrv, restart, app) {
-  const { browser, ctx, page, errors, consoleErrors, hasRuntime, runtimeActive } = app
+  const { browser, ctx, page, errors, consoleErrors, runtimeActive } = app
 
   await step(
     'T2 lease: first MCP call activates the runtime; fixture components listed',
@@ -1168,7 +1194,7 @@ async function tier2(p, getSrv, restart, app) {
     // ReactiveSummary (types.ts); rows are active instances (top K), other = the rest (runtime.ts)
     if (s.policy !== 'sampled-200ms' || s.coverage !== 'component-init')
       throw new Error(`policy ${s.policy} / coverage ${s.coverage}`)
-    if (s.components?.total == null || s.other == null)
+    if ((s.components?.total ?? null) === null || (s.other ?? null) === null)
       throw new Error('total or other unknown (null)')
     if (s.rows.length + s.other.components !== s.components.total)
       throw new Error('rows + other ≠ total')
@@ -1193,7 +1219,6 @@ async function tier2(p, getSrv, restart, app) {
     const file = fileBase(sc.file)
     if (sc.path && sc.path !== '/')
       await page.goto(getSrv().base + sc.path, { waitUntil: 'load', timeout: 30_000 })
-    const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
     const ofState = c => c.name === sc.state && fileBase(c.componentFile) === file
     const brief = cs =>
       JSON.stringify(
@@ -1275,7 +1300,7 @@ async function tier2(p, getSrv, restart, app) {
     // includeMeta shape (server.ts): {epoch, total, captured, truncated, components}
     for (const k of ['epoch', 'total', 'captured', 'truncated', 'components'])
       if (!(k in (live ?? {}))) throw new Error(`get_live_components includeMeta lacks ${k}`)
-    if (!inst || live.epoch == null)
+    if (!inst || (live.epoch ?? null) === null)
       throw new Error(`${file} instance or epoch missing in get_live_components`)
     const scope = await tool(getSrv(), 'get_reactive_scope', {
       componentId: inst.id,
@@ -1286,7 +1311,8 @@ async function tier2(p, getSrv, restart, app) {
     if (scope?.stale) throw new Error(`scope stale: ${scope.staleReason ?? 'no reason'}`)
     if (scope.scope !== inst.id || scope.epoch !== live.epoch)
       throw new Error('scope answered another instance or epoch')
-    if (!Array.isArray(scope.nodes) || !scope.nodes.length) throw new Error('scope has no nodes')
+    if (!Array.isArray(scope.nodes) || scope.nodes.length === 0)
+      throw new Error('scope has no nodes')
     if (!['scoped', 'global-head', 'server-filter'].includes(scope.policy))
       throw new Error(`policy ${scope.policy}`)
     return {
@@ -1355,7 +1381,9 @@ async function tier2(p, getSrv, restart, app) {
         })
       } catch (e) {
         const latest = { vite: app.viteLog.slice(-5), navigations: app.navigations() - navFrom }
-        throw new Error(`HMR revert not applied: ${e.message} ${JSON.stringify(latest)}`)
+        throw new Error(`HMR revert not applied: ${e.message} ${JSON.stringify(latest)}`, {
+          cause: e,
+        })
       }
       return result
     },
@@ -1387,11 +1415,11 @@ async function tier2(p, getSrv, restart, app) {
                 const gate = [...document.querySelectorAll('[role=dialog]')].some(
                   d =>
                     d.getAttribute('aria-label') === 'Authorize this browser' ||
-                    /Authorize this browser/.test(d.textContent ?? ''),
+                    (d.textContent ?? '').includes('Authorize this browser'),
                 )
                 return { connected: !!conn?.classList.contains('connected'), gate }
               }),
-            x => x.connected || x.gate,
+            x => x.connected === true || x.gate === true,
             30_000,
           )
           const uiConnectedMs = Date.now() - restartedAt
@@ -1406,6 +1434,7 @@ async function tier2(p, getSrv, restart, app) {
         } catch (e) {
           throw new Error(
             `${String(e?.message ?? e).slice(0, 600)} | restartMs ${restartMs}, since restart ${Date.now() - restartedAt} ms | ui: ${JSON.stringify(await uiDump(ui))}`,
+            { cause: e },
           )
         }
       } else if (mode === 'dock') {
@@ -1479,7 +1508,7 @@ async function tier2(p, getSrv, restart, app) {
   set(
     'T2 no page errors',
     errors.length === 0 ? 'PASS' : 'FAIL',
-    errors.length
+    errors.length > 0
       ? {
           errors: errors.slice(0, 3),
           errorCount: errors.length + (errors.overflow ?? 0),
@@ -1496,7 +1525,7 @@ let finishing = false
 async function finish(code) {
   if (finishing) return
   finishing = true
-  for (const fn of cleanup.splice(0).reverse()) await fn().catch(() => {})
+  await runCleanup()
   if (tier < 2)
     for (const s of PLAN)
       if (s.startsWith('T2') && ledger.get(s).status === 'NOT RUN')
@@ -1515,15 +1544,16 @@ async function finish(code) {
   const leaked = [...secrets].filter(s => out.some(l => l.includes(s)) || body.includes(s))
   ledger.set('privacy: no token / code in stdout or --json', {
     step: 'privacy: no token / code in stdout or --json',
-    status: secrets.size === 0 ? 'UNVERIFIED' : leaked.length ? 'FAIL' : 'PASS',
+    status: secrets.size === 0 ? 'UNVERIFIED' : leaked.length > 0 ? 'FAIL' : 'PASS',
     ...(secrets.size === 0 && { reason: 'no secret was read' }),
-    ...(leaked.length && { leaked: leaked.length }),
+    ...(leaked.length > 0 && { leaked: leaked.length }),
   })
   summary.steps = [...ledger.values()]
-  if (jsonOut && !leaked.length)
+  if (jsonOut && leaked.length === 0)
     fs.writeFileSync(path.resolve(jsonOut), JSON.stringify(summary, null, 2) + '\n')
   const st = summary.steps.map(s => s.status)
-  const exit = code || (st.includes('FAIL') ? 1 : st.some(s => s !== 'PASS' && s !== 'N/A') ? 3 : 0)
+  const exit =
+    code > 0 ? code : st.includes('FAIL') ? 1 : st.some(s => s !== 'PASS' && s !== 'N/A') ? 3 : 0
   for (const s of summary.steps)
     if (s.status === 'NOT RUN' || s.step.startsWith('privacy'))
       console.log(`${s.status} ${s.step}${s.reason ? ` (${s.reason})` : ''}`)
@@ -1535,14 +1565,18 @@ async function finish(code) {
 
 const watchdog = setTimeout(() => {
   say(`watchdog: --max-min=${maxMin} exceeded`)
-  finish(4)
+  void finish(4)
 }, maxMin * 60_000)
 watchdog.unref()
-for (const sig of ['SIGINT', 'SIGTERM']) process.once(sig, () => finish(130))
-
-main()
-  .then(() => finish(0))
-  .catch(async e => {
-    say(`FATAL ${mask(String(e?.message ?? e)).slice(0, 300)}`)
-    await finish(1)
+for (const sig of ['SIGINT', 'SIGTERM'])
+  process.once(sig, () => {
+    void finish(130)
   })
+
+try {
+  await main()
+} catch (e) {
+  say(`FATAL ${mask(String(e?.message ?? e)).slice(0, 300)}`)
+  await finish(1)
+}
+await finish(0)

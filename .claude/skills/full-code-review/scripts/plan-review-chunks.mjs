@@ -217,12 +217,12 @@ if (format === 'md') {
     ``,
     `## Files per chunk`,
     ``,
-    ...chunks.flatMap((c, i) => [
-      `### ${i + 1}. ${c.name} (${c.fileCount} files, ${c.totalLines} lines)`,
-      ``,
-      ...c.files.map(f => `- \`${f}\``),
-      ``,
-    ]),
+    ...chunks.flatMap((c, i) =>
+      [`### ${i + 1}. ${c.name} (${c.fileCount} files, ${c.totalLines} lines)`, ``].concat(
+        c.files.map(f => `- \`${f}\``),
+        [``],
+      ),
+    ),
   ]
   console.log(lines.join('\n'))
 } else {

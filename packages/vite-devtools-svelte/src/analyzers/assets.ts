@@ -1,5 +1,6 @@
-import fs from 'fs'
-import path from 'path'
+import fs from 'node:fs'
+import path from 'node:path'
+
 import type { AssetInfo } from '../types.js'
 
 export const MIME_TYPES: Record<string, string> = {
@@ -41,7 +42,7 @@ export function analyzeAssets(staticDir: string, publicBase = '/'): AssetInfo[] 
   const assets: AssetInfo[] = []
   const base = publicBase.endsWith('/') ? publicBase : `${publicBase}/`
   scanDir(staticDir, staticDir, base, assets)
-  return assets.sort((a, b) => a.relativePath.localeCompare(b.relativePath))
+  return assets.toSorted((a, b) => a.relativePath.localeCompare(b.relativePath))
 }
 
 function scanDir(dir: string, rootDir: string, base: string, assets: AssetInfo[]): void {
@@ -68,7 +69,7 @@ function scanDir(dir: string, rootDir: string, base: string, assets: AssetInfo[]
       relativePath,
       url: base + relativePath.split(path.sep).map(encodeURIComponent).join('/'),
       size: stat.size,
-      type: MIME_TYPES[ext] || 'application/octet-stream',
+      type: MIME_TYPES[ext] ?? 'application/octet-stream',
       mtime: stat.mtimeMs,
     })
   }

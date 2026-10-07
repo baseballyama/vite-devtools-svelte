@@ -13,7 +13,7 @@
     { id: 1, text: 'Open /.svelte-devtools/', done: false },
     { id: 2, text: 'Pick App in Components', done: false },
   ])
-  const remaining = $derived(todos.filter((t) => !t.done).length)
+  const remaining = $derived(todos.filter(t => !t.done).length)
   const label = $derived(`${remaining} of ${todos.length} left`)
 
   $effect(() => {
@@ -33,7 +33,7 @@
   }
 
   function toggle(id: number) {
-    const t = todos.find((x) => x.id === id)
+    const t = todos.find(x => x.id === id)
     if (t) t.done = !t.done
   }
 </script>

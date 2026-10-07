@@ -1,9 +1,7 @@
-<script lang="ts" module>
-  export type Tone = 'neutral' | 'accent' | 'green' | 'yellow' | 'red' | 'blue' | 'purple' | 'cyan'
-</script>
-
 <script lang="ts">
   import type { Snippet } from 'svelte'
+
+  import type { Tone } from './types.js'
 
   let {
     tone = 'neutral',

@@ -16,7 +16,7 @@ const posts: Record<string, { title: string; content: string }> = {
   },
 }
 
-export const load: PageServerLoad = async ({ params }) => {
+export const load: PageServerLoad = ({ params }) => {
   const post = posts[params.slug]
 
   if (!post) {

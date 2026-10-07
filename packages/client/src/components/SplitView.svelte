@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
+
   import { persisted } from '../lib/persisted.svelte.js'
 
   /**
@@ -68,7 +69,8 @@
   function onkeydown(e: KeyboardEvent) {
     const step = e.shiftKey ? 64 : 16
     const grow = side === 'end' || stacked ? ['ArrowLeft', 'ArrowUp'] : ['ArrowRight', 'ArrowDown']
-    const shrink = side === 'end' || stacked ? ['ArrowRight', 'ArrowDown'] : ['ArrowLeft', 'ArrowUp']
+    const shrink =
+      side === 'end' || stacked ? ['ArrowRight', 'ArrowDown'] : ['ArrowLeft', 'ArrowUp']
     if (grow.includes(e.key)) size.value = clamped + step
     else if (shrink.includes(e.key)) size.value = clamped - step
     else return

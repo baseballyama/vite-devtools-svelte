@@ -1,24 +1,12 @@
-<script lang="ts" module>
-  import type { IconName } from '../lib/icons.js'
-
-  export interface Command {
-    id: string
-    label: string
-    hint?: string
-    group: string
-    icon: IconName
-    keywords?: string
-    run: () => void
-  }
-</script>
-
 <script lang="ts">
   import { tick } from 'svelte'
-  import { matcher } from '../lib/match.js'
-  import Icon from './Icon.svelte'
-  import Highlight from './Highlight.svelte'
 
-  let { open = $bindable(false), commands }: { open: boolean; commands: Command[] } = $props()
+  import { matcher } from '../lib/match.js'
+  import Highlight from './Highlight.svelte'
+  import Icon from './Icon.svelte'
+  import type { Command } from './types.js'
+
+  let { open = $bindable(false), commands }: { open?: boolean; commands: Command[] } = $props()
 
   let query = $state('')
   let index = $state(0)
@@ -28,7 +16,7 @@
 
   const results = $derived.by(() => {
     const m = matcher(query)
-    return m ? commands.filter((c) => m(c.label, c.hint, c.group, c.keywords)) : commands
+    return m ? commands.filter(c => m(c.label, c.hint, c.group, c.keywords)) : commands
   })
 
   $effect(() => {
@@ -36,13 +24,13 @@
       returnFocus = document.activeElement as HTMLElement | null
       query = ''
       index = 0
-      tick().then(() => input?.focus())
+      void tick().then(() => input?.focus())
     }
   })
 
   function close() {
     open = false
-    returnFocus?.focus?.()
+    returnFocus?.focus()
   }
 
   function run(c: Command | undefined) {
@@ -54,7 +42,9 @@
   function move(delta: number) {
     if (!results.length) return
     index = (index + delta + results.length) % results.length
-    tick().then(() => listEl?.querySelector(`[data-i="${index}"]`)?.scrollIntoView({ block: 'nearest' }))
+    void tick().then(() =>
+      listEl?.querySelector(`[data-i="${index}"]`)?.scrollIntoView({ block: 'nearest' }),
+    )
   }
 
   function onkeydown(e: KeyboardEvent) {
@@ -71,7 +61,7 @@
 
 {#if open}
   <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-  <div class="scrim" onclick={(e) => e.target === e.currentTarget && close()}>
+  <div class="scrim" onclick={e => e.target === e.currentTarget && close()}>
     <div class="palette" role="dialog" aria-modal="true" aria-label="Command palette">
       <div class="field">
         <Icon name="search" size={15} />

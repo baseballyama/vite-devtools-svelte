@@ -38,7 +38,7 @@ function parseExternalUrl(urlStr: string): URL {
  */
 function hostOf(url: URL): string {
   return url.hostname
-    .replace(/^\[|\]$/g, '')
+    .replaceAll(/^\[|\]$/g, '')
     .toLowerCase()
     .replace(/\.$/, '')
 }
@@ -142,7 +142,7 @@ for (const [prefix, bits] of [
  * malformed value is never let through.
  */
 export function isPrivateIP(ip: string): boolean {
-  const host = ip.replace(/^\[|\]$/g, '').toLowerCase()
+  const host = ip.replaceAll(/^\[|\]$/g, '').toLowerCase()
   const version = net.isIP(host)
   if (version === 4) return BLOCKED_V4.check(host, 'ipv4')
   if (version !== 6) return true
@@ -160,16 +160,22 @@ function ipv6Words(ip: string): number[] {
     const [a, b, c, d] = dotted[1]!.split('.').map(Number) as [number, number, number, number]
     text = `${text.slice(0, dotted.index)}${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}`
   }
-  const [head = '', tail] = text.split('::') as [string, string | undefined]
-  const parse = (part: string) => (part === '' ? [] : part.split(':').map(w => parseInt(w, 16)))
-  if (tail === undefined) return parse(head)
-  const left = parse(head)
-  const right = parse(tail)
-  return [...left, ...Array<number>(8 - left.length - right.length).fill(0), ...right]
+  const [head, tail] = text.split('::') as [string, string | undefined]
+  if (tail === undefined) return hexWords(head)
+  const left = hexWords(head)
+  const right = hexWords(tail)
+  return [...left, ...Array.from({ length: 8 - left.length - right.length }, () => 0), ...right]
+}
+
+function hexWords(part: string): number[] {
+  return part === '' ? [] : part.split(':').map(w => Number.parseInt(w, 16))
+}
+
+function dottedQuad(hi: number, lo: number): string {
+  return `${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`
 }
 
 function embeddedIPv4(words: number[]): string | null {
-  const v4 = (hi: number, lo: number) => `${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`
   const [w0, w1, w2, w3, w4, w5, w6, w7] = words as [
     number,
     number,
@@ -182,13 +188,14 @@ function embeddedIPv4(words: number[]): string | null {
   ]
   const zeroPrefix = w0 === 0 && w1 === 0 && w2 === 0 && w3 === 0 && w4 === 0
   // ::ffff:a.b.c.d (mapped) and ::a.b.c.d (compatible, deprecated)
-  if (zeroPrefix && (w5 === 0xffff || w5 === 0) && (w6 !== 0 || w5 === 0xffff)) return v4(w6, w7)
+  if (zeroPrefix && (w5 === 0xffff || w5 === 0) && (w6 !== 0 || w5 === 0xffff))
+    return dottedQuad(w6, w7)
   // 64:ff9b::a.b.c.d (NAT64 well-known prefix)
   if (w0 === 0x64 && w1 === 0xff9b && w2 === 0 && w3 === 0 && w4 === 0 && w5 === 0) {
-    return v4(w6, w7)
+    return dottedQuad(w6, w7)
   }
   // 2002:aabb:ccdd::/48 (6to4)
-  if (w0 === 0x2002) return v4(w1, w2)
+  if (w0 === 0x2002) return dottedQuad(w1, w2)
   return null
 }
 

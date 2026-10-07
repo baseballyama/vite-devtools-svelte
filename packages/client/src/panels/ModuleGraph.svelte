@@ -1,20 +1,21 @@
 <script lang="ts">
-  import { getModuleGraph, openInEditor } from '../lib/rpc.js'
-  import type { ModuleGraphData, ModuleNode } from '../lib/types.js'
-  import { resource } from '../lib/resource.svelte.js'
-  import { matcher } from '../lib/match.js'
-  import { basename, formatBytes } from '../lib/format.js'
-  import Panel from '../components/Panel.svelte'
-  import SplitView from '../components/SplitView.svelte'
-  import DataTable, { type Column, type SortState } from '../components/DataTable.svelte'
+  import Badge from '../components/Badge.svelte'
+  import Button from '../components/Button.svelte'
+  import DataTable from '../components/DataTable.svelte'
+  import EmptyState from '../components/EmptyState.svelte'
+  import Highlight from '../components/Highlight.svelte'
+  import Icon from '../components/Icon.svelte'
   import Inspector from '../components/Inspector.svelte'
+  import Panel from '../components/Panel.svelte'
   import SearchField from '../components/SearchField.svelte'
   import Segmented from '../components/Segmented.svelte'
-  import Button from '../components/Button.svelte'
-  import Badge, { type Tone } from '../components/Badge.svelte'
-  import Icon from '../components/Icon.svelte'
-  import Highlight from '../components/Highlight.svelte'
-  import EmptyState from '../components/EmptyState.svelte'
+  import SplitView from '../components/SplitView.svelte'
+  import type { Column, SortState, TableRowState, Tone } from '../components/types.js'
+  import { basename, formatBytes } from '../lib/format.js'
+  import { matcher } from '../lib/match.js'
+  import { resource } from '../lib/resource.svelte.js'
+  import { getModuleGraph, openInEditor } from '../lib/rpc.js'
+  import type { ModuleGraphData, ModuleNode } from '../lib/types.js'
 
   const graph = resource<ModuleGraphData>(getModuleGraph, { initial: { modules: [], cycles: [] } })
 
@@ -25,7 +26,7 @@
   let sort = $state<SortState | null>({ id: 'size', desc: true })
   let selected = $state<string | null>(null)
 
-  const byId = $derived(new Map(graph.data.modules.map((m) => [m.id, m])))
+  const byId = $derived(new Map(graph.data.modules.map(m => [m.id, m])))
 
   const typeCounts = $derived.by(() => {
     const c: Record<string, number> = {}
@@ -36,34 +37,74 @@
   const typeOptions = $derived([
     { value: 'all' as TypeFilter, label: 'All', count: graph.data.modules.length },
     ...(['svelte', 'ts', 'js', 'css', 'other'] as const)
-      .filter((t) => typeCounts[t])
-      .map((t) => ({ value: t as TypeFilter, label: t === 'svelte' ? 'Svelte' : t.toUpperCase(), count: typeCounts[t] })),
+      .filter(t => typeCounts[t])
+      .map(t => ({
+        value: t,
+        label: t === 'svelte' ? 'Svelte' : t.toUpperCase(),
+        count: typeCounts[t],
+      })),
   ])
 
   const rows = $derived.by(() => {
     const m = matcher(query)
     return graph.data.modules.filter(
-      (mod) => (type === 'all' || mod.type === type) && (!cyclicOnly || mod.isCyclic) && (!m || m(mod.id)),
+      mod =>
+        (type === 'all' || mod.type === type) && (!cyclicOnly || mod.isCyclic) && (!m || m(mod.id)),
     )
   })
 
   const maxSize = $derived(graph.data.modules.reduce((m, x) => Math.max(m, x.size ?? 0), 1))
   const current = $derived(selected ? (byId.get(selected) ?? null) : null)
-  const currentCycles = $derived(current ? graph.data.cycles.filter((c) => c.includes(current.id)) : [])
+  const currentCycles = $derived(
+    current ? graph.data.cycles.filter(c => c.includes(current.id)) : [],
+  )
 
-  const tones: Record<ModuleNode['type'], Tone> = { svelte: 'accent', ts: 'blue', js: 'yellow', css: 'purple', other: 'neutral' }
+  const tones: Record<ModuleNode['type'], Tone> = {
+    svelte: 'accent',
+    ts: 'blue',
+    js: 'yellow',
+    css: 'purple',
+    other: 'neutral',
+  }
 
   const columns: Column<ModuleNode>[] = [
-    { id: 'id', label: 'Module', width: 'minmax(0, 1fr)', sort: (a, b) => a.id.localeCompare(b.id) },
-    { id: 'imports', label: 'Imports', width: '64px', align: 'end', descFirst: true, minWidth: 560, sort: (a, b) => a.imports.length - b.imports.length },
-    { id: 'importers', label: 'Importers', width: '72px', align: 'end', descFirst: true, sort: (a, b) => a.importedBy.length - b.importedBy.length },
-    { id: 'size', label: 'Size', width: '132px', align: 'end', descFirst: true, sort: (a, b) => (a.size ?? 0) - (b.size ?? 0) },
+    {
+      id: 'id',
+      label: 'Module',
+      width: 'minmax(0, 1fr)',
+      sort: (a, b) => a.id.localeCompare(b.id),
+    },
+    {
+      id: 'imports',
+      label: 'Imports',
+      width: '64px',
+      align: 'end',
+      descFirst: true,
+      minWidth: 560,
+      sort: (a, b) => a.imports.length - b.imports.length,
+    },
+    {
+      id: 'importers',
+      label: 'Importers',
+      width: '72px',
+      align: 'end',
+      descFirst: true,
+      sort: (a, b) => a.importedBy.length - b.importedBy.length,
+    },
+    {
+      id: 'size',
+      label: 'Size',
+      width: '132px',
+      align: 'end',
+      descFirst: true,
+      sort: (a, b) => (a.size ?? 0) - (b.size ?? 0),
+    },
   ]
 
   function select(id: string) {
     if (!byId.has(id)) return
     // Make sure the target is visible under the current filters.
-    if (!rows.some((m) => m.id === id)) {
+    if (!rows.some(m => m.id === id)) {
       query = ''
       type = 'all'
       cyclicOnly = false
@@ -87,21 +128,38 @@
     {/if}
   {/snippet}
   {#snippet actions()}
-    <Button icon="refresh" variant="ghost" label="Refresh module graph" disabled={graph.busy} onclick={() => graph.refresh()} />
+    <Button
+      icon="refresh"
+      variant="ghost"
+      label="Refresh module graph"
+      disabled={graph.busy}
+      onclick={() => graph.refresh()}
+    />
   {/snippet}
 
   <SplitView id="modules" open={!!current}>
-    <DataTable items={rows} {columns} getKey={(m) => m.id} bind:sort bind:selected label="Modules" onactivate={open}>
-      {#snippet row(m, { visible })}
+    <DataTable
+      items={rows}
+      {columns}
+      getKey={(m: ModuleNode) => m.id}
+      bind:sort
+      bind:selected
+      label="Modules"
+      onactivate={open}
+    >
+      {#snippet row(m: ModuleNode, { visible }: TableRowState)}
         <span class="mod">
           <Badge tone={tones[m.type]}>{m.type}</Badge>
           <span class="truncate mono id"><Highlight text={m.id} {query} /></span>
-          {#if m.isCyclic}<span class="cyc" title="Part of a circular import"><Icon name="cycle" size={12} /></span>{/if}
+          {#if m.isCyclic}<span class="cyc" title="Part of a circular import"
+              ><Icon name="cycle" size={12} /></span
+            >{/if}
         </span>
         {#if visible.has('imports')}<span class="end num muted">{m.imports.length || ''}</span>{/if}
         <span class="end num muted">{m.importedBy.length || ''}</span>
         <span class="size end">
-          {#if m.size}<span class="bar" style:width="{Math.max(2, (m.size / maxSize) * 56)}px"></span>{/if}
+          {#if m.size}<span class="bar" style:width="{Math.max(2, (m.size / maxSize) * 56)}px"
+            ></span>{/if}
           <span class="num">{m.size ? formatBytes(m.size) : '—'}</span>
         </span>
       {/snippet}
@@ -109,17 +167,28 @@
         {#if graph.loading}
           <EmptyState title="Reading module graph…" />
         {:else if graph.error}
-          <EmptyState icon="errors" tone="error" title="Could not read module graph"><p class="mono">{graph.error}</p></EmptyState>
+          <EmptyState icon="errors" tone="error" title="Could not read module graph"
+            ><p class="mono">{graph.error}</p></EmptyState
+          >
         {:else}
-          <EmptyState icon="modules" title={graph.data.modules.length ? 'No modules match' : 'No modules transformed yet'}>
-            {#if !graph.data.modules.length}<p>Open the app so Vite transforms its modules, then refresh.</p>{/if}
+          <EmptyState
+            icon="modules"
+            title={graph.data.modules.length ? 'No modules match' : 'No modules transformed yet'}
+          >
+            {#if !graph.data.modules.length}<p>
+                Open the app so Vite transforms its modules, then refresh.
+              </p>{/if}
           </EmptyState>
         {/if}
       {/snippet}
     </DataTable>
     {#snippet aside()}
       {#if current}
-        <Inspector title={basename(current.id)} subtitle={current.id} onclose={() => (selected = null)}>
+        <Inspector
+          title={basename(current.id)}
+          subtitle={current.id}
+          onclose={() => (selected = null)}
+        >
           {#snippet badges()}
             <Badge tone={tones[current.type]}>{current.type}</Badge>
             {#if current.size}<Badge>{formatBytes(current.size)}</Badge>{/if}
@@ -132,7 +201,11 @@
             <h3 class="section-title"><Icon name="cycle" size={12} /> Cycle {i + 1}</h3>
             <ol class="cycle">
               {#each cycle as id, j (j)}
-                <li><button class:me={id === current.id} onclick={() => select(id)}>{basename(id)}</button></li>
+                <li>
+                  <button type="button" class:me={id === current.id} onclick={() => select(id)}
+                    >{basename(id)}</button
+                  >
+                </li>
               {/each}
             </ol>
           {/each}
@@ -151,7 +224,7 @@
       {#each ids.slice(0, 500) as id (id)}
         {@const m = byId.get(id)}
         <li>
-          <button onclick={() => select(id)} disabled={!m} title={id}>
+          <button type="button" onclick={() => select(id)} disabled={!m} title={id}>
             {#if m}<Badge tone={tones[m.type]}>{m.type}</Badge>{/if}
             <span class="truncate">{basename(id)}</span>
             <span class="sub truncate mono">{id}</span>

@@ -31,12 +31,13 @@
 <div class="todo-list">
   <h3>Todo List ({remaining} remaining)</h3>
 
-  <form onsubmit={(e) => { e.preventDefault(); addTodo(); }}>
-    <input
-      type="text"
-      placeholder="Add a todo..."
-      bind:value={newTodo}
-    />
+  <form
+    onsubmit={e => {
+      e.preventDefault()
+      addTodo()
+    }}
+  >
+    <input type="text" placeholder="Add a todo..." bind:value={newTodo} />
     <button type="submit">Add</button>
   </form>
 
@@ -47,7 +48,7 @@
           <input type="checkbox" bind:checked={todo.done} />
           <span>{todo.text}</span>
         </label>
-        <button class="remove" onclick={() => removeTodo(todo.id)}>x</button>
+        <button type="button" class="remove" onclick={() => removeTodo(todo.id)}>x</button>
       </li>
     {/each}
   </ul>

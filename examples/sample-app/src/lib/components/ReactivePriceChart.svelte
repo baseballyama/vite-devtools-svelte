@@ -20,13 +20,7 @@
   <div class="grid">
     <label>
       税率
-      <input
-        type="number"
-        step="0.01"
-        min="0"
-        max="0.5"
-        bind:value={taxRate}
-      />
+      <input type="number" step="0.01" min="0" max="0.5" bind:value={taxRate} />
     </label>
     <label>
       送料無料しきい値
@@ -35,7 +29,10 @@
   </div>
 
   <dl>
-    <div><dt>小計</dt><dd>¥{subtotal.toLocaleString()}</dd></div>
+    <div>
+      <dt>小計</dt>
+      <dd>¥{subtotal.toLocaleString()}</dd>
+    </div>
     <div>
       <dt>消費税 ({(taxRate * 100).toFixed(0)}%)</dt>
       <dd>¥{tax.toLocaleString()}</dd>

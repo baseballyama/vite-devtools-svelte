@@ -1,4 +1,5 @@
 {
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
   "singleQuote": true,
   "semi": false,
   "printWidth": 100,
@@ -6,12 +7,17 @@
   "useTabs": false,
   "trailingComma": "all",
   "arrowParens": "avoid",
+  "sortImports": true,
+  "sortPackageJson": true,
+  "svelte": true,
   "ignorePatterns": [
     "**/node_modules/**",
     "**/dist/**",
     "**/build/**",
     "**/.svelte-kit/**",
     "**/coverage/**",
-    "pnpm-lock.yaml"
+    "pnpm-lock.yaml",
+    "**/pnpm-lock.yaml",
+    "e2e/compat/kit3/pnpm-lock.yaml"
   ]
 }

@@ -14,7 +14,12 @@
     noun = 'items',
     detached = 0,
     stale = null,
-  }: { info?: CaptureInfo | null; noun?: string; detached?: number; stale?: string | null } = $props()
+  }: {
+    info?: CaptureInfo | null
+    noun?: string
+    detached?: number
+    stale?: string | null
+  } = $props()
 
   const reasons: Record<string, string> = {
     'runtime-count': 'the app buffer was full before they were sent',
@@ -23,7 +28,9 @@
     'server-bytes': 'the dev server buffer hit its size budget',
   }
 
-  const truncated = $derived(!!info?.truncated && (info.total === null || info.total > info.captured))
+  const truncated = $derived(
+    !!info?.truncated && (info.total === null || info.total > info.captured),
+  )
   const dropped = $derived(info?.dropped?.reduce((s, d) => s + d.count, 0) ?? 0)
   const title = $derived(
     [
@@ -33,9 +40,15 @@
           : `The dev server keeps ${info!.captured.toLocaleString()} ${noun}; ${(info!.total - info!.captured).toLocaleString()} more exist in the app.`
         : '',
       info?.policy ? `Policy: ${info.policy}.` : '',
-      ...(info?.dropped ?? []).filter((d) => d.count > 0).map((d) => `${d.count.toLocaleString()} dropped: ${reasons[d.reason] ?? d.reason}.`),
-      info?.valueTooLarge ? `${info.valueTooLarge.toLocaleString()} values were too large to snapshot (shown as a size).` : '',
-      detached ? `${detached.toLocaleString()} ${noun} are shown as roots because their parent was not captured.` : '',
+      ...(info?.dropped ?? [])
+        .filter(d => d.count > 0)
+        .map(d => `${d.count.toLocaleString()} dropped: ${reasons[d.reason] ?? d.reason}.`),
+      info?.valueTooLarge
+        ? `${info.valueTooLarge.toLocaleString()} values were too large to snapshot (shown as a size).`
+        : '',
+      detached
+        ? `${detached.toLocaleString()} ${noun} are shown as roots because their parent was not captured.`
+        : '',
       stale ? `Stale: ${stale}.` : '',
     ]
       .filter(Boolean)
@@ -47,8 +60,10 @@
   <span class="notice" role="status" {title}>
     <Icon name="warning" size={12} />
     {#if truncated}
-      Showing {#if info!.policy}{info!.policy}{/if} <strong class="num">{info!.captured.toLocaleString()}</strong>
-      {#if info!.total === null}of ?{:else}of <span class="num">{info!.total.toLocaleString()}</span>{/if}
+      Showing {#if info!.policy}{info!.policy}{/if}
+      <strong class="num">{info!.captured.toLocaleString()}</strong>
+      {#if info!.total === null}of ?{:else}of <span class="num">{info!.total.toLocaleString()}</span
+        >{/if}
     {/if}
     {#if dropped}
       {#if truncated}·{/if}

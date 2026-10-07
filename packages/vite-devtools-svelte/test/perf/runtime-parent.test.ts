@@ -10,6 +10,7 @@
 // component_context = its ctx restored (runtime.js update_reaction); the
 // live `active_effect` binding is exported (internal/client/index.js).
 import { describe, expect, it } from 'vitest'
+
 import { wrapperCode } from '../../src/runtime/index.js'
 import { createRuntime, type Harness } from './harness.js'
 
@@ -54,7 +55,7 @@ function svelteModel() {
     // top-level $effect during init is deferred until pop (mount)
     if (componentContext && !componentContext.i && ns.active_effect?.branch) {
       ;(componentContext.e ??= []).push(fn)
-      return undefined
+      return null
     }
     const effect = create(fn)
     queue.push(effect)
@@ -80,7 +81,7 @@ function svelteModel() {
     return { rerun: (next: () => void) => run(block, () => ns.branch(next)) }
   }
   const flush = () => {
-    while (queue.length) {
+    while (queue.length > 0) {
       const effect = queue.shift()!
       run(effect, () => effect.fn?.())
     }
@@ -88,12 +89,19 @@ function svelteModel() {
   return { ns, flush, root: (fn: () => void) => ns.branch(fn) }
 }
 
+/** Every component added across delta messages. */
+function addedIn(msgs: any[]): any[] {
+  return msgs.flatMap(m => m.added ?? [])
+}
+
 function loadWrapper(ns: any, window: Record<string, any>) {
   const body = wrapperCode
     .replace(/^import \* as __svelte_original from 'svelte\/internal\/client';?$/m, '')
     .replace(/^export \* from 'svelte\/internal\/client';?$/m, '')
-    .replace(/^export function /gm, 'function ')
+    .replaceAll(/^export function /gm, 'function ')
     .replace(/^export \{[^}]*\};?$/m, '')
+  // Evaluates the wrapper module's own source against the model namespace.
+  // oxlint-disable-next-line typescript/no-implied-eval -- running the wrapper source under test is the point
   return new Function('__svelte_original', 'window', `${body}\nreturn { push, pop, each };`)(
     ns,
     window,
@@ -147,7 +155,7 @@ describe('B1b: parent of a component created by a later block update', () => {
 
     // delta form (what the hot channel carries)
     h.flushTimers()
-    const added = componentsSent(h).flatMap(m => m.added ?? [])
+    const added = addedIn(componentsSent(h))
     expect(added.map((c: any) => [c.name, c.parentId])).toEqual([
       ['Row', app.id],
       ['Cell', newRow.id],

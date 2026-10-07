@@ -1,24 +1,25 @@
 <script lang="ts">
-  import { datasetVersion } from '../lib/versions.js'
-  import { getCompilerWarnings, getRuntimeErrors, clearErrors, openInEditor } from '../lib/rpc.js'
-  import type { CompilerWarning, RuntimeError } from '../lib/types.js'
-  import { resource } from '../lib/resource.svelte.js'
-  import { matcher } from '../lib/match.js'
-  import { formatClock, shortPath } from '../lib/format.js'
-  import Panel from '../components/Panel.svelte'
-  import SplitView from '../components/SplitView.svelte'
-  import VirtualList from '../components/VirtualList.svelte'
+  import Badge from '../components/Badge.svelte'
+  import Button from '../components/Button.svelte'
+  import CaptureNotice from '../components/CaptureNotice.svelte'
+  import EmptyState from '../components/EmptyState.svelte'
+  import Highlight from '../components/Highlight.svelte'
+  import Icon from '../components/Icon.svelte'
   import Inspector from '../components/Inspector.svelte'
+  import LiveControls from '../components/LiveControls.svelte'
+  import Panel from '../components/Panel.svelte'
   import SearchField from '../components/SearchField.svelte'
   import Segmented from '../components/Segmented.svelte'
-  import Button from '../components/Button.svelte'
-  import Badge from '../components/Badge.svelte'
-  import Icon from '../components/Icon.svelte'
-  import Highlight from '../components/Highlight.svelte'
-  import EmptyState from '../components/EmptyState.svelte'
-  import LiveControls from '../components/LiveControls.svelte'
-  import CaptureNotice from '../components/CaptureNotice.svelte'
+  import SplitView from '../components/SplitView.svelte'
+  import VirtualList from '../components/VirtualList.svelte'
   import { captureInfo } from '../lib/capture.svelte.js'
+  import { countBy } from '../lib/collections.js'
+  import { formatClock, shortPath } from '../lib/format.js'
+  import { matcher } from '../lib/match.js'
+  import { resource } from '../lib/resource.svelte.js'
+  import { getCompilerWarnings, getRuntimeErrors, clearErrors, openInEditor } from '../lib/rpc.js'
+  import type { CompilerWarning, RuntimeError } from '../lib/types.js'
+  import { datasetVersion } from '../lib/versions.js'
 
   interface Problem {
     key: string
@@ -37,7 +38,11 @@
       const [warnings, errors] = await Promise.all([getCompilerWarnings(), getRuntimeErrors()])
       return { warnings, errors }
     },
-    { initial: { warnings: [] as CompilerWarning[], errors: [] as RuntimeError[] }, interval: 3000, version: datasetVersion('errors') },
+    {
+      initial: { warnings: [] as CompilerWarning[], errors: [] as RuntimeError[] },
+      interval: 3000,
+      version: datasetVersion('errors'),
+    },
   )
 
   const capture = captureInfo(3000)
@@ -46,9 +51,16 @@
   let selected = $state<string | null>(null)
 
   const all = $derived.by<Problem[]>(() => {
-    const errs: Problem[] = [...problems.data.errors]
-      .reverse()
-      .map((e, i) => ({ key: `e:${e.timestamp}:${i}`, kind: 'error', message: e.message, file: e.file, line: e.line, column: e.column, stack: e.stack, timestamp: e.timestamp }))
+    const errs: Problem[] = [...problems.data.errors].reverse().map((e, i) => ({
+      key: `e:${e.timestamp}:${i}`,
+      kind: 'error',
+      message: e.message,
+      file: e.file,
+      line: e.line,
+      column: e.column,
+      stack: e.stack,
+      timestamp: e.timestamp,
+    }))
     const warns: Problem[] = problems.data.warnings.map((w, i) => ({
       key: `w:${w.file}:${w.line ?? 0}:${w.column ?? 0}:${w.code}:${i}`,
       kind: 'warning',
@@ -63,17 +75,17 @@
 
   const rows = $derived.by(() => {
     const m = matcher(query)
-    return all.filter((p) => (kind === 'all' || p.kind === kind) && (!m || m(p.message, p.code, p.file)))
+    return all.filter(
+      p => (kind === 'all' || p.kind === kind) && (!m || m(p.message, p.code, p.file)),
+    )
   })
 
-  const current = $derived(selected ? (all.find((p) => p.key === selected) ?? null) : null)
+  const current = $derived(selected ? (all.find(p => p.key === selected) ?? null) : null)
 
   // Most frequent warning codes — a quick way to triage a noisy project.
-  const topCodes = $derived.by(() => {
-    const c = new Map<string, number>()
-    for (const w of problems.data.warnings) c.set(w.code, (c.get(w.code) ?? 0) + 1)
-    return [...c].sort((a, b) => b[1] - a[1]).slice(0, 4)
-  })
+  const topCodes = $derived(
+    [...countBy(problems.data.warnings, w => w.code)].sort((a, b) => b[1] - a[1]).slice(0, 4),
+  )
 
   function open(p: Problem) {
     if (p.file) openInEditor(p.file, p.line).catch(() => {})
@@ -85,7 +97,10 @@
     selected = null
   }
 
-  const loc = (p: Problem) => (p.file ? `${shortPath(p.file, 3)}${p.line ? `:${p.line}` : ''}${p.column ? `:${p.column}` : ''}` : '')
+  const loc = (p: Problem) =>
+    p.file
+      ? `${shortPath(p.file, 3)}${p.line ? `:${p.line}` : ''}${p.column ? `:${p.column}` : ''}`
+      : ''
 </script>
 
 <Panel title="Problems" count={all.length}>
@@ -99,11 +114,21 @@
         { value: 'warning', label: 'Warnings', count: problems.data.warnings.length },
       ]}
     />
-    <SearchField bind:value={query} placeholder="Filter by message, code or file…" count={rows.length} />
+    <SearchField
+      bind:value={query}
+      placeholder="Filter by message, code or file…"
+      count={rows.length}
+    />
     <CaptureNotice info={capture.data.runtimeErrors} noun="runtime errors" />
     <CaptureNotice info={capture.data.compilerWarnings} noun="warnings" />
     {#each topCodes as [code, n] (code)}
-      <button class="chip" class:on={query === code} onclick={() => (query = query === code ? '' : code)} title="Filter by {code}">
+      <button
+        type="button"
+        class="chip"
+        class:on={query === code}
+        onclick={() => (query = query === code ? '' : code)}
+        title="Filter by {code}"
+      >
         {code}<span class="num">{n}</span>
       </button>
     {/each}
@@ -113,19 +138,35 @@
   {/snippet}
 
   <SplitView id="problems" open={!!current}>
-    <VirtualList items={rows} getKey={(p) => p.key} bind:selected rowHeight={44} label="Problems" onactivate={open}>
-      {#snippet row(p)}
-        <span class="sev {p.kind}"><Icon name={p.kind === 'error' ? 'errors' : 'warning'} size={14} /></span>
+    <VirtualList
+      items={rows}
+      getKey={(p: Problem) => p.key}
+      bind:selected
+      rowHeight={44}
+      label="Problems"
+      onactivate={open}
+    >
+      {#snippet row(p: Problem)}
+        <span class="sev {p.kind}"
+          ><Icon name={p.kind === 'error' ? 'errors' : 'warning'} size={14} /></span
+        >
         <span class="text">
           <span class="msg truncate"><Highlight text={p.message} {query} /></span>
           <span class="meta">
             {#if p.code}<span class="code mono"><Highlight text={p.code} {query} /></span>{/if}
-            {#if p.file}<span class="loc mono truncate"><Highlight text={loc(p)} {query} /></span>{/if}
+            {#if p.file}<span class="loc mono truncate"><Highlight text={loc(p)} {query} /></span
+              >{/if}
             {#if p.timestamp}<span class="faint num">{formatClock(p.timestamp)}</span>{/if}
           </span>
         </span>
         {#if p.file}
-          <button class="open" tabindex="-1" title="Open in editor" onclick={(e) => (e.stopPropagation(), open(p))}><Icon name="editor" size={13} /></button>
+          <button
+            type="button"
+            class="open"
+            tabindex="-1"
+            title="Open in editor"
+            onclick={e => (e.stopPropagation(), open(p))}><Icon name="editor" size={13} /></button
+          >
         {/if}
       {/snippet}
       {#snippet empty()}
@@ -142,13 +183,19 @@
     </VirtualList>
     {#snippet aside()}
       {#if current}
-        <Inspector title={current.kind === 'error' ? 'Runtime error' : (current.code ?? 'Warning')} subtitle={loc(current)} onclose={() => (selected = null)}>
+        <Inspector
+          title={current.kind === 'error' ? 'Runtime error' : (current.code ?? 'Warning')}
+          subtitle={loc(current)}
+          onclose={() => (selected = null)}
+        >
           {#snippet badges()}
             <Badge tone={current.kind === 'error' ? 'red' : 'yellow'}>{current.kind}</Badge>
             {#if current.timestamp}<Badge>{formatClock(current.timestamp, true)}</Badge>{/if}
           {/snippet}
           {#snippet actions()}
-            {#if current.file}<Button icon="editor" onclick={() => open(current)}>Open {current.line ? `line ${current.line}` : 'file'}</Button>{/if}
+            {#if current.file}<Button icon="editor" onclick={() => open(current)}
+                >Open {current.line ? `line ${current.line}` : 'file'}</Button
+              >{/if}
           {/snippet}
           <h3 class="section-title">Message</h3>
           <p class="message">{current.message}</p>
@@ -159,7 +206,11 @@
           {#if current.code}
             <h3 class="section-title">Reference</h3>
             <p class="message">
-              <a href="https://svelte.dev/docs/svelte/compiler-warnings#{current.code}" target="_blank" rel="noopener noreferrer">svelte.dev — {current.code}</a>
+              <a
+                href="https://svelte.dev/docs/svelte/compiler-warnings#{current.code}"
+                target="_blank"
+                rel="noopener noreferrer">svelte.dev — {current.code}</a
+              >
             </p>
           {/if}
         </Inspector>

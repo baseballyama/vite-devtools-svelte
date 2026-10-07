@@ -1,6 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths'
   import { page } from '$app/state'
+
   import SvelteMark from './SvelteMark.svelte'
   import ThemeToggle from './ThemeToggle.svelte'
   import { pkgVersion } from './version'

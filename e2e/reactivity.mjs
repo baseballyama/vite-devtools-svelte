@@ -16,16 +16,19 @@
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+
 import { chromium } from 'playwright-core'
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const repoRoot = path.resolve(import.meta.dirname, '..')
 const appDir = path.join(repoRoot, 'playground')
 const argv = process.argv.slice(2)
 const port = Number(argv.find(a => a.startsWith('--port='))?.slice(7) ?? 5290)
 const headed = argv.includes('--headed')
 const base = `http://127.0.0.1:${port}`
-const sleep = ms => new Promise(r => setTimeout(r, ms))
+const sleep = ms =>
+  new Promise(r => {
+    setTimeout(r, ms)
+  })
 
 // ------------------------------------------------------------------ ledger
 const results = []
@@ -50,9 +53,14 @@ const child = spawn(
   { cwd: appDir, detached: true, stdio: ['ignore', 'pipe', 'pipe'] },
 )
 let log = ''
-child.stdout.on('data', d => (log += d))
-child.stderr.on('data', d => (log += d))
+child.stdout.on('data', d => {
+  log += d
+})
+child.stderr.on('data', d => {
+  log += d
+})
 const stopServer = () => {
+  if (child.pid === undefined) return
   try {
     process.kill(-child.pid, 'SIGTERM')
   } catch {}
@@ -144,7 +152,7 @@ function checkTree(label, comps) {
 // ------------------------------------------------------------------ run
 let browser
 try {
-  for (let i = 0; i < 200 && !/x-svelte-devtools-token:/.test(log); i++) await sleep(150)
+  for (let i = 0; i < 200 && !log.includes('x-svelte-devtools-token:'); i++) await sleep(150)
   token = log.match(/x-svelte-devtools-token:([0-9a-f-]{36})/)?.[1]
   if (!token) throw new Error(`dev server did not start:\n${log.slice(-2000)}`)
 
@@ -294,7 +302,7 @@ try {
   // ---------------------------------------------------------------- timeline
   const timeline = await tool('get_state_timeline', {})
   let cursor = timeline.cursor
-  async function changesAfter(action, expectNames) {
+  const changesAfter = async (action, expectNames) => {
     await action()
     const found = await until(
       async () => {
@@ -345,8 +353,8 @@ try {
   fs.writeFileSync(
     hmrFile,
     hmrOriginal.replace(
-      '<button onclick={() => (editing = !editing)}>edit</button>',
-      '<button onclick={() => (editing = !editing)}>edit!</button>',
+      '<button type="button" onclick={() => (editing = !editing)}>edit</button>',
+      '<button type="button" onclick={() => (editing = !editing)}>edit!</button>',
     ),
   )
   await page.waitForFunction(

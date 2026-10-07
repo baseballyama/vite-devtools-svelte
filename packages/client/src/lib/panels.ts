@@ -3,6 +3,7 @@
  * palette and the router. Panels are code-split and loaded on first visit.
  */
 import type { Component } from 'svelte'
+
 import type { IconName } from './icons.js'
 
 export type PanelGroup = 'app' | 'perf' | 'tools'

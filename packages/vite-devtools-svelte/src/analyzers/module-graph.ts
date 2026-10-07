@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+
 import type { ModuleGraphData, ModuleNode } from '../types.js'
 
 /** Minimal shape of a Vite module-graph node that we read. */

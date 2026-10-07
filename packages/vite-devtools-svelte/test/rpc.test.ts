@@ -1,7 +1,9 @@
-import { describe, it, expect, vi } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+
+import { describe, it, expect, vi } from 'vitest'
+
 import {
   createRpcFunctions,
   createSvelteDevframe,
@@ -11,11 +13,17 @@ import {
 import { createTestHost, rpcHandlers } from './helpers.js'
 
 vi.mock('node:dns/promises', () => ({
-  default: { lookup: async () => [{ address: '93.184.215.14', family: 4 }] },
+  default: { lookup: () => Promise.resolve([{ address: '93.184.215.14', family: 4 }]) },
 }))
 
 const FIXTURES_DIR = path.resolve(import.meta.dirname, 'fixtures')
 const COUNTER = path.join(FIXTURES_DIR, 'src/lib/components/Counter.svelte')
+
+/** Reads (get-*, inspect-*) are queries, except the outbound OG fetch. */
+function expectedRpcType(name: string): 'query' | 'action' {
+  if (name === 'get-og-preview') return 'action'
+  return /^(get-|inspect-)/.test(name) ? 'query' : 'action'
+}
 
 describe('devframe definition', () => {
   it('is a dev-only, host-agnostic tool mounted at /.svelte-devtools/', () => {
@@ -24,7 +32,7 @@ describe('devframe definition', () => {
     expect(def.basePath).toBe(DEVFRAME_BASE)
     expect(def.capabilities).toEqual({ dev: true, build: false })
     expect(def.packageName).toBe('vite-devtools-svelte')
-    expect(String(def.clientAssets)).toMatch(/client$/)
+    expect(def.clientAssets).toMatch(/client$/)
   })
 
   it('registers every RPC under the svelte-devtools scope with bare names', async () => {
@@ -37,9 +45,7 @@ describe('devframe definition', () => {
     } as any)
     expect(registered).toContain('svelte-devtools:get-project')
     expect(registered).toContain('svelte-devtools:get-state-timeline-delta')
-    expect(
-      registered.every(n => n.startsWith('svelte-devtools:') && n.split(':').length === 2),
-    ).toBe(true)
+    expect(registered.filter(n => !/^svelte-devtools:[^:]+$/.test(n))).toEqual([])
   })
 
   it('marks reads as query, mutations as action, all JSON-serializable', () => {
@@ -53,7 +59,7 @@ describe('devframe definition', () => {
       fns.map(fn => ({
         name: fn.name,
         jsonSerializable: true,
-        type: /^(get-|inspect-)/.test(fn.name) && fn.name !== 'get-og-preview' ? 'query' : 'action',
+        type: expectedRpcType(fn.name),
       })),
     )
   })
@@ -170,10 +176,12 @@ describe('file access sandbox', () => {
   })
 
   it('inspect-file returns source, and compiled output + map from the dev server', async () => {
-    const transformRequest = vi.fn(async () => ({
-      code: 'compiled',
-      map: JSON.stringify({ mappings: 'AAAA', sources: ['Counter.svelte'] }),
-    }))
+    const transformRequest = vi.fn(() =>
+      Promise.resolve({
+        code: 'compiled',
+        map: JSON.stringify({ mappings: 'AAAA', sources: ['Counter.svelte'] }),
+      }),
+    )
     const r = rpcHandlers(createTestHost(FIXTURES_DIR, { transformRequest }))
     const result = await r.get('svelte-devtools:inspect-file')!({
       file: 'src/lib/components/Counter.svelte',
@@ -190,7 +198,7 @@ describe('file access sandbox', () => {
   it('inspect-file reports transform failures without throwing', async () => {
     const r = rpcHandlers(
       createTestHost(FIXTURES_DIR, {
-        transformRequest: async () => Promise.reject(new Error('x')),
+        transformRequest: () => Promise.reject(new Error('x')),
       }),
     )
     const result = await r.get('svelte-devtools:inspect-file')!({ file: COUNTER })
@@ -230,13 +238,13 @@ describe('file access sandbox', () => {
   })
 })
 
-describe('module graph RPC', () => {
-  const file = (rel: string) => path.join(FIXTURES_DIR, rel)
-  const mod = (rel: string, imports: any[] = []) => ({
-    file: file(rel),
-    importedModules: new Set(imports),
-  })
+const fixtureFile = (rel: string) => path.join(FIXTURES_DIR, rel)
+const mod = (rel: string, imports: any[] = []) => ({
+  file: fixtureFile(rel),
+  importedModules: new Set(imports),
+})
 
+describe('module graph RPC', () => {
   it('builds project-local nodes, edges, types and cycles from the dev server graph', async () => {
     const a = mod('src/a.ts')
     const b = mod('src/b.svelte')
@@ -250,7 +258,7 @@ describe('module graph RPC', () => {
     const modules = [a, b, c, css, dep, { ...a }]
     const r = rpcHandlers(createTestHost(FIXTURES_DIR, { modules: () => modules }))
     const graph = await r.get('svelte-devtools:get-module-graph')!()
-    const ids = graph.modules.map((m: any) => m.id).sort()
+    const ids = graph.modules.map((m: any) => m.id).toSorted()
     expect(ids).toEqual(['src/a.ts', 'src/b.svelte', 'src/c.js', 'src/s.css'])
     const byId = Object.fromEntries(graph.modules.map((m: any) => [m.id, m]))
     expect(byId['src/a.ts'].type).toBe('ts')

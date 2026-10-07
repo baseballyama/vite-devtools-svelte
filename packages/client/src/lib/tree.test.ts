@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+
 import {
   defaultExpansion,
   remapAcross,
@@ -52,6 +53,19 @@ const app = (rowIds: number[], extra: Inst[] = []): Inst[] => [
 ]
 const remap1 = (key: string, prev: AnchorIndex<Node>, next: AnchorIndex<Node>) =>
   remapKeys([key], prev, next, idOf, keyOf)[0] ?? null
+/** Rows with a `Cell` child under 11, 13 (unless `removedChild`) and 14. */
+const withKids = (rowIds: number[], removedChild = false) =>
+  app(rowIds, [
+    { id: 111, name: 'Cell', parentId: 11 },
+    ...(removedChild ? [] : [{ id: 131, name: 'Cell', parentId: 13 }]),
+    { id: 141, name: 'Cell', parentId: 14 },
+  ])
+const at = (epoch: string | null, list: Inst[]): EpochIndex<Node> => ({
+  ...snapshot(list),
+  epoch,
+})
+const across = (key: string, prev: EpochIndex<Node>, next: EpochIndex<Node>) =>
+  remapAcross([key], prev, next, idOf, keyOf)[0] ?? null
 
 describe('tree anchors (review U4b)', () => {
   const rows = [10, 11, 12, 13, 14]
@@ -73,7 +87,7 @@ describe('tree anchors (review U4b)', () => {
   })
 
   it('keyed reverse keeps the same instance', () => {
-    const next = snapshot(app([...rows].reverse()))
+    const next = snapshot(app(rows.toReversed()))
     const key = remap1(selected, prev, next)
     expect(next.byKey.get(key!)!.c.id).toBe(13)
     expect(key).toBe('App#0/Row#1')
@@ -97,12 +111,6 @@ describe('tree anchors (review U4b)', () => {
   })
 
   it('expanded set follows the same rules', () => {
-    const withKids = (rowIds: number[], removedChild = false) =>
-      app(rowIds, [
-        { id: 111, name: 'Cell', parentId: 11 },
-        ...(removedChild ? [] : [{ id: 131, name: 'Cell', parentId: 13 }]),
-        { id: 141, name: 'Cell', parentId: 14 },
-      ])
     const p = snapshot(withKids(rows))
     const expanded = ['App#0', 'App#0/Row#1', 'App#0/Row#3'] // ids 1, 11, 13
 
@@ -130,12 +138,6 @@ describe('tree anchors (review U4b)', () => {
 })
 
 describe('tree anchors across app page loads (review U4b epoch)', () => {
-  const at = (epoch: string | null, list: Inst[]): EpochIndex<Node> => ({
-    ...snapshot(list),
-    epoch,
-  })
-  const across = (key: string, prev: EpochIndex<Node>, next: EpochIndex<Node>) =>
-    remapAcross([key], prev, next, idOf, keyOf)[0] ?? null
   const selected = 'App#0/Row#3' // id 13 in epoch A
 
   it('reload: ids reused by the new page load → resolve by path, not by id', () => {

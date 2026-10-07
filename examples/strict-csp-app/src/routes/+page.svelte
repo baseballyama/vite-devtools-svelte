@@ -10,11 +10,11 @@
   </p>
 
   <p>
-    DevTools UI が起動できるか、また起動した場合に何が CSP に弾かれるかを
-    DevTools の Console / Network タブで確認する用途。
+    DevTools UI が起動できるか、また起動した場合に何が CSP に弾かれるかを DevTools の Console /
+    Network タブで確認する用途。
   </p>
 
-  <button onclick={() => count++}>クリック数: {count}</button>
+  <button type="button" onclick={() => count++}>クリック数: {count}</button>
 
   <h2>確認手順</h2>
   <ol>
@@ -26,8 +26,10 @@
 
   <h2>適用されている CSP</h2>
   <p>
-    詳しくは <code>vite.config.ts</code> の <code>csp</code> オプションを参照。<code>script-src 'self'</code>{' '}
-    で nonce のない外部 script は全て弾かれ、<code>img-src 'self' data:</code>{' '}
+    詳しくは <code>vite.config.ts</code> の <code>csp</code> オプションを参照。<code
+      >script-src 'self'</code
+    >
+    で nonce のない外部 script は全て弾かれ、<code>img-src 'self' data:</code>
     で外部画像取得もブロックされる。
   </p>
 </main>

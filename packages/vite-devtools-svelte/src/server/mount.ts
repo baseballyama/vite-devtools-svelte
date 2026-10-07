@@ -1,10 +1,12 @@
-import os from 'node:os'
 import type { Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import type { ViteDevServer } from 'vite'
+import os from 'node:os'
+
 import type { DevframeDefinition } from 'devframe'
 import { initDevframe } from 'devframe/initiate'
 import type { DevframeInstance } from 'devframe/initiate'
+import type { ViteDevServer } from 'vite'
+
 import { DEVFRAME_BASE } from './devframe.js'
 
 const WILDCARD = new Set(['0.0.0.0', '::'])
@@ -19,7 +21,7 @@ function formatHost(address: string): string {
  * reachable beyond loopback (`server.host`). devframe accepts loopback
  * origins by default and rejects every other WS `Origin` unless listed.
  */
-export function networkOrigins(address: AddressInfo, proto: string): string[] {
+function networkOrigins(address: AddressInfo, proto: string): string[] {
   if (LOOPBACK.has(address.address)) return []
   const hosts = WILDCARD.has(address.address)
     ? Object.values(os.networkInterfaces())

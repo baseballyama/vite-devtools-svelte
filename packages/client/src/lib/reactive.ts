@@ -1,3 +1,4 @@
+import { formatValue } from './format.js'
 /**
  * Reactivity data helpers (docs/devframe-migration.md §6.7 A/I).
  *
@@ -5,8 +6,8 @@
  * the server did not report is `null` / `false`.
  */
 import { getReactiveGraph, getReactiveSummary } from './rpc.js'
-import { formatValue } from './format.js'
 import type {
+  ReactiveEdge,
   ReactiveGraph,
   ReactiveGraphRequest,
   ReactiveGraphResult,
@@ -17,7 +18,7 @@ import type {
 } from './types.js'
 
 /** Server-side caps (§6.7 A); larger requests are rejected by the RPC schema. */
-export const GRAPH_CAPS = { maxNodes: 5000, maxEdges: 20000 } as const
+const GRAPH_CAPS = { maxNodes: 5000, maxEdges: 20000 } as const
 
 export const EMPTY_GRAPH: ReactiveGraphResult = {
   nodes: [],
@@ -119,7 +120,7 @@ export const BASELINE_UNKNOWN =
  * reported, and `null` (no notice) only when the runtime says it is complete.
  */
 export function baselineNotice(
-  b: { complete: boolean; pendingNodes: number } | undefined | null,
+  b?: { complete: boolean; pendingNodes: number } | null,
 ): string | null {
   if (!b) return BASELINE_UNKNOWN
   if (b.complete) return null
@@ -158,9 +159,11 @@ export function sameGraph(a: ReactiveGraphResult, b: ReactiveGraphResult): boole
   )
     return false
   if (a.nodes.length !== b.nodes.length || a.edges.length !== b.edges.length) return false
-  for (let i = 0; i < a.nodes.length; i++) if (!sameNode(a.nodes[i], b.nodes[i])) return false
+  for (let i = 0; i < a.nodes.length; i++) if (!sameNode(a.nodes[i]!, b.nodes[i]!)) return false
   for (let i = 0; i < a.edges.length; i++) {
-    if (a.edges[i].from !== b.edges[i].from || a.edges[i].to !== b.edges[i].to) return false
+    const ea = a.edges[i]!
+    const eb = b.edges[i]!
+    if (ea.from !== eb.from || ea.to !== eb.to) return false
   }
   return true
 }
@@ -204,3 +207,24 @@ export function groupByFile(rows: readonly ReactiveSummaryRow[]): SummaryFileRow
 /** Registered nodes of a row. */
 export const nodeCount = (n: { state: number; derived: number; effect: number }) =>
   n.state + n.derived + n.effect
+
+/**
+ * Ids of the nodes of `file` plus the endpoints of edges touching them, in a
+ * single pass over `edges` (an edge between two outside nodes counts once one
+ * of them has been pulled in by an earlier edge).
+ */
+export function fileNeighbourhood(
+  nodes: readonly ReactiveNode[],
+  edges: readonly ReactiveEdge[],
+  file: string,
+): Set<string> {
+  const ids = new Set<string>()
+  for (const n of nodes) if (n.componentFile === file) ids.add(n.id)
+  for (const e of edges) {
+    if (ids.has(e.from) || ids.has(e.to)) {
+      ids.add(e.from)
+      ids.add(e.to)
+    }
+  }
+  return ids
+}

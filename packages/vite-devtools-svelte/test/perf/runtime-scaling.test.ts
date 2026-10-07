@@ -5,6 +5,7 @@
 //
 // No `it.fails`: every known defect found so far is fixed and asserted here.
 import { describe, it, expect } from 'vitest'
+
 import {
   createRuntime,
   mountList,
@@ -15,6 +16,30 @@ import {
 } from './harness.js'
 
 // Fake clock + deterministic JSON.stringify cost model (see P2 tests).
+/** One churn tick: every numeric signal changes. */
+function bumpNumbers(signals: Array<{ v: unknown }>) {
+  for (const s of signals) if (typeof s.v === 'number') s.v++
+}
+
+/**
+ * What the poller will do with this tick's slice (read before it runs):
+ * object values whose ref / write version moved are dirty; unchanged ones
+ * past their re-check time are overdue. Primitives are not counted.
+ */
+function classifySlice(dt: any, slice: readonly unknown[], now: number) {
+  let dirty: number = dt._pollDirty.size
+  let overdue = 0
+  for (const nodeId of slice) {
+    const signal = dt._reactiveNodes.get(nodeId).signal.deref()
+    const value = dt._readStateValue(nodeId, signal)
+    if (value === null || typeof value !== 'object') continue
+    const meta = dt._pollMeta.get(nodeId)
+    if (meta.ref !== value || meta.wv !== signal.wv) dirty++
+    else if (now >= meta.nextCheckAt) overdue++
+  }
+  return { dirty, overdue }
+}
+
 function simulatedClock(nsPerChar = 10) {
   let now = 0
   return {
@@ -71,7 +96,7 @@ describe('runtime memory bounds', () => {
     const poll = h.intervals.find(i => i.ms === 200)
     expect(poll).toBeDefined()
     for (let tick = 0; tick < 50; tick++) {
-      for (const s of signals) if (typeof s.v === 'number') s.v++
+      bumpNumbers(signals)
       poll!.fn()
     }
     // raw array: bulk-trimmed, at most 2 x the cap between trims
@@ -99,7 +124,9 @@ describe('runtime scaling (huge app)', () => {
     const h = createRuntime({
       clock: () => now,
       deltas: false, // the full-push fallback is what the throttle protects
-      onSend: bytes => (now += bytes * 1e-5),
+      onSend: bytes => {
+        now += bytes * 1e-5
+      },
     })
     // §6.3: activation (inside createRuntime) already sent one full snapshot
     // of the then-empty tree. Assert it explicitly, then measure from here.
@@ -111,7 +138,7 @@ describe('runtime scaling (huge app)', () => {
     h.flushTimers() // first throttled push: ≈ 1.3 MB
     const first = h.sent.filter(m => m.event === 'svelte-devtools:components')
     expect(first.length).toBe(1)
-    expect(first[0].bytes).toBeGreaterThan(1_000_000)
+    expect(first[0]!.bytes).toBeGreaterThan(1_000_000)
     // churn: 1 000 mounts/unmounts must not reset or multiply the timer
     for (let i = 0; i < 1000; i++) {
       const id = h.dt.register('/app/src/lib/X.svelte')
@@ -203,16 +230,7 @@ describe('runtime scaling (huge app)', () => {
       { length: Math.min(4096, ids.length) },
       (_, i) => ids[(dt._pollCursor + i) % ids.length],
     )
-    let dirty = dt._pollDirty.size
-    let overdue = 0
-    for (const nodeId of slice) {
-      const signal = dt._reactiveNodes.get(nodeId).signal.deref()
-      const value = dt._readStateValue(nodeId, signal)
-      if (value === null || typeof value !== 'object') continue
-      const meta = dt._pollMeta.get(nodeId)
-      if (meta.ref !== value || meta.wv !== signal.wv) dirty++
-      else if (sim.now() >= meta.nextCheckAt) overdue++
-    }
+    const { dirty, overdue } = classifySlice(dt, slice, sim.now())
     const idle = sim.run(poll, 1, 0) // same instant: nothing changed
     expect(dirty).toBe(0)
     expect(idle.calls).toBe(overdue)
@@ -230,27 +248,28 @@ describe('runtime scaling (huge app)', () => {
   })
 })
 
-describe('state polling correctness under budgets', () => {
-  // Fake clock: time-based re-checks are tested without real waiting.
-  function single(value: unknown, opts: { proxy?: boolean } = {}) {
-    let now = 0
-    const h = createRuntime({ clock: () => now })
-    const id = h.dt.register('/app/src/lib/S.svelte')
-    const signal: any = { v: value, wv: 1 }
-    if (opts.proxy) h.dt.trackProxy(value, 'x', id)
-    else h.dt.trackState(signal, 'x', id)
-    h.dt.registered(id)
-    return {
-      h,
-      signal,
-      poll: pollFn(h),
-      nodeId: id + ':x',
-      advance: (ms: number) => (now += ms),
-    }
+// Fake clock: time-based re-checks are tested without real waiting.
+function single(value: unknown, opts: { proxy?: boolean } = {}) {
+  let now = 0
+  const h = createRuntime({ clock: () => now })
+  const id = h.dt.register('/app/src/lib/S.svelte')
+  const signal: any = { v: value, wv: 1 }
+  if (opts.proxy) h.dt.trackProxy(value, 'x', id)
+  else h.dt.trackState(signal, 'x', id)
+  h.dt.registered(id)
+  return {
+    h,
+    signal,
+    poll: pollFn(h),
+    nodeId: id + ':x',
+    advance: (ms: number) => (now += ms),
   }
-  const changesFor = (h: Harness, nodeId: string) =>
-    h.dt._stateTimeline.filter((c: any) => c.id === nodeId)
+}
 
+const changesFor = (h: Harness, nodeId: string) =>
+  h.dt._stateTimeline.filter((c: any) => c.id === nodeId)
+
+describe('state polling correctness under budgets', () => {
   it('records primitive changes on the next tick', () => {
     const { h, signal, poll, nodeId } = single(1)
     poll()
@@ -312,7 +331,7 @@ describe('state polling correctness under budgets', () => {
     const big = Array.from({ length: 500 }, (_, i) => ({ i, label: 'item ' + i }))
     const { h, poll, nodeId, advance } = single(big)
     poll()
-    big[5].label = 'changed'
+    big[5]!.label = 'changed'
     poll()
     expect(changesFor(h, nodeId).length).toBe(0) // not yet: within RECHECK_MS (seed only)
     advance(1001)
@@ -372,7 +391,7 @@ describe('state polling correctness under budgets', () => {
     poll()
     expect(changesFor(h, nodeId)).toHaveLength(0) // seed
     expect(h.dt._stateSnapshotStrs.get(nodeId).length).toBeLessThan(64)
-    big[10].i = -1
+    big[10]!.i = -1
     advance(60_000)
     poll()
     const changes = changesFor(h, nodeId)
@@ -400,9 +419,9 @@ describe('state polling correctness under budgets', () => {
   }, 60_000)
 })
 
-describe('activity subscription (devframe-migration §6.3)', () => {
-  const events = (h: Harness) => h.sent.map(m => m.event)
+const events = (h: Harness) => h.sent.map(m => m.event)
 
+describe('activity subscription (devframe-migration §6.3)', () => {
   it('announces itself with runtime-ready on boot and on HMR reconnect', () => {
     const h = createRuntime({ active: false })
     expect(events(h)).toEqual(['svelte-devtools:runtime-ready'])
@@ -418,7 +437,7 @@ describe('activity subscription (devframe-migration §6.3)', () => {
     expect((comp!.data as any).components.length).toBe(51)
     expect(events(h)).toContain('svelte-devtools:profiles')
     expect(events(h)).toContain('svelte-devtools:state-timeline')
-    expect(h.intervals.map(i => i.ms).sort()).toEqual([200, 500])
+    expect(h.intervals.map(i => i.ms).toSorted((x, y) => x - y)).toEqual([200, 500])
     expect(h.rafCallbacks).toBe(1)
     // a repeated active:true is not a new activation
     const before = h.sent.length
@@ -455,24 +474,24 @@ describe('activity subscription (devframe-migration §6.3)', () => {
   })
 })
 
-describe('state timeline transfer (devframe-migration §6.4)', () => {
-  function setup() {
-    const h = createRuntime()
-    const id = h.dt.register('/app/src/lib/T.svelte')
-    h.dt.registered(id)
-    const add = (n: number, big = 0) => {
-      const sigs = Array.from({ length: n }, (_, i) => {
-        const sig: any = { v: big ? Array.from({ length: big }, (_, k) => k + i) : i, wv: 1 }
-        h.dt.trackState(sig, 's' + h.dt._reactiveNodes.size, id)
-        return sig
-      })
-      return sigs
-    }
-    const timelineMsgs = () =>
-      h.sent.filter(m => m.event === 'svelte-devtools:state-timeline').map(m => m.data as any)
-    return { h, add, poll: () => pollFn(h)(), timelineMsgs }
+function setup() {
+  const h = createRuntime()
+  const id = h.dt.register('/app/src/lib/T.svelte')
+  h.dt.registered(id)
+  const add = (n: number, big = 0) => {
+    const sigs = Array.from({ length: n }, (_, i) => {
+      const sig: any = { v: big ? Array.from({ length: big }, (_unused, k) => k + i) : i, wv: 1 }
+      h.dt.trackState(sig, 's' + h.dt._reactiveNodes.size, id)
+      return sig
+    })
+    return sigs
   }
+  const timelineMsgs = () =>
+    h.sent.filter(m => m.event === 'svelte-devtools:state-timeline').map(m => m.data as any)
+  return { h, add, poll: () => pollFn(h)(), timelineMsgs }
+}
 
+describe('state timeline transfer (devframe-migration §6.4)', () => {
   it('pushes only new entries since the previous push, tagged with a stable epoch', () => {
     const { h, add, poll, timelineMsgs } = setup()
     const sigs = add(3)
@@ -559,7 +578,9 @@ describe('scoped reactive graph (review U1)', () => {
 
     h.emit('svelte-devtools:request-reactive-graph', { componentId: a })
     const g = h.sent.at(-1)!.data as any
-    expect(g.nodes.map((n: any) => n.id).sort()).toEqual([`${a}:count`, `${b}:double`].sort())
+    expect(g.nodes.map((n: any) => n.id).toSorted()).toEqual(
+      [`${a}:count`, `${b}:double`].toSorted(),
+    )
     expect(g.edges).toEqual([{ from: `${a}:count`, to: `${b}:double` }])
 
     h.emit('svelte-devtools:request-reactive-graph', {})
@@ -568,10 +589,10 @@ describe('scoped reactive graph (review U1)', () => {
   })
 })
 
-describe('component deltas (devframe-migration §6.5)', () => {
-  const compMsgs = (h: Harness) =>
-    h.sent.filter(m => m.event === 'svelte-devtools:components').map(m => m.data as any)
+const compMsgs = (h: Harness) =>
+  h.sent.filter(m => m.event === 'svelte-devtools:components').map(m => m.data as any)
 
+describe('component deltas (devframe-migration §6.5)', () => {
   it('sends only the full form without the componentDeltas gate', () => {
     const h = createRuntime({ deltas: false })
     mountList(h, 10)
@@ -665,8 +686,8 @@ describe('component deltas (devframe-migration §6.5)', () => {
       'svelte-devtools:profiles',
       'svelte-devtools:state-timeline',
     ])
-    expect((h.sent[1].data as any).reset).toBe(true)
-    expect((h.sent[3].data as any).reset).toBe(true)
+    expect((h.sent[1]!.data as any).reset).toBe(true)
+    expect((h.sent[3]!.data as any).reset).toBe(true)
   })
 })
 
@@ -682,9 +703,9 @@ describe('resync (§6.5, review C1)', () => {
       'svelte-devtools:profiles',
       'svelte-devtools:state-timeline',
     ])
-    expect(h.sent[0].data as any).toMatchObject({ reset: true })
-    expect((h.sent[0].data as any).components.length).toBe(4)
-    expect((h.sent[2].data as any).reset).toBe(true)
+    expect(h.sent[0]!.data as any).toMatchObject({ reset: true })
+    expect((h.sent[0]!.data as any).components.length).toBe(4)
+    expect((h.sent[2]!.data as any).reset).toBe(true)
     // then deltas continue
     h.sent.length = 0
     const id = h.dt.register('/app/src/lib/After.svelte')

@@ -1,14 +1,11 @@
 <script lang="ts" module>
-  export interface RowState {
-    index: number
-    selected: boolean
-  }
-
   let uid = 0
 </script>
 
 <script lang="ts" generics="T">
   import { untrack, type Snippet } from 'svelte'
+
+  import type { RowState } from './types.js'
 
   /**
    * Fixed-row-height virtual list. Renders only the rows in view (+overscan),
@@ -29,7 +26,7 @@
     onselect?: (item: T, index: number) => void
     onactivate?: (item: T, index: number) => void
     /** Return true when the key was handled (skips default navigation). */
-    onrowkeydown?: (e: KeyboardEvent, item: T, index: number) => boolean | void
+    onrowkeydown?: (e: KeyboardEvent, item: T, index: number) => boolean
     rowAttrs?: (item: T, index: number) => Record<string, string | number | boolean | undefined>
   }
 
@@ -56,15 +53,19 @@
 
   const total = $derived(items.length * rowHeight)
   const start = $derived(Math.max(0, Math.floor(scrollTop / rowHeight) - overscan))
-  const end = $derived(Math.min(items.length, Math.ceil((scrollTop + height) / rowHeight) + overscan))
+  const end = $derived(
+    Math.min(items.length, Math.ceil((scrollTop + height) / rowHeight) + overscan),
+  )
   const visible = $derived(items.slice(start, end))
   const pageSize = $derived(Math.max(1, Math.floor(height / rowHeight) - 1))
 
-  const selectedIndex = $derived.by(() => {
-    if (selected == null) return -1
-    for (let i = 0; i < items.length; i++) if (getKey(items[i], i) === selected) return i
-    return -1
+  const selection = $derived.by(() => {
+    if (selected == null) return null
+    for (const [index, item] of items.entries())
+      if (getKey(item, index) === selected) return { index, item }
+    return null
   })
+  const selectedIndex = $derived(selection?.index ?? -1)
 
   $effect(() => {
     const el = viewport
@@ -119,7 +120,7 @@
   export function select(i: number) {
     if (!items.length) return
     const idx = Math.max(0, Math.min(items.length - 1, i))
-    const item = items[idx]
+    const item = items[idx]!
     selected = getKey(item, idx)
     scrollToIndex(idx)
     onselect?.(item, idx)
@@ -127,8 +128,9 @@
 
   function onkeydown(e: KeyboardEvent) {
     if (e.altKey || e.metaKey || e.ctrlKey) return
-    const i = selectedIndex
-    if (i >= 0 && onrowkeydown?.(e, items[i], i)) {
+    const sel = selection
+    const i = sel?.index ?? -1
+    if (sel && onrowkeydown?.(e, sel.item, sel.index)) {
       e.preventDefault()
       return
     }
@@ -155,9 +157,9 @@
         next = (i < 0 ? 0 : i) - pageSize
         break
       case 'Enter':
-        if (i >= 0) {
+        if (sel) {
           e.preventDefault()
-          onactivate?.(items[i], i)
+          onactivate?.(sel.item, sel.index)
         }
         return
       default:
@@ -179,7 +181,9 @@
   class="viewport"
   {role}
   aria-label={label}
-  aria-activedescendant={selectedIndex >= start && selectedIndex < end ? `${id}-${selectedIndex}` : undefined}
+  aria-activedescendant={selectedIndex >= start && selectedIndex < end
+    ? `${id}-${selectedIndex}`
+    : undefined}
   tabindex="0"
   {onscroll}
   {onkeydown}
@@ -191,7 +195,6 @@
       {#each visible as item, j (getKey(item, start + j))}
         {@const index = start + j}
         {@const isSelected = index === selectedIndex}
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
         <div
           id="{id}-{index}"
           class="row"

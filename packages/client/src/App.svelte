@@ -1,17 +1,26 @@
 <script lang="ts">
   import type { Component } from 'svelte'
+
   import './lib/design-system.css'
-  import { panels, groupLabels, panelById, type PanelDef, type PanelGroup, type PanelId } from './lib/panels.js'
-  import { router } from './lib/router.svelte.js'
-  import { persisted } from './lib/persisted.svelte.js'
-  import { createThemeStore, type ThemeMode } from './lib/theme.svelte.js'
+  import Button from './components/Button.svelte'
+  import CommandPalette from './components/CommandPalette.svelte'
+  import ConnectionGate from './components/ConnectionGate.svelte'
+  import EmptyState from './components/EmptyState.svelte'
   import Icon from './components/Icon.svelte'
   import PanelHost from './components/PanelHost.svelte'
-  import EmptyState from './components/EmptyState.svelte'
-  import Button from './components/Button.svelte'
-  import CommandPalette, { type Command } from './components/CommandPalette.svelte'
-  import ConnectionGate from './components/ConnectionGate.svelte'
+  import type { Command } from './components/types.js'
   import { connection, connectionSupported } from './lib/connection.svelte.js'
+  import {
+    panels,
+    groupLabels,
+    panelById,
+    type PanelDef,
+    type PanelGroup,
+    type PanelId,
+  } from './lib/panels.js'
+  import { persisted } from './lib/persisted.svelte.js'
+  import { router } from './lib/router.svelte.js'
+  import { createThemeStore, type ThemeMode } from './lib/theme.svelte.js'
 
   const theme = createThemeStore()
   const navPref = persisted<'expanded' | 'collapsed' | null>('nav', null)
@@ -30,7 +39,8 @@
   $effect(() => {
     const id = router.current
     if (!visited.includes(id)) visited.push(id)
-    if (!loaded[id] && !loadError[id]) load(id)
+    // `load` records failures in `loadError`, so it never rejects.
+    if (!loaded[id] && !loadError[id]) void load(id)
     document.title = `${panelById(id).label} · Svelte DevTools`
   })
 
@@ -43,17 +53,19 @@
     }
   }
 
-  const groups = (Object.keys(groupLabels) as PanelGroup[]).map((g) => ({
+  const groups = (Object.keys(groupLabels) as PanelGroup[]).map(g => ({
     id: g,
     label: groupLabels[g],
-    items: panels.filter((p) => p.group === g),
+    items: panels.filter(p => p.group === g),
   }))
 
   const themeOrder: ThemeMode[] = ['system', 'light', 'dark']
-  const themeIcon = $derived(theme.mode === 'system' ? 'monitor' : theme.mode === 'light' ? 'sun' : 'moon')
+  const themeIcon = $derived(
+    theme.mode === 'system' ? 'monitor' : theme.mode === 'light' ? 'sun' : 'moon',
+  )
 
   function cycleTheme() {
-    theme.set(themeOrder[(themeOrder.indexOf(theme.mode) + 1) % themeOrder.length])
+    theme.set(themeOrder[(themeOrder.indexOf(theme.mode) + 1) % themeOrder.length]!)
   }
 
   function toggleNav() {
@@ -61,7 +73,7 @@
   }
 
   const commands = $derived<Command[]>([
-    ...(panels as readonly PanelDef[]).map((p) => ({
+    ...(panels as readonly PanelDef[]).map(p => ({
       id: `panel:${p.id}`,
       label: p.label,
       hint: p.description,
@@ -70,10 +82,34 @@
       keywords: p.keywords,
       run: () => router.go(p.id as PanelId),
     })),
-    { id: 'theme:system', label: 'Theme: follow system', group: 'Preferences', icon: 'monitor', run: () => theme.set('system') },
-    { id: 'theme:light', label: 'Theme: light', group: 'Preferences', icon: 'sun', run: () => theme.set('light') },
-    { id: 'theme:dark', label: 'Theme: dark', group: 'Preferences', icon: 'moon', run: () => theme.set('dark') },
-    { id: 'nav:toggle', label: collapsed ? 'Expand sidebar' : 'Collapse sidebar', group: 'Preferences', icon: 'sidebar', run: toggleNav },
+    {
+      id: 'theme:system',
+      label: 'Theme: follow system',
+      group: 'Preferences',
+      icon: 'monitor',
+      run: () => theme.set('system'),
+    },
+    {
+      id: 'theme:light',
+      label: 'Theme: light',
+      group: 'Preferences',
+      icon: 'sun',
+      run: () => theme.set('light'),
+    },
+    {
+      id: 'theme:dark',
+      label: 'Theme: dark',
+      group: 'Preferences',
+      icon: 'moon',
+      run: () => theme.set('dark'),
+    },
+    {
+      id: 'nav:toggle',
+      label: collapsed ? 'Expand sidebar' : 'Collapse sidebar',
+      group: 'Preferences',
+      icon: 'sidebar',
+      run: toggleNav,
+    },
   ])
 
   function isTyping(t: EventTarget | null) {
@@ -99,8 +135,8 @@
     } else if (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
       // Alt+↑/↓ steps through panels without touching the mouse.
       e.preventDefault()
-      const i = panels.findIndex((p) => p.id === router.current)
-      const next = panels[(i + (e.key === 'ArrowDown' ? 1 : -1) + panels.length) % panels.length]
+      const i = panels.findIndex(p => p.id === router.current)
+      const next = panels[(i + (e.key === 'ArrowDown' ? 1 : -1) + panels.length) % panels.length]!
       router.go(next.id)
     }
   }
@@ -124,7 +160,12 @@
       <span class="brand-name">Svelte <span class="faint">DevTools</span></span>
     </div>
 
-    <button class="cmdk" type="button" onclick={() => (paletteOpen = true)} title="Command palette (⌘K)">
+    <button
+      class="cmdk"
+      type="button"
+      onclick={() => (paletteOpen = true)}
+      title="Command palette (⌘K)"
+    >
       <Icon name="search" size={14} />
       <span class="nav-text grow">Search</span>
       <kbd class="nav-text">⌘K</kbd>
@@ -154,7 +195,9 @@
         <span
           class="conn {connection.state.status}"
           role="status"
-          title="Dev server: {connection.state.status}{connection.state.host !== 'unknown' ? ` (${connection.state.host === 'vite-devtools' ? 'Vite DevTools' : 'standalone'})` : ''}"
+          title="Dev server: {connection.state.status}{connection.state.host !== 'unknown'
+            ? ` (${connection.state.host === 'vite-devtools' ? 'Vite DevTools' : 'standalone'})`
+            : ''}"
         >
           <span class="conn-dot" aria-hidden="true"></span>
           <span class="nav-text">{connection.state.status}</span>

@@ -2,13 +2,13 @@ import * as __svelte_original from 'svelte/internal/client'
 export * from 'svelte/internal/client'
 
 function __dt() {
-  return typeof window !== 'undefined' ? window.__SVELTE_DEVTOOLS__ : null
+  return typeof window === 'undefined' ? null : window.__SVELTE_DEVTOOLS__
 }
 
 // Component ID stack (parallel to runtime._stack but local to wrapper)
 const __idStack = []
 function __currentId() {
-  return __idStack.length > 0 ? __idStack[__idStack.length - 1] : null
+  return __idStack.length > 0 ? __idStack.at(-1) : null
 }
 
 // Tracks the most recently created signal for type determination in tag()
@@ -72,7 +72,7 @@ export function push() {
   try {
     const dt = __dt()
     if (dt) {
-      const file = dt._pendingFile || 'Unknown'
+      const file = dt._pendingFile ?? 'Unknown'
       dt._pendingFile = null
       dt._pendingParent = parentHint
       const id = dt.register(file)
@@ -82,7 +82,7 @@ export function push() {
         __svelte_original.user_effect(() => {
           try {
             const own = __svelte_original.active_effect
-            if (own && own.ctx) dt._idByContext.set(own.ctx, id)
+            if (own?.ctx) dt._idByContext.set(own.ctx, id)
             if (own) dt.setComponentEffect(id, own)
           } catch {}
           return () => {
@@ -159,7 +159,7 @@ export function tag(signal, name) {
       } else {
         dt.trackState(signal, name, cid, owner)
       }
-    } else if (dt && dt._moduleFile) {
+    } else if (dt?._moduleFile) {
       // created while a .svelte.js/.ts module body runs (shared state)
       dt.trackModuleSignal(type === 'derived' ? 'derived' : 'state', signal, name)
     }
@@ -169,15 +169,15 @@ export function tag(signal, name) {
   return result
 }
 
-export function tag_proxy(proxy, name) {
+export function tag_proxy(value, name) {
   const result = __svelte_original.tag_proxy.apply(null, arguments)
   try {
     const dt = __dt()
     const cid = __owner()
     if (dt && cid !== null) {
-      dt.trackProxy(proxy, name, cid, __svelte_original.active_effect)
-    } else if (dt && dt._moduleFile) {
-      dt.trackModuleSignal('proxy', proxy, name)
+      dt.trackProxy(value, name, cid, __svelte_original.active_effect)
+    } else if (dt?._moduleFile) {
+      dt.trackModuleSignal('proxy', value, name)
     }
     __pendingSignal.ref = null
     __pendingSignal.type = null
@@ -270,7 +270,7 @@ function __flushRenderDurations() {
 }
 
 function __recordRenderDuration(cid, duration) {
-  __pendingRenderDurations.set(cid, (__pendingRenderDurations.get(cid) || 0) + duration)
+  __pendingRenderDurations.set(cid, (__pendingRenderDurations.get(cid) ?? 0) + duration)
   if (!__renderFlushScheduled) {
     __renderFlushScheduled = true
     queueMicrotask(__flushRenderDurations)

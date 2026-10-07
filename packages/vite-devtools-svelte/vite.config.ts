@@ -4,9 +4,9 @@ import dts from 'vite-plugin-dts'
 export default defineConfig({
   plugins: [
     dts({
+      tsconfigPath: './tsconfig.build.json',
       entryRoot: 'src',
       include: ['src/**/*.ts'],
-      outDir: 'dist',
     }),
   ],
   build: {
@@ -19,7 +19,7 @@ export default defineConfig({
       formats: ['es'],
       fileName: () => 'index.mjs',
     },
-    rollupOptions: {
+    rolldownOptions: {
       external: [
         'vite',
         /^@vitejs\/devtools-kit/,

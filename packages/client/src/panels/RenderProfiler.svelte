@@ -1,25 +1,31 @@
 <script lang="ts">
-  import { datasetVersion } from '../lib/versions.js'
-  import { getRenderProfiles, openInEditor } from '../lib/rpc.js'
-  import type { RenderProfile } from '../lib/types.js'
-  import { resource } from '../lib/resource.svelte.js'
-  import { matcher } from '../lib/match.js'
-  import { formatMs, formatClock, shortPath } from '../lib/format.js'
-  import Panel from '../components/Panel.svelte'
-  import SplitView from '../components/SplitView.svelte'
-  import DataTable, { type Column, type SortState } from '../components/DataTable.svelte'
+  import Badge from '../components/Badge.svelte'
+  import Button from '../components/Button.svelte'
+  import CaptureNotice from '../components/CaptureNotice.svelte'
+  import DataTable from '../components/DataTable.svelte'
+  import EmptyState from '../components/EmptyState.svelte'
+  import Highlight from '../components/Highlight.svelte'
   import Inspector from '../components/Inspector.svelte'
+  import LiveControls from '../components/LiveControls.svelte'
+  import Panel from '../components/Panel.svelte'
   import SearchField from '../components/SearchField.svelte'
   import Segmented from '../components/Segmented.svelte'
-  import Button from '../components/Button.svelte'
-  import Badge from '../components/Badge.svelte'
-  import Highlight from '../components/Highlight.svelte'
-  import EmptyState from '../components/EmptyState.svelte'
-  import LiveControls from '../components/LiveControls.svelte'
-  import CaptureNotice from '../components/CaptureNotice.svelte'
+  import SplitView from '../components/SplitView.svelte'
+  import type { Column, SortState, TableRowState } from '../components/types.js'
   import { captureInfo } from '../lib/capture.svelte.js'
+  import { groupBy } from '../lib/collections.js'
+  import { formatMs, formatClock, shortPath } from '../lib/format.js'
+  import { matcher } from '../lib/match.js'
+  import { resource } from '../lib/resource.svelte.js'
+  import { getRenderProfiles, openInEditor } from '../lib/rpc.js'
+  import type { RenderProfile } from '../lib/types.js'
+  import { datasetVersion } from '../lib/versions.js'
 
-  const profiles = resource<RenderProfile[]>(getRenderProfiles, { initial: [], interval: 1000, version: datasetVersion('renderProfiles') })
+  const profiles = resource<RenderProfile[]>(getRenderProfiles, {
+    initial: [],
+    interval: 1000,
+    version: datasetVersion('renderProfiles'),
+  })
 
   const capture = captureInfo(1000)
 
@@ -43,59 +49,108 @@
     ids: number[]
   }
 
+  function toRow(p: RenderProfile, key: string): Row {
+    return {
+      key,
+      name: p.name,
+      file: p.file,
+      instances: 1,
+      initTime: p.initTime,
+      renderCount: p.renderCount,
+      totalRenderTime: p.totalRenderTime,
+      lastRenderTime: p.lastRenderTime,
+      lastRenderAt: p.lastRenderAt,
+      ids: [p.componentId],
+    }
+  }
+
+  /** Fold another instance of the same file into `r` (mutates the fresh row). */
+  function merge(r: Row, p: RenderProfile): Row {
+    r.instances++
+    r.initTime += p.initTime
+    r.renderCount += p.renderCount
+    r.totalRenderTime += p.totalRenderTime
+    r.ids.push(p.componentId)
+    if (p.lastRenderAt > r.lastRenderAt) {
+      r.lastRenderAt = p.lastRenderAt
+      r.lastRenderTime = p.lastRenderTime
+    }
+    return r
+  }
+
   const all = $derived.by<Row[]>(() => {
-    if (group === 'instance') {
-      return profiles.data.map((p) => ({
-        key: String(p.componentId),
-        name: p.name,
-        file: p.file,
-        instances: 1,
-        initTime: p.initTime,
-        renderCount: p.renderCount,
-        totalRenderTime: p.totalRenderTime,
-        lastRenderTime: p.lastRenderTime,
-        lastRenderAt: p.lastRenderAt,
-        ids: [p.componentId],
-      }))
-    }
-    const m = new Map<string, Row>()
-    for (const p of profiles.data) {
-      const r = m.get(p.file)
-      if (!r) {
-        m.set(p.file, { key: p.file, name: p.name, file: p.file, instances: 1, initTime: p.initTime, renderCount: p.renderCount, totalRenderTime: p.totalRenderTime, lastRenderTime: p.lastRenderTime, lastRenderAt: p.lastRenderAt, ids: [p.componentId] })
-      } else {
-        r.instances++
-        r.initTime += p.initTime
-        r.renderCount += p.renderCount
-        r.totalRenderTime += p.totalRenderTime
-        r.ids.push(p.componentId)
-        if (p.lastRenderAt > r.lastRenderAt) {
-          r.lastRenderAt = p.lastRenderAt
-          r.lastRenderTime = p.lastRenderTime
-        }
-      }
-    }
-    return [...m.values()]
+    if (group === 'instance') return profiles.data.map(p => toRow(p, String(p.componentId)))
+    return [...groupBy(profiles.data, p => p.file)].map(([file, [first, ...rest]]) =>
+      rest.reduce(merge, toRow(first!, file)),
+    )
   })
 
   const rows = $derived.by(() => {
     const m = matcher(query)
-    return m ? all.filter((r) => m(r.name, r.file)) : all
+    return m ? all.filter(r => m(r.name, r.file)) : all
   })
 
   const maxTotal = $derived(all.reduce((m, r) => Math.max(m, r.totalRenderTime), 0.0001))
-  const totals = $derived(all.reduce((s, r) => ({ renders: s.renders + r.renderCount, time: s.time + r.totalRenderTime }), { renders: 0, time: 0 }))
-  const current = $derived(selected ? (all.find((r) => r.key === selected) ?? null) : null)
+  const totals = $derived(
+    all.reduce(
+      (s, r) => ({ renders: s.renders + r.renderCount, time: s.time + r.totalRenderTime }),
+      { renders: 0, time: 0 },
+    ),
+  )
+  const current = $derived(selected ? (all.find(r => r.key === selected) ?? null) : null)
 
   const avg = (r: Row) => (r.renderCount ? r.totalRenderTime / r.renderCount : 0)
 
   const columns: Column<Row>[] = [
-    { id: 'name', label: 'Component', width: 'minmax(0, 1fr)', sort: (a, b) => a.name.localeCompare(b.name) },
-    { id: 'instances', label: 'Inst.', width: '52px', align: 'end', descFirst: true, minWidth: 640, sort: (a, b) => a.instances - b.instances },
-    { id: 'init', label: 'Init', width: '72px', align: 'end', descFirst: true, minWidth: 720, sort: (a, b) => a.initTime - b.initTime },
-    { id: 'renders', label: 'Renders', width: '68px', align: 'end', descFirst: true, sort: (a, b) => a.renderCount - b.renderCount },
-    { id: 'avg', label: 'Avg', width: '72px', align: 'end', descFirst: true, minWidth: 560, sort: (a, b) => avg(a) - avg(b) },
-    { id: 'total', label: 'Total', width: '150px', align: 'end', descFirst: true, sort: (a, b) => a.totalRenderTime - b.totalRenderTime },
+    {
+      id: 'name',
+      label: 'Component',
+      width: 'minmax(0, 1fr)',
+      sort: (a, b) => a.name.localeCompare(b.name),
+    },
+    {
+      id: 'instances',
+      label: 'Inst.',
+      width: '52px',
+      align: 'end',
+      descFirst: true,
+      minWidth: 640,
+      sort: (a, b) => a.instances - b.instances,
+    },
+    {
+      id: 'init',
+      label: 'Init',
+      width: '72px',
+      align: 'end',
+      descFirst: true,
+      minWidth: 720,
+      sort: (a, b) => a.initTime - b.initTime,
+    },
+    {
+      id: 'renders',
+      label: 'Renders',
+      width: '68px',
+      align: 'end',
+      descFirst: true,
+      sort: (a, b) => a.renderCount - b.renderCount,
+    },
+    {
+      id: 'avg',
+      label: 'Avg',
+      width: '72px',
+      align: 'end',
+      descFirst: true,
+      minWidth: 560,
+      sort: (a, b) => avg(a) - avg(b),
+    },
+    {
+      id: 'total',
+      label: 'Total',
+      width: '150px',
+      align: 'end',
+      descFirst: true,
+      sort: (a, b) => a.totalRenderTime - b.totalRenderTime,
+    },
   ]
 
   function heat(ms: number) {
@@ -115,15 +170,25 @@
     />
     <SearchField bind:value={query} placeholder="Filter components…" count={rows.length} />
     <CaptureNotice info={capture.data.renderProfiles} noun="profiles" />
-    <span class="summary num">{totals.renders.toLocaleString()} renders · {formatMs(totals.time)}</span>
+    <span class="summary num"
+      >{totals.renders.toLocaleString()} renders · {formatMs(totals.time)}</span
+    >
   {/snippet}
   {#snippet actions()}
     <LiveControls res={profiles} />
   {/snippet}
 
   <SplitView id="render" open={!!current}>
-    <DataTable items={rows} {columns} getKey={(r) => r.key} bind:sort bind:selected label="Render profiles" onactivate={(r) => openInEditor(r.file).catch(() => {})}>
-      {#snippet row(r, { visible })}
+    <DataTable
+      items={rows}
+      {columns}
+      getKey={(r: Row) => r.key}
+      bind:sort
+      bind:selected
+      label="Render profiles"
+      onactivate={(r: Row) => openInEditor(r.file).catch(() => {})}
+    >
+      {#snippet row(r: Row, { visible }: TableRowState)}
         <span class="name">
           <span class="cname"><Highlight text={r.name} {query} /></span>
           <span class="file truncate"><Highlight text={shortPath(r.file)} {query} /></span>
@@ -133,7 +198,10 @@
         <span class="end num">{r.renderCount.toLocaleString()}</span>
         {#if visible.has('avg')}<span class="end num {heat(avg(r))}">{formatMs(avg(r))}</span>{/if}
         <span class="total end">
-          <span class="bar {heat(avg(r))}" style:width="{Math.max(2, (r.totalRenderTime / maxTotal) * 60)}px"></span>
+          <span
+            class="bar {heat(avg(r))}"
+            style:width="{Math.max(2, (r.totalRenderTime / maxTotal) * 60)}px"
+          ></span>
           <span class="num">{formatMs(r.totalRenderTime)}</span>
         </span>
       {/snippet}
@@ -141,7 +209,9 @@
         {#if profiles.loading}
           <EmptyState title="Waiting for render data…" />
         {:else if profiles.data.length === 0}
-          <EmptyState icon="render" title="No renders recorded yet"><p>Interact with your app — every component mount and update is timed.</p></EmptyState>
+          <EmptyState icon="render" title="No renders recorded yet"
+            ><p>Interact with your app — every component mount and update is timed.</p></EmptyState
+          >
         {:else}
           <EmptyState icon="search" title="No components match" />
         {/if}
@@ -151,21 +221,53 @@
       {#if current}
         <Inspector title={current.name} subtitle={current.file} onclose={() => (selected = null)}>
           {#snippet badges()}
-            {#if group === 'component'}<Badge>{current.instances} instance{current.instances === 1 ? '' : 's'}</Badge>{/if}
-            {#if avg(current) >= 16}<Badge tone="red">over frame budget</Badge>{:else if avg(current) >= 4}<Badge tone="yellow">slow</Badge>{/if}
+            {#if group === 'component'}<Badge
+                >{current.instances} instance{current.instances === 1 ? '' : 's'}</Badge
+              >{/if}
+            {#if avg(current) >= 16}<Badge tone="red">over frame budget</Badge
+              >{:else if avg(current) >= 4}<Badge tone="yellow">slow</Badge>{/if}
           {/snippet}
           {#snippet actions()}
-            <Button icon="editor" onclick={() => openInEditor(current.file).catch(() => {})}>Open in editor</Button>
+            <Button icon="editor" onclick={() => openInEditor(current.file).catch(() => {})}
+              >Open in editor</Button
+            >
           {/snippet}
           <div class="stats">
-            <div><span>Renders</span><strong class="num">{current.renderCount.toLocaleString()}</strong></div>
-            <div><span>Total</span><strong class="num">{formatMs(current.totalRenderTime)}</strong></div>
-            <div><span>Average</span><strong class="num {heat(avg(current))}">{formatMs(avg(current))}</strong></div>
-            <div><span>Last</span><strong class="num {heat(current.lastRenderTime)}">{formatMs(current.lastRenderTime)}</strong></div>
-            <div><span>Init{group === 'component' ? ' (sum)' : ''}</span><strong class="num">{formatMs(current.initTime)}</strong></div>
-            <div><span>Last render</span><strong class="num">{current.lastRenderAt ? formatClock(current.lastRenderAt) : '—'}</strong></div>
+            <div>
+              <span>Renders</span><strong class="num">{current.renderCount.toLocaleString()}</strong
+              >
+            </div>
+            <div>
+              <span>Total</span><strong class="num">{formatMs(current.totalRenderTime)}</strong>
+            </div>
+            <div>
+              <span>Average</span><strong class="num {heat(avg(current))}"
+                >{formatMs(avg(current))}</strong
+              >
+            </div>
+            <div>
+              <span>Last</span><strong class="num {heat(current.lastRenderTime)}"
+                >{formatMs(current.lastRenderTime)}</strong
+              >
+            </div>
+            <div>
+              <span>Init{group === 'component' ? ' (sum)' : ''}</span><strong class="num"
+                >{formatMs(current.initTime)}</strong
+              >
+            </div>
+            <div>
+              <span>Last render</span><strong class="num"
+                >{current.lastRenderAt ? formatClock(current.lastRenderAt) : '—'}</strong
+              >
+            </div>
           </div>
-          <p class="note">Share of all render time: <strong class="num">{((current.totalRenderTime / Math.max(totals.time, 0.0001)) * 100).toFixed(1)}%</strong></p>
+          <p class="note">
+            Share of all render time: <strong class="num"
+              >{((current.totalRenderTime / Math.max(totals.time, 0.0001)) * 100).toFixed(
+                1,
+              )}%</strong
+            >
+          </p>
         </Inspector>
       {/if}
     {/snippet}

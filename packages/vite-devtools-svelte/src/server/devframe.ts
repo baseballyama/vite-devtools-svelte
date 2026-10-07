@@ -1,21 +1,21 @@
 import fs from 'node:fs'
-import path from 'node:path'
 import { createRequire } from 'node:module'
+import path from 'node:path'
+
 import { defineDevframe, defineRpcFunction } from 'devframe'
 import type { DevframeDefinition } from 'devframe'
 import { z } from 'zod'
-import { analyzeRoutes } from '../analyzers/routes.js'
-import { analyzeAssets } from '../analyzers/assets.js'
-import { analyzeProject } from '../analyzers/project.js'
-import { analyzeComponents } from '../analyzers/components.js'
+
 import { analyzeApiEndpoints, sendApiRequest } from '../analyzers/api.js'
+import { analyzeAssets } from '../analyzers/assets.js'
 import { analyzeBuild } from '../analyzers/build.js'
+import { analyzeComponents } from '../analyzers/components.js'
 import { buildModuleGraph } from '../analyzers/module-graph.js'
 import type { GraphModuleLike } from '../analyzers/module-graph.js'
 import { getOGPreview } from '../analyzers/og.js'
+import { analyzeProject } from '../analyzers/project.js'
+import { analyzeRoutes } from '../analyzers/routes.js'
 import { findReactiveLine } from '../analyzers/source.js'
-import { resolveWithinRoot } from './security.js'
-import type { Collector } from './collector.js'
 import type {
   ApiResponse,
   CaptureInfoMap,
@@ -26,6 +26,8 @@ import type {
   StateTimelineDelta,
   LiveComponentsMeta,
 } from '../types.js'
+import type { Collector } from './collector.js'
+import { resolveWithinRoot } from './security.js'
 
 export const DEVFRAME_ID = 'svelte-devtools'
 /** Mount base for both hosts (standalone and Vite DevTools), so the SPA URL never changes. */
@@ -305,10 +307,10 @@ export function createRpcFunctions(host: SvelteDevtoolsHost) {
         if (!host.transformRequest) return { ...empty, source }
         try {
           const result = await host.transformRequest(resolved)
-          const map = typeof result?.map === 'string' ? JSON.parse(result.map) : result?.map
+          const map = parseSourceMap(result?.map)
           return {
             source,
-            compiled: result?.code || '',
+            compiled: result?.code ?? '',
             file,
             mappings: map?.mappings,
             sources: map?.sources,
@@ -379,4 +381,19 @@ export function createSvelteDevframe(host: SvelteDevtoolsHost): DevframeDefiniti
       for (const fn of createRpcFunctions(host)) scoped.rpc.register(fn)
     },
   })
+}
+
+/** The `mappings` / `sources` of a transform's source map (object or JSON string). */
+function parseSourceMap(
+  map: { mappings?: string; sources?: string[] } | string | null | undefined,
+): { mappings?: string; sources?: string[] } | undefined {
+  if (typeof map !== 'string') return map ?? undefined
+  const parsed: unknown = JSON.parse(map)
+  if (typeof parsed !== 'object' || parsed === null) return undefined
+  const { mappings, sources } = parsed as { mappings?: unknown; sources?: unknown }
+  return {
+    mappings: typeof mappings === 'string' ? mappings : undefined,
+    sources:
+      Array.isArray(sources) && sources.every(s => typeof s === 'string') ? sources : undefined,
+  }
 }

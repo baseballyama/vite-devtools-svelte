@@ -21,10 +21,11 @@
 
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
+import { createRequire } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
-import { createRequire } from 'node:module'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { pathToFileURL } from 'node:url'
+
 import {
   generate,
   ensurePlaygroundSync,
@@ -33,7 +34,7 @@ import {
   kitShape,
 } from './generate-large-app.mjs'
 
-const perfDir = path.dirname(fileURLToPath(import.meta.url))
+const perfDir = import.meta.dirname
 const repoRoot = path.resolve(perfDir, '..')
 
 function parseArgs(argv) {
@@ -55,7 +56,7 @@ function parseArgs(argv) {
   for (const arg of argv) {
     const m = /^--([^=]+)=(.*)$/.exec(arg)
     if (!m) continue
-    const key = m[1].replace(/-([a-z])/g, (_, c) => c.toUpperCase())
+    const key = m[1].replaceAll(/-([a-z])/g, (_, c) => c.toUpperCase())
     if (!(key in opts)) throw new Error(`Unknown option --${m[1]}`)
     opts[key] = typeof opts[key] === 'number' ? Number(m[2]) : m[2]
   }
@@ -91,14 +92,17 @@ function resolveDepFile(name, file) {
   return null
 }
 
-const sleep = ms => new Promise(r => setTimeout(r, ms))
+const sleep = ms =>
+  new Promise(r => {
+    setTimeout(r, ms)
+  })
 const median = xs => {
-  const s = [...xs].sort((a, b) => a - b)
-  return s.length ? s[Math.floor((s.length - 1) / 2)] : NaN
+  const s = xs.toSorted((a, b) => a - b)
+  return s.length > 0 ? s[Math.floor((s.length - 1) / 2)] : NaN
 }
 const pct = (xs, p) => {
-  const s = [...xs].sort((a, b) => a - b)
-  return s.length ? s[Math.min(s.length - 1, Math.floor((p / 100) * s.length))] : NaN
+  const s = xs.toSorted((a, b) => a - b)
+  return s.length > 0 ? s[Math.min(s.length - 1, Math.floor((p / 100) * s.length))] : NaN
 }
 const r1 = n => Math.round(n * 10) / 10
 
@@ -113,8 +117,13 @@ async function startServer(appDir, port, withDevtools) {
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   let log = ''
-  child.stdout.on('data', d => (log += d))
-  child.stderr.on('data', d => (log += d))
+  const getLog = () => log
+  child.stdout.on('data', d => {
+    log += d
+  })
+  child.stderr.on('data', d => {
+    log += d
+  })
   const base = `http://localhost:${port}`
   // Ready = the dev server answered the first SSR request of /bench (includes
   // the cold compile of the route + plugin transforms).
@@ -124,7 +133,7 @@ async function startServer(appDir, port, withDevtools) {
       const res = await fetch(`${base}/bench`)
       if (res.ok) {
         await res.text()
-        return { child, base, coldMs: performance.now() - t0, log: () => log }
+        return { child, base, coldMs: performance.now() - t0, log: getLog }
       }
     } catch {
       /* not listening yet */
@@ -136,7 +145,7 @@ async function startServer(appDir, port, withDevtools) {
 }
 
 async function stopServer(srv) {
-  if (!srv || srv.child.exitCode !== null) return
+  if (srv?.child.exitCode !== null) return
   srv.child.kill('SIGTERM')
   for (let i = 0; i < 50 && srv.child.exitCode === null; i++) await sleep(100)
   if (srv.child.exitCode === null) srv.child.kill('SIGKILL')
@@ -282,6 +291,7 @@ async function benchApp(browser, srv, opts, withDevtools) {
   res.runtimeSizes = await page.evaluate(() => {
     const dt = window.__SVELTE_DEVTOOLS__
     if (!dt) return null
+    // oxlint-disable-next-line unicorn/consistent-function-scoping -- runs in the browser via page.evaluate; cannot reference module scope
     const size = x =>
       x && typeof x.size === 'number' ? x.size : Array.isArray(x) ? x.length : null
     return {
@@ -312,6 +322,7 @@ async function benchApp(browser, srv, opts, withDevtools) {
   res.runtimeSizesAfterUnmount = await page.evaluate(() => {
     const dt = window.__SVELTE_DEVTOOLS__
     if (!dt) return null
+    // oxlint-disable-next-line unicorn/consistent-function-scoping -- runs in the browser via page.evaluate; cannot reference module scope
     const size = x =>
       x && typeof x.size === 'number' ? x.size : Array.isArray(x) ? x.length : null
     return {
@@ -381,7 +392,14 @@ async function settle(page, timeout = 60_000) {
     .catch(() => {})
   await page.waitForLoadState('networkidle').catch(() => {})
   await page.evaluate(
-    () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => r()))),
+    () =>
+      new Promise(r => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            r()
+          })
+        })
+      }),
   )
 }
 
@@ -435,7 +453,7 @@ async function benchUi(browser, srv, opts, outDir) {
     await ctl.click()
     await settle(page)
     const ms = performance.now() - ts
-    const dom = await page.evaluate(() => document.getElementsByTagName('*').length)
+    const dom = await page.evaluate(() => document.querySelectorAll('*').length)
     await page.screenshot({ path: path.join(outDir, `ui-${label.toLowerCase()}.png`) })
     res.panels[label] = {
       found: true,
@@ -463,7 +481,13 @@ async function benchUi(browser, srv, opts, outDir) {
             const t = performance.now()
             el.value = value
             el.dispatchEvent(new Event('input', { bubbles: true }))
-            await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => r())))
+            await new Promise(r => {
+              requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                  r()
+                })
+              })
+            })
             return performance.now() - t
           }, q),
         )
@@ -486,7 +510,7 @@ async function benchUi(browser, srv, opts, outDir) {
       await sleep(2500) // at least one poll cycle
       res.liveTree = {
         renderMs: r1(performance.now() - ts - 2500),
-        domNodes: await page.evaluate(() => document.getElementsByTagName('*').length),
+        domNodes: await page.evaluate(() => document.querySelectorAll('*').length),
       }
       await page.screenshot({ path: path.join(outDir, `ui-components-live.png`) })
       // H2: with > 5 000 instances the collector must keep the roots, so the
@@ -552,7 +576,7 @@ async function benchUi(browser, srv, opts, outDir) {
 
 // Scroll the largest scroll container 120px per frame for ~2 s and record
 // frame durations (virtualization / layout cost).
-async function scrollLargest(page) {
+function scrollLargest(page) {
   return page.evaluate(async () => {
     const els = [...document.querySelectorAll('*')].filter(el => {
       const s = getComputedStyle(el)
@@ -570,20 +594,22 @@ async function scrollLargest(page) {
     while (performance.now() < end) {
       el.scrollTop += 120
       if (el.scrollTop + el.clientHeight >= el.scrollHeight - 1) el.scrollTop = 0
-      await new Promise(r => requestAnimationFrame(r))
+      await new Promise(r => {
+        requestAnimationFrame(r)
+      })
       const now = performance.now()
       durations.push(now - last)
       last = now
     }
-    const d = durations.slice(1).sort((a, b) => a - b)
+    const d = durations.slice(1).toSorted((a, b) => a - b)
     const p = q => Math.round(d[Math.min(d.length - 1, Math.floor(q * d.length))] * 10) / 10
     return {
       scrollHeight: el.scrollHeight,
       frames: d.length,
       p50: p(0.5),
       p95: p(0.95),
-      max: Math.round(d[d.length - 1] * 10) / 10,
-      domInScroller: el.getElementsByTagName('*').length,
+      max: Math.round(d.at(-1) * 10) / 10,
+      domInScroller: el.querySelectorAll('*').length,
     }
   })
 }
@@ -626,8 +652,10 @@ async function main() {
       const withDevtools = mode === 'on'
       const srv = await startServer(appDir, opts.port, withDevtools)
       try {
-        const m = { coldSsrMs: r1(srv.coldMs) }
-        m.app = await benchApp(browser, srv, opts, withDevtools)
+        const m = {
+          coldSsrMs: r1(srv.coldMs),
+          app: await benchApp(browser, srv, opts, withDevtools),
+        }
         if (withDevtools && opts.ui) m.ui = await benchUi(browser, srv, opts, outDir)
         result.modes[mode] = m
       } finally {
@@ -660,7 +688,9 @@ async function main() {
   console.log(`\nwrote ${path.relative(repoRoot, file)}`)
 }
 
-main().catch(e => {
+try {
+  await main()
+} catch (e) {
   console.error(e)
   process.exit(1)
-})
+}

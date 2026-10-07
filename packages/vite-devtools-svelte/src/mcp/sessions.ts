@@ -1,9 +1,10 @@
+import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
-import crypto from 'node:crypto'
+
 import type { RenderProfile, LoadProfile, FpsSample } from '../types.js'
 
-export interface SessionSnapshot {
+interface SessionSnapshot {
   /** componentId -> { renderCount, totalRenderTime } at snapshot moment */
   renderProfiles: Array<{
     componentId: number
@@ -235,27 +236,23 @@ export class SessionStore {
           if (!name.endsWith('.json')) continue
           const id = name.slice(0, -5)
           if (!isSessionId(id) || seen.has(id)) continue
-          try {
-            const rec = JSON.parse(fs.readFileSync(this.pathFor(id), 'utf-8'))
-            // A file whose content claims another id is not listed under it.
-            if (rec?.id !== id) continue
-            out.push({
-              id: rec.id,
-              label: rec.label,
-              startedAt: rec.startedAt,
-              endedAt: rec.endedAt,
-              persisted: true,
-              active: false,
-            })
-          } catch {
-            /* skip unreadable session file */
-          }
+          // Unreadable files, and files whose content claims another id, are skipped.
+          const rec = this.loadFromDisk(id)
+          if (!rec) continue
+          out.push({
+            id: rec.id,
+            label: rec.label,
+            startedAt: rec.startedAt,
+            endedAt: rec.endedAt,
+            persisted: true,
+            active: false,
+          })
         }
       }
     } catch {
       /* persist dir not accessible */
     }
-    return out.sort((a, b) => b.startedAt - a.startedAt)
+    return out.toSorted((a, b) => b.startedAt - a.startedAt)
   }
 
   delete(id: string): boolean {
@@ -299,7 +296,7 @@ export class SessionStore {
         }
       })
       .filter(c => c.renderCountDelta > 0)
-      .sort((a, b) => b.totalRenderTimeDelta - a.totalRenderTimeDelta)
+      .toSorted((a, b) => b.totalRenderTimeDelta - a.totalRenderTimeDelta)
 
     const loadDurations = rec.loadProfiles.map(l => l.duration)
     const loadAvg = avg(loadDurations)
@@ -307,7 +304,7 @@ export class SessionStore {
 
     const fpsValues = rec.fpsSamples.map(s => s.fps)
     const fpsAvg = avg(fpsValues)
-    const fpsMin = fpsValues.length ? Math.min(...fpsValues) : 0
+    const fpsMin = fpsValues.length > 0 ? Math.min(...fpsValues) : 0
     const fpsDrops = fpsValues.filter(f => f < FPS_DROP_THRESHOLD).length
 
     return {
@@ -372,8 +369,11 @@ export class SessionStore {
   private loadFromDisk(id: string): SessionRecord | undefined {
     try {
       const raw = fs.readFileSync(this.pathFor(id), 'utf-8')
-      const rec = JSON.parse(raw)
-      return rec?.id === id ? rec : undefined
+      const rec: unknown = JSON.parse(raw)
+      // A file whose content claims another id is not served under this one.
+      return typeof rec === 'object' && rec !== null && 'id' in rec && rec.id === id
+        ? (rec as SessionRecord)
+        : undefined
     } catch {
       return undefined
     }
@@ -381,13 +381,13 @@ export class SessionStore {
 }
 
 function avg(xs: number[]): number {
-  if (!xs.length) return 0
+  if (xs.length === 0) return 0
   return xs.reduce((s, x) => s + x, 0) / xs.length
 }
 
 function percentile(xs: number[], p: number): number {
-  if (!xs.length) return 0
-  const sorted = [...xs].sort((a, b) => a - b)
+  if (xs.length === 0) return 0
+  const sorted = xs.toSorted((a, b) => a - b)
   const idx = Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))
-  return sorted[idx]
+  return sorted[idx]!
 }

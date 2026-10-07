@@ -46,7 +46,8 @@
     transition: color 0.15s;
   }
 
-  a:hover, a.active {
+  a:hover,
+  a.active {
     color: #ff3e00;
     text-decoration: none;
   }

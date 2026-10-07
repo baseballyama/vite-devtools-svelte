@@ -1,26 +1,29 @@
 <script lang="ts">
+  import { resolve } from '$app/paths'
   import { page } from '$app/state'
   import { cart } from '$lib/stores/cart.svelte'
 
+  // route ids; resolve() adds the app's base path
   const links = [
-    { href: '/', label: 'Home' },
-    { href: '/products', label: 'Products' },
-    { href: '/cart', label: 'Cart' },
-    { href: '/dashboard', label: 'Dashboard' },
-  ]
+    { route: '/', label: 'Home' },
+    { route: '/products', label: 'Products' },
+    { route: '/cart', label: 'Cart' },
+    { route: '/dashboard', label: 'Dashboard' },
+  ] as const
 </script>
 
 <header>
-  <a class="brand" href="/">☕ devtools-shop</a>
+  <a class="brand" href={resolve('/')}>☕ devtools-shop</a>
   <nav>
-    {#each links as link (link.href)}
+    {#each links as link (link.route)}
+      {@const href = resolve(link.route)}
       <a
-        href={link.href}
-        class:active={page.url.pathname === link.href ||
-          (link.href !== '/' && page.url.pathname.startsWith(link.href))}
+        {href}
+        class:active={page.url.pathname === href ||
+          (link.route !== '/' && page.url.pathname.startsWith(href))}
       >
         {link.label}
-        {#if link.href === '/cart' && cart.itemCount > 0}
+        {#if link.route === '/cart' && cart.itemCount > 0}
           <span class="badge">{cart.itemCount}</span>
         {/if}
       </a>

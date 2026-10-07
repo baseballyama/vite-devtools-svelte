@@ -1,5 +1,6 @@
-import { json, error } from '@sveltejs/kit'
 import { getProduct } from '$lib/server/products'
+import { json, error } from '@sveltejs/kit'
+
 import type { RequestHandler } from './$types'
 
 interface AddRequest {

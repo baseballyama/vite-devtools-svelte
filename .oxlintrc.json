@@ -1,26 +1,129 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["typescript", "unicorn", "oxc", "import", "vitest"],
+  "plugins": ["eslint", "typescript", "unicorn", "oxc", "import", "promise", "node", "vitest"],
   "categories": {
-    "correctness": "error"
+    "correctness": "error",
+    "suspicious": "error",
+    "perf": "error",
+    "pedantic": "error"
   },
-  "rules": {
-    "vitest/require-mock-type-parameters": "off",
-    "jest/no-standalone-expect": "off",
-    "jest/require-to-throw-message": "off"
+  "options": {
+    "typeAware": true,
+    "reportUnusedDisableDirectives": "error"
   },
   "env": {
     "builtin": true,
-    "browser": true,
-    "node": true,
     "es2024": true
   },
+  "rules": {
+    // Off on purpose. Size limits, comment placement and regex flags are
+    // style, not defects; `__name` is the runtime's namespace convention.
+    "eslint/max-lines": "off",
+    "eslint/max-lines-per-function": "off",
+    "eslint/max-depth": "off",
+    "eslint/no-inline-comments": "off",
+    "eslint/require-unicode-regexp": "off",
+    "eslint/no-underscore-dangle": "off",
+    "import/max-dependencies": "off",
+    "unicorn/no-array-callback-reference": "off",
+    // Truthiness checks and `() => void fn()` are idiomatic here; casts are
+    // reviewed decisions; readonly parameter types everywhere are noise.
+    "typescript/strict-boolean-expressions": "off",
+    "typescript/no-confusing-void-expression": "off",
+    "typescript/no-unsafe-type-assertion": "off",
+    "typescript/prefer-readonly-parameter-types": "off",
+    // The type-aware variant covers this (and knows about thenables).
+    "eslint/require-await": "off",
+    // Superseded by typescript/no-unsafe-function-type.
+    "typescript/ban-types": "off",
+    "vitest/require-mock-type-parameters": "off",
+
+    // Opt-in rules beyond the enabled categories.
+    "eslint/no-var": "error",
+    "eslint/prefer-const": "error",
+    "eslint/no-console": ["error", { "allow": ["warn", "error"] }],
+    "eslint/no-param-reassign": "off",
+    "typescript/consistent-type-imports": "error",
+    "typescript/no-import-type-side-effects": "error",
+    "typescript/no-explicit-any": "error",
+    "typescript/no-non-null-asserted-nullish-coalescing": "error",
+    "typescript/prefer-optional-chain": "error",
+    "typescript/no-unnecessary-condition": "off",
+    "import/no-duplicates": "error",
+    "import/no-cycle": "error",
+    "import/no-self-import": "error",
+    "unicorn/prefer-node-protocol": "error",
+    "unicorn/no-useless-spread": "error",
+    "vitest/no-focused-tests": "error",
+    "vitest/no-disabled-tests": "error",
+    "vitest/consistent-test-it": ["error", { "fn": "it" }]
+  },
+  "overrides": [
+    {
+      // Plain JavaScript has no types: the type-aware `no-unsafe-*` family
+      // would flag every value.
+      "files": ["**/*.js", "**/*.mjs", "**/*.cjs"],
+      "rules": {
+        "typescript/no-unsafe-argument": "off",
+        "typescript/no-unsafe-assignment": "off",
+        "typescript/no-unsafe-call": "off",
+        "typescript/no-unsafe-member-access": "off",
+        "typescript/no-unsafe-return": "off",
+        "typescript/no-explicit-any": "off"
+      }
+    },
+    {
+      // Browser code served as virtual modules into the user's app.
+      "files": ["packages/vite-devtools-svelte/src/runtime/*.js"],
+      "env": { "browser": true, "builtin": true, "es2024": true }
+    },
+    {
+      "files": [
+        "packages/client/src/**",
+        "site/src/**",
+        "playground/src/**",
+        "examples/**/src/**",
+        "e2e/compat/kit3/src/**"
+      ],
+      "env": { "browser": true, "builtin": true, "es2024": true }
+    },
+    {
+      // Tests drive the untyped browser runtime (window.__SVELTE_DEVTOOLS__)
+      // and fake hosts; the dev-only mock backend is never shipped.
+      "files": ["**/test/**", "**/*.test.ts", "packages/client/dev/**"],
+      "rules": {
+        "typescript/no-unsafe-argument": "off",
+        "typescript/no-unsafe-assignment": "off",
+        "typescript/no-unsafe-call": "off",
+        "typescript/no-unsafe-member-access": "off",
+        "typescript/no-unsafe-return": "off",
+        "typescript/no-explicit-any": "off"
+      }
+    },
+    {
+      // Sequential steps (servers, browsers, files) are the point of these.
+      "files": [
+        "e2e/**",
+        "perf/**",
+        "scripts/**",
+        "site/scripts/**",
+        "**/test/**",
+        "**/*.test.ts",
+        ".claude/**"
+      ],
+      "rules": {
+        "eslint/no-await-in-loop": "off",
+        "eslint/no-console": "off"
+      }
+    }
+  ],
   "ignorePatterns": [
     "**/node_modules/**",
     "**/dist/**",
     "**/build/**",
     "**/.svelte-kit/**",
     "**/coverage/**",
-    "**/*.svelte"
+    "**/*.svelte",
+    "e2e/compat/kit3/**"
   ]
 }

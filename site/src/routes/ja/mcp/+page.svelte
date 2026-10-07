@@ -2,9 +2,10 @@
   // Japanese quickstart for the MCP guide. The English page (/mcp) is the
   // source of truth: keep facts, limits and versions in step with it.
   import { resolve } from '$app/paths'
+
   import CodeBlock from '#lib/CodeBlock.svelte'
-  import { MCP_TOOL_COUNT } from '#lib/mcp-tools.ts'
   import { mcpToolsJa } from '#lib/mcp-tools.ja.ts'
+  import { MCP_TOOL_COUNT } from '#lib/mcp-tools.ts'
 
   const groups = mcpToolsJa()
 
@@ -129,14 +130,14 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
           </header>
           <p>
             <code>vite dev</code> の実行中、プラグインは
-            <code>/__svelte-devtools/mcp</code> に MCP エンドポイント（Streamable
-            HTTP）を提供します。エージェントはそこでツールを呼び、パネルに表示される内容を読みます:
-            活発なコンポーネント、1 つのインスタンスのリアクティブグラフ、サンプリングされた state
-            の変化、レンダープロファイル、load 関数、フレームレート。変更の前後を比べる計測セッションも実行できます。
+            <code>/__svelte-devtools/mcp</code> に MCP エンドポイント（Streamable HTTP）を提供します。エージェントはそこでツールを呼び、パネルに表示される内容を読みます:
+            活発なコンポーネント、1 つのインスタンスのリアクティブグラフ、サンプリングされた state の変化、レンダープロファイル、load
+            関数、フレームレート。変更の前後を比べる計測セッションも実行できます。
           </p>
           <p>
             アプリのコードや state を変更するツールはありません。起きることは 2 つです:
-            呼び出しのたびにページ内のランタイムが約 1 分間サンプリングを続けること、そしてセッション系のツールが計測セッションを保持すること（メモリ内。ディスクには指定したときだけ書き込み、<code
+            呼び出しのたびにページ内のランタイムが約 1
+            分間サンプリングを続けること、そしてセッション系のツールが計測セッションを保持すること（メモリ内。ディスクには指定したときだけ書き込み、<code
               >delete_session</code
             > で削除できます）。実行時のデータはブラウザで開いているアプリのページから来るので、エージェントの作業中はアプリを開いたままにしてください。
           </p>
@@ -167,10 +168,10 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
 
           <h3 class="content-h2">コマンドの代わりにプロジェクトのファイルを使う</h3>
           <p>
-            <code>claude mcp add</code> は自分だけにサーバーを登録します（local スコープ）。プロジェクトの
-            <code>.mcp.json</code> はプロジェクトを開く全員と共有されるので（project
-            スコープ）、トークンを書き込まないでください。Claude Code
-            はこのファイル内の環境変数を展開するので、トークンは環境変数から読み込みます:
+            <code>claude mcp add</code> は自分だけにサーバーを登録します（local
+            スコープ）。プロジェクトの
+            <code>.mcp.json</code> はプロジェクトを開く全員と共有されるので（project スコープ）、トークンを書き込まないでください。Claude
+            Code はこのファイル内の環境変数を展開するので、トークンは環境変数から読み込みます:
           </p>
           <CodeBlock code={mcpJsonCode} lang="json" filename=".mcp.json" />
           <p>開発サーバーが表示した行からトークンを設定し、Claude Code を起動します:</p>
@@ -179,10 +180,11 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
 
           <h3 class="content-h2">他の MCP クライアント</h3>
           <p>
-            カスタムヘッダー付きの Streamable HTTP に対応したクライアントなら接続できます。必要なのは
-            URL（<code>http://localhost:&lt;port&gt;/__svelte-devtools/mcp</code>）とヘッダー（<code
-              >x-svelte-devtools-token: &lt;token&gt;</code
-            >）の 2 つです。開発サーバーが表示するのは Claude Code
+            カスタムヘッダー付きの Streamable HTTP
+            に対応したクライアントなら接続できます。必要なのは URL（<code
+              >http://localhost:&lt;port&gt;/__svelte-devtools/mcp</code
+            >）とヘッダー（<code>x-svelte-devtools-token: &lt;token&gt;</code>）の 2
+            つです。開発サーバーが表示するのは Claude Code
             のコマンドだけなので、他のクライアントではそれぞれの設定形式でこの 2
             つを指定します。サーバーはステートレスで JSON で応答します。手動で確認するには:
           </p>
@@ -202,11 +204,12 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
             <span class="step-num mono">03</span>
             <h2>基本の流れ</h2>
           </header>
-          <p>大きなアプリでも回答を小さく保つ順序です。各ステップの実際の回答は<a
+          <p>
+            大きなアプリでも回答を小さく保つ順序です。各ステップの実際の回答は<a
               href={resolve('/mcp#walkthrough')}
               lang="en">英語版の Walkthrough</a
-            >にあります（合成データのサンプルアプリ <code>examples/sample-app</code> で CI
-            が記録したもの）。</p>
+            >にあります（合成データのサンプルアプリ <code>examples/sample-app</code> で CI が記録したもの）。
+          </p>
           <ol class="limits">
             {#each flow as step (step.tool)}
               <li><code>{step.tool}</code> — {step.text}</li>
@@ -267,41 +270,41 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
           </header>
           <ul class="limits">
             <li>
-              <strong>サンプリング。</strong> state は 200 ms ごとに確認され、1
-              回のサンプル内の複数回の書き込みは 1 回と数えます。回数は総数や発生率ではありません。
+              <strong>サンプリング。</strong> state は 200 ms ごとに確認され、1 回のサンプル内の複数回の書き込みは
+              1 回と数えます。回数は総数や発生率ではありません。
             </li>
             <li>
-              <strong>コンポーネントの state のみ。</strong> コンポーネントの初期化中に作られた state
-              を追跡します。<code>.svelte.ts</code> ファイルのモジュールレベルの state は対象外です。
+              <strong>コンポーネントの state のみ。</strong> コンポーネントの初期化中に作られた
+              state を追跡します。<code>.svelte.ts</code> ファイルのモジュールレベルの state は対象外です。
             </li>
             <li>
               <strong>「影響しうる」であって「原因」ではない。</strong> エッジは現在の依存関係です。どの書き込みが値を変えたかは記録しません。
             </li>
             <li>
-              <strong>一部の依存関係は欠けます。</strong> <code>$effect</code> は state
-              を読んでいても入ってくるエッジが表示されないことがあります。
+              <strong>一部の依存関係は欠けます。</strong> <code>$effect</code> は state を読んでいても入ってくるエッジが表示されないことがあります。
             </li>
             <li>
-              <strong>グラフ内の値は要約。</strong> オブジェクトや配列は <code>(object)</code>、<code
-                >[n]</code
-              >、<code>{'{n}'}</code> と表示されます。タイムラインには
+              <strong>グラフ内の値は要約。</strong> オブジェクトや配列は
+              <code>(object)</code>、<code>[n]</code>、<code>{'{n}'}</code>
+              と表示されます。タイムラインには
               <code>maxValueChars</code> までの値が含まれます。
             </li>
             <li>
-              <strong>signal ごとの履歴はありません。</strong> タイムラインはすべての signal
-              をまとめて、サンプリングされた最新 500 件の変化を保持します。
+              <strong>signal ごとの履歴はありません。</strong> タイムラインはすべての signal をまとめて、サンプリングされた最新
+              500 件の変化を保持します。
             </li>
             <li>
-              <strong>上限。</strong> グラフは 5000 ノード・20000 エッジで打ち切られ、そのことを明示します（<code
-                >truncated</code
-              >、<code>total</code>、<code>edgesOmitted</code>）。<code>get_capture_info</code>
+              <strong>上限。</strong> グラフは 5000 ノード・20000
+              エッジで打ち切られ、そのことを明示します（<code>truncated</code>、<code>total</code
+              >、<code>edgesOmitted</code>）。<code>get_capture_info</code>
               が何をなぜ落としたかを報告します。
             </li>
             <li>
               <strong>1 回のページ読み込み。</strong> コンポーネント id は 1 つの epoch
               の中でだけ有効です。回答は最大 1 秒間キャッシュから返ることがあり、<code
                 >computedAt</code
-              > と <code>window.until</code> が計算時刻を示します。
+              >
+              と <code>window.until</code> が計算時刻を示します。
             </li>
           </ul>
           <p>非常に大きなアプリでの性能は計測していません。対応できる規模は約束していません。</p>
@@ -321,7 +324,9 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
             </div>
             <div>
               <dt><code>staleReason: "no-runtime"</code> の空の回答</dt>
-              <dd>アプリのページが接続されていません。ブラウザでアプリを開いてから呼び直してください。</dd>
+              <dd>
+                アプリのページが接続されていません。ブラウザでアプリを開いてから呼び直してください。
+              </dd>
             </div>
             <div>
               <dt><code>staleReason: "timeout"</code></dt>
@@ -339,7 +344,9 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
             </div>
             <div>
               <dt><code>componentId requires epoch</code></dt>
-              <dd>同じ <code>get_live_components</code> の回答に含まれる epoch を渡してください。</dd>
+              <dd>
+                同じ <code>get_live_components</code> の回答に含まれる epoch を渡してください。
+              </dd>
             </div>
             <div>
               <dt>コンポーネントやリアクティブノードが出てこない</dt>
@@ -368,15 +375,16 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
             </li>
             <li>
               トークンはパネルのブラウザでのサインイン（ワンタイムコード）とは別物です。MCP
-              クライアントはローカルのプロセスなのでブラウザの origin は確認されず、トークンだけが関門です。
+              クライアントはローカルのプロセスなのでブラウザの origin
+              は確認されず、トークンだけが関門です。
             </li>
             <li>
-              <code>get_state_timeline</code> は実行中のアプリの実際の state
-              の値を返すので、エージェントにも見えます。開発中の state に秘密情報を入れないか、このツールを使わないでください。
+              <code>get_state_timeline</code> は実行中のアプリの実際の state の値を返すので、エージェントにも見えます。開発中の
+              state に秘密情報を入れないか、このツールを使わないでください。
             </li>
             <li>
-              開発サーバーがネットワークで待ち受けている場合（<code>--host</code>）、エンドポイントも同様です。localhost
-              を推奨します。
+              開発サーバーがネットワークで待ち受けている場合（<code>--host</code
+              >）、エンドポイントも同様です。localhost を推奨します。
             </li>
             <li>
               セッションがディスクに書かれるのは <code>persist</code> か
@@ -409,14 +417,17 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
               <dd>
                 Streamable HTTP、ステートレス、JSON 応答。CI はプレーンな HTTP（<code
                   >initialize</code
-                >、<code>tools/list</code>、<code>tools/call</code>）でエンドポイントを呼んでいます。
+                >、<code>tools/list</code>、<code>tools/call</code
+                >）でエンドポイントを呼んでいます。
               </dd>
             </div>
             <div>
               <dt>資料</dt>
               <dd>
-                動画による解説はまだありません。実際の回答例とスクリーンショット（CI
-                で記録）は<a href={resolve('/mcp')} lang="en">英語の MCP ガイド</a>にあります。
+                動画による解説はまだありません。実際の回答例とスクリーンショット（CI で記録）は<a
+                  href={resolve('/mcp')}
+                  lang="en">英語の MCP ガイド</a
+                >にあります。
               </dd>
             </div>
           </dl>
@@ -427,7 +438,10 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
           <ul>
             <li><a href={resolve('/getting-started')}>プラグインを設定する（英語）</a></li>
             <li><a href={resolve('/mcp#walkthrough')}>実際の回答例（英語）</a></li>
-            <li><a href={resolve('/panels/[slug]', { slug: 'reactive' })}>Reactivity パネル（英語）</a></li>
+            <li>
+              <a href={resolve('/panels/[slug]', { slug: 'reactive' })}>Reactivity パネル（英語）</a
+              >
+            </li>
           </ul>
         </section>
       </article>
@@ -535,7 +549,9 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
     border-left: 2px solid transparent;
     padding-left: 0.6rem;
     margin-left: -0.6rem;
-    transition: border-color 150ms var(--ease), color 150ms var(--ease);
+    transition:
+      border-color 150ms var(--ease),
+      color 150ms var(--ease);
   }
 
   .toc a:hover {
@@ -644,11 +660,6 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
   .tool-note {
     font-size: 0.9rem;
     color: var(--text-2);
-  }
-
-  .provenance {
-    font-size: 0.85rem;
-    color: var(--text-3);
   }
 
   .limits {

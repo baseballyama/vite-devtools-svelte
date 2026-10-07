@@ -11,9 +11,7 @@
   )
 
   const filtered = $derived(
-    query
-      ? items.filter((it) => it.label.toLowerCase().includes(query.toLowerCase()))
-      : items,
+    query ? items.filter(it => it.label.toLowerCase().includes(query.toLowerCase())) : items,
   )
 </script>
 
@@ -28,7 +26,7 @@
   </div>
   <div class="list">
     {#each filtered as item (item.id)}
-      <div class="row" style="--hue:{item.hue}">
+      <div class="row" style:--hue={item.hue}>
         <span class="dot"></span>
         <span>{item.label}</span>
       </div>

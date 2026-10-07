@@ -70,7 +70,7 @@
       パーティクル数: {particleCount}
       <input type="range" min="10" max="800" bind:value={particleCount} />
     </label>
-    <button onclick={() => (running = !running)}>
+    <button type="button" onclick={() => (running = !running)}>
       {running ? '一時停止' : '再開'}
     </button>
   </div>

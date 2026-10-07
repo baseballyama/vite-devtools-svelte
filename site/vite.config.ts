@@ -1,13 +1,15 @@
 import { readFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { resolve } from 'node:path'
+
 import adapter from '@sveltejs/adapter-static'
 import { sveltekit } from '@sveltejs/kit/vite'
 import { defineConfig } from 'vite'
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
 const pkg = JSON.parse(
-  readFileSync(resolve(__dirname, '../packages/vite-devtools-svelte/package.json'), 'utf-8'),
+  readFileSync(
+    resolve(import.meta.dirname, '../packages/vite-devtools-svelte/package.json'),
+    'utf-8',
+  ),
 ) as { version: string }
 
 const dev = process.env.NODE_ENV !== 'production'

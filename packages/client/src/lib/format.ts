@@ -51,7 +51,7 @@ export function componentName(file: string | undefined | null, fallback = 'Unkno
 
 /** Human-readable byte size: `512 B`, `1.4 KB`, `2.31 MB`. */
 export function formatBytes(bytes: number | undefined | null): string {
-  if (bytes == null || !Number.isFinite(bytes)) return '—'
+  if (typeof bytes !== 'number' || !Number.isFinite(bytes)) return '—'
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
@@ -59,7 +59,7 @@ export function formatBytes(bytes: number | undefined | null): string {
 
 /** Millisecond duration with precision that adapts to magnitude. */
 export function formatMs(ms: number | undefined | null): string {
-  if (ms == null || !Number.isFinite(ms)) return '—'
+  if (typeof ms !== 'number' || !Number.isFinite(ms)) return '—'
   if (ms >= 1000) return `${(ms / 1000).toFixed(2)} s`
   if (ms >= 100) return `${ms.toFixed(0)} ms`
   if (ms >= 10) return `${ms.toFixed(1)} ms`
@@ -77,14 +77,24 @@ export function formatClock(ts: number, millis = false): string {
   })
 }
 
+/**
+ * Last-resort `String()` for values JSON cannot represent (functions,
+ * symbols, bigints, cyclic objects). Objects intentionally keep their own
+ * `toString()` (or the `[object Object]` default) — there is nothing better
+ * to show for an unserialisable value.
+ */
+export function toText(v: unknown): string {
+  return typeof v === 'string' ? v : String(v)
+}
+
 /** Compact one-line rendering of an arbitrary value (JSON-ish, truncated). */
 export function formatValue(v: unknown, max = 80): string {
   if (v === undefined) return 'undefined'
   let s: string
   try {
-    s = typeof v === 'string' ? JSON.stringify(v) : (JSON.stringify(v) ?? String(v))
+    s = typeof v === 'string' ? JSON.stringify(v) : (JSON.stringify(v) ?? toText(v))
   } catch {
-    s = String(v)
+    s = toText(v)
   }
   return s.length > max ? s.slice(0, max - 1) + '…' : s
 }
@@ -93,15 +103,15 @@ export function formatValue(v: unknown, max = 80): string {
 export function prettyValue(v: unknown): string {
   if (v === undefined) return 'undefined'
   try {
-    return JSON.stringify(v, null, 2) ?? String(v)
+    return JSON.stringify(v, null, 2) ?? toText(v)
   } catch {
-    return String(v)
+    return toText(v)
   }
 }
 
 /** Relative "x s ago" label for freshness indicators. */
 export function formatAgo(ts: number | null, now = Date.now()): string {
-  if (ts == null) return 'never'
+  if (ts === null) return 'never'
   const s = Math.max(0, Math.round((now - ts) / 1000))
   if (s < 2) return 'just now'
   if (s < 60) return `${s}s ago`

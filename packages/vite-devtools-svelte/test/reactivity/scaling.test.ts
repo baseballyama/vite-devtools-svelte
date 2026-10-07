@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+
 import BigList from './fixtures/BigList.svelte'
 import { render, instances, graph } from './harness.js'
 
@@ -22,7 +23,7 @@ describe('graph build scaling', () => {
     build(50) // warm up
     const small = build(250)
     const large = build(1000)
-    expect(small.rowsOk && large.rowsOk).toBe(true)
+    expect([small.rowsOk, large.rowsOk]).toEqual([true, true])
     // 4x the rows: linear ~4x, quadratic ~16x
     expect(large.ms / Math.max(small.ms, 1)).toBeLessThan(10)
   })

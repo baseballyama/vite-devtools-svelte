@@ -1,9 +1,11 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
+
   import type { LabItem } from './store.svelte'
 
   let {
     item,
+    // eslint-disable-next-line @typescript-eslint/no-useless-default-assignment -- $bindable() marks the prop bindable (bind:qty in the lab page); it is not a default value
     qty = $bindable(),
     badge,
   }: { item: LabItem; qty: number; badge: Snippet<[string]> } = $props()
@@ -19,6 +21,6 @@
     <b>{double}</b>
   {/each}
   {@render badge(String(qty))}
-  <button data-testid="inc" onclick={() => qty++}>+</button>
-  <button onclick={() => (editing = !editing)}>edit</button>
+  <button type="button" data-testid="inc" onclick={() => qty++}>+</button>
+  <button type="button" onclick={() => (editing = !editing)}>edit</button>
 </li>

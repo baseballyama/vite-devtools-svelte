@@ -1,24 +1,25 @@
 <script lang="ts">
-  import { getSvelteFiles, inspectFile, openInEditor } from '../lib/rpc.js'
-  import type { InspectResult } from '../lib/types.js'
-  import { resource } from '../lib/resource.svelte.js'
-  import { matcher } from '../lib/match.js'
-  import { shortPath } from '../lib/format.js'
-  import { parseLineMappings, type LineMaps } from '../lib/sourcemap.js'
-  import { highlightJS, highlightSvelte } from '../lib/highlight.js'
-  import Panel from '../components/Panel.svelte'
-  import SplitView from '../components/SplitView.svelte'
-  import VirtualList from '../components/VirtualList.svelte'
-  import SearchField from '../components/SearchField.svelte'
-  import Button from '../components/Button.svelte'
   import Badge from '../components/Badge.svelte'
-  import Highlight from '../components/Highlight.svelte'
-  import EmptyState from '../components/EmptyState.svelte'
+  import Button from '../components/Button.svelte'
   import CodePane from '../components/CodePane.svelte'
+  import EmptyState from '../components/EmptyState.svelte'
+  import Highlight from '../components/Highlight.svelte'
+  import Panel from '../components/Panel.svelte'
+  import SearchField from '../components/SearchField.svelte'
+  import SplitView from '../components/SplitView.svelte'
+  import type { CodePaneApi } from '../components/types.js'
+  import VirtualList from '../components/VirtualList.svelte'
+  import { shortPath } from '../lib/format.js'
+  import { highlightJS, highlightSvelte } from '../lib/highlight.js'
+  import { matcher } from '../lib/match.js'
+  import { resource } from '../lib/resource.svelte.js'
+  import { getSvelteFiles, inspectFile, openInEditor, type SvelteFileEntry } from '../lib/rpc.js'
+  import { parseLineMappings, type LineMaps } from '../lib/sourcemap.js'
+  import type { InspectResult } from '../lib/types.js'
 
   const LH = 18
 
-  const files = resource(getSvelteFiles, { initial: [] as { file: string; name: string }[] })
+  const files = resource<SvelteFileEntry[]>(getSvelteFiles, { initial: [] })
 
   let query = $state('')
   let selected = $state<string | null>(null)
@@ -33,13 +34,13 @@
   let srcTop = $state(0)
   let outTop = $state(0)
   let gutterH = $state(0)
-  let srcPane = $state<CodePane | null>(null)
-  let outPane = $state<CodePane | null>(null)
+  let srcPane = $state<CodePaneApi | null>(null)
+  let outPane = $state<CodePaneApi | null>(null)
   let codeWidth = $state(1000)
 
   const rows = $derived.by(() => {
     const m = matcher(query)
-    return m ? files.data.filter((f) => m(f.name, f.file)) : files.data
+    return m ? files.data.filter(f => m(f.name, f.file)) : files.data
   })
 
   const srcHtml = $derived(result ? highlightSvelte(result.source.split('\n')) : [])
@@ -91,13 +92,16 @@
     const out: { a: number; b: number }[] = []
     const from = origin === 'compiled' ? outHl : srcHl
     for (const ln of from) {
-      const targets = origin === 'compiled' ? maps.compiledToSource.get(ln) : maps.sourceToCompiled.get(ln)
+      const targets =
+        origin === 'compiled' ? maps.compiledToSource.get(ln) : maps.sourceToCompiled.get(ln)
       for (const t of targets ?? []) {
         const [s, c] = origin === 'compiled' ? [t, ln] : [ln, t]
         out.push({ a: (s - 0.5) * LH - srcTop, b: (c - 0.5) * LH - outTop })
       }
     }
-    return out.filter((l) => (l.a > -LH || l.b > -LH) && (l.a < gutterH + LH || l.b < gutterH + LH)).slice(0, 200)
+    return out
+      .filter(l => (l.a > -LH || l.b > -LH) && (l.a < gutterH + LH || l.b < gutterH + LH))
+      .slice(0, 200)
   })
 </script>
 
@@ -111,21 +115,46 @@
   {/snippet}
   {#snippet actions()}
     {#if result}
-      <Button icon="editor" variant="ghost" label="Open source in editor" onclick={() => openInEditor(result!.file).catch(() => {})} />
-      <Button icon="refresh" variant="ghost" label="Recompile" disabled={loading} onclick={() => selected && load(selected)} />
+      <Button
+        icon="editor"
+        variant="ghost"
+        label="Open source in editor"
+        onclick={() => openInEditor(result!.file).catch(() => {})}
+      />
+      <Button
+        icon="refresh"
+        variant="ghost"
+        label="Recompile"
+        disabled={loading}
+        onclick={() => selected && load(selected)}
+      />
     {/if}
   {/snippet}
 
   <SplitView id="inspect" side="start" initial={280} min={180} open>
     <div class="code" class:stacked bind:clientWidth={codeWidth} aria-busy={loading}>
       {#if error}
-        <EmptyState icon="errors" tone="error" title="Could not compile this file"><p class="mono">{error}</p></EmptyState>
+        <EmptyState icon="errors" tone="error" title="Could not compile this file"
+          ><p class="mono">{error}</p></EmptyState
+        >
       {:else if !result}
         <EmptyState icon="inspect" title={loading ? 'Compiling…' : 'Pick a component'}>
-          {#if !loading}<p>See exactly what the Svelte compiler emits. Click any line to jump to its source-mapped counterpart.</p>{/if}
+          {#if !loading}<p>
+              See exactly what the Svelte compiler emits. Click any line to jump to its
+              source-mapped counterpart.
+            </p>{/if}
         </EmptyState>
       {:else}
-        <CodePane bind:this={srcPane} bind:scrollTop={srcTop} title="Source" html={srcHtml} highlighted={srcHl} origin={origin === 'source'} lineHeight={LH} onlineclick={clickSource} />
+        <CodePane
+          bind:this={srcPane}
+          bind:scrollTop={srcTop}
+          title="Source"
+          html={srcHtml}
+          highlighted={srcHl}
+          origin={origin === 'source'}
+          lineHeight={LH}
+          onlineclick={clickSource}
+        />
         {#if !stacked}
           <div class="gutter" bind:clientHeight={gutterH} aria-hidden="true">
             <svg width="100%" height="100%" preserveAspectRatio="none">
@@ -135,17 +164,35 @@
             </svg>
           </div>
         {/if}
-        <CodePane bind:this={outPane} bind:scrollTop={outTop} title="Compiled JS" html={outHtml} highlighted={outHl} origin={origin === 'compiled'} lineHeight={LH} onlineclick={clickCompiled} />
+        <CodePane
+          bind:this={outPane}
+          bind:scrollTop={outTop}
+          title="Compiled JS"
+          html={outHtml}
+          highlighted={outHl}
+          origin={origin === 'compiled'}
+          lineHeight={LH}
+          onlineclick={clickCompiled}
+        />
       {/if}
     </div>
     {#snippet aside()}
-      <VirtualList items={rows} getKey={(f) => f.file} bind:selected label="Svelte files" onselect={(f) => load(f.file)}>
-        {#snippet row(f)}
+      <VirtualList
+        items={rows}
+        getKey={(f: SvelteFileEntry) => f.file}
+        bind:selected
+        label="Svelte files"
+        onselect={(f: SvelteFileEntry) => load(f.file)}
+      >
+        {#snippet row(f: SvelteFileEntry)}
           <span class="name truncate"><Highlight text={f.name} {query} /></span>
           <span class="path truncate"><Highlight text={shortPath(f.file, 3)} {query} /></span>
         {/snippet}
         {#snippet empty()}
-          <EmptyState icon={files.loading ? undefined : 'search'} title={files.loading ? 'Listing files…' : 'No files match'} />
+          <EmptyState
+            icon={files.loading ? undefined : 'search'}
+            title={files.loading ? 'Listing files…' : 'No files match'}
+          />
         {/snippet}
       </VirtualList>
     {/snippet}

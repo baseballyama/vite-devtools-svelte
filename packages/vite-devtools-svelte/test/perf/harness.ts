@@ -70,6 +70,8 @@ export function createRuntime(
     },
   }
   const code = runtimeCode.replaceAll('import.meta.hot', '__hot')
+  // Evaluates the injected runtime's own source with stubbed browser globals.
+  // oxlint-disable-next-line typescript/no-implied-eval -- running the runtime source under test is the point
   const fn = new Function(
     'window',
     'document',
@@ -163,7 +165,7 @@ export function mountList(h: Harness, n: number, statesPer = 2) {
       signals.push(sig)
       dt.trackState(sig, `s${s}`, id)
     }
-    const derived = { v: i * 2, deps: [signals[signals.length - 1]] }
+    const derived = { v: i * 2, deps: [signals.at(-1)] }
     signals.push(derived)
     dt.trackDerived(derived, 'd', id)
     dt.trackEffect({ deps: [derived] }, '$effect', id)
@@ -203,7 +205,9 @@ export function countVisits(fn: () => void): number {
         },
       }
     }
-    restores.push(() => (proto[key] = orig))
+    restores.push(() => {
+      proto[key] = orig
+    })
   }
   const patchLinear = (proto: any, key: string) => {
     const orig = proto[key]
@@ -211,7 +215,9 @@ export function countVisits(fn: () => void): number {
       visits += this.length ?? this.size ?? 0
       return orig.apply(this, args)
     }
-    restores.push(() => (proto[key] = orig))
+    restores.push(() => {
+      proto[key] = orig
+    })
   }
   for (const proto of [Map.prototype, Set.prototype]) {
     for (const key of ['entries', 'keys', 'values', Symbol.iterator]) patchIter(proto, key)
@@ -233,7 +239,7 @@ export function countVisits(fn: () => void): number {
   try {
     fn()
   } finally {
-    for (const r of restores.reverse()) r()
+    for (const r of restores.toReversed()) r()
   }
   return visits
 }

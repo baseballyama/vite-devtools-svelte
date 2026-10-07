@@ -1,6 +1,8 @@
 <script lang="ts">
+  import { resolve } from '$app/paths'
   import ProductCard from '$lib/components/ProductCard.svelte'
   import { cart } from '$lib/stores/cart.svelte'
+
   import type { PageProps } from './$types'
 
   let { data }: PageProps = $props()
@@ -25,7 +27,7 @@
   <meta property="og:description" content={data.product.description} />
 </svelte:head>
 
-<p><a href="/products">← 商品一覧</a></p>
+<p><a href={resolve('/products')}>← 商品一覧</a></p>
 
 <article class="card detail">
   <h1>{data.product.name}</h1>
@@ -39,23 +41,17 @@
       <input type="number" min="1" max={data.product.stock} bind:value={qty} />
     </label>
     <p>合計: ¥{lineTotal.toLocaleString()}</p>
-    <button onclick={addToCart} disabled={data.product.stock <= 0}>
+    <button type="button" onclick={addToCart} disabled={data.product.stock <= 0}>
       カートに追加
     </button>
   </div>
 </article>
 
 {#if data.related.length}
-  <h2 style="margin-top:24px">関連商品</h2>
+  <h2 style:margin-top="24px">関連商品</h2>
   <div class="grid">
     {#each data.related as p (p.id)}
-      <ProductCard
-        id={p.id}
-        name={p.name}
-        price={p.price}
-        category={p.category}
-        stock={p.stock}
-      />
+      <ProductCard id={p.id} name={p.name} price={p.price} category={p.category} stock={p.stock} />
     {/each}
   </div>
 {/if}

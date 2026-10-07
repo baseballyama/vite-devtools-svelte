@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
   import type { HTMLButtonAttributes } from 'svelte/elements'
+
   import type { IconName } from '../lib/icons.js'
   import Icon from './Icon.svelte'
 

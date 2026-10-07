@@ -30,7 +30,11 @@
   const overscan = 20
 
   const start = $derived(Math.max(0, Math.floor(scrollTop / lineHeight) - overscan))
-  const end = $derived(Math.min(html.length, Math.ceil((scrollTop + height) / lineHeight) + overscan))
+  const end = $derived(
+    Math.min(html.length, Math.ceil((scrollTop + height) / lineHeight) + overscan),
+  )
+  /** 1-based numbers of the rendered (visible + overscan) lines. */
+  const lines = $derived(Array.from({ length: end - start }, (_, j) => start + j + 1))
   const gutterCh = $derived(String(html.length).length + 1)
 
   export function scrollToLine(line: number) {
@@ -69,9 +73,13 @@
     aria-label="{title} code"
     {onkeydown}
   >
-    <div class="spacer" style:height="{html.length * lineHeight}px" style:--lh="{lineHeight}px" style:--gutter="{gutterCh}ch">
-      {#each { length: end - start } as _, j (start + j)}
-        {@const ln = start + j + 1}
+    <div
+      class="spacer"
+      style:height="{html.length * lineHeight}px"
+      style:--lh="{lineHeight}px"
+      style:--gutter="{gutterCh}ch"
+    >
+      {#each lines as ln (ln)}
         <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
         <div
           class="line"
@@ -80,6 +88,7 @@
           style:transform="translateY({(ln - 1) * lineHeight}px)"
           onclick={() => onlineclick?.(ln)}
         >
+          <!-- eslint-disable-next-line svelte/no-at-html-tags -- `html` is escaped by lib/highlight.ts (the only producer) -->
           <span class="ln num">{ln}</span><span class="src">{@html html[ln - 1] || ' '}</span>
         </div>
       {/each}

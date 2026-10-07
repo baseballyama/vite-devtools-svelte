@@ -1,23 +1,23 @@
 <script lang="ts">
+  import Badge from '../components/Badge.svelte'
+  import Button from '../components/Button.svelte'
+  import CaptureNotice from '../components/CaptureNotice.svelte'
+  import EmptyState from '../components/EmptyState.svelte'
+  import Highlight from '../components/Highlight.svelte'
+  import Inspector from '../components/Inspector.svelte'
+  import LiveControls from '../components/LiveControls.svelte'
+  import Panel from '../components/Panel.svelte'
+  import SearchField from '../components/SearchField.svelte'
+  import SplitView from '../components/SplitView.svelte'
+  import VirtualList from '../components/VirtualList.svelte'
+  import { captureInfo } from '../lib/capture.svelte.js'
+  import { componentName, formatClock, formatValue, prettyValue } from '../lib/format.js'
+  import { haystack, haystackMatcher } from '../lib/match.js'
+  import { baselineNotice } from '../lib/reactive.js'
+  import { resource } from '../lib/resource.svelte.js'
   import { getStateTimelineDelta, clearStateTimeline, openReactiveInEditor } from '../lib/rpc.js'
   import type { StateChange, StateTimelineEntry } from '../lib/types.js'
   import { datasetVersion } from '../lib/versions.js'
-  import { resource } from '../lib/resource.svelte.js'
-  import { haystack, haystackMatcher } from '../lib/match.js'
-  import { componentName, formatClock, formatValue, prettyValue } from '../lib/format.js'
-  import Panel from '../components/Panel.svelte'
-  import SplitView from '../components/SplitView.svelte'
-  import VirtualList from '../components/VirtualList.svelte'
-  import Inspector from '../components/Inspector.svelte'
-  import SearchField from '../components/SearchField.svelte'
-  import Button from '../components/Button.svelte'
-  import Badge from '../components/Badge.svelte'
-  import Highlight from '../components/Highlight.svelte'
-  import EmptyState from '../components/EmptyState.svelte'
-  import LiveControls from '../components/LiveControls.svelte'
-  import CaptureNotice from '../components/CaptureNotice.svelte'
-  import { captureInfo } from '../lib/capture.svelte.js'
-  import { baselineNotice } from '../lib/reactive.js'
 
   /** Mirrors the server buffer (docs/devframe-migration.md §6.4). */
   const MAX_ENTRIES = 500
@@ -40,7 +40,7 @@
   const identityOf = (d: object): string | undefined => {
     const x = d as { serverId?: unknown; instanceId?: unknown }
     const id = x.serverId ?? x.instanceId
-    return id == null ? undefined : String(id)
+    return typeof id === 'string' || typeof id === 'number' ? String(id) : undefined
   }
 
   async function pull(): Promise<StateTimelineEntry[]> {
@@ -52,7 +52,7 @@
       cursor !== undefined &&
       ((id !== undefined && serverId !== undefined && id !== serverId) ||
         d.cursor < cursor ||
-        (d.changes.length > 0 && lastSeq !== undefined && d.changes[0].seq <= lastSeq))
+        (d.changes.length > 0 && lastSeq !== undefined && d.changes[0]!.seq <= lastSeq))
     if (stale) d = await getStateTimelineDelta(undefined)
     serverId = identityOf(d)
     cursor = d.cursor
@@ -61,10 +61,12 @@
     return buffer
   }
 
-  const timeline = resource<StateTimelineEntry[]>(
-    pull,
-    { initial: [], interval: 1000, version: datasetVersion('stateTimeline'), equals: (a, b) => a === b },
-  )
+  const timeline = resource<StateTimelineEntry[]>(pull, {
+    initial: [],
+    interval: 1000,
+    version: datasetVersion('stateTimeline'),
+    equals: (a, b) => a === b,
+  })
 
   const capture = captureInfo(1000)
   let query = $state('')
@@ -103,15 +105,15 @@
     const m = haystackMatcher(query)
     const data = timeline.data
     for (let i = data.length - 1; i >= 0; i--) {
-      const c = data[i]
+      const c = data[i]!
       if (m && !m(preview(c).hay)) continue
       out.push({ key: String(c.seq), c })
     }
     return out
   })
 
-  const current = $derived(selected ? (entries.find((e) => e.key === selected)?.c ?? null) : null)
-  const signals = $derived(new Set(timeline.data.map((c) => c.id)).size)
+  const current = $derived(selected ? (entries.find(e => e.key === selected)?.c ?? null) : null)
+  const signals = $derived(new Set(timeline.data.map(c => c.id)).size)
 
   async function clear() {
     await clearStateTimeline().catch(() => {})
@@ -128,10 +130,16 @@
 
 <Panel title="State timeline" count={timeline.data.length}>
   {#snippet toolbar()}
-    <SearchField bind:value={query} placeholder="Filter by signal, component or value…" count={entries.length} />
+    <SearchField
+      bind:value={query}
+      placeholder="Filter by signal, component or value…"
+      count={entries.length}
+    />
     <CaptureNotice info={capture.data.stateTimeline} noun="changes" />
     {#if baselineNotice(capture.data.stateTimeline?.baseline)}
-      <span class="baseline" role="status">{baselineNotice(capture.data.stateTimeline?.baseline)}</span>
+      <span class="baseline" role="status"
+        >{baselineNotice(capture.data.stateTimeline?.baseline)}</span
+      >
     {/if}
     <span class="summary">{signals} signal{signals === 1 ? '' : 's'}</span>
     <span
@@ -151,12 +159,20 @@
         <span>Time</span><span>Signal</span><span>Change</span>
       </div>
       <div class="body">
-        <VirtualList items={entries} getKey={(e) => e.key} bind:selected label="State changes, newest first" onactivate={(e) => open(e.c)}>
-          {#snippet row({ c })}
+        <VirtualList
+          items={entries}
+          getKey={(e: Entry) => e.key}
+          bind:selected
+          label="State changes, newest first"
+          onactivate={(e: Entry) => open(e.c)}
+        >
+          {#snippet row({ c }: Entry)}
             <span class="time num">{formatClock(c.timestamp, true)}</span>
             <span class="sig">
               <span class="mono name"><Highlight text={c.name} {query} /></span>
-              <span class="comp truncate"><Highlight text={componentName(c.componentFile)} {query} /></span>
+              <span class="comp truncate"
+                ><Highlight text={componentName(c.componentFile)} {query} /></span
+              >
             </span>
             <span class="change mono truncate">
               {#if c.oldValue === null}
@@ -169,7 +185,11 @@
           {/snippet}
           {#snippet empty()}
             {#if timeline.data.length === 0}
-              <EmptyState icon="timeline" title="No state changes yet"><p>Interact with your app — every <code>$state</code> write is recorded here, newest first.</p></EmptyState>
+              <EmptyState icon="timeline" title="No state changes yet"
+                ><p>
+                  Interact with your app — every <code>$state</code> write is recorded here, newest first.
+                </p></EmptyState
+              >
             {:else}
               <EmptyState icon="search" title="No changes match" />
             {/if}
@@ -179,9 +199,15 @@
     </div>
     {#snippet aside()}
       {#if current}
-        <Inspector title={current.name} subtitle={current.componentFile} onclose={() => (selected = null)}>
+        <Inspector
+          title={current.name}
+          subtitle={current.componentFile}
+          onclose={() => (selected = null)}
+        >
           {#snippet badges()}
-            <Badge tone={current.oldValue === null ? 'green' : 'blue'}>{current.oldValue === null ? 'init' : 'update'}</Badge>
+            <Badge tone={current.oldValue === null ? 'green' : 'blue'}
+              >{current.oldValue === null ? 'init' : 'update'}</Badge
+            >
             <Badge>{formatClock(current.timestamp, true)}</Badge>
           {/snippet}
           {#snippet actions()}

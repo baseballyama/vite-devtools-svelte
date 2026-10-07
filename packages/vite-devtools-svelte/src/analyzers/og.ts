@@ -27,12 +27,12 @@ export async function getOGPreview(
     const contentRegex = /content=["']([^"']+)["']/
     let match
     while ((match = metaRegex.exec(html)) !== null) {
-      const attrs = match[1]
+      const attrs = match[1]!
       const propMatch = attrs.match(propRegex)
       const contentMatch = attrs.match(contentRegex)
       if (propMatch && contentMatch) {
-        const prop = propMatch[1]
-        const content = contentMatch[1]
+        const prop = propMatch[1]!
+        const content = contentMatch[1]!
         preview.tags.push({ property: prop, content })
         if (prop === 'og:title') preview.title = content
         else if (prop === 'og:description') preview.description = content
@@ -41,7 +41,7 @@ export async function getOGPreview(
     }
     if (!preview.title) {
       const titleMatch = html.match(/<title>([^<]+)<\/title>/i)
-      if (titleMatch) preview.title = titleMatch[1]
+      if (titleMatch) preview.title = titleMatch[1]!
     }
     if (!preview.description) {
       const descTag = preview.tags.find(t => t.property === 'description')

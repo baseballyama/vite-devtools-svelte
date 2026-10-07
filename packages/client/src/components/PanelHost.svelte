@@ -1,5 +1,6 @@
 <script lang="ts">
   import { setContext, type Component } from 'svelte'
+
   import { PANEL_ACTIVE } from '../lib/resource.svelte.js'
 
   /** Keeps a visited panel mounted; exposes visibility so polling pauses. */

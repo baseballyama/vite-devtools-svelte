@@ -279,7 +279,9 @@ for (const file of files) {
 ```svelte
 <script lang="ts">
   // ❌ 初期化処理を $effect に置くと依存変化で再実行される
-  $effect(() => { fetchData() })
+  $effect(() => {
+    fetchData()
+  })
 
   // ✅ 初期化はトップレベル
   fetchData()
@@ -300,7 +302,7 @@ for (const file of files) {
 <script lang="ts">
   $effect(() => {
     const id = setInterval(refresh, 500)
-    return () => clearInterval(id)  // ← 必須
+    return () => clearInterval(id) // ← 必須
   })
 </script>
 ```
@@ -313,10 +315,12 @@ DevTools パネルでは **ポーリング (`setInterval(refresh, 500)`)** が�
 <script lang="ts">
   // ❌ $effect で代入
   let displayed = $state<Item[]>([])
-  $effect(() => { displayed = items.filter((i) => i.visible) })
+  $effect(() => {
+    displayed = items.filter(i => i.visible)
+  })
 
   // ✅ $derived
-  const displayed = $derived(items.filter((i) => i.visible))
+  const displayed = $derived(items.filter(i => i.visible))
 </script>
 ```
 

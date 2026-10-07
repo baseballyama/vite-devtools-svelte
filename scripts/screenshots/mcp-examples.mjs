@@ -25,14 +25,14 @@
 // Output: <dir>/NN-*.json + <dir>/manifest.json (no machine paths).
 // Exit 0 only when every step wrote a clean file.
 import { spawn, execFileSync } from 'node:child_process'
-import { createRequire } from 'node:module'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { pathToFileURL } from 'node:url'
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
+const repoRoot = path.resolve(import.meta.dirname, '../..')
 const outArg = process.argv.find(a => a.startsWith('--out='))
 if (!outArg) {
   console.error('usage: node scripts/screenshots/mcp-examples.mjs --out=<dir>')
@@ -41,8 +41,11 @@ if (!outArg) {
 const outDir = path.resolve(outArg.slice('--out='.length))
 const appDir = path.join(repoRoot, 'examples/sample-app')
 const CAP_MS = 180_000
-const sleep = ms => new Promise(r => setTimeout(r, ms))
-const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g')
+const sleep = ms =>
+  new Promise(r => {
+    setTimeout(r, ms)
+  })
+const ANSI = new RegExp(`${String.fromCodePoint(27)}\\[[0-9;]*m`, 'g')
 
 const secrets = new Set()
 const home = mkdtempSync(path.join(os.tmpdir(), 'sdt-mcp-home-'))
@@ -53,15 +56,16 @@ function redact(text) {
 function mask(text) {
   let t = redact(text)
   for (const s of secrets) if (s) t = t.split(s).join('<secret>')
-  return t.replace(/x-svelte-devtools-token:\s*\S+/gi, 'x-svelte-devtools-token:<secret>')
+  return t.replaceAll(/x-svelte-devtools-token:\s*\S+/gi, 'x-svelte-devtools-token:<secret>')
 }
 
+/** @type {Array<() => unknown>} cleanup steps, run newest first by finish() */
 const cleanup = [() => rmSync(home, { recursive: true, force: true })]
 let finished = false
 async function finish(code) {
   if (finished) return
   finished = true
-  for (const fn of cleanup.reverse())
+  for (const fn of cleanup.toReversed())
     await Promise.resolve()
       .then(fn)
       .catch(() => {})
@@ -124,8 +128,12 @@ const child = spawn(
   },
 )
 let log = ''
-child.stdout.on('data', d => (log += d))
-child.stderr.on('data', d => (log += d))
+child.stdout.on('data', d => {
+  log += d
+})
+child.stderr.on('data', d => {
+  log += d
+})
 cleanup.push(async () => {
   if (child.exitCode !== null || child.signalCode !== null) return
   const kill = sig => {

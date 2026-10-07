@@ -11,7 +11,7 @@ export type DatasetKey = keyof DatasetVersions
 
 const api = rpc as unknown as { getVersions?: () => Promise<DatasetVersions> }
 
-export const versionsSupported = typeof api.getVersions === 'function'
+const versionsSupported = typeof api.getVersions === 'function'
 
 const MAX_AGE = 250
 let pending: Promise<DatasetVersions | null> | null = null
