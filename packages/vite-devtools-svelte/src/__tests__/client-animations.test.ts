@@ -8,7 +8,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const src = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const src = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../client/src')
 const COMPOSITED = new Set(['transform', 'opacity', 'offset'])
 
 function files(dir: string): string[] {
