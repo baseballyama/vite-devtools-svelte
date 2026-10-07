@@ -21,6 +21,7 @@
   const routes = resource<RouteInfo[]>(getRoutes, { initial: [] })
 
   const tree = $derived(buildRouteTree(routes.data))
+  const allBranches = () => branchKeys(tree.roots, { key: n => n.key, children: n => n.children })
 
   let query = $state('')
   let kind = $state<'all' | 'pages' | 'endpoints' | 'dynamic'>('all')
@@ -34,32 +35,27 @@
     // Small apps: open everything. Large apps: first two levels.
     expanded =
       routes.data.length <= 60
-        ? branchKeys(tree.roots, { key: n => n.key, children: n => n.children })
+        ? allBranches()
         : new Set(['/', ...(tree.roots[0]?.children ?? []).map(c => c.key)])
   })
 
-  const kindTest = $derived(
-    kind === 'pages'
-      ? (r: RouteInfo) => r.hasPage
-      : kind === 'endpoints'
-        ? (r: RouteInfo) => r.hasEndpoint
-        : kind === 'dynamic'
-          ? (r: RouteInfo) => r.params.length > 0
-          : null,
-  )
+  const KINDS = {
+    pages: (r: RouteInfo) => r.hasPage,
+    endpoints: (r: RouteInfo) => r.hasEndpoint,
+    dynamic: (r: RouteInfo) => r.params.length > 0,
+  }
 
   const filter = $derived.by(() => {
     const m = matcher(query)
-    const k = kindTest
+    const k = kind === 'all' ? null : KINDS[kind]
     if (!m && !k) return null
     return (n: RouteNode) => !!n.route && (!k || k(n.route)) && (!m || m(n.route.path, n.route.id))
   })
 
   const counts = $derived({
-    all: routes.data.length,
-    pages: routes.data.filter(r => r.hasPage).length,
-    endpoints: routes.data.filter(r => r.hasEndpoint).length,
-    dynamic: routes.data.filter(r => r.params.length > 0).length,
+    pages: routes.data.filter(KINDS.pages).length,
+    endpoints: routes.data.filter(KINDS.endpoints).length,
+    dynamic: routes.data.filter(KINDS.dynamic).length,
   })
 
   const selectedRoute = $derived(selected ? (tree.byKey.get(selected)?.route ?? null) : null)
@@ -121,7 +117,7 @@
       label="Route kind"
       bind:value={kind}
       options={[
-        { value: 'all', label: 'All', count: counts.all },
+        { value: 'all', label: 'All', count: routes.data.length },
         { value: 'pages', label: 'Pages', count: counts.pages },
         { value: 'endpoints', label: 'Endpoints', count: counts.endpoints },
         { value: 'dynamic', label: 'Dynamic', count: counts.dynamic },
@@ -132,8 +128,7 @@
       icon="expand"
       variant="ghost"
       label="Expand all"
-      onclick={() =>
-        (expanded = branchKeys(tree.roots, { key: n => n.key, children: n => n.children }))}
+      onclick={() => (expanded = allBranches())}
     />
     <Button
       icon="collapse"

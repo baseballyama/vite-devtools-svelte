@@ -127,7 +127,7 @@ describe('StateTimeline', () => {
     expect(screen.getByText('No state changes yet')).toBeTruthy()
   })
 
-  it('appends deltas after the cursor and refetches the buffer on a stale cursor', async () => {
+  it('appends deltas after the cursor and replaces the list on a reset', async () => {
     const pulls = vi.mocked(rpc.getStateTimelineDelta)
     pulls.mockResolvedValueOnce(delta([entry(1), entry(2)]))
     render(StateTimeline)
@@ -147,29 +147,12 @@ describe('StateTimeline', () => {
     await settle()
     expect(rows()).toHaveLength(3)
 
-    // A cursor moving backwards (dev server restarted): refetch everything.
-    pulls.mockResolvedValueOnce(delta([entry(1)], { reset: false, cursor: 1 }))
+    // A cursor the server cannot continue (clear, restart): the whole buffer, reset.
     pulls.mockResolvedValueOnce(delta([entry(1, { name: 'fresh' })]))
     await userEvent.click(screen.getByRole('button', { name: /^Refresh/ }))
     await settle()
-    expect(pulls.mock.lastCall?.[0]).toBeUndefined()
+    expect(pulls).toHaveBeenLastCalledWith(3)
     expect(rows().map(r => r.querySelector('.name')?.textContent)).toEqual(['fresh'])
-
-    // A changed server identity also means another timeline.
-    pulls.mockResolvedValueOnce({
-      ...delta([entry(2)], { reset: true }),
-      serverId: 'a',
-    } as StateTimelineDelta)
-    await userEvent.click(screen.getByRole('button', { name: /^Refresh/ }))
-    await settle()
-    pulls.mockResolvedValueOnce({
-      ...delta([entry(9)], { reset: false }),
-      serverId: 'b',
-    } as StateTimelineDelta)
-    pulls.mockResolvedValueOnce(delta([entry(4, { name: 'other-server' })]))
-    await userEvent.click(screen.getByRole('button', { name: /^Refresh/ }))
-    await settle()
-    expect(rows().map(r => r.querySelector('.name')?.textContent)).toEqual(['other-server'])
   })
 
   it('pauses and resumes live updates', async () => {

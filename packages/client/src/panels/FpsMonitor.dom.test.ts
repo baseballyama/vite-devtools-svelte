@@ -63,7 +63,7 @@ describe('FpsMonitor', () => {
     const { container } = render(FpsMonitor)
     await settle()
     expect(container.querySelector('.big')!.textContent).toBe('59')
-    expect(container.querySelector('.big')!.classList.contains('good')).toBe(true)
+    expect(container.querySelector('.big')!.classList.contains('green')).toBe(true)
     expect(stats(container.querySelector('.top')!)).toEqual({
       Min: '20',
       '1% low': '20',
@@ -82,7 +82,7 @@ describe('FpsMonitor', () => {
     vi.mocked(rpc.getFps).mockResolvedValue(samples([35]))
     const { container } = render(FpsMonitor)
     await settle()
-    expect(container.querySelector('.big')!.classList.contains('fair')).toBe(true)
+    expect(container.querySelector('.big')!.classList.contains('yellow')).toBe(true)
     expect(container.querySelector('path.line')).toBeNull()
     expect(container.querySelector('path.area')).toBeNull()
   })
@@ -108,7 +108,7 @@ describe('FpsMonitor', () => {
     expect(screen.getByRole('img').getAttribute('aria-label')).toBe(
       'Frame rate over the last 15 seconds',
     )
-    expect(container.querySelector('.poor')).toBeNull()
+    expect(container.querySelector('.red')).toBeNull()
   })
 
   it('records a window and summarises it after stopping', async () => {

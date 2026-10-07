@@ -8,7 +8,7 @@ vi.doMock('svelte', async (importOriginal: () => Promise<typeof Svelte>) => ({
   getContext: () => null,
 }))
 
-/** Fresh module (feature detection is module-level) over a fake RPC layer. */
+/** Fresh module over a fake RPC layer. */
 async function load(rpc: Record<string, unknown>) {
   vi.resetModules()
   vi.doMock('./rpc.js', () => rpc)
@@ -28,7 +28,7 @@ afterEach(() => {
 })
 
 describe('captureInfo', () => {
-  it('polls getCaptureInfo when the server has it', async () => {
+  it('polls getCaptureInfo', async () => {
     const info = { components: { captured: 1, total: 2, truncated: true } }
     const getCaptureInfo = vi.fn(() => Promise.resolve(info))
     const { captureInfo, withRoot } = await load({ getCaptureInfo })
@@ -45,14 +45,6 @@ describe('captureInfo', () => {
     const r = withRoot(() => captureInfo(1_000, () => false))
     await vi.advanceTimersByTimeAsync(5_000)
     expect(getCaptureInfo).not.toHaveBeenCalled()
-    r.stop()
-  })
-
-  it('against an older server it is an empty map and never polls', async () => {
-    const { captureInfo, withRoot } = await load({ getCaptureInfo: undefined })
-    const r = withRoot(() => captureInfo(1_000))
-    await vi.advanceTimersByTimeAsync(5_000)
-    expect(r.value).toMatchObject({ data: {}, loading: false, error: null })
     r.stop()
   })
 })

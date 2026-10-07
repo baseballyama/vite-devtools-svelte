@@ -42,8 +42,15 @@
   const current = $derived(selected ? (chunks.find(c => c.file === selected) ?? null) : null)
 
   const byKind = $derived.by(() => {
-    const k = { js: 0, css: 0, other: 0 }
-    for (const c of chunks) k[kindOf(c)] += c.size
+    const k = {
+      js: { count: 0, size: 0 },
+      css: { count: 0, size: 0 },
+      other: { count: 0, size: 0 },
+    }
+    for (const c of chunks) {
+      k[kindOf(c)].count++
+      k[kindOf(c)].size += c.size
+    }
     return k
   })
 
@@ -90,9 +97,9 @@
       bind:value={kind}
       options={[
         { value: 'all', label: 'All' },
-        { value: 'js', label: 'JS', count: chunks.filter(c => kindOf(c) === 'js').length },
-        { value: 'css', label: 'CSS', count: chunks.filter(c => kindOf(c) === 'css').length },
-        { value: 'other', label: 'Other', count: chunks.filter(c => kindOf(c) === 'other').length },
+        { value: 'js', label: 'JS', count: byKind.js.count },
+        { value: 'css', label: 'CSS', count: byKind.css.count },
+        { value: 'other', label: 'Other', count: byKind.other.count },
       ]}
     />
     <SearchField bind:value={query} placeholder="Filter chunks or modules…" count={rows.length} />
@@ -129,15 +136,15 @@
         <div
           class="stack"
           role="img"
-          aria-label="JS {formatBytes(byKind.js)}, CSS {formatBytes(
-            byKind.css,
-          )}, other {formatBytes(byKind.other)}"
+          aria-label="JS {formatBytes(byKind.js.size)}, CSS {formatBytes(
+            byKind.css.size,
+          )}, other {formatBytes(byKind.other.size)}"
         >
           {#each ['js', 'css', 'other'] as const as k (k)}
-            {#if byKind[k]}<span
+            {#if byKind[k].size}<span
                 class="seg {k}"
-                style:flex-grow={byKind[k]}
-                title="{k}: {formatBytes(byKind[k])}"
+                style:flex-grow={byKind[k].size}
+                title="{k}: {formatBytes(byKind[k].size)}"
               ></span>{/if}
           {/each}
         </div>
@@ -145,7 +152,7 @@
           {#each ['js', 'css', 'other'] as const as k (k)}
             <span
               ><i class="dot {k}"></i>{k.toUpperCase()}
-              <span class="num muted">{formatBytes(byKind[k])}</span></span
+              <span class="num muted">{formatBytes(byKind[k].size)}</span></span
             >
           {/each}
         </div>

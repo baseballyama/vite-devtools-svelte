@@ -11,6 +11,7 @@
   import SearchField from '../components/SearchField.svelte'
   import Segmented from '../components/Segmented.svelte'
   import SplitView from '../components/SplitView.svelte'
+  import StatList from '../components/StatList.svelte'
   import type { Column, SortState, TableRowState } from '../components/types.js'
   import { captureInfo } from '../lib/capture.svelte.js'
   import { groupBy } from '../lib/collections.js'
@@ -153,8 +154,9 @@
     },
   ]
 
+  /** Render time against the 16 ms frame budget. */
   function heat(ms: number) {
-    return ms >= 16 ? 'hot' : ms >= 4 ? 'warm' : ''
+    return ms >= 16 ? 'red' : ms >= 4 ? 'yellow' : null
   }
 </script>
 
@@ -196,10 +198,11 @@
         {#if visible.has('instances')}<span class="end num muted">{r.instances}</span>{/if}
         {#if visible.has('init')}<span class="end num muted">{formatMs(r.initTime)}</span>{/if}
         <span class="end num">{r.renderCount.toLocaleString()}</span>
-        {#if visible.has('avg')}<span class="end num {heat(avg(r))}">{formatMs(avg(r))}</span>{/if}
+        {#if visible.has('avg')}<span class={['end num', heat(avg(r))]}>{formatMs(avg(r))}</span
+          >{/if}
         <span class="total end">
           <span
-            class="bar {heat(avg(r))}"
+            class={['bar', heat(avg(r))]}
             style:width="{Math.max(2, (r.totalRenderTime / maxTotal) * 60)}px"
           ></span>
           <span class="num">{formatMs(r.totalRenderTime)}</span>
@@ -226,43 +229,35 @@
             {#if group === 'component'}<Badge
                 >{current.instances} instance{current.instances === 1 ? '' : 's'}</Badge
               >{/if}
-            {#if avg(current) >= 16}<Badge tone="red">over frame budget</Badge
-              >{:else if avg(current) >= 4}<Badge tone="yellow">slow</Badge>{/if}
+            {#if heat(avg(current)) === 'red'}<Badge tone="red">over frame budget</Badge
+              >{:else if heat(avg(current))}<Badge tone="yellow">slow</Badge>{/if}
           {/snippet}
           {#snippet actions()}
             <Button icon="editor" onclick={() => openInEditor(current.file).catch(() => {})}
               >Open in editor</Button
             >
           {/snippet}
-          <div class="stats">
-            <div>
-              <span>Renders</span><strong class="num">{current.renderCount.toLocaleString()}</strong
-              >
-            </div>
-            <div>
-              <span>Total</span><strong class="num">{formatMs(current.totalRenderTime)}</strong>
-            </div>
-            <div>
-              <span>Average</span><strong class="num {heat(avg(current))}"
-                >{formatMs(avg(current))}</strong
-              >
-            </div>
-            <div>
-              <span>Last</span><strong class="num {heat(current.lastRenderTime)}"
-                >{formatMs(current.lastRenderTime)}</strong
-              >
-            </div>
-            <div>
-              <span>Init{group === 'component' ? ' (sum)' : ''}</span><strong class="num"
-                >{formatMs(current.initTime)}</strong
-              >
-            </div>
-            <div>
-              <span>Last render</span><strong class="num"
-                >{current.lastRenderAt ? formatClock(current.lastRenderAt) : '—'}</strong
-              >
-            </div>
-          </div>
+          <StatList
+            variant="grid"
+            items={[
+              { label: 'Renders', value: current.renderCount.toLocaleString() },
+              { label: 'Total', value: formatMs(current.totalRenderTime) },
+              { label: 'Average', value: formatMs(avg(current)), tone: heat(avg(current)) },
+              {
+                label: 'Last',
+                value: formatMs(current.lastRenderTime),
+                tone: heat(current.lastRenderTime),
+              },
+              {
+                label: group === 'component' ? 'Init (sum)' : 'Init',
+                value: formatMs(current.initTime),
+              },
+              {
+                label: 'Last render',
+                value: current.lastRenderAt ? formatClock(current.lastRenderAt) : '—',
+              },
+            ]}
+          />
           <p class="note">
             Share of all render time: <strong class="num"
               >{((current.totalRenderTime / Math.max(totals.time, 0.0001)) * 100).toFixed(
@@ -308,42 +303,17 @@
     background: var(--green);
     opacity: 0.7;
   }
-  .bar.warm {
+  .bar.yellow {
     background: var(--yellow);
   }
-  .bar.hot {
+  .bar.red {
     background: var(--red);
   }
-  .warm {
+  .yellow {
     color: var(--yellow);
   }
-  .hot {
+  .red {
     color: var(--red);
-  }
-  .stats {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-    gap: 1px;
-    margin: 12px 14px 0;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-    background: var(--border);
-  }
-  .stats div {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 8px 10px;
-    background: var(--bg-subtle);
-  }
-  .stats span {
-    font-size: var(--fs-xs);
-    color: var(--fg-muted);
-  }
-  .stats strong {
-    font-size: var(--fs-lg);
-    font-weight: 600;
   }
   .note {
     margin: 12px 14px 0;
