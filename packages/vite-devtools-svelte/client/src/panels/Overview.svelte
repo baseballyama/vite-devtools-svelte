@@ -182,16 +182,20 @@
     flex-direction: column;
     gap: 20px;
   }
+  /* opacity-only animation: runs on the compositor (the dock shares the
+     app's main thread) */
   .skeleton {
     height: 120px;
     border-radius: var(--radius-lg);
-    background: linear-gradient(90deg, var(--bg-subtle), var(--bg-active), var(--bg-subtle));
-    background-size: 200% 100%;
-    animation: shimmer 1.2s linear infinite;
+    background: var(--bg-active);
+    animation: shimmer 1.2s ease-in-out infinite alternate;
   }
   @keyframes shimmer {
+    from {
+      opacity: 0.45;
+    }
     to {
-      background-position: -200% 0;
+      opacity: 1;
     }
   }
   .hero {

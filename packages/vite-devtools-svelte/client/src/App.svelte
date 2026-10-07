@@ -396,19 +396,26 @@
   .stage :global(.host[hidden]) {
     display: none;
   }
+  /* transform-only animation: runs on the compositor, not on the main
+     thread the app shares with the dock */
   .loading {
     height: 2px;
+    overflow: hidden;
+  }
+  .loading::before {
+    content: '';
+    display: block;
+    width: 40%;
+    height: 100%;
     background: linear-gradient(90deg, transparent, var(--accent), transparent);
-    background-size: 40% 100%;
-    background-repeat: no-repeat;
     animation: slide 1s linear infinite;
   }
   @keyframes slide {
     from {
-      background-position: -40% 0;
+      transform: translateX(-100%);
     }
     to {
-      background-position: 140% 0;
+      transform: translateX(250%);
     }
   }
 </style>

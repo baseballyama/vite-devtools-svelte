@@ -59,20 +59,12 @@
     border-radius: 50%;
     background: var(--fg-faint);
   }
+  /* Static on purpose: in the Vite DevTools dock this UI shares the app's
+     main thread, so a never-ending animation (a box-shadow pulse here
+     forced a style recalc + paint every frame) lowers the frame rate the
+     Frame rate panel measures. */
   .on .dot {
     background: var(--green);
-    box-shadow: 0 0 0 0 var(--green);
-    animation: pulse 2s infinite;
-  }
-  @keyframes pulse {
-    0% {
-      box-shadow: 0 0 0 0 rgb(74 222 128 / 0.5);
-    }
-    70% {
-      box-shadow: 0 0 0 5px rgb(74 222 128 / 0);
-    }
-    100% {
-      box-shadow: 0 0 0 0 rgb(74 222 128 / 0);
-    }
+    box-shadow: 0 0 0 2px rgb(74 222 128 / 0.25);
   }
 </style>
