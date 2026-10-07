@@ -1,5 +1,5 @@
 ---
-name: vite-devtools-svelte:perf-audit
+name: vite-devtools-svelte-perf-audit
 description: Use when the user asks to audit Svelte/SvelteKit app performance, find render hotspots, or identify what to optimize. Requires the vite-devtools-svelte MCP server to be registered (the dev server prints `claude mcp add ...` on startup). Always interactive — the user picks which issues to fix; never starts editing on its own.
 ---
 
@@ -21,7 +21,7 @@ If either is missing, stop and tell the user what to do; do not invent metrics.
 3. Call `end_session` with `keep: "memory"`. Note the session id from the response — you will need it later.
 4. Call `list_performance_issues` (no thresholds first; defaults are sensible). Read the `issues` array.
 5. Present the top 3 issues to the user as a compact table: `severity | kind | summary | file`. Add any context from the `metric` field that aids interpretation.
-6. Ask the user which issue (if any) to investigate. **Do not implement fixes in this skill.** Hand off to `/vite-devtools-svelte:perf-fix <issue id or summary>` once they pick one.
+6. Ask the user which issue (if any) to investigate. **Do not implement fixes in this skill.** Hand off to `/vite-devtools-svelte-perf-fix <issue id or summary>` once they pick one.
 
 ## Guardrails
 

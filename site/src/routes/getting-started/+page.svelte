@@ -149,6 +149,13 @@ export default defineConfig({
           machine. The browser keeps its token per origin, so a dev server on another port or host
           asks for a code again.
         </p>
+        <p>
+          On a single-user machine where the dev server only listens on <code>localhost</code>, you
+          can skip the code with <code>svelteDevtools(&#123; clientAuth: false &#125;)</code>
+          (or <code>DevTools(&#123; clientAuth: false &#125;)</code> inside the Vite DevTools dock). Without
+          it, any page or device that can reach the dev server can read your project files through the
+          DevTools, so keep it on if you are unsure.
+        </p>
       </section>
 
       <section id="dock" class="step">

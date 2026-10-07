@@ -186,6 +186,15 @@ Start your dev server as usual (`npm run dev`) and open the URL it prints:
 
 The first time a browser opens the DevTools it asks for a one-time code: request it from the page, and the dev server prints a 6-digit code plus a link (`…/.svelte-devtools/#devframe_otp=…`) in the terminal. Opening the link (or typing the code) trusts that browser; the token is remembered across reloads and dev-server restarts.
 
+On a single-user machine where the dev server only listens on `localhost`, you can turn the code off:
+
+```ts
+svelteDevtools({ clientAuth: false }) // standalone /.svelte-devtools/
+DevTools({ clientAuth: false }) // inside the Vite DevTools dock (@vitejs/devtools)
+```
+
+Without it, any page in your browser that can reach the dev server, and any device on the network when you use `--host`, can read files in your project through the DevTools. Keep it on if you are unsure. The MCP endpoint keeps its own token either way.
+
 ### Inside the Vite DevTools dock
 
 With `@vitejs/devtools` installed, add its plugin as well. The Svelte tool then mounts as a dock entry instead of standalone (never both), and authentication is handled once by Vite DevTools:
@@ -206,6 +215,9 @@ Open your app, click the floating Vite DevTools handle and switch to the **Svelt
 svelteDevtools({
   // Enable component lifecycle tracking (default: true)
   componentTracking: true,
+  // Require the one-time code for the standalone DevTools (default: true).
+  // In the Vite DevTools dock use DevTools({ clientAuth: false }) instead.
+  clientAuth: true,
 })
 ```
 
@@ -279,10 +291,10 @@ The endpoint is served wherever your Vite dev server listens. With the default (
 
 Two Claude Code skills ship under `node_modules/vite-devtools-svelte/skills/`:
 
-- `vite-devtools-svelte:perf-audit` — captures a baseline session, calls `list_performance_issues`, and presents the top issues for the user to triage.
-- `vite-devtools-svelte:perf-fix` — one issue per run: baseline → edit → after → `compare_sessions`, with `verdict` reported verbatim and an explicit revert path if the change regresses or has no effect.
+- `vite-devtools-svelte-perf-audit` — captures a baseline session, calls `list_performance_issues`, and presents the top issues for the user to triage.
+- `vite-devtools-svelte-perf-fix` — one issue per run: baseline → edit → after → `compare_sessions`, with `verdict` reported verbatim and an explicit revert path if the change regresses or has no effect.
 
-Skill names are namespaced with `vite-devtools-svelte:` so they don't collide with other skills in your `.claude/skills/`.
+Skill names are prefixed with `vite-devtools-svelte-` so they don't collide with other skills in your `.claude/skills/`. They use only lowercase letters and hyphens, and each matches its directory name, as the Agent Skills spec requires, so agents other than Claude Code (e.g. pi) can load them too.
 
 To install for a given project:
 
@@ -301,7 +313,7 @@ The MCP server is **read + measure only** — it never edits files. Editing is l
 
 Some RPCs read files from disk or open them in your editor, so the DevTools backend is authenticated even though the dev server is normally only reachable from `localhost`.
 
-- **Devframe auth gate.** Every RPC connection must be trusted first: a browser exchanges a single-use 6-digit code (printed in the dev-server terminal, valid for 5 minutes) for a bearer token stored in that browser. Inside Vite DevTools the hub's own gate covers the tool.
+- **Devframe auth gate.** Every RPC connection must be trusted first: a browser exchanges a single-use 6-digit code (printed in the dev-server terminal, valid for 5 minutes) for a bearer token stored in that browser. Inside Vite DevTools the hub's own gate covers the tool. `svelteDevtools({ clientAuth: false })` (or `DevTools({ clientAuth: false })` in the dock) removes this gate; the origin checks below still apply.
 - **Origin checks.** The RPC WebSocket only accepts loopback origins (plus the dev server's own LAN origins when you use `--host`), which blocks cross-site pages and DNS-rebinding attacks.
 - **Schema-validated arguments.** RPC inputs are validated with zod schemas before any handler runs.
 - **Path sandbox.** `inspect-file`, `open-in-editor`, and `open-reactive-in-editor` resolve their input through `fs.realpath()` and refuse anything outside the project root. Symlinks inside the project are followed normally.

@@ -340,6 +340,16 @@ describe('middleware mode disposal (closeServer hook)', () => {
     expect(b.close).toHaveBeenCalledOnce()
   })
 
+  it.each([
+    [{}, true],
+    [{ clientAuth: false }, false],
+  ])('svelteDevtools(%j) → devframe auth %s', (options, auth) => {
+    const plugins = svelteDevtools(options)
+    resolve(plugins)
+    callHook(plugins[0]!.configureServer, middlewareServer().server)
+    expect(initiate.initDevframe.mock.calls.at(-1)![1]).toMatchObject({ auth })
+  })
+
   it('serves devframe through SSE in middleware mode (no WebSocket server to share)', () => {
     const plugins = svelteDevtools()
     resolve(plugins)

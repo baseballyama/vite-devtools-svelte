@@ -43,6 +43,7 @@ function networkOrigins(address: AddressInfo, proto: string): string[] {
 export function mountStandalone(
   server: ViteDevServer,
   def: DevframeDefinition,
+  { auth = true }: { auth?: boolean } = {},
 ): (() => Promise<void>) | undefined {
   let instance: DevframeInstance | undefined
   let closed = false
@@ -64,7 +65,13 @@ export function mountStandalone(
     // Middleware mode: no server to share the upgrade with, so devframe
     // serves its SSE transport through the same middleware. There is no
     // `close` event either: the caller disposes via Vite's `closeServer` hook.
-    const created = initDevframe(def, { base: DEVFRAME_BASE, ws: false, sse: true, mcp: false })
+    const created = initDevframe(def, {
+      base: DEVFRAME_BASE,
+      ws: false,
+      sse: true,
+      mcp: false,
+      auth,
+    })
     instance = created
     return async () => {
       instance = undefined
@@ -83,6 +90,7 @@ export function mountStandalone(
       // the same `upgrade` events devframe listens for.
       server: httpServer as Server,
       mcp: false,
+      auth,
       // The auth banner's magic link is built from `origin`; point it at the
       // SPA so opening it authenticates (the app root has no devframe client).
       origin: `${local}${DEVFRAME_BASE}`,

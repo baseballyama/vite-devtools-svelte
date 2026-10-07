@@ -190,3 +190,32 @@ describe('mount lifecycle', () => {
     await expect(dispose()).resolves.toBeUndefined()
   })
 })
+
+function listenWith(options?: { auth?: boolean }) {
+  const f = fakeServer()
+  mountStandalone(f.server as never, DEF, options)
+  f.httpServer!.address = () => ({ address: '127.0.0.1', family: 'IPv4', port: 5173 })
+  f.httpServer!.emit('listening')
+}
+const lastAuth = () => (initiate.initDevframe.mock.calls.at(-1)![1] as { auth?: unknown }).auth
+
+describe('client auth (the one-time code gate)', () => {
+  it.each([
+    [undefined, true],
+    [{}, true],
+    [{ auth: true }, true],
+    [{ auth: false }, false],
+  ])('%j → auth %s on the shared HTTP server', (options, expected) => {
+    listenWith(options)
+    expect(lastAuth()).toBe(expected)
+  })
+
+  it.each([
+    [undefined, true],
+    [{ auth: false }, false],
+  ])('%j → auth %s in middleware mode', (options, expected) => {
+    const f = fakeServer({ http: false })
+    mountStandalone(f.server as never, DEF, options)
+    expect(lastAuth()).toBe(expected)
+  })
+})
