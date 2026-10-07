@@ -9,7 +9,7 @@
   import SplitView from '../components/SplitView.svelte'
   import type { Tone } from '../components/types.js'
   import VirtualList from '../components/VirtualList.svelte'
-  import { formatBytes, formatMs } from '../lib/format.js'
+  import { errorMessage, formatBytes, formatMs } from '../lib/format.js'
   import { matcher } from '../lib/match.js'
   import { resource } from '../lib/resource.svelte.js'
   import { getApiEndpoints, sendApiRequest, openInEditor } from '../lib/rpc.js'
@@ -91,7 +91,7 @@
       response = await sendApiRequest(url, method, headers.trim() || '{}', hasBody ? body : '')
     } catch (e) {
       response = null
-      requestError = e instanceof Error ? e.message : String(e)
+      requestError = errorMessage(e)
     } finally {
       sending = false
     }

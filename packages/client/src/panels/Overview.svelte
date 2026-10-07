@@ -124,7 +124,8 @@
         icon: 'modules',
         label: 'Modules',
         value: n(s?.modules),
-        sub: s?.cycles ? `${n(s.cycles)} circular` : 'no cycles',
+        // Unknown (still loading, or the module graph failed) is not "no cycles".
+        sub: s?.cycles == null ? undefined : s.cycles ? `${n(s.cycles)} circular` : 'no cycles',
         tone: s?.cycles ? 'yellow' : undefined,
       },
       {

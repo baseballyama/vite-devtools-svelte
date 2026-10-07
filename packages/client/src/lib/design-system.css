@@ -39,34 +39,6 @@
 
   --accent: #ff3e00;
   --accent-hover: #ff5a24;
-
-  /* Legacy aliases consumed by GraphView / Inspect. */
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --text-xs: var(--fs-xs);
-  --text-sm: var(--fs-sm);
-  --text-lg: var(--fs-lg);
-  --radius-md: var(--radius);
-  --transition-fast: var(--dur-fast) var(--ease);
-  --color-accent: var(--accent);
-  --color-accent-400: var(--accent-hover);
-  --color-accent-500: var(--accent);
-  --color-base: var(--bg);
-  --color-surface: var(--bg-elevated);
-  --color-surface-active: var(--bg-active);
-  --color-border: var(--border);
-  --color-text: var(--fg);
-  --color-text-muted: var(--fg-muted);
-  --color-text-subtle: var(--fg-muted);
-  --color-text-faint: var(--fg-faint);
-  --color-success: var(--green);
-  --color-error: var(--red);
-  --color-error-bg: var(--red-bg);
-  --color-info: var(--blue);
-  --color-info-bg: var(--blue-bg);
-  --color-warning-text: var(--yellow);
 }
 
 :root,

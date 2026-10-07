@@ -10,6 +10,7 @@
   import PanelHost from './components/PanelHost.svelte'
   import type { Command } from './components/types.js'
   import { connection, connectionSupported } from './lib/connection.svelte.js'
+  import { errorMessage } from './lib/format.js'
   import {
     panels,
     groupLabels,
@@ -49,7 +50,7 @@
       const mod = await panelById(id).load()
       loaded[id] = mod.default
     } catch (e) {
-      loadError[id] = e instanceof Error ? e.message : String(e)
+      loadError[id] = errorMessage(e)
     }
   }
 
@@ -226,10 +227,7 @@
           <PanelHost component={Comp} active={router.current === id} />
           {#snippet failed(error: unknown, reset: () => void)}
             <div class="host" hidden={router.current !== id}>
-              <EmptyState
-                title="{panelById(id).label} crashed"
-                error={error instanceof Error ? error.message : String(error)}
-              >
+              <EmptyState title="{panelById(id).label} crashed" error={errorMessage(error)}>
                 <Button icon="refresh" onclick={reset}>Reload panel</Button>
               </EmptyState>
             </div>
