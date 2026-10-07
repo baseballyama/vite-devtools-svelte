@@ -78,6 +78,15 @@ describe('Inspect', () => {
     expect(within(list).getByText('Listing files…')).toBeTruthy()
   })
 
+  it('shows a failed file listing as an error, not as "No files match"', async () => {
+    vi.mocked(rpc.getSvelteFiles).mockRejectedValue(new Error('RPC down'))
+    render(Inspect)
+    await settle()
+    const list = screen.getByRole('listbox', { name: 'Svelte files' })
+    expect(within(list).getByRole('alert').textContent).toContain('RPC down')
+    expect(screen.queryByText('No files match')).toBeNull()
+  })
+
   it('compiles the picked file and shows source and compiled code side by side', async () => {
     const { user, list } = await setup()
     await pick(user, list, 'Card')

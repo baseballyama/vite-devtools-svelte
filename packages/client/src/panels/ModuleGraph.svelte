@@ -2,17 +2,19 @@
   import Badge from '../components/Badge.svelte'
   import Button from '../components/Button.svelte'
   import DataTable from '../components/DataTable.svelte'
-  import EmptyState from '../components/EmptyState.svelte'
   import Highlight from '../components/Highlight.svelte'
   import Icon from '../components/Icon.svelte'
   import Inspector from '../components/Inspector.svelte'
   import Panel from '../components/Panel.svelte'
   import RefreshButton from '../components/RefreshButton.svelte'
+  import ResourceEmpty from '../components/ResourceEmpty.svelte'
   import SearchField from '../components/SearchField.svelte'
   import Segmented from '../components/Segmented.svelte'
   import SplitView from '../components/SplitView.svelte'
   import type { Column, SortState, TableRowState, Tone } from '../components/types.js'
+  import { countBy } from '../lib/collections.js'
   import { basename, formatBytes } from '../lib/format.js'
+  import { kindOptions } from '../lib/kind-options.js'
   import { matcher } from '../lib/match.js'
   import { resource } from '../lib/resource.svelte.js'
   import { getModuleGraph, openInEditor } from '../lib/rpc.js'
@@ -20,31 +22,22 @@
 
   const graph = resource<ModuleGraphData>(getModuleGraph, { initial: { modules: [], cycles: [] } })
 
-  type TypeFilter = 'all' | ModuleNode['type']
   let query = $state('')
-  let type = $state<TypeFilter>('all')
+  let type = $state<'all' | ModuleNode['type']>('all')
   let cyclicOnly = $state(false)
   let sort = $state<SortState | null>({ id: 'size', desc: true })
   let selected = $state<string | null>(null)
 
   const byId = $derived(new Map(graph.data.modules.map(m => [m.id, m])))
 
-  const typeCounts = $derived.by(() => {
-    const c: Record<string, number> = {}
-    for (const m of graph.data.modules) c[m.type] = (c[m.type] ?? 0) + 1
-    return c
-  })
-
-  const typeOptions = $derived([
-    { value: 'all' as TypeFilter, label: 'All', count: graph.data.modules.length },
-    ...(['svelte', 'ts', 'js', 'css', 'other'] as const)
-      .filter(t => typeCounts[t])
-      .map(t => ({
-        value: t,
-        label: t === 'svelte' ? 'Svelte' : t.toUpperCase(),
-        count: typeCounts[t],
-      })),
-  ])
+  const typeOptions = $derived(
+    kindOptions(
+      ['svelte', 'ts', 'js', 'css', 'other'],
+      countBy(graph.data.modules, m => m.type),
+      type,
+      t => (t === 'svelte' ? 'Svelte' : t.toUpperCase()),
+    ),
+  )
 
   const rows = $derived.by(() => {
     const m = matcher(query)
@@ -159,20 +152,17 @@
         </span>
       {/snippet}
       {#snippet empty()}
-        {#if graph.loading}
-          <EmptyState title="Reading module graph…" />
-        {:else if graph.error}
-          <EmptyState title="Could not read module graph" error={graph.error} />
-        {:else}
-          <EmptyState
-            icon="modules"
-            title={graph.data.modules.length ? 'No modules match' : 'No modules transformed yet'}
-          >
-            {#if !graph.data.modules.length}<p>
-                Open the app so Vite transforms its modules, then refresh.
-              </p>{/if}
-          </EmptyState>
-        {/if}
+        <ResourceEmpty
+          res={graph}
+          total={graph.data.modules.length}
+          loading="Reading module graph…"
+          failed="Could not read module graph"
+          icon="modules"
+          title="No modules transformed yet"
+          noMatch="No modules match"
+        >
+          <p>Open the app so Vite transforms its modules, then refresh.</p>
+        </ResourceEmpty>
       {/snippet}
     </DataTable>
     {#snippet aside()}

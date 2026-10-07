@@ -1,7 +1,7 @@
 import * as fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 
-import { countBy, groupBy } from './collections.js'
+import { countBy, groupBy, uniqueKeys } from './collections.js'
 
 describe('countBy', () => {
   it('counts per key in first-occurrence order', () => {
@@ -66,6 +66,26 @@ describe('groupBy', () => {
           xs.toSorted((a, b) => a - b),
         )
         for (const [k, group] of m) expect(group).toEqual(xs.filter(x => x % 3 === k))
+      }),
+    )
+  })
+})
+
+describe('uniqueKeys', () => {
+  it('suffixes repeats in order', () => {
+    expect(uniqueKeys(['a', 'b', 'a', 'a'], s => s)).toEqual(['a', 'b', 'a#2', 'a#3'])
+  })
+
+  it('keeps earlier keys when items are appended', () => {
+    const before = uniqueKeys(['x', 'y', 'x'], s => s)
+    expect(uniqueKeys(['x', 'y', 'x', 'x', 'z'], s => s).slice(0, 3)).toEqual(before)
+  })
+
+  it('property: keys are unique', () => {
+    fc.assert(
+      fc.property(fc.array(fc.constantFrom('a', 'b', 'c')), xs => {
+        const keys = uniqueKeys(xs, s => s)
+        expect(new Set(keys).size).toBe(xs.length)
       }),
     )
   })

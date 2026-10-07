@@ -119,6 +119,24 @@ describe('ModuleGraph', () => {
     expect(screen.getByRole('status').textContent).toContain('No modules match')
   })
 
+  it('keeps the chosen type listed after its last module goes away', async () => {
+    const user = userEvent.setup()
+    vi.mocked(rpc.getModuleGraph).mockResolvedValue(graph)
+    render(ModuleGraph)
+    await settle()
+    await user.click(screen.getByRole('radio', { name: /^CSS/ }))
+    vi.mocked(rpc.getModuleGraph).mockResolvedValue({
+      ...graph,
+      modules: graph.modules.filter(m => m.type !== 'css'),
+    })
+    await user.click(screen.getByRole('button', { name: 'Refresh module graph' }))
+    await settle()
+    const css = screen.getByRole('radio', { name: /^CSS/ })
+    expect(css.getAttribute('aria-checked')).toBe('true')
+    expect(css.textContent).toContain('0')
+    expect(screen.getByRole('status').textContent).toContain('No modules match')
+  })
+
   it('sorts by every column', async () => {
     const user = userEvent.setup()
     vi.mocked(rpc.getModuleGraph).mockResolvedValue(graph)

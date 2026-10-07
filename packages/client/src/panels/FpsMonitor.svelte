@@ -1,9 +1,9 @@
 <script lang="ts">
   import Badge from '../components/Badge.svelte'
   import Button from '../components/Button.svelte'
-  import EmptyState from '../components/EmptyState.svelte'
   import LiveControls from '../components/LiveControls.svelte'
   import Panel from '../components/Panel.svelte'
+  import ResourceEmpty from '../components/ResourceEmpty.svelte'
   import Segmented from '../components/Segmented.svelte'
   import { resource } from '../lib/resource.svelte.js'
   import { getFps, clearFps } from '../lib/rpc.js'
@@ -19,6 +19,8 @@
   const W = 1000
   const H = 200
   const MAX = 120
+  /** Below this a frame rate counts as a drop. */
+  const DROP = 30
   let windowSec = $state<'15' | '30' | '60'>('30')
   let recording = $state(false)
   let recordStart = $state(0)
@@ -44,7 +46,7 @@
       ? `${line}L${x(visible.at(-1)!.timestamp).toFixed(1)},${H}L${x(visible[0]!.timestamp).toFixed(1)},${H}Z`
       : '',
   )
-  const drops = $derived(visible.filter(s => s.fps < 30))
+  const drops = $derived(visible.filter(s => s.fps < DROP))
 
   const recorded = $derived.by(() => {
     if (!recordStart) return []
@@ -54,27 +56,18 @@
 
   function summarize(src: FpsSample[]) {
     if (!src.length) return null
-    let min = Infinity
-    let max = -Infinity
-    let sum = 0
-    let drops = 0
-    for (const s of src) {
-      min = Math.min(min, s.fps)
-      max = Math.max(max, s.fps)
-      sum += s.fps
-      if (s.fps < 30) drops++
-    }
     const sorted = src.map(s => s.fps).sort((a, b) => a - b)
     return {
-      min,
-      max,
-      avg: Math.round(sum / src.length),
+      min: sorted[0]!,
+      max: sorted.at(-1)!,
+      avg: Math.round(sorted.reduce((sum, f) => sum + f, 0) / sorted.length),
       p1: sorted[Math.floor(sorted.length * 0.01)]!,
-      drops,
-      count: src.length,
+      drops: sorted.filter(f => f < DROP).length,
+      count: sorted.length,
     }
   }
 
+  type Stats = NonNullable<ReturnType<typeof summarize>>
   const stats = $derived(summarize(visible))
   const recStats = $derived(summarize(recorded))
   const region = $derived.by(() => {
@@ -85,7 +78,7 @@
   })
 
   function tone(f: number) {
-    return f >= 55 ? 'good' : f >= 30 ? 'fair' : 'poor'
+    return f >= 55 ? 'good' : f >= DROP ? 'fair' : 'poor'
   }
 
   function toggleRecord() {
@@ -131,15 +124,16 @@
   {/snippet}
 
   {#if fps.data.length === 0}
-    {#if fps.loading}
-      <EmptyState title="Waiting for frames…" />
-    {:else}
-      <EmptyState icon="fps" title="No frame samples yet"
-        ><p>
-          Keep your app open in a visible tab — it reports its frame rate twice a second.
-        </p></EmptyState
-      >
-    {/if}
+    <ResourceEmpty
+      res={fps}
+      total={0}
+      loading="Waiting for frames…"
+      failed="Could not load frame samples"
+      icon="fps"
+      title="No frame samples yet"
+    >
+      <p>Keep your app open in a visible tab — it reports its frame rate twice a second.</p>
+    </ResourceEmpty>
   {:else}
     <div class="wrap">
       <div class="top">
@@ -148,30 +142,7 @@
           <span class="unit">fps</span>
           {#if recording}<Badge tone="red">● REC</Badge>{/if}
         </div>
-        {#if stats}
-          <dl class="stats">
-            <div>
-              <dt>Min</dt>
-              <dd class="num {tone(stats.min)}">{stats.min}</dd>
-            </div>
-            <div>
-              <dt>1% low</dt>
-              <dd class="num {tone(stats.p1)}">{stats.p1}</dd>
-            </div>
-            <div>
-              <dt>Avg</dt>
-              <dd class="num {tone(stats.avg)}">{stats.avg}</dd>
-            </div>
-            <div>
-              <dt>Max</dt>
-              <dd class="num">{stats.max}</dd>
-            </div>
-            <div>
-              <dt>Drops &lt;30</dt>
-              <dd class="num" class:poor={stats.drops > 0}>{stats.drops}</dd>
-            </div>
-          </dl>
-        {/if}
+        {#if stats}{@render statList(stats)}{/if}
       </div>
 
       <figure class="chart">
@@ -182,11 +153,12 @@
           aria-label="Frame rate over the last {windowSec} seconds"
         >
           <line x1="0" x2={W} y1={y(60)} y2={y(60)} class="grid target" />
-          <line x1="0" x2={W} y1={y(30)} y2={y(30)} class="grid warn" />
+          <line x1="0" x2={W} y1={y(DROP)} y2={y(DROP)} class="grid warn" />
           {#if region}<rect x={region.x} y="0" width={region.w} height={H} class="region" />{/if}
           {#if area}<path d={area} class="area" />{/if}
           {#if line}<path d={line} class="line" vector-effect="non-scaling-stroke" />{/if}
-          {#each drops as d (d.timestamp)}
+          <!-- By position: two tabs of the app can report in the same millisecond. -->
+          {#each drops as d, i (i)}
             <line
               x1={x(d.timestamp)}
               x2={x(d.timestamp)}
@@ -198,7 +170,7 @@
           {/each}
         </svg>
         <span class="label l60" style:top="{(y(60) / H) * 100}%">60</span>
-        <span class="label l30" style:top="{(y(30) / H) * 100}%">30</span>
+        <span class="label l30" style:top="{(y(DROP) / H) * 100}%">{DROP}</span>
         <figcaption class="axis"><span>−{windowSec}s</span><span>now</span></figcaption>
       </figure>
 
@@ -207,33 +179,37 @@
           <h3 class="section-title">
             Recording · {((recordEnd - recordStart) / 1000).toFixed(1)} s · {recStats.count} samples
           </h3>
-          <dl class="stats">
-            <div>
-              <dt>Min</dt>
-              <dd class="num {tone(recStats.min)}">{recStats.min}</dd>
-            </div>
-            <div>
-              <dt>1% low</dt>
-              <dd class="num {tone(recStats.p1)}">{recStats.p1}</dd>
-            </div>
-            <div>
-              <dt>Avg</dt>
-              <dd class="num {tone(recStats.avg)}">{recStats.avg}</dd>
-            </div>
-            <div>
-              <dt>Max</dt>
-              <dd class="num">{recStats.max}</dd>
-            </div>
-            <div>
-              <dt>Drops &lt;30</dt>
-              <dd class="num" class:poor={recStats.drops > 0}>{recStats.drops}</dd>
-            </div>
-          </dl>
+          {@render statList(recStats)}
         </section>
       {/if}
     </div>
   {/if}
 </Panel>
+
+{#snippet statList(st: Stats)}
+  <dl class="stats">
+    <div>
+      <dt>Min</dt>
+      <dd class="num {tone(st.min)}">{st.min}</dd>
+    </div>
+    <div>
+      <dt>1% low</dt>
+      <dd class="num {tone(st.p1)}">{st.p1}</dd>
+    </div>
+    <div>
+      <dt>Avg</dt>
+      <dd class="num {tone(st.avg)}">{st.avg}</dd>
+    </div>
+    <div>
+      <dt>Max</dt>
+      <dd class="num">{st.max}</dd>
+    </div>
+    <div>
+      <dt>Drops &lt;{DROP}</dt>
+      <dd class="num" class:poor={st.drops > 0}>{st.drops}</dd>
+    </div>
+  </dl>
+{/snippet}
 
 <style>
   .wrap {

@@ -2,12 +2,12 @@
   import Badge from '../components/Badge.svelte'
   import Button from '../components/Button.svelte'
   import DataTable from '../components/DataTable.svelte'
-  import EmptyState from '../components/EmptyState.svelte'
   import Highlight from '../components/Highlight.svelte'
   import Icon from '../components/Icon.svelte'
   import Inspector from '../components/Inspector.svelte'
   import Panel from '../components/Panel.svelte'
   import RefreshButton from '../components/RefreshButton.svelte'
+  import ResourceEmpty from '../components/ResourceEmpty.svelte'
   import SearchField from '../components/SearchField.svelte'
   import Segmented from '../components/Segmented.svelte'
   import SplitView from '../components/SplitView.svelte'
@@ -15,6 +15,7 @@
   import { countBy } from '../lib/collections.js'
   import { formatBytes } from '../lib/format.js'
   import type { IconName } from '../lib/icons.js'
+  import { kindOptions } from '../lib/kind-options.js'
   import { matcher } from '../lib/match.js'
   import { resource } from '../lib/resource.svelte.js'
   import { getAssets, openInEditor } from '../lib/rpc.js'
@@ -22,16 +23,11 @@
 
   const assets = resource<AssetInfo[]>(getAssets, { initial: [] })
 
-  type Category = 'image' | 'font' | 'video' | 'audio' | 'text' | 'other'
+  const CATEGORIES = ['image', 'font', 'video', 'audio', 'text', 'other'] as const
+  type Category = (typeof CATEGORIES)[number]
   function category(mime: string): Category {
     const head = mime.split('/')[0]
-    return head === 'image' ||
-      head === 'font' ||
-      head === 'video' ||
-      head === 'audio' ||
-      head === 'text'
-      ? head
-      : 'other'
+    return CATEGORIES.find(c => c === head) ?? 'other'
   }
   const catIcon: Record<Category, IconName> = {
     image: 'assets',
@@ -47,18 +43,14 @@
   let sort = $state<SortState | null>({ id: 'size', desc: true })
   let selected = $state<string | null>(null)
 
-  const counts = $derived(countBy(assets.data, a => category(a.type)))
-
-  const catOptions = $derived([
-    { value: 'all' as const, label: 'All', count: assets.data.length },
-    ...(['image', 'font', 'video', 'audio', 'text', 'other'] as const)
-      .filter(c => counts.get(c))
-      .map(c => ({
-        value: c,
-        label: c.charAt(0).toUpperCase() + c.slice(1),
-        count: counts.get(c),
-      })),
-  ])
+  const catOptions = $derived(
+    kindOptions(
+      CATEGORIES,
+      countBy(assets.data, a => category(a.type)),
+      cat,
+      c => c.charAt(0).toUpperCase() + c.slice(1),
+    ),
+  )
 
   const rows = $derived.by(() => {
     const m = matcher(query)
@@ -146,16 +138,15 @@
         </span>
       {/snippet}
       {#snippet empty()}
-        {#if assets.loading}
-          <EmptyState title="Scanning static directory…" />
-        {:else if assets.error}
-          <EmptyState title="Could not read assets" error={assets.error} />
-        {:else}
-          <EmptyState
-            icon="assets"
-            title={assets.data.length ? 'No assets match' : 'No static assets'}
-          />
-        {/if}
+        <ResourceEmpty
+          res={assets}
+          total={assets.data.length}
+          loading="Scanning static directory…"
+          failed="Could not read assets"
+          icon="assets"
+          title="No static assets"
+          noMatch="No assets match"
+        />
       {/snippet}
     </DataTable>
     {#snippet aside()}

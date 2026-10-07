@@ -5,6 +5,7 @@
   import EmptyState from '../components/EmptyState.svelte'
   import Highlight from '../components/Highlight.svelte'
   import Panel from '../components/Panel.svelte'
+  import ResourceEmpty from '../components/ResourceEmpty.svelte'
   import SearchField from '../components/SearchField.svelte'
   import SplitView from '../components/SplitView.svelte'
   import type { CodePaneApi } from '../components/types.js'
@@ -187,9 +188,14 @@
           <span class="path truncate"><Highlight text={shortPath(f.file, 3)} {query} /></span>
         {/snippet}
         {#snippet empty()}
-          <EmptyState
-            icon={files.loading ? undefined : 'search'}
-            title={files.loading ? 'Listing files…' : 'No files match'}
+          <ResourceEmpty
+            res={files}
+            total={files.data.length}
+            loading="Listing files…"
+            failed="Could not list files"
+            icon="inspect"
+            title="No .svelte files"
+            noMatch="No files match"
           />
         {/snippet}
       </VirtualList>

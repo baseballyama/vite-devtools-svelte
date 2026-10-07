@@ -473,7 +473,9 @@
             </EmptyState>
           {/if}
         {:else if mode === 'graph'}
-          {#if nodes.length > GRAPH_LIMIT}
+          {#if nodes.length === 0}
+            <EmptyState icon="search" title="No loaded signals match" />
+          {:else if nodes.length > GRAPH_LIMIT}
             <EmptyState
               icon="graph"
               title="{nodes.length.toLocaleString()} signals is too many to lay out"

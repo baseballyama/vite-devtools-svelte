@@ -105,6 +105,14 @@ describe('ApiPlayground', () => {
     expect(within(list).getByText('No +server endpoints')).toBeTruthy()
   })
 
+  it('shows a failed scan as an error, not as "No +server endpoints"', async () => {
+    vi.mocked(rpc.getApiEndpoints).mockRejectedValue(new Error('RPC down'))
+    render(ApiPlayground)
+    await settle()
+    expect(screen.getByRole('alert').textContent).toContain('RPC down')
+    expect(screen.queryByText('No +server endpoints')).toBeNull()
+  })
+
   it('shows a scanning state until endpoints load', async () => {
     vi.mocked(rpc.getApiEndpoints).mockReturnValue(new Promise(() => {}))
     const { list } = await setup()
