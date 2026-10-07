@@ -170,8 +170,14 @@ export interface ReactiveSummaryRequest {
 
 /** One component instance in the overview, from runtime counters over all instances. */
 export interface ReactiveSummaryRow {
+  /** Component instance id, or the id of a module scope (`kind: 'module'`). */
   componentId: number
   file: string
+  /**
+   * `module`: shared state of a `.svelte.js` / `.svelte.ts` module (signals
+   * created while its body ran), not a component instance.
+   */
+  kind?: 'module'
   /** Tracked nodes registered for this instance, by type. */
   nodes: { state: number; derived: number; effect: number }
   /** Sampled state changes in the window (≤ 1 per node per 200 ms tick); not a rate. */
@@ -189,7 +195,12 @@ export interface ReactiveSummary {
   epoch: string | null
   window: { ms: number; since: number; until: number; sampledActiveMs: number }
   policy: 'sampled-200ms'
-  /** Only state created during a component's init is tracked. */
+  /**
+   * Tracked: signals created during a component's init (and its later block
+   * updates / effect runs) and while a `.svelte.js`/`.ts` module body runs
+   * (module scopes count as rows/components, `kind: 'module'`). Signals
+   * created elsewhere (e.g. in an event handler) are not tracked.
+   */
   coverage: 'component-init'
   components: { total: number | null; withActivity: number }
   rows: ReactiveSummaryRow[]

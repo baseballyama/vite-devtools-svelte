@@ -76,6 +76,27 @@ export function injectComponentTracking(code: string, id: string): string | null
   )
 }
 
+/** A Svelte module (`.svelte.js` / `.svelte.ts`, runes outside components). */
+export const SVELTE_MODULE_RE = /\.svelte\.[cm]?[jt]s$/
+
+/**
+ * Module-scope transform for one compiled client Svelte module: signals
+ * created while its body runs (shared state, `export const cart =
+ * $state(...)`) are tracked under a scope named after the file. The body is
+ * bracketed by enter/leave calls; nothing is inserted as a new line.
+ * `null` when the module is not a client-compiled Svelte module.
+ */
+export function injectModuleTracking(code: string, id: string): string | null {
+  if (!code.includes('svelte/internal/client')) return null
+  const safeId = JSON.stringify(id)
+  const dt = `(typeof window !== 'undefined' && window.__SVELTE_DEVTOOLS__)`
+  return (
+    `import '${RUNTIME_MODULE_ID}';if (${dt}) { window.__SVELTE_DEVTOOLS__._enterModule(${safeId}); }` +
+    code +
+    `\n;if (${dt}) { window.__SVELTE_DEVTOOLS__._leaveModule(); }\n`
+  )
+}
+
 export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
   const { componentTracking = true } = options
 
@@ -337,10 +358,14 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
 
     transform(code, id) {
       if (!componentTracking) return null
-      if (!id.endsWith('.svelte')) return null
       if (id.includes('node_modules')) return null
       if (config?.command !== 'serve') return null
-      const modified = injectComponentTracking(code, id)
+      const file = id.split('?')[0]
+      const modified = file.endsWith('.svelte')
+        ? injectComponentTracking(code, id)
+        : SVELTE_MODULE_RE.test(file)
+          ? injectModuleTracking(code, file)
+          : null
       return modified === null ? null : { code: modified, map: null }
     },
   }

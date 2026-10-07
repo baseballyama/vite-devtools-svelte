@@ -104,6 +104,7 @@ export function push() {
           try {
             const own = __svelte_original.active_effect;
             if (own && own.ctx) dt._idByContext.set(own.ctx, id);
+            if (own) dt.setComponentEffect(id, own);
           } catch {}
           return () => { try { dt.unmount(id); } catch {} };
         });
@@ -163,14 +164,17 @@ export function tag(signal, name) {
   try {
     const dt = __dt();
     const cid = __owner();
+    const type = (__pendingSignal.ref === signal) ? __pendingSignal.type : 'state';
     if (dt && cid !== null) {
-      const type = (__pendingSignal.ref === signal) ? __pendingSignal.type : 'state';
       const owner = __svelte_original.active_effect;
       if (type === 'derived') {
         dt.trackDerived(signal, name, cid, owner);
       } else {
         dt.trackState(signal, name, cid, owner);
       }
+    } else if (dt && dt._moduleFile) {
+      // created while a .svelte.js/.ts module body runs (shared state)
+      dt.trackModuleSignal(type === 'derived' ? 'derived' : 'state', signal, name);
     }
     __pendingSignal.ref = null;
     __pendingSignal.type = null;
@@ -185,6 +189,8 @@ export function tag_proxy(proxy, name) {
     const cid = __owner();
     if (dt && cid !== null) {
       dt.trackProxy(proxy, name, cid, __svelte_original.active_effect);
+    } else if (dt && dt._moduleFile) {
+      dt.trackModuleSignal('proxy', proxy, name);
     }
     __pendingSignal.ref = null;
     __pendingSignal.type = null;
@@ -457,6 +463,18 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     // componentId -> (name -> last suffix) for names declared more than once
     // per instance ({@const} in {#each} items, several $state class instances)
     _nameSeq: new Map(),
+    // Module scopes: signals created while a .svelte.js/.ts module body runs
+    // (shared state such as \`export const cart = $state(...)\`) belong to a
+    // scope per module file. Ids come from the component id counter (never
+    // reused, non-negative) but scopes are not components: they are not in
+    // _instances / the component tree, and live as long as the page.
+    _modules: new Map(),
+    _moduleByFile: new Map(),
+    // tag_proxy node name -> Set<nodeId>: resolves a proxy's property source
+    // (labelled '<name>.prop' by Svelte in dev) to the node of its proxy
+    _proxyNames: new Map(),
+    // file of the module body running now (set by the module transform)
+    _moduleFile: null,
     // componentId -> { effect, effect_pre } counters: effect names are
     // numbered per component, so instances of one file match
     _effectSeq: new Map(),
@@ -609,6 +627,13 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       if (signal && this._idBySignal.get(signal) === nodeId) this._idBySignal.delete(signal);
       const proxy = this._reactiveProxies.get(nodeId)?.deref();
       if (proxy && this._idByProxy.get(proxy) === nodeId) this._idByProxy.delete(proxy);
+      if (entry && this._reactiveProxies.has(nodeId)) {
+        const named = this._proxyNames.get(entry.meta.name);
+        if (named) {
+          named.delete(nodeId);
+          if (named.size === 0) this._proxyNames.delete(entry.meta.name);
+        }
+      }
       this._pollRemove(nodeId);
       this._sweepRemove(nodeId);
       this._pollDirty.delete(nodeId);
@@ -620,6 +645,42 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       this._lastSnapshotSize.delete(nodeId);
     },
 
+    // A component instance or a module scope that is still live.
+    _scopeLive(id) {
+      return this._instances.has(id) || this._modules.has(id);
+    },
+
+    _scopeFile(id) {
+      const scope = this._instances.get(id) || this._modules.get(id);
+      return scope ? scope.file : '';
+    },
+
+    _enterModule(file) {
+      this._moduleFile = file;
+      // a module body that throws (or awaits) never reaches _leaveModule
+      queueMicrotask(() => {
+        if (this._moduleFile === file) this._moduleFile = null;
+      });
+    },
+
+    _leaveModule() {
+      this._moduleFile = null;
+    },
+
+    trackModuleSignal(kind, target, name) {
+      const file = this._moduleFile;
+      let id = this._moduleByFile.get(file);
+      if (id === undefined) {
+        id = this._nextId++;
+        const base = file.split('/').pop() || file;
+        this._modules.set(id, { id, file, name: base, kind: 'module' });
+        this._moduleByFile.set(file, id);
+      }
+      if (kind === 'proxy') this.trackProxy(target, name, id, null);
+      else if (kind === 'derived') this.trackDerived(target, name, id, null);
+      else this.trackState(target, name, id, null);
+    },
+
     // A node is live while its signal is reachable, its component is mounted,
     // and the effect it was created in (an {#each} item, an effect run) has
     // not been destroyed. Svelte nulls effect.fn when it destroys an effect
@@ -629,7 +690,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       const entry = this._reactiveNodes.get(nodeId);
       if (!entry) return null;
       const signal = entry.signal.deref();
-      if (signal && this._instances.has(entry.meta.componentId) && this._ownerAlive(entry)) {
+      if (signal && this._scopeLive(entry.meta.componentId) && this._ownerAlive(entry)) {
         if (!entry.effect) return signal;
         // a bound effect is destroyed when Svelte clears its callback
         if (signal.fn !== null) return signal;
@@ -699,12 +760,11 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     },
 
     _registerNode(nodeId, componentId, type, name, signalRef, owner, extra) {
-      const instance = this._instances.get(componentId);
       this._trackNodeCount(nodeId, componentId, type);
       const entry = {
         signal: signalRef,
         owner: owner ? new WeakRef(owner) : null,
-        meta: { id: nodeId, type, name, componentId, componentFile: instance ? instance.file : '' },
+        meta: { id: nodeId, type, name, componentId, componentFile: this._scopeFile(componentId) },
       };
       if (extra) Object.assign(entry, extra);
       this._reactiveNodes.set(nodeId, entry);
@@ -1029,6 +1089,12 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       this._registerNode(nodeId, componentId, 'state', name, { deref: () => marker }, owner);
       this._idBySignal.set(marker, nodeId);
       this._idByProxy.set(proxy, nodeId);
+      let named = this._proxyNames.get(name);
+      if (!named) {
+        named = new Set();
+        this._proxyNames.set(name, named);
+      }
+      named.add(nodeId);
       this._pollAdd(nodeId);
     },
 
@@ -1070,6 +1136,106 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       entry.signal = new WeakRef(effect);
       entry.effect = true;
       this._idBySignal.set(effect, nodeId);
+    },
+
+    // The component's mount hook effect (the wrapper's, created at pop): its
+    // parent is the effect the component's markup effects were created in.
+    setComponentEffect(id, effect) {
+      const instance = this._instances.get(id);
+      if (instance) instance.hook = new WeakRef(effect);
+    },
+
+    // Markup effects of a component: the effects of its template
+    // (template_effect, {#if}/{#each}/... blocks, <svelte:head>), i.e. the
+    // effects under the hook's parent created in the component's context
+    // (effect.ctx), without descending into other components or the
+    // tracked $effect nodes. Svelte links child effects via first/next.
+    _markupEffects(id) {
+      const instance = this._instances.get(id);
+      const hook = instance && instance.hook && instance.hook.deref();
+      if (!hook || !hook.ctx || !hook.parent) return [];
+      const ctx = hook.ctx;
+      const out = [];
+      const stack = [];
+      for (let e = hook.parent.first; e; e = e.next) stack.push(e);
+      while (stack.length) {
+        const e = stack.pop();
+        if (e === hook || e.ctx !== ctx) continue;
+        if (e.deps && !this._idBySignal.has(e)) out.push(e);
+        for (let c = e.first; c; c = c.next) stack.push(c);
+      }
+      return out;
+    },
+
+    // The tracked node a proxy's property source belongs to. Svelte (dev)
+    // labels a proxy's sources after the proxy's path ('todos[0].text',
+    // 'cart.items.length', 'todos version'); the root name is a tag_proxy
+    // node name. Several live nodes may share the name (one per instance):
+    // candidates are narrowed by the source's value at that path (identity
+    // for objects), then the reader's component, its nearest ancestor,
+    // a module scope. null when unresolved.
+    _sourceOwner(source, readerCid, liveSignal) {
+      const label = source.label;
+      if (typeof label !== 'string' || this._proxyNames.size === 0) return null;
+      let root = null;
+      let rest = '';
+      for (let i = label.length; i > 0; i--) {
+        const ch = i === label.length ? '' : label[i];
+        if (ch !== '' && ch !== '.' && ch !== '[' && ch !== ' ') continue;
+        const named = this._proxyNames.get(label.slice(0, i));
+        if (named) {
+          root = named;
+          rest = label.slice(i);
+          break;
+        }
+      }
+      if (!root) return null;
+      let candidates = [...root].filter((id) => liveSignal(id));
+      if (candidates.length > 1) {
+        const path = this._labelPath(rest);
+        if (path) {
+          const v = source.v;
+          const same = candidates.filter((id) => {
+            const at = this._valueAt(this._reactiveProxies.get(id)?.deref(), path);
+            return at !== __NO_VALUE && (Object.is(at, v) || (typeof v === 'symbol' && at === undefined));
+          });
+          if (same.length > 0) candidates = same;
+        }
+      }
+      if (candidates.length <= 1) return candidates[0] || null;
+      const byScope = new Map(candidates.map((id) => [this._reactiveNodes.get(id).meta.componentId, id]));
+      for (let cid = readerCid; cid !== null && cid !== undefined; ) {
+        if (byScope.has(cid)) return byScope.get(cid);
+        const instance = this._instances.get(cid);
+        cid = instance ? instance.parentId : null;
+      }
+      for (const [cid, id] of byScope) if (this._modules.has(cid)) return id;
+      return candidates[0];
+    },
+
+    // '.items[0].text' -> ['items', '0', 'text']; null for ' version' and
+    // anything else that is not a property path.
+    _labelPath(rest) {
+      const path = [];
+      const re = /\\.([A-Za-z_$][\\w$]*)|\\[(\\d+)\\]|\\['((?:[^'\\\\]|\\\\.)*)'\\]/y;
+      let m;
+      while (re.lastIndex < rest.length && (m = re.exec(rest))) path.push(m[1] ?? m[2] ?? m[3]);
+      return re.lastIndex === rest.length || rest.length === 0 ? path : null;
+    },
+
+    // Own-property walk (getOwnPropertyDescriptor does not create sources on
+    // a Svelte proxy, unlike reading a missing property).
+    _valueAt(obj, path) {
+      let v = obj;
+      for (const key of path) {
+        if (v === null || (typeof v !== 'object' && typeof v !== 'function')) return __NO_VALUE;
+        let d;
+        try { d = Object.getOwnPropertyDescriptor(v, key); } catch { return __NO_VALUE; }
+        if (!d) return __NO_VALUE;
+        v = 'value' in d ? d.value : __NO_VALUE;
+        if (v === __NO_VALUE) return v;
+      }
+      return v;
     },
 
     // A component whose init threw (the wrapper unwinds its stack): it never
@@ -1186,7 +1352,9 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       // Walk a signal's neighbours (deps or reactions) through untracked
       // intermediates until tracked nodes are reached. onTemplate (reactions
       // only) receives the template node of each untracked effect reached.
-      const walk = (start, field, onHit, onTemplate) => {
+      // On the deps side an untracked leaf source (a proxy's property) is
+      // resolved to its proxy's node (readerCid: the reading component).
+      const walk = (start, field, onHit, onTemplate, readerCid) => {
         if (!start) return;
         const visited = new Set();
         const queue = [...start];
@@ -1203,7 +1371,25 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
           } else if (onTemplate) {
             const t = templateOf(dep);
             if (t) onTemplate(t);
+          } else if (field === 'deps' && onHit && !('fn' in dep)) {
+            const owner = this._sourceOwner(dep, readerCid, liveSignal);
+            if (owner) onHit(owner);
           }
+        }
+      };
+      const nodeCid = (nodeId) => this._reactiveNodes.get(nodeId).meta.componentId;
+      // Reads of a component's markup effects: edges into its template node
+      // (filter: keep only edges from these node ids, for neighbours).
+      const markupEdges = (cid, filter) => {
+        const effects = this._markupEffects(cid);
+        if (effects.length === 0) return;
+        const t = cid + ':(template)';
+        for (const effect of effects) {
+          walk(effect.deps, 'deps', (id) => {
+            if (filter && !filter(id)) return;
+            templates.set(t, cid);
+            addEdge(id, t);
+          }, null, cid);
         }
       };
 
@@ -1214,9 +1400,21 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
           const signal = liveSignal(nodeId);
           if (!signal) continue;
           see(nodeId);
-          walk(signal.deps, 'deps', (depId) => addEdge(depId, nodeId));
+          walk(signal.deps, 'deps', (depId) => addEdge(depId, nodeId), null, componentId);
           const toReader = (rId) => addEdge(nodeId, rId);
           walk(signal.reactions, 'reactions', toReader, toReader);
+        }
+        if (this._instances.has(componentId)) markupEdges(componentId, null);
+        // Readers in direct children (props): a proxy has no reactions list
+        // of its own, so its readers are found from their dependencies.
+        const own = (id) => nodeCid(id) === componentId;
+        const instance = this._instances.get(componentId);
+        for (const child of instance ? instance.children : []) {
+          for (const nodeId of [...(this._nodesByComponent.get(child) || [])]) {
+            const signal = liveSignal(nodeId);
+            if (signal) walk(signal.deps, 'deps', (depId) => own(depId) && addEdge(depId, nodeId), null, child);
+          }
+          markupEdges(child, own);
         }
         totalNodes = seen.size;
         totalEdges = edgeSet.size;
@@ -1231,11 +1429,12 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
           const signal = liveSignal(nodeId);
           if (!signal) continue;
           see(nodeId);
-          walk(signal.deps, 'deps', (depId) => addEdge(depId, nodeId));
+          walk(signal.deps, 'deps', (depId) => addEdge(depId, nodeId), null, nodeCid(nodeId));
           // tracked readers are found from their own deps; only template
           // readers need the reactions side
           walk(signal.reactions, 'reactions', null, (t) => addEdge(nodeId, t));
         }
+        if (complete) for (const cid of this._instances.keys()) markupEdges(cid, null);
         // registered count (+ template nodes reached), minus nodes found
         // dead while building
         totalNodes = this._reactiveNodes.size + templates.size;
@@ -1310,7 +1509,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
         if (!b || b.second !== sec) continue;
         sampledMs += b.sampledMs;
         for (const [cid, r] of b.rows) {
-          if (!this._instances.has(cid)) continue;
+          if (!this._scopeLive(cid)) continue;
           let a = agg.get(cid);
           if (!a) {
             a = { changes: 0, renders: 0, renderMs: 0 };
@@ -1329,25 +1528,30 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       const rows = ranked.slice(0, topK).map(([cid, a]) => {
         const n = this._nodeCounts.get(cid) || { state: 0, derived: 0, effect: 0 };
         rowNodes += n.state + n.derived + n.effect;
-        return {
+        const row = {
           componentId: cid,
-          file: this._instances.get(cid).file,
+          file: this._scopeFile(cid),
           nodes: { state: n.state, derived: n.derived, effect: n.effect },
           changes: a.changes,
           renders: a.renders,
           renderMs: Math.round(a.renderMs * 1000) / 1000,
         };
+        // module scope (shared .svelte.js state), not a component instance
+        if (this._modules.has(cid)) row.kind = 'module';
+        return row;
       });
       const t = this._nodeTotals;
+      // module scopes count as rows like components (rows + other = total)
+      const scopes = this._instances.size + this._modules.size;
       const until = Date.now();
       return {
         epoch: this._epoch,
         window: { ms: windowMs, since: until - windowMs, until, sampledActiveMs: Math.min(windowMs, sampledMs) },
         policy: 'sampled-200ms',
         coverage: 'component-init',
-        components: { total: this._instances.size, withActivity: agg.size },
+        components: { total: scopes, withActivity: agg.size },
         rows,
-        other: { components: this._instances.size - rows.length, nodes: t.state + t.derived + t.effect - rowNodes },
+        other: { components: scopes - rows.length, nodes: t.state + t.derived + t.effect - rowNodes },
         truncated: agg.size > topK,
         capabilities: { valueInspection: false, signalHistory: false, writeCause: false },
         // Seed coverage: changes of pending nodes are not observable yet.
@@ -1436,7 +1640,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
           this._pollRemove(nodeId);
           continue;
         }
-        if (!this._instances.has(entry.meta.componentId)) {
+        if (!this._scopeLive(entry.meta.componentId)) {
           this._forgetNode(nodeId); // swaps the last id into this slot
           continue;
         }

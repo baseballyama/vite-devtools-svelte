@@ -10,7 +10,7 @@ import {
   WRAPPER_MODULE_ID,
   wrapperCode,
 } from '../../runtime.js'
-import { injectComponentTracking } from '../../plugin.js'
+import { injectComponentTracking, injectModuleTracking, SVELTE_MODULE_RE } from '../../plugin.js'
 
 export function reactivityHarnessPlugin(): Plugin[] {
   return [
@@ -39,8 +39,13 @@ export function reactivityHarnessPlugin(): Plugin[] {
       name: 'reactivity-harness:tracking',
       enforce: 'post',
       transform(code, id) {
-        if (!id.endsWith('.svelte') || id.includes('node_modules')) return null
-        const modified = injectComponentTracking(code, id)
+        if (id.includes('node_modules')) return null
+        const file = id.split('?')[0]
+        const modified = file.endsWith('.svelte')
+          ? injectComponentTracking(code, id)
+          : SVELTE_MODULE_RE.test(file)
+            ? injectModuleTracking(code, file)
+            : null
         return modified === null ? null : { code: modified, map: null }
       },
     },
