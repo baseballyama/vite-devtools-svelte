@@ -189,7 +189,6 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
             buildMcpServer({
               getProject: () => analyzeProject(root),
               getRoutes: () => analyzeRoutes(analyzeProject(root).routesDir),
-              getLiveComponents: () => collector.liveComponents,
               getLiveSnapshot: () => collector.liveSnapshot,
               getComponentRelations: () => analyzeComponents(root),
               getRenderProfiles: () => collector.renderProfiles,

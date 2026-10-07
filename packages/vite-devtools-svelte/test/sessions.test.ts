@@ -11,7 +11,7 @@ import path from 'node:path'
 import * as fc from 'fast-check'
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
 
-import { SessionStore, isSessionId, SESSION_ID_PATTERN } from '../src/mcp/sessions.js'
+import { SessionStore, isSessionId } from '../src/mcp/sessions.js'
 import type { FpsSample, LoadProfile, RenderProfile } from '../src/types.js'
 
 const dirs: string[] = []
@@ -55,7 +55,6 @@ describe('session ids', () => {
   it('accepts exactly the shape start() issues', () => {
     const { s } = store()
     const rec = s.start('a', false)
-    expect(rec.id).toMatch(SESSION_ID_PATTERN)
     expect(isSessionId(rec.id)).toBe(true)
     for (const id of MALFORMED) expect({ id, valid: isSessionId(id) }).toEqual({ id, valid: false })
   })

@@ -93,20 +93,13 @@ function makeDeps(data: Partial<Data> = {}, persistDir?: string): McpDeps & { da
     data: d,
     getProject: () => ({ name: 'app' }) as any,
     getRoutes: () => [{ id: '/', path: '/' }] as any,
-    getLiveComponents: () => [{ id: 1 }] as any,
+    getLiveSnapshot: () => ({ epoch: 'e1', total: 1, components: [{ id: 1 } as any] }),
     getComponentRelations: () => [{ file: 'src/A.svelte', name: 'A', imports: [] }],
     getRenderProfiles: getters.getRenderProfiles,
     getReactiveGraph: () => Promise.resolve(d.graph),
     getLoadProfiles: getters.getLoadProfiles,
     getFpsSamples: getters.getFpsSamples,
     sessions: new SessionStore({ persistDir: dir, getters }),
-  }
-}
-
-function withReactivity(deps: McpDeps): McpDeps {
-  return {
-    ...deps,
-    getLiveSnapshot: () => ({ epoch: 'e1', total: 1, components: [{ id: 1 } as any] }),
     getReactiveSummary: req => Promise.resolve({ req } as any),
     getReactiveScope: req => Promise.resolve({ req } as any),
     getStateTimelineDelta: () => ({ cursor: 1, reset: true, changes: [] }),
@@ -147,36 +140,15 @@ function toolShape(t: {
 }
 
 describe('tool registration', () => {
-  it('registers exactly the base tools when no reactivity deps are given', async () => {
+  it('registers exactly the documented tools', async () => {
     const { tools } = await (await connect(makeDeps())).listTools()
-    expect(tools.map(t => t.name).toSorted()).toEqual(BASE_TOOLS.toSorted())
-  })
-
-  it('adds exactly the bounded reactivity tools when their deps are given', async () => {
-    const { tools } = await (await connect(withReactivity(makeDeps()))).listTools()
     expect(tools.map(t => t.name).toSorted()).toEqual(
       [...BASE_TOOLS, ...REACTIVITY_TOOLS].toSorted(),
     )
   })
 
-  it.each(REACTIVITY_TOOLS.map((name, i) => [name, i] as const))(
-    'registers %s only with its own dep',
-    async name => {
-      const dep = {
-        get_reactive_summary: 'getReactiveSummary',
-        get_reactive_scope: 'getReactiveScope',
-        get_state_timeline: 'getStateTimelineDelta',
-        get_capture_info: 'getCaptureInfo',
-      }[name]!
-      const full = withReactivity(makeDeps()) as unknown as Record<string, unknown>
-      const only = { ...makeDeps(), [dep]: full[dep] } as McpDeps
-      const { tools } = await (await connect(only)).listTools()
-      expect(tools.map(t => t.name).filter(n => REACTIVITY_TOOLS.includes(n))).toEqual([name])
-    },
-  )
-
   it('every tool has a title, a description and an object input schema', async () => {
-    const { tools } = await (await connect(withReactivity(makeDeps()))).listTools()
+    const { tools } = await (await connect(makeDeps())).listTools()
     expect(tools.map(toolShape)).toEqual(
       tools.map(t => ({ name: t.name, title: true, description: true, schema: 'object' })),
     )
@@ -186,16 +158,14 @@ describe('tool registration', () => {
 describe('every tool answers valid input', () => {
   it('calls each registered tool once and checks its answer', async () => {
     vi.useFakeTimers({ now: 10_000 })
-    const deps = withReactivity(
-      makeDeps({
-        render: [rp(1, 40, 200), rp(2, 1, 1)],
-        load: [lp('/a', 300), lp('/a', 100), lp('/b', 50)],
-        fps: [
-          { timestamp: 9000, fps: 20 },
-          { timestamp: 9500, fps: 59 },
-        ],
-      }),
-    )
+    const deps = makeDeps({
+      render: [rp(1, 40, 200), rp(2, 1, 1)],
+      load: [lp('/a', 300), lp('/a', 100), lp('/b', 50)],
+      fps: [
+        { timestamp: 9000, fps: 20 },
+        { timestamp: 9500, fps: 59 },
+      ],
+    })
     const client = await connect(deps)
     const { tools } = await client.listTools()
 
@@ -314,7 +284,7 @@ describe('input validation', () => {
     ['load_session', { id: `s_${'a'.repeat(56)}_123456` }], // 65 chars
     ['delete_session', { id: 's_abc_12345' }],
   ])('%s rejects %j', async (tool, args) => {
-    const deps = withReactivity(makeDeps())
+    const deps = makeDeps()
     const spies = {
       summary: vi.spyOn(deps, 'getReactiveSummary'),
       scope: vi.spyOn(deps, 'getReactiveScope'),
@@ -351,7 +321,7 @@ describe('input validation', () => {
       },
     ],
   ])('%s accepts the boundary %j', async (tool, args) => {
-    const result = await call(await connect(withReactivity(makeDeps())), tool, args)
+    const result = await call(await connect(makeDeps()), tool, args)
     expect(failed(result)).toBe(false)
   })
 
@@ -648,7 +618,6 @@ describe('reactivity tools', () => {
     const comps = Array.from({ length: 3 }, (_, i) => ({ id: i }) as any)
     const client = await connect({
       ...makeDeps(),
-      getLiveComponents: () => comps,
       getLiveSnapshot: () => ({ epoch: 'e7', total: 3, components: comps }),
     })
     expect(parse(await call(client, 'get_live_components'))).toEqual(comps)
@@ -676,12 +645,5 @@ describe('reactivity tools', () => {
       truncated: false,
       captured: 5,
     })
-  })
-
-  it('get_live_components with includeMeta but no snapshot dep answers the bare array', async () => {
-    const client = await connect(makeDeps())
-    expect(parse(await call(client, 'get_live_components', { includeMeta: true }))).toEqual([
-      { id: 1 },
-    ])
   })
 })

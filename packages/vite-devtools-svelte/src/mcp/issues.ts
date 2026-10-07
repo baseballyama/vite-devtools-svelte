@@ -1,4 +1,5 @@
 import type { RenderProfile, ReactiveGraph, LoadProfile, FpsSample } from '../types.js'
+import { avgRenderTime, min, round } from './stats.js'
 
 type IssueKind =
   | 'slow-component-render'
@@ -65,6 +66,17 @@ export interface IssueInputs {
   fpsSamples: FpsSample[]
 }
 
+/** `high` from `threshold * high`, `medium` from `threshold * medium`, else `low`. */
+function severity(
+  value: number,
+  threshold: number,
+  medium: number,
+  high: number,
+): PerformanceIssue['severity'] {
+  if (value >= threshold * high) return 'high'
+  return value >= threshold * medium ? 'medium' : 'low'
+}
+
 export function listPerformanceIssues(
   inputs: IssueInputs,
   thresholds: IssueThresholds = {},
@@ -73,13 +85,12 @@ export function listPerformanceIssues(
   const out: PerformanceIssue[] = []
 
   for (const p of inputs.renderProfiles) {
-    const avg = p.renderCount > 0 ? p.totalRenderTime / p.renderCount : 0
+    const avg = avgRenderTime(p)
     if (avg >= t.avgRenderTimeMs) {
       out.push({
         id: `slow-render:${p.file}:${p.componentId}`,
         kind: 'slow-component-render',
-        severity:
-          avg >= t.avgRenderTimeMs * 4 ? 'high' : avg >= t.avgRenderTimeMs * 2 ? 'medium' : 'low',
+        severity: severity(avg, t.avgRenderTimeMs, 2, 4),
         summary: `${p.name} averages ${avg.toFixed(2)}ms per render (${p.renderCount} renders)`,
         file: p.file,
         metric: {
@@ -94,12 +105,7 @@ export function listPerformanceIssues(
       out.push({
         id: `over-render:${p.file}:${p.componentId}`,
         kind: 'over-rendered-component',
-        severity:
-          p.renderCount >= t.renderCount * 8
-            ? 'high'
-            : p.renderCount >= t.renderCount * 3
-              ? 'medium'
-              : 'low',
+        severity: severity(p.renderCount, t.renderCount, 3, 8),
         summary: `${p.name} rendered ${p.renderCount} times`,
         file: p.file,
         metric: { renderCount: p.renderCount, avgRenderTimeMs: round(avg) },
@@ -113,12 +119,7 @@ export function listPerformanceIssues(
       out.push({
         id: `slow-load:${l.route}:${l.timestamp}`,
         kind: 'slow-load',
-        severity:
-          l.duration >= t.loadDurationMs * 5
-            ? 'high'
-            : l.duration >= t.loadDurationMs * 2
-              ? 'medium'
-              : 'low',
+        severity: severity(l.duration, t.loadDurationMs, 2, 5),
         summary: `${l.type} load for ${l.route} took ${l.duration.toFixed(0)}ms`,
         file: l.file,
         metric: { durationMs: round(l.duration), dataSizeBytes: l.dataSize },
@@ -129,36 +130,30 @@ export function listPerformanceIssues(
 
   const fpsDrops = inputs.fpsSamples.filter(s => s.fps < t.fpsDropThreshold)
   if (fpsDrops.length > 0) {
-    // reduce, not Math.min(...): spreading a long sample list overflows the stack
-    const min = fpsDrops.reduce((m, s) => Math.min(m, s.fps), Infinity)
+    const minFps = min(
+      fpsDrops.map(s => s.fps),
+      0,
+    )
     out.push({
       id: `fps-drops:${inputs.fpsSamples[0]?.timestamp ?? 0}`,
       kind: 'fps-drop',
-      severity: min < 15 ? 'high' : min < 30 ? 'medium' : 'low',
-      summary: `${fpsDrops.length} FPS samples below ${t.fpsDropThreshold} (min ${min})`,
-      metric: { dropCount: fpsDrops.length, minFps: min, threshold: t.fpsDropThreshold },
+      severity: minFps < 15 ? 'high' : minFps < 30 ? 'medium' : 'low',
+      summary: `${fpsDrops.length} FPS samples below ${t.fpsDropThreshold} (min ${minFps})`,
+      metric: { dropCount: fpsDrops.length, minFps, threshold: t.fpsDropThreshold },
       suggestedTool: 'get_fps_drops',
     })
   }
 
-  // Reactive graph: count incoming (dependency) edges per node
-  const { inDegree } = degrees(inputs.reactiveGraph)
-  for (const node of inputs.reactiveGraph.nodes) {
-    if (node.type === 'effect') {
-      const deps = inDegree.get(node.id) ?? 0
-      if (deps >= t.effectMaxDeps) {
-        out.push({
-          id: `effect-deps:${node.id}`,
-          kind: 'effect-overconnected',
-          severity:
-            deps >= t.effectMaxDeps * 3 ? 'high' : deps >= t.effectMaxDeps * 2 ? 'medium' : 'low',
-          summary: `effect "${node.name}" depends on ${deps} reactive values`,
-          file: node.componentFile,
-          metric: { depCount: deps },
-          suggestedTool: 'get_reactive_graph_problems',
-        })
-      }
-    }
+  for (const effect of overconnectedEffects(inputs.reactiveGraph, t.effectMaxDeps)) {
+    out.push({
+      id: `effect-deps:${effect.id}`,
+      kind: 'effect-overconnected',
+      severity: severity(effect.depCount, t.effectMaxDeps, 2, 3),
+      summary: `effect "${effect.name}" depends on ${effect.depCount} reactive values`,
+      file: effect.file,
+      metric: { depCount: effect.depCount },
+      suggestedTool: 'get_reactive_graph_problems',
+    })
   }
 
   return out.toSorted(compareSeverity)
@@ -188,8 +183,17 @@ function degrees(graph: ReactiveGraph): {
   return { inDegree, outDegree }
 }
 
-function round(n: number): number {
-  return Math.round(n * 100) / 100
+/** Effects with at least `maxDeps` distinct dependencies (incoming edges), in node order. */
+function overconnectedEffects(graph: ReactiveGraph, maxDeps: number): ReactiveProblems['effects'] {
+  const { inDegree } = degrees(graph)
+  const effects: ReactiveProblems['effects'] = []
+  for (const node of graph.nodes) {
+    const depCount = inDegree.get(node.id) ?? 0
+    if (node.type === 'effect' && depCount >= maxDeps) {
+      effects.push({ id: node.id, name: node.name, file: node.componentFile, depCount })
+    }
+  }
+  return effects
 }
 
 export interface ReactiveProblems {
@@ -211,21 +215,14 @@ export function summarizeReactiveProblems(
   graph: ReactiveGraph,
   t: IssueThresholds = {},
 ): ReactiveProblems {
-  const thresh = withDefaults(t)
   const { inDegree, outDegree } = degrees(graph)
-  const effects: ReactiveProblems['effects'] = []
   const orphanDeriveds: ReactiveProblems['orphanDeriveds'] = []
   const isolatedNodes: ReactiveProblems['isolatedNodes'] = []
   for (const node of graph.nodes) {
-    const ind = inDegree.get(node.id) ?? 0
-    const outd = outDegree.get(node.id) ?? 0
-    if (node.type === 'effect' && ind >= thresh.effectMaxDeps) {
-      effects.push({ id: node.id, name: node.name, file: node.componentFile, depCount: ind })
-    }
     if (node.type === 'template') continue
     if (node.type === 'derived' && node.unevaluated) {
       orphanDeriveds.push({ id: node.id, name: node.name, file: node.componentFile })
-    } else if (ind === 0 && outd === 0 && !node.untrackedDeps) {
+    } else if (!inDegree.has(node.id) && !outDegree.has(node.id) && !node.untrackedDeps) {
       isolatedNodes.push({
         id: node.id,
         name: node.name,
@@ -234,5 +231,6 @@ export function summarizeReactiveProblems(
       })
     }
   }
+  const effects = overconnectedEffects(graph, withDefaults(t).effectMaxDeps)
   return { effects, orphanDeriveds, isolatedNodes }
 }
