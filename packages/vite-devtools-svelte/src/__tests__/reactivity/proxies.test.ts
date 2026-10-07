@@ -76,3 +76,22 @@ describe('object / array $state (proxies)', () => {
     expect(incoming(g, node(g, shop.id, 'count').id)).toEqual([cart.id])
   })
 })
+
+describe('proxies held by $state signals (class fields, reassigned objects)', () => {
+  it('element reads resolve to the signal node, nothing untracked', async () => {
+    const r = mountIt((await import('./fixtures/Inventory.svelte')).default)
+    const c = instance('Inventory')
+    const g = graph(null)
+    const items = g.nodes.find(n => n.name === 'Inventory.items')!
+    const total = g.nodes.find(n => n.name === 'Inventory.total')!
+    expect(items.componentFile).toMatch(/stock\.svelte\.ts$/)
+    expect(incoming(g, total.id)).toEqual([items.id])
+    expect(outgoing(g, items.id).sort()).toEqual([total.id, `${c.id}:(template)`].sort())
+    expect(g.nodes.filter(n => n.untrackedDeps)).toEqual([])
+    ;(r.app as any).api.replace()
+    flushSync()
+    const g2 = graph(c.id)
+    expect(incoming(g2, node(g2, c.id, 'n').id)).toEqual([`${c.id}:obj`])
+    expect(g2.nodes.filter(n => n.untrackedDeps)).toEqual([])
+  })
+})

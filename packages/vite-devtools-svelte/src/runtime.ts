@@ -470,8 +470,10 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     // _instances / the component tree, and live as long as the page.
     _modules: new Map(),
     _moduleByFile: new Map(),
-    // tag_proxy node name -> Set<nodeId>: resolves a proxy's property source
-    // (labelled '<name>.prop' by Svelte in dev) to the node of its proxy
+    // $state node name -> Set<nodeId>: resolves a proxy's property source
+    // (labelled '<name>.prop' by Svelte in dev) to the node of its proxy —
+    // a tag_proxy node, or a state signal holding a proxy (reassigned object
+    // state, class fields)
     _proxyNames: new Map(),
     // file of the module body running now (set by the module transform)
     _moduleFile: null,
@@ -627,7 +629,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       if (signal && this._idBySignal.get(signal) === nodeId) this._idBySignal.delete(signal);
       const proxy = this._reactiveProxies.get(nodeId)?.deref();
       if (proxy && this._idByProxy.get(proxy) === nodeId) this._idByProxy.delete(proxy);
-      if (entry && this._reactiveProxies.has(nodeId)) {
+      if (entry && entry.meta.type === 'state') {
         const named = this._proxyNames.get(entry.meta.name);
         if (named) {
           named.delete(nodeId);
@@ -1076,6 +1078,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       const nodeId = this._nodeIdFor(signal, this._idBySignal, componentId, name);
       this._registerNode(nodeId, componentId, 'state', name, new WeakRef(signal), owner);
       this._idBySignal.set(signal, nodeId);
+      this._nameProxyRoot(nodeId, name);
       this._pollAdd(nodeId);
     },
 
@@ -1089,12 +1092,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       this._registerNode(nodeId, componentId, 'state', name, { deref: () => marker }, owner);
       this._idBySignal.set(marker, nodeId);
       this._idByProxy.set(proxy, nodeId);
-      let named = this._proxyNames.get(name);
-      if (!named) {
-        named = new Set();
-        this._proxyNames.set(name, named);
-      }
-      named.add(nodeId);
+      this._nameProxyRoot(nodeId, name);
       this._pollAdd(nodeId);
     },
 
@@ -1196,7 +1194,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
         if (path) {
           const v = source.v;
           const same = candidates.filter((id) => {
-            const at = this._valueAt(this._reactiveProxies.get(id)?.deref(), path);
+            const at = this._valueAt(this._rootValue(id), path);
             return at !== __NO_VALUE && (Object.is(at, v) || (typeof v === 'symbol' && at === undefined));
           });
           if (same.length > 0) candidates = same;
@@ -1236,6 +1234,24 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
         if (v === __NO_VALUE) return v;
       }
       return v;
+    },
+
+    _nameProxyRoot(nodeId, name) {
+      let named = this._proxyNames.get(name);
+      if (!named) {
+        named = new Set();
+        this._proxyNames.set(name, named);
+      }
+      named.add(nodeId);
+    },
+
+    // The proxy a $state node holds now (tag_proxy: the proxy itself; a
+    // state signal: its current value), or undefined.
+    _rootValue(nodeId) {
+      const proxy = this._reactiveProxies.get(nodeId);
+      if (proxy) return proxy.deref();
+      const signal = this._reactiveNodes.get(nodeId)?.signal.deref();
+      return signal ? signal.v : undefined;
     },
 
     // A component whose init threw (the wrapper unwinds its stack): it never
