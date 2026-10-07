@@ -13,7 +13,7 @@ import { RUNTIME_MODULE_ID, RESOLVED_RUNTIME_ID, WRAPPER_MODULE_ID } from '../..
 import {
   injectComponentTracking,
   injectModuleTracking,
-  SVELTE_MODULE_RE,
+  isSvelteModule,
 } from '../../src/runtime/transform.js'
 
 const runtimeCode = fs.readFileSync(new URL('../../src/runtime/client.js', import.meta.url), 'utf8')
@@ -53,7 +53,7 @@ export function reactivityHarnessPlugin(): Plugin[] {
         const file = id.split('?')[0]!
         const modified = file.endsWith('.svelte')
           ? injectComponentTracking(code, file)
-          : SVELTE_MODULE_RE.test(file)
+          : isSvelteModule(file)
             ? injectModuleTracking(code, file)
             : null
         return modified === null ? null : { code: modified, map: null }

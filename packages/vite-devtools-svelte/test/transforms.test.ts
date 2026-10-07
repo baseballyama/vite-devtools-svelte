@@ -12,7 +12,7 @@ import { RUNTIME_MODULE_ID } from '../src/runtime/ids.js'
 import {
   injectComponentTracking,
   injectModuleTracking,
-  SVELTE_MODULE_RE,
+  isSvelteModule,
 } from '../src/runtime/transform.js'
 import { callHook, codeOf, resolvePlugins } from './helpers.js'
 
@@ -214,7 +214,7 @@ describe('injectModuleTracking', () => {
   })
 })
 
-describe('SVELTE_MODULE_RE', () => {
+describe('isSvelteModule', () => {
   it.each([
     ['/a/store.svelte.js', true],
     ['/a/store.svelte.ts', true],
@@ -230,7 +230,7 @@ describe('SVELTE_MODULE_RE', () => {
     ['/a/store.svelte.ts?v=123', false], // callers strip the query first
     ['/a/store.svelte.ts.bak', false],
   ])('%s → %s', (file, expected) => {
-    expect(SVELTE_MODULE_RE.test(file)).toBe(expected)
+    expect(isSvelteModule(file)).toBe(expected)
   })
 })
 

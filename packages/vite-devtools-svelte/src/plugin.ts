@@ -21,7 +21,7 @@ import {
 import {
   injectComponentTracking,
   injectModuleTracking,
-  SVELTE_MODULE_RE,
+  isSvelteModule,
 } from './runtime/transform.js'
 import { Collector } from './server/collector.js'
 import { captureCompilerWarnings } from './server/compiler-warnings.js'
@@ -293,7 +293,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       const [file = id] = id.split('?')
       const modified = file.endsWith('.svelte')
         ? injectComponentTracking(code, file)
-        : SVELTE_MODULE_RE.test(file)
+        : isSvelteModule(file)
           ? injectModuleTracking(code, file)
           : null
       return modified === null ? null : { code: modified, map: null }

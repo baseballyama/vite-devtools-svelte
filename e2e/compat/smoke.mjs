@@ -377,14 +377,16 @@ async function waitReady(srv, ms = 60_000) {
     if (srv.child.exitCode !== null)
       throw new Error(`dev server exited (${srv.child.exitCode}): ${mask(srv.log).slice(-600)}`)
     const token = srv.log.match(/x-svelte-devtools-token:([0-9a-f-]{36})/)?.[1]
-    if (token) {
+    // Vite's "Local:" banner and the MCP token line are printed independently:
+    // wait for both, or the resolved host reads as null.
+    const local = srv.log.match(/Local:\s+(https?:\/\/\S+)/)?.[1]
+    if (token && local) {
       secrets.add(token)
       srv.token = token
       try {
-        const local = srv.log.match(/Local:\s+(https?:\/\/\S+)/)?.[1]
         const r = await fetch(srv.base + '/', { signal: AbortSignal.timeout(5000) })
         if (r.status < 500) {
-          srv.local = local ? new URL(local).hostname : null
+          srv.local = new URL(local).hostname
           return
         }
       } catch {
