@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import type { RenderProfile, LoadProfile, FpsSample } from '../types.js'
+import { avg, min } from './stats.js'
 
 interface SessionSnapshot {
   /** componentId -> { renderCount, totalRenderTime } at snapshot moment */
@@ -55,6 +56,8 @@ export interface SessionDelta {
   }
 }
 
+type Verdict = 'improved' | 'regressed' | 'unchanged'
+
 export interface SessionDiff {
   a: { id: string; label: string }
   b: { id: string; label: string }
@@ -62,20 +65,19 @@ export interface SessionDiff {
     totalRenderTimeDeltaA: number
     totalRenderTimeDeltaB: number
     diff: number
-    verdict: 'improved' | 'regressed' | 'unchanged'
+    verdict: Verdict
   }
-  load: {
-    avgA: number
-    avgB: number
-    diff: number
-    verdict: 'improved' | 'regressed' | 'unchanged'
-  }
-  fps: {
-    avgA: number
-    avgB: number
-    diff: number
-    verdict: 'improved' | 'regressed' | 'unchanged'
-  }
+  load: { avgA: number; avgB: number; diff: number; verdict: Verdict }
+  fps: { avgA: number; avgB: number; diff: number; verdict: Verdict }
+}
+
+interface SessionSummary {
+  id: string
+  label: string
+  startedAt: number
+  endedAt?: number
+  persisted: boolean
+  active: boolean
 }
 
 export interface MetricGetters {
@@ -105,27 +107,37 @@ function takeSnapshot(getters: MetricGetters): SessionSnapshot {
   }
 }
 
-function classify(
-  diff: number,
-  threshold: number,
-  lowerIsBetter: boolean,
-): 'improved' | 'regressed' | 'unchanged' {
+/** How `b` compares to `a` given `diff = b - a`. */
+function classify(diff: number, threshold: number, lowerIsBetter: boolean): Verdict {
   if (Math.abs(diff) < threshold) return 'unchanged'
-  const negativeIsBetter = lowerIsBetter
-  if (negativeIsBetter) return diff < 0 ? 'improved' : 'regressed'
-  return diff > 0 ? 'improved' : 'regressed'
+  return diff < 0 === lowerIsBetter ? 'improved' : 'regressed'
+}
+
+const BASE36 = '0123456789abcdefghijklmnopqrstuvwxyz'
+const HEX = '0123456789abcdef'
+function consistsOf(s: string, chars: string): boolean {
+  for (const c of s) if (!chars.includes(c)) return false
+  return true
 }
 
 /**
- * The only id shape `start()` issues: `s_<Date.now() base36>_<6 hex>`. Ids
- * reach the store from MCP clients and become file names, so anything else
- * (path separators, `..`, absolute paths) is rejected before touching disk
- * (review C-7).
+ * Whether `id` has the only shape `start()` issues: `s_<Date.now() base36>_<6
+ * hex>`. Ids reach the store from MCP clients and become file names, so
+ * anything else (path separators, `..`, absolute paths) is rejected before
+ * touching disk (review C-7).
  */
-export const SESSION_ID_PATTERN = /^s_[0-9a-z]{1,16}_[0-9a-f]{6}$/
-
 export function isSessionId(id: unknown): id is string {
-  return typeof id === 'string' && SESSION_ID_PATTERN.test(id)
+  if (typeof id !== 'string') return false
+  const parts = id.split('_')
+  if (parts.length !== 3 || parts[0] !== 's') return false
+  const [, time = '', random = ''] = parts
+  return (
+    time.length > 0 &&
+    time.length <= 16 &&
+    consistsOf(time, BASE36) &&
+    random.length === 6 &&
+    consistsOf(random, HEX)
+  )
 }
 
 export interface SessionStoreOptions {
@@ -165,23 +177,23 @@ export class SessionStore {
     return record
   }
 
+  private get activeRecord(): SessionRecord | undefined {
+    return this.active === null ? undefined : this.sessions.get(this.active)
+  }
+
   /** Called by the plugin whenever a new load profile arrives. */
   recordLoadProfile(p: LoadProfile): void {
-    if (!this.active) return
-    const rec = this.sessions.get(this.active)
-    if (rec) rec.loadProfiles.push(p)
+    this.activeRecord?.loadProfiles.push(p)
   }
 
   /** Called by the plugin whenever a new fps sample arrives. */
   recordFpsSample(s: FpsSample): void {
-    if (!this.active) return
-    const rec = this.sessions.get(this.active)
-    if (rec) rec.fpsSamples.push(s)
+    this.activeRecord?.fpsSamples.push(s)
   }
 
   end(keep: 'memory' | 'disk' | 'discard'): SessionRecord {
     if (!this.active) throw new Error('No active session')
-    const rec = this.sessions.get(this.active)
+    const rec = this.activeRecord
     if (!rec) throw new Error('Active session missing from store')
     rec.endedAt = Date.now()
     rec.endSnapshot = takeSnapshot(this.getters)
@@ -197,60 +209,32 @@ export class SessionStore {
 
   get(id: string): SessionRecord | undefined {
     if (!isSessionId(id)) return undefined
-    const inMem = this.sessions.get(id)
-    if (inMem) return inMem
-    return this.loadFromDisk(id)
+    return this.sessions.get(id) ?? this.loadFromDisk(id)
   }
 
-  list(): Array<{
-    id: string
-    label: string
-    startedAt: number
-    endedAt?: number
-    persisted: boolean
-    active: boolean
-  }> {
-    const seen = new Set<string>()
-    const out: Array<{
-      id: string
-      label: string
-      startedAt: number
-      endedAt?: number
-      persisted: boolean
-      active: boolean
-    }> = []
-    for (const rec of this.sessions.values()) {
-      seen.add(rec.id)
-      out.push({
-        id: rec.id,
-        label: rec.label,
-        startedAt: rec.startedAt,
-        endedAt: rec.endedAt,
-        persisted: fs.existsSync(this.pathFor(rec.id)),
-        active: this.active === rec.id,
-      })
-    }
+  list(): SessionSummary[] {
+    const summary = (rec: SessionRecord, persisted: boolean): SessionSummary => ({
+      id: rec.id,
+      label: rec.label,
+      startedAt: rec.startedAt,
+      endedAt: rec.endedAt,
+      persisted,
+      active: this.active === rec.id,
+    })
+    const out = [...this.sessions.values()].map(rec =>
+      summary(rec, fs.existsSync(this.pathFor(rec.id))),
+    )
     try {
-      if (fs.existsSync(this.persistDir)) {
-        for (const name of fs.readdirSync(this.persistDir)) {
-          if (!name.endsWith('.json')) continue
-          const id = name.slice(0, -5)
-          if (!isSessionId(id) || seen.has(id)) continue
-          // Unreadable files, and files whose content claims another id, are skipped.
-          const rec = this.loadFromDisk(id)
-          if (!rec) continue
-          out.push({
-            id: rec.id,
-            label: rec.label,
-            startedAt: rec.startedAt,
-            endedAt: rec.endedAt,
-            persisted: true,
-            active: false,
-          })
-        }
+      for (const name of fs.readdirSync(this.persistDir)) {
+        if (!name.endsWith('.json')) continue
+        const id = name.slice(0, -'.json'.length)
+        if (!isSessionId(id) || this.sessions.has(id)) continue
+        // Unreadable files, and files whose content claims another id, are skipped.
+        const rec = this.loadFromDisk(id)
+        if (rec) out.push(summary(rec, true))
       }
     } catch {
-      /* persist dir not accessible */
+      /* persist dir missing or not accessible */
     }
     return out.toSorted((a, b) => b.startedAt - a.startedAt)
   }
@@ -260,22 +244,13 @@ export class SessionStore {
     const had = this.sessions.delete(id)
     let onDisk = false
     try {
-      const p = this.pathFor(id)
-      if (fs.existsSync(p)) {
-        fs.unlinkSync(p)
-        onDisk = true
-      }
+      fs.unlinkSync(this.pathFor(id))
+      onDisk = true
     } catch {
-      /* ignore */
+      /* not on disk */
     }
     if (this.active === id) this.active = null
     return had || onDisk
-  }
-
-  delta(id: string): SessionDelta {
-    const rec = this.get(id)
-    if (!rec) throw new Error(`Session not found: ${id}`)
-    return this.deltaOf(rec)
   }
 
   /**
@@ -291,10 +266,8 @@ export class SessionStore {
     const components = rec.endSnapshot.renderProfiles
       .map(end => {
         const start = startMap.get(end.componentId)
-        const startRenderCount = start?.renderCount ?? 0
-        const startTotal = start?.totalRenderTime ?? 0
-        const renderCountDelta = end.renderCount - startRenderCount
-        const totalRenderTimeDelta = end.totalRenderTime - startTotal
+        const renderCountDelta = end.renderCount - (start?.renderCount ?? 0)
+        const totalRenderTimeDelta = end.totalRenderTime - (start?.totalRenderTime ?? 0)
         return {
           componentId: end.componentId,
           file: end.file,
@@ -308,28 +281,39 @@ export class SessionStore {
       .toSorted((a, b) => b.totalRenderTimeDelta - a.totalRenderTimeDelta)
 
     const loadDurations = rec.loadProfiles.map(l => l.duration)
-    const loadAvg = avg(loadDurations)
-    const loadP95 = percentile(loadDurations, 95)
-
     const fpsValues = rec.fpsSamples.map(s => s.fps)
-    const fpsAvg = avg(fpsValues)
-    // reduce, not Math.min(...): a long session can hold more samples than fit in a call
-    const fpsMin = fpsValues.length > 0 ? fpsValues.reduce((m, f) => Math.min(m, f), Infinity) : 0
-    const fpsDrops = fpsValues.filter(f => f < FPS_DROP_THRESHOLD).length
-
     return {
       durationMs: rec.endedAt - rec.startedAt,
       components,
-      loadProfiles: { count: rec.loadProfiles.length, avgDuration: loadAvg, p95Duration: loadP95 },
-      fps: { samples: fpsValues.length, avg: fpsAvg, min: fpsMin, drops: fpsDrops },
+      loadProfiles: {
+        count: rec.loadProfiles.length,
+        avgDuration: avg(loadDurations),
+        p95Duration: percentile(loadDurations, 95),
+      },
+      fps: {
+        samples: fpsValues.length,
+        avg: avg(fpsValues),
+        min: min(fpsValues, 0),
+        drops: fpsValues.filter(f => f < FPS_DROP_THRESHOLD).length,
+      },
     }
   }
 
+  delta(id: string): SessionDelta {
+    return this.deltaOf(this.found(id))
+  }
+
+  private found(id: string): SessionRecord {
+    const rec = this.get(id)
+    if (!rec) throw new Error(`Session not found: ${id}`)
+    return rec
+  }
+
   compare(idA: string, idB: string): SessionDiff {
-    const a = this.delta(idA)
-    const b = this.delta(idB)
-    const recA = this.get(idA)!
-    const recB = this.get(idB)!
+    const recA = this.found(idA)
+    const recB = this.found(idB)
+    const a = this.deltaOf(recA)
+    const b = this.deltaOf(recB)
     const totalA = a.components.reduce((s, c) => s + c.totalRenderTimeDelta, 0)
     const totalB = b.components.reduce((s, c) => s + c.totalRenderTimeDelta, 0)
     const renderDiff = totalB - totalA
@@ -381,18 +365,13 @@ export class SessionStore {
       const raw = fs.readFileSync(this.pathFor(id), 'utf-8')
       const rec: unknown = JSON.parse(raw)
       // A file whose content claims another id is not served under this one;
-      // one missing fields delta()/list() read is not served at all (it used
+      // one missing fields deltaOf()/list() read is not served at all (it used
       // to crash them with a TypeError).
       return isRecordShape(rec) && rec.id === id ? rec : undefined
     } catch {
       return undefined
     }
   }
-}
-
-function avg(xs: number[]): number {
-  if (xs.length === 0) return 0
-  return xs.reduce((s, x) => s + x, 0) / xs.length
 }
 
 /**

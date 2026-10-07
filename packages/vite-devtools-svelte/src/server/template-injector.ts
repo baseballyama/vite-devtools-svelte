@@ -117,8 +117,7 @@ export function sveltekitTemplateInjector(isHosted: () => boolean): Plugin {
       if (!GENERATED_SERVER_SUFFIXES.some(suffix => id.endsWith(suffix))) return null
       if (!isHosted()) return null
       const next = injectIntoSvelteKitInternal(code)
-      if (next === null) return null
-      return { code: next, map: null }
+      return next === null ? null : { code: next, map: null }
     },
   }
 }

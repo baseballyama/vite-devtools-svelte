@@ -1,26 +1,35 @@
 import type {
-  CaptureInfo,
   CaptureInfoMap,
   CompilerWarning,
-  DropReason,
   ComponentInstance,
   FpsSample,
   LoadProfile,
-  ReactiveGraph,
   ReactiveGraphRequest,
   ReactiveGraphResult,
-  ReactiveGraphTotal,
   ReactiveSummary,
   ReactiveSummaryRequest,
-  ReactiveSummaryRow,
   RenderProfile,
   RuntimeError,
   StateChange,
   StateTimelineDelta,
   StateTimelineEntry,
   DatasetVersions,
-  TimelineBaseline,
 } from '../types.js'
+import { arrayOf, asPayload, clampInt, finiteOrNull } from './payload.js'
+import type { Payload } from './payload.js'
+import {
+  emptyGraph,
+  emptySummary,
+  GRAPH_LIMITS,
+  normalizeGraph,
+  normalizeSummary,
+  SUMMARY_DEFAULTS,
+} from './reactive.js'
+import { Ring } from './ring.js'
+import { LEGACY_EPOCH, nextSeq, STATE_TIMELINE_LIMIT, StateTimeline } from './state-timeline.js'
+import type { TimelinePush } from './state-timeline.js'
+
+export { STATE_TIMELINE_BYTES } from './state-timeline.js'
 
 // Defensive caps on runtime-supplied data: even though the runtime already
 // trims its own buffers, an out-of-spec or compromised runtime could hand us
@@ -28,9 +37,9 @@ import type {
 export const LIMITS = {
   liveComponents: 50000,
   renderProfiles: 5000,
-  stateTimeline: 500,
-  reactiveNodes: 5000,
-  reactiveEdges: 20000,
+  stateTimeline: STATE_TIMELINE_LIMIT,
+  reactiveNodes: GRAPH_LIMITS.nodes,
+  reactiveEdges: GRAPH_LIMITS.edges,
   fpsSamples: 1200,
   runtimeErrors: 200,
   loadProfiles: 200,
@@ -43,40 +52,16 @@ export const RUNTIME_REQUEST_TIMEOUT = 1000
 /** A pull answered within this window is reused instead of asking the runtime again. */
 export const PULL_FRESHNESS = 1000
 
-/** Byte budget (JSON length, measured once at ingest) for the server-side state timeline. */
-export const STATE_TIMELINE_BYTES = 4 * 1024 * 1024
-
-export type DatasetKey = keyof DatasetVersions
-
-// Timeline `seq` values come from one process-wide counter, seeded from the
-// clock: a cursor issued by an earlier collector in this process (inline or
-// config-file restart) is always below a newer collector's `timelineResetAt`,
-// and one from a previous process is too unless it issued more than 1 000
-// entries per millisecond of downtime (review D2).
-let lastSeq = Date.now() * 1000
-const nextSeq = () => ++lastSeq
-
-/** Epoch for runtimes that send payloads without an epoch. */
-const LEGACY_EPOCH = '(legacy)'
+/** A consumer (DevTools UI tab, MCP agent) counts as watching until its lease expires. */
+export const LEASE_TTL = 15_000
 
 /** App page loads (tabs / reloads) whose component tree + profiles are kept, LRU. */
 export const MAX_EPOCHS = 4
 
-interface EpochState {
-  /** Insertion order = registration order (parents first). */
-  components: Map<number, ComponentInstance>
-  /**
-   * Ids of mounted instances not stored: beyond the cap, or whose parent
-   * isn't stored (admitting them would show orphans). Ids only, so the total
-   * and removals stay exact.
-   */
-  overflow: Set<number>
-  /** A full components snapshot was applied, so deltas have a base. */
-  hasBase: boolean
-  profiles: RenderProfile[]
-  /** Profiles the runtime holds before its tail cap (sent as `total`); `null` = unknown. */
-  profilesTotal: number | null
-}
+/** Keyed pull results kept for reuse / stale fallback (graph scopes, summaries), LRU. */
+const MAX_CACHED_PULLS = 32
+
+type DatasetKey = keyof DatasetVersions
 
 /** Hot-channel event names shared with `runtime.ts` (stable contract, see docs/devframe-migration.md §6). */
 export const HOT_EVENTS = {
@@ -98,67 +83,23 @@ export const HOT_EVENTS = {
   subscription: 'svelte-devtools:subscription',
 } as const
 
-/** Keyed pull results kept for reuse / stale fallback (graph scopes, summaries), LRU. */
-const MAX_CACHED_PULLS = 32
-
-/** Defaults and bounds for `get-reactive-summary` (§6.7 I). */
-const SUMMARY_DEFAULTS = {
-  topK: 50,
-  maxTopK: 200,
-  windowMs: 10_000,
-  minWindowMs: 1000,
-  maxWindowMs: 60_000,
-} as const
-
-const DROP_REASONS: readonly DropReason[] = [
-  'runtime-count',
-  'runtime-bytes',
-  'server-count',
-  'server-bytes',
-]
-
-/** An integer within [min, max], or `fallback` when absent / not a number. */
-function validBaseline(b: unknown): b is TimelineBaseline {
-  const v = b as Partial<TimelineBaseline> | undefined
-  return (
-    !!v &&
-    typeof v.complete === 'boolean' &&
-    Number.isInteger(v.pendingNodes) &&
-    (v.pendingNodes as number) >= 0
-  )
+interface EpochState {
+  /** Insertion order = registration order (parents first). */
+  components: Map<number, ComponentInstance>
+  /**
+   * Ids of mounted instances not stored: beyond the cap, or whose parent
+   * isn't stored (admitting them would show orphans). Ids only, so the total
+   * and removals stay exact.
+   */
+  overflow: Set<number>
+  /** A full components snapshot was applied, so deltas have a base. */
+  hasBase: boolean
+  profiles: RenderProfile[]
+  /** Profiles the runtime holds before its tail cap (sent as `total`); `null` = unknown. */
+  profilesTotal: number | null
 }
 
-function clampInt(value: unknown, min: number, max: number, fallback: number): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback
-  return Math.min(max, Math.max(min, Math.trunc(value)))
-}
-
-/** A non-negative safe integer, 0 when absent / not a number. */
-function nonNegInt(value: unknown): number {
-  return clampInt(value, 0, Number.MAX_SAFE_INTEGER, 0)
-}
-
-/** A hot-channel payload: an untrusted JSON object from the app's runtime. */
-type Payload = Record<string, unknown>
-
-function asPayload(value: unknown): Payload | undefined {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? (value as Payload)
-    : undefined
-}
-
-function isFpsSample(value: unknown): value is FpsSample {
-  const v = asPayload(value)
-  return typeof v?.timestamp === 'number' && typeof v.fps === 'number'
-}
-
-function isRuntimeError(value: unknown): value is RuntimeError {
-  return typeof asPayload(value)?.message === 'string'
-}
-
-function ringInfo(captured: number, received: number): CaptureInfo {
-  return { captured, total: received, truncated: received > captured, policy: 'tail' }
-}
+type PullResult = ReactiveGraphResult | ReactiveSummary
 
 /** A pull request waiting for the runtime's reply, matched by `requestId` (§6.7 A, M1). */
 interface PendingPull {
@@ -166,12 +107,11 @@ interface PendingPull {
   key: string
   epoch: string | null
   scope: number | null
-  resolve: (value: ReactiveGraphResult | ReactiveSummary) => void
+  resolve: (value: PullResult) => void
+  /** The answer when the runtime does not reply: the last result for `key`, or empty. */
+  fallback: (reason: 'timeout' | 'no-runtime') => PullResult
   timer: ReturnType<typeof setTimeout>
 }
-
-/** A consumer (DevTools UI tab, MCP agent) counts as watching until its lease expires. */
-export const LEASE_TTL = 15_000
 
 export interface HotClient {
   send(event: string, payload: unknown): void
@@ -188,15 +128,8 @@ export interface CollectorHooks {
   onLoadProfile?: (profile: LoadProfile) => void
 }
 
-function tail<T>(arr: unknown, max: number): T[] {
-  const list = Array.isArray(arr) ? (arr as T[]) : []
-  return list.length > max ? list.slice(-max) : list
-}
-
-function head<T>(arr: unknown, max: number): T[] {
-  const list = Array.isArray(arr) ? (arr as T[]) : []
-  return list.length > max ? list.slice(0, max) : list
-}
+const epochOf = (data: Payload | undefined) =>
+  typeof data?.epoch === 'string' ? data.epoch : LEGACY_EPOCH
 
 /**
  * Host-side store for everything the browser runtime and the instrumentation
@@ -210,11 +143,15 @@ export class Collector {
   private epochs = new Map<string, EpochState>()
   private servedEpoch: string | undefined
   private liveCache: ComponentInstance[] | undefined
-  loadProfiles: LoadProfile[] = []
-  reactiveGraph: ReactiveGraph = { nodes: [], edges: [] }
-  compilerWarnings: CompilerWarning[] = []
-  runtimeErrors: RuntimeError[] = []
-  fpsSamples: FpsSample[] = []
+  /** Epochs we asked for a full snapshot (delta without a base); answered once per epoch. */
+  private resyncRequested = new Set<string>()
+
+  private readonly fps = new Ring<FpsSample>(LIMITS.fpsSamples)
+  private readonly errors = new Ring<RuntimeError>(LIMITS.runtimeErrors)
+  private readonly loads = new Ring<LoadProfile>(LIMITS.loadProfiles)
+  private readonly warnings = new Ring<CompilerWarning>(LIMITS.compilerWarnings)
+  private readonly timeline = new StateTimeline(() => this.bump('stateTimeline'))
+
   // Opaque change tokens drawn from the process-wide counter (like timeline
   // seqs): a restarted server's collector never reports a value a client saw
   // before, so "unchanged version → skip refetch" stays correct across
@@ -229,45 +166,19 @@ export class Collector {
     fps: nextSeq(),
   }
 
-  private bump(...keys: DatasetKey[]): void {
-    for (const key of keys) this.versions[key] = nextSeq()
-  }
-
-  private timeline: StateTimelineEntry[] = []
-  /** Parallel to `timeline`: JSON size and source epoch (app page load) of each entry. */
-  private timelineSizes: number[] = []
-  private timelineEpochs: string[] = []
-  private timelineBytes = 0
-  /** Newest seq issued by this collector (= the current cursor). */
-  private timelineSeq = nextSeq()
-  /** Cursor value at the last removal; older cursors must start over. */
-  private timelineResetAt = this.timelineSeq
-  /** Seq of the newest entry trimmed by the caps; cursors below it missed entries. */
-  private timelineTrimmedAt = this.timelineSeq
-  private lastPull = { stateTimeline: 0 }
-  private inflight: { stateTimeline?: Promise<StateChange[]> } = {}
-
   // Keyed pulls (graph scopes, summaries; §6.7 A/I): each request carries a
   // requestId + the served epoch, and only the matching reply resolves it, so
   // one viewer never receives another viewer's scope (review G5, M1).
   private pulls = new Map<string, PendingPull>()
-  private pullCache = new Map<
-    string,
-    { value: ReactiveGraphResult | ReactiveSummary; at: number }
-  >()
-  private pullInflight = new Map<string, Promise<ReactiveGraphResult | ReactiveSummary>>()
+  private pullCache = new Map<string, { value: PullResult; at: number }>()
+  private pullInflight = new Map<string, Promise<PullResult>>()
   private requestSeq = 0
   /** The most recent graph reply, for capture info. */
   private lastGraph: ReactiveGraphResult | undefined
 
-  // Timeline losses per epoch, by reason; monotonic until the epoch is
-  // evicted or the timeline is cleared (§6.7 B/C).
-  private timelineDrops = new Map<string, Record<DropReason, number>>()
-  /** Per epoch: whether the runtime has a first sample of every tracked $state yet. */
-  private timelineBaseline = new Map<string, TimelineBaseline>()
-  private timelineTooLarge = new Map<string, number>()
-  // Items received since the last clear, for the ring datasets' totals.
-  private received = { fps: 0, runtimeErrors: 0, loadProfiles: 0, compilerWarnings: 0 }
+  private lastTimelinePull = 0
+  private timelineInflight: Promise<StateChange[]> | undefined
+  private timelineResolvers: Array<(changes: StateChange[]) => void> = []
 
   private hot: HotChannel | undefined
   private detachHot: (() => void) | undefined
@@ -275,12 +186,14 @@ export class Collector {
   private snapshotWaiters: Array<() => void> = []
   private active = false
   private sweepTimer: ReturnType<typeof setTimeout> | undefined
-  private stateTimelineResolvers: Array<(changes: StateChange[]) => void> = []
 
   private readonly hooks: CollectorHooks
-
   constructor(hooks: CollectorHooks = {}) {
     this.hooks = hooks
+  }
+
+  private bump(...keys: DatasetKey[]): void {
+    for (const key of keys) this.versions[key] = nextSeq()
   }
 
   /**
@@ -303,13 +216,17 @@ export class Collector {
       [
         HOT_EVENTS.fps,
         d => {
-          if (isFpsSample(d)) this.ingestFps(d)
+          const v = asPayload(d)
+          if (typeof v?.timestamp === 'number' && typeof v.fps === 'number') {
+            this.ingestFps(v as unknown as FpsSample)
+          }
         },
       ],
       [
         HOT_EVENTS.runtimeError,
         d => {
-          if (isRuntimeError(d)) this.ingestRuntimeError(d)
+          const v = asPayload(d)
+          if (typeof v?.message === 'string') this.ingestRuntimeError(v as unknown as RuntimeError)
         },
       ],
       [HOT_EVENTS.reactiveGraph, d => this.ingestReactiveGraph(asPayload(d))],
@@ -328,7 +245,7 @@ export class Collector {
     this.detachHot = undefined
     this.hot = undefined
     // Answer pending pulls from cache instead of leaving them to time out.
-    this.flushPulls('no-runtime')
+    for (const id of this.pulls.keys()) this.settle(id, 'no-runtime')
     this.flushStateTimeline()
   }
 
@@ -339,8 +256,28 @@ export class Collector {
     return { active: this.active, componentDeltas: true }
   }
 
-  /** Epochs we asked for a full snapshot (delta without a base); answered once per epoch. */
-  private resyncRequested = new Set<string>()
+  // --- datasets ---
+
+  get fpsSamples(): FpsSample[] {
+    return this.fps.items
+  }
+
+  get runtimeErrors(): RuntimeError[] {
+    return this.errors.items
+  }
+
+  get loadProfiles(): LoadProfile[] {
+    return this.loads.items
+  }
+
+  get compilerWarnings(): CompilerWarning[] {
+    return this.warnings.items
+  }
+
+  /** The server-side timeline (all tracked epochs, oldest first). */
+  get stateTimeline(): StateTimelineEntry[] {
+    return this.timeline.entries
+  }
 
   /** Components of the served epoch, parents first, capped at {@link LIMITS.liveComponents}. */
   get liveComponents(): ComponentInstance[] {
@@ -384,13 +321,13 @@ export class Collector {
     return { epoch: this.servedEpoch ?? [...this.epochs.keys()].at(-1), epochs: this.epochs.size }
   }
 
+  // --- epochs ---
+
   private servedState(): EpochState | undefined {
     if (this.servedEpoch !== undefined) return this.epochs.get(this.servedEpoch)
     // No page load has sent a component snapshot yet: show the most recent
     // pusher (its profiles; its tree is empty either way).
-    let newest: EpochState | undefined
-    for (const state of this.epochs.values()) newest = state
-    return newest
+    return [...this.epochs.values()].at(-1)
   }
 
   /**
@@ -400,25 +337,20 @@ export class Collector {
    * otherwise show an empty tree (review B1).
    */
   private touchEpoch(epoch: string): EpochState {
-    let state = this.epochs.get(epoch)
-    if (state) this.epochs.delete(epoch)
-    else
-      state = {
-        components: new Map(),
-        overflow: new Set(),
-        hasBase: false,
-        profiles: [],
-        profilesTotal: null,
-      }
+    const state = this.epochs.get(epoch) ?? {
+      components: new Map(),
+      overflow: new Set(),
+      hasBase: false,
+      profiles: [],
+      profilesTotal: null,
+    }
+    this.epochs.delete(epoch)
     this.epochs.set(epoch, state) // re-insert: Map order = recency
     while (this.epochs.size > MAX_EPOCHS) {
       const evicted = this.epochs.keys().next().value!
       this.epochs.delete(evicted)
       this.resyncRequested.delete(evicted)
-      this.dropEpoch(evicted)
-      this.timelineDrops.delete(evicted)
-      this.timelineTooLarge.delete(evicted)
-      this.timelineBaseline.delete(evicted)
+      this.timeline.forget(evicted)
       if (this.servedEpoch === evicted) this.serve(this.newestBasedEpoch())
     }
     if (state.hasBase) this.serve(epoch)
@@ -439,16 +371,22 @@ export class Collector {
     this.liveCache = undefined
   }
 
+  // --- consumers ---
+
   /**
    * Mark `id` as watching for `ttl` ms (renewed by heartbeats). The first
    * lease activates the runtime's polling/FPS sampling, the last expiry or
-   * release pauses it.
+   * release pauses it. Returns whether this call activated it.
    */
   lease(id: string, ttl = LEASE_TTL): boolean {
     const wasActive = this.active
     this.leases.set(id, Date.now() + ttl)
     this.updateSubscription()
     return !wasActive && this.active
+  }
+
+  release(id: string): void {
+    if (this.leases.delete(id)) this.updateSubscription()
   }
 
   /**
@@ -468,10 +406,6 @@ export class Collector {
       const timer = setTimeout(done, timeout)
       this.snapshotWaiters.push(done)
     })
-  }
-
-  release(id: string): void {
-    if (this.leases.delete(id)) this.updateSubscription()
   }
 
   private updateSubscription(): void {
@@ -494,6 +428,8 @@ export class Collector {
     }
   }
 
+  // --- ingest ---
+
   /**
    * Full form `{ epoch?, reset?, components }` replaces the epoch's tree;
    * delta form `{ epoch, added, removed }` (ids) patches it (§6.5). A delta
@@ -502,12 +438,10 @@ export class Collector {
    * resync. Entries stay in registration order (parents first); an instance
    * is stored only while its parent is and the cap allows, otherwise only its
    * id is tracked, so the stored part is always a rooted, orphan-free tree.
+   * Entries that are not objects with a numeric `id` are ignored.
    */
-  ingestComponents(
-    data: { components?: unknown; epoch?: unknown; added?: unknown; removed?: unknown } | undefined,
-    client?: HotClient,
-  ): void {
-    const epoch = typeof data?.epoch === 'string' ? data.epoch : LEGACY_EPOCH
+  ingestComponents(data: Payload | undefined, client?: HotClient): void {
+    const epoch = epochOf(data)
     const isDelta =
       !Array.isArray(data?.components) &&
       (Array.isArray(data?.added) || Array.isArray(data?.removed))
@@ -519,48 +453,117 @@ export class Collector {
       return
     }
     const state = this.touchEpoch(epoch)
-    if (!isDelta) {
+    if (isDelta) {
+      for (const id of arrayOf<number>(data?.removed)) {
+        if (!state.components.delete(id)) state.overflow.delete(id)
+      }
+    } else {
       this.resyncRequested.delete(epoch)
       state.hasBase = true
       this.serve(epoch)
       state.components = new Map()
       state.overflow = new Set()
     }
-    if (isDelta && Array.isArray(data?.removed)) {
-      for (const id of data.removed as unknown[]) {
-        if (!state.components.delete(id as number)) state.overflow.delete(id as number)
+    for (const c of arrayOf<ComponentInstance>(isDelta ? data?.added : data?.components)) {
+      if (typeof c?.id !== 'number') continue
+      if (state.components.has(c.id)) {
+        state.components.set(c.id, c)
+        continue
       }
-    }
-    const incoming = isDelta ? data?.added : data?.components
-    if (Array.isArray(incoming)) {
-      for (const c of incoming as ComponentInstance[]) {
-        const id = c?.id
-        if (state.components.has(id)) {
-          state.components.set(id, c)
-          continue
-        }
-        const parentId = c?.parentId
-        const parentStored =
-          parentId === null || parentId === undefined || state.components.has(parentId)
-        if (parentStored && state.components.size < LIMITS.liveComponents) {
-          state.overflow.delete(id)
-          state.components.set(id, c)
-        } else {
-          state.overflow.add(id)
-        }
+      const parentStored =
+        c.parentId === null || c.parentId === undefined || state.components.has(c.parentId)
+      if (parentStored && state.components.size < LIMITS.liveComponents) {
+        state.overflow.delete(c.id)
+        state.components.set(c.id, c)
+      } else {
+        state.overflow.add(c.id)
       }
     }
     this.liveCache = undefined
     this.bump('components')
   }
 
-  ingestProfiles(data?: { profiles?: unknown; epoch?: unknown; total?: unknown }): void {
-    const epoch = typeof data?.epoch === 'string' ? data.epoch : LEGACY_EPOCH
-    const state = this.touchEpoch(epoch)
-    state.profiles = tail(data?.profiles, LIMITS.renderProfiles)
-    state.profilesTotal =
-      typeof data?.total === 'number' && Number.isFinite(data.total) ? data.total : null
+  ingestProfiles(data?: Payload): void {
+    const state = this.touchEpoch(epochOf(data))
+    state.profiles = arrayOf<RenderProfile>(data?.profiles).slice(-LIMITS.renderProfiles)
+    state.profilesTotal = finiteOrNull(data?.total)
     this.bump('renderProfiles')
+  }
+
+  ingestStateTimeline(data: TimelinePush | undefined): void {
+    if (typeof data?.epoch === 'string') this.touchEpoch(data.epoch)
+    this.timeline.ingest(data)
+    this.lastTimelinePull = Date.now()
+    this.flushStateTimeline()
+    // The runtime's activation snapshot ends with a `reset: true` timeline
+    // (after components and profiles), so that completes a snapshot (D4).
+    if (data?.reset === true) {
+      // Copy: each waiter removes itself from the list while we iterate.
+      for (const done of this.snapshotWaiters.slice()) done()
+    }
+  }
+
+  ingestFps(sample: FpsSample): void {
+    this.fps.push(sample)
+    this.bump('fps')
+    this.hooks.onFpsSample?.(sample)
+  }
+
+  ingestRuntimeError(error: RuntimeError): void {
+    this.errors.push(error)
+    this.bump('errors')
+  }
+
+  recordLoadProfile(profile: LoadProfile): void {
+    this.loads.push(profile)
+    this.bump('loadProfiles')
+    this.hooks.onLoadProfile?.(profile)
+  }
+
+  /**
+   * A warning identical to one held is not recorded again: a component is
+   * compiled once per environment (client and SSR), each time warning anew.
+   */
+  recordCompilerWarning(warning: CompilerWarning): void {
+    const held = this.warnings.items.some(
+      w =>
+        w.file === warning.file &&
+        w.line === warning.line &&
+        w.column === warning.column &&
+        w.code === warning.code &&
+        w.message === warning.message,
+    )
+    if (held) return
+    this.warnings.push(warning)
+    this.bump('errors')
+  }
+
+  clearLoadProfiles(): void {
+    this.loads.clear()
+    this.bump('loadProfiles')
+  }
+
+  clearErrors(): void {
+    this.warnings.clear()
+    this.errors.clear()
+    this.bump('errors')
+  }
+
+  clearFps(): void {
+    this.fps.clear()
+    this.bump('fps')
+  }
+
+  clearStateTimeline(): void {
+    this.timeline.clear()
+    this.hot?.send(HOT_EVENTS.clearStateTimeline, {})
+  }
+
+  // --- reads ---
+
+  /** Changes after `since` (a previous `cursor`), or the whole buffer when the cursor is stale. */
+  getStateTimelineDelta(since?: number): StateTimelineDelta {
+    return this.timeline.delta(since)
   }
 
   /**
@@ -570,31 +573,16 @@ export class Collector {
   getCaptureInfo(): CaptureInfoMap {
     const state = this.servedState()
     const epoch = this.servedEpoch
-    const drops: Record<DropReason, number> = {
-      'runtime-count': 0,
-      'runtime-bytes': 0,
-      'server-count': 0,
-      'server-bytes': 0,
-    }
-    for (const counts of this.timelineDrops.values()) {
-      for (const reason of DROP_REASONS) drops[reason] += counts[reason]
-    }
-    const dropped = DROP_REASONS.filter(r => drops[r] > 0).map(reason => ({
-      reason,
-      count: drops[reason],
-    }))
-    let tooLarge = 0
-    for (const n of this.timelineTooLarge.values()) tooLarge += n
+    const withEpoch = epoch !== undefined && { epoch }
     const profiles = state?.profiles.length ?? 0
     const profilesTotal = state?.profilesTotal ?? null
-    const graph = this.lastGraph
     const info: CaptureInfoMap = {
       liveComponents: {
         captured: state?.components.size ?? 0,
         total: this.liveComponentsTotal,
         truncated: (state?.overflow.size ?? 0) > 0,
         policy: 'roots-first',
-        ...(epoch !== undefined && { epoch }),
+        ...withEpoch,
       },
       renderProfiles: {
         captured: profiles,
@@ -602,23 +590,15 @@ export class Collector {
         truncated: profilesTotal !== null && profilesTotal > profiles,
         // The runtime keeps first-render order and sends the tail: the newest-mounted instances (review IA1).
         policy: 'newest-mounted',
-        ...(epoch !== undefined && { epoch }),
+        ...withEpoch,
       },
-      stateTimeline: {
-        captured: this.timeline.length,
-        total: null,
-        truncated: dropped.length > 0,
-        policy: 'sampled-200ms',
-        ...(dropped.length > 0 && { dropped }),
-        ...(tooLarge > 0 && { valueTooLarge: tooLarge }),
-        ...(epoch !== undefined &&
-          this.timelineBaseline.has(epoch) && { baseline: this.timelineBaseline.get(epoch) }),
-      },
-      fpsSamples: ringInfo(this.fpsSamples.length, this.received.fps),
-      runtimeErrors: ringInfo(this.runtimeErrors.length, this.received.runtimeErrors),
-      loadProfiles: ringInfo(this.loadProfiles.length, this.received.loadProfiles),
-      compilerWarnings: ringInfo(this.compilerWarnings.length, this.received.compilerWarnings),
+      stateTimeline: this.timeline.captureInfo(epoch),
+      fpsSamples: this.fps.info,
+      runtimeErrors: this.errors.info,
+      loadProfiles: this.loads.info,
+      compilerWarnings: this.warnings.info,
     }
+    const graph = this.lastGraph
     if (graph) {
       const common = {
         truncated: graph.truncated,
@@ -639,170 +619,7 @@ export class Collector {
     return info
   }
 
-  /** The server-side timeline (all tracked epochs, oldest first). */
-  get stateTimeline(): StateTimelineEntry[] {
-    return this.timeline
-  }
-
-  /**
-   * Two payload shapes (docs/devframe-migration.md §6.4):
-   * - delta: `{ epoch, changes, reset? }` — `changes` are new since the
-   *   previous push from that page load (`epoch`); `reset` replaces that
-   *   epoch's entries. Entries are kept per epoch, so several app tabs (or a
-   *   reload) interleave instead of wiping each other.
-   * - legacy full snapshot: `{ changes }` — we append only the entries after
-   *   the newest one we already hold, so clients still get deltas.
-   */
-  ingestStateTimeline(
-    data:
-      | {
-          changes?: unknown
-          epoch?: unknown
-          reset?: unknown
-          dropped?: unknown
-          valueTooLarge?: unknown
-          baseline?: unknown
-        }
-      | undefined,
-  ): void {
-    const incoming = tail<StateChange>(data?.changes, LIMITS.stateTimeline)
-    if (typeof data?.epoch === 'string') {
-      this.touchEpoch(data.epoch)
-      this.countRuntimeLosses(data.epoch, data.dropped, data.valueTooLarge)
-      if (data.reset === true) this.dropEpoch(data.epoch)
-      this.appendTimeline(incoming, data.epoch)
-      if (validBaseline(data.baseline))
-        this.timelineBaseline.set(data.epoch, {
-          complete: data.baseline.complete,
-          pendingNodes: data.baseline.pendingNodes,
-        })
-    } else {
-      let last: StateTimelineEntry | undefined
-      for (let i = this.timeline.length - 1; i >= 0 && !last; i--) {
-        if (this.timelineEpochs[i] === LEGACY_EPOCH) last = this.timeline[i]
-      }
-      let start = -1
-      if (last) {
-        for (let i = incoming.length - 1; i >= 0; i--) {
-          const entry = incoming[i]!
-          if (entry.timestamp === last.timestamp && entry.id === last.id) {
-            start = i + 1
-            break
-          }
-        }
-      }
-      if (start === -1) {
-        this.dropEpoch(LEGACY_EPOCH)
-        start = 0
-      }
-      this.appendTimeline(incoming.slice(start), LEGACY_EPOCH)
-    }
-    this.lastPull.stateTimeline = Date.now()
-    this.flushStateTimeline()
-    // The runtime's activation snapshot ends with a `reset: true` timeline
-    // (after components and profiles), so that completes a snapshot (D4).
-    if (data?.reset === true) this.resolveSnapshotWaiters()
-  }
-
-  /**
-   * Add the runtime's own losses (unsent entries it evicted, §6.7 C) and
-   * too-large values to the epoch's counters. Only runtime reasons are
-   * accepted from the runtime; server reasons are counted here.
-   */
-  private countRuntimeLosses(epoch: string, dropped: unknown, valueTooLarge: unknown): void {
-    if (Array.isArray(dropped)) {
-      for (const d of dropped as Array<{ reason?: unknown; count?: unknown }>) {
-        if (d?.reason !== 'runtime-count' && d?.reason !== 'runtime-bytes') continue
-        const count = clampInt(d.count, 0, Number.MAX_SAFE_INTEGER, 0)
-        if (count > 0) this.addDrop(epoch, d.reason, count)
-      }
-    }
-    const tooLarge = clampInt(valueTooLarge, 0, Number.MAX_SAFE_INTEGER, 0)
-    if (tooLarge > 0) {
-      this.timelineTooLarge.set(epoch, (this.timelineTooLarge.get(epoch) ?? 0) + tooLarge)
-    }
-  }
-
-  private addDrop(epoch: string, reason: DropReason, count: number): void {
-    let counts = this.timelineDrops.get(epoch)
-    if (!counts) {
-      counts = { 'runtime-count': 0, 'runtime-bytes': 0, 'server-count': 0, 'server-bytes': 0 }
-      this.timelineDrops.set(epoch, counts)
-    }
-    counts[reason] += count
-  }
-
-  /** Changes after `since` (a previous `cursor`), or the whole buffer when the cursor is stale. */
-  getStateTimelineDelta(since?: number): StateTimelineDelta {
-    const cursor = this.timelineSeq
-    if (
-      since === undefined ||
-      since < this.timelineResetAt ||
-      since < this.timelineTrimmedAt ||
-      since > cursor
-    ) {
-      return { cursor, reset: true, changes: this.timeline }
-    }
-    let i = this.timeline.length
-    while (i > 0 && this.timeline[i - 1]!.seq > since) i--
-    return { cursor, reset: false, changes: this.timeline.slice(i) }
-  }
-
-  /** Invalidate every cursor issued so far (entries were removed, not just appended). */
-  private markTimelineReset(): void {
-    this.timelineResetAt = this.timelineSeq = nextSeq()
-    this.bump('stateTimeline')
-  }
-
-  private dropEpoch(epoch: string): void {
-    if (!this.timelineEpochs.includes(epoch)) return
-    const keep = this.timelineEpochs.map(e => e !== epoch)
-    this.timeline = this.timeline.filter((_, i) => keep[i])
-    this.timelineSizes = this.timelineSizes.filter((_, i) => keep[i])
-    this.timelineEpochs = this.timelineEpochs.filter((_, i) => keep[i])
-    this.timelineBytes = this.timelineSizes.reduce((a, b) => a + b, 0)
-    this.markTimelineReset()
-  }
-
-  private appendTimeline(changes: StateChange[], epoch: string): void {
-    if (changes.length === 0) return
-    for (const change of changes) {
-      let size = 0
-      try {
-        size = JSON.stringify(change).length
-      } catch {
-        continue // not serializable: never reaches a client anyway
-      }
-      this.timeline.push({ ...change, seq: (this.timelineSeq = nextSeq()) })
-      this.timelineSizes.push(size)
-      this.timelineEpochs.push(epoch)
-      this.timelineBytes += size
-    }
-    let drop = Math.max(0, this.timeline.length - LIMITS.stateTimeline)
-    let bytes = this.timelineBytes
-    for (let i = 0; i < drop; i++) {
-      bytes -= this.timelineSizes[i]!
-      this.addDrop(this.timelineEpochs[i]!, 'server-count', 1)
-    }
-    // Keep at least the newest entry even if it alone exceeds the budget.
-    while (bytes > STATE_TIMELINE_BYTES && drop < this.timeline.length - 1) {
-      this.addDrop(this.timelineEpochs[drop]!, 'server-bytes', 1)
-      bytes -= this.timelineSizes[drop++]!
-    }
-    if (drop > 0) {
-      this.timelineTrimmedAt = this.timeline[drop - 1]!.seq
-      this.timeline = this.timeline.slice(drop)
-      this.timelineSizes = this.timelineSizes.slice(drop)
-      this.timelineEpochs = this.timelineEpochs.slice(drop)
-    }
-    this.timelineBytes = bytes
-    this.bump('stateTimeline')
-  }
-
-  private resolveSnapshotWaiters(): void {
-    // Copy: each waiter removes itself from the list while we iterate.
-    for (const done of this.snapshotWaiters.slice()) done()
-  }
+  // --- pulls (the runtime answers on request) ---
 
   /**
    * A graph reply. With a `requestId` (§6.7 A) it resolves only that request,
@@ -818,244 +635,36 @@ export class Collector {
       for (const [id, pull] of this.pulls) {
         if (pull.kind !== 'graph') continue
         answered = true
-        this.settle(id, this.normalizeGraph(data, pull.scope, pull.epoch))
+        this.settle(id, normalizeGraph(data, pull.scope, pull.epoch))
       }
-      if (!answered) this.storeGraph(this.normalizeGraph(data, null, this.servedEpoch ?? null))
+      if (!answered) this.lastGraph = normalizeGraph(data, null, this.servedEpoch ?? null)
     } else {
-      const pull = this.pulls.get(requestId)
-      if (pull?.kind !== 'graph') return
-      if (pull.epoch !== null && typeof data?.epoch === 'string' && data.epoch !== pull.epoch)
-        return
-      this.settle(requestId, this.normalizeGraph(data, pull.scope, pull.epoch))
+      const pull = this.matchingPull(requestId, 'graph', data)
+      if (!pull) return
+      this.settle(requestId, normalizeGraph(data, pull.scope, pull.epoch))
     }
     this.bump('reactiveGraph')
-  }
-
-  /**
-   * Shape a runtime reply into a {@link ReactiveGraphResult}: apply the
-   * collector caps (nodes, then only edges between kept nodes, then the edge
-   * cap) and report what was left out. Totals come from the runtime; an older
-   * runtime's are the counts it sent (`nodesKind: 'sent'`), or unknown when
-   * the server had to scope its whole-app graph.
-   */
-  private normalizeGraph(
-    data: Payload | undefined,
-    scope: number | null,
-    epoch: string | null,
-  ): ReactiveGraphResult {
-    const legacy = typeof data?.requestId !== 'string'
-    let nodes = head<ReactiveGraph['nodes'][number]>(data?.nodes, Infinity)
-    const rawEdges = head<ReactiveGraph['edges'][number]>(data?.edges, Infinity)
-    let policy: ReactiveGraphResult['policy'] =
-      data?.policy === 'scoped' || data?.policy === 'global-head'
-        ? data.policy
-        : scope === null
-          ? 'global-head'
-          : 'scoped'
-    let total: ReactiveGraphTotal | null = null
-    const reportedTotal = asPayload(data?.total)
-    if (!legacy && typeof reportedTotal?.nodes === 'number') {
-      total = {
-        nodes: reportedTotal.nodes,
-        nodesKind: 'registered',
-        edges: typeof reportedTotal.edges === 'number' ? reportedTotal.edges : null,
-      }
-    }
-    if (legacy && scope !== null) {
-      // Older runtime: whole app. Keep the component's nodes and their direct neighbours.
-      const own = new Set(nodes.filter(n => n?.componentId === scope).map(n => n.id))
-      const keep = new Set(own)
-      for (const e of rawEdges) {
-        if (own.has(e?.from)) keep.add(e.to)
-        if (own.has(e?.to)) keep.add(e.from)
-      }
-      nodes = nodes.filter(n => keep.has(n?.id))
-      policy = 'server-filter'
-    } else if (legacy) {
-      total = { nodes: nodes.length, nodesKind: 'sent', edges: rawEdges.length }
-    }
-    let truncated = data?.truncated === true
-    if (nodes.length > LIMITS.reactiveNodes) {
-      nodes = nodes.slice(0, LIMITS.reactiveNodes)
-      truncated = true
-    }
-    const ids = new Set(nodes.map(n => n?.id))
-    let edgesOmitted = clampInt(data?.edgesOmitted, 0, Number.MAX_SAFE_INTEGER, 0)
-    const edges: ReactiveGraph['edges'] = []
-    for (const e of rawEdges) {
-      if (!ids.has(e?.from) || !ids.has(e?.to)) {
-        if (policy !== 'server-filter') edgesOmitted++
-      } else if (edges.length < LIMITS.reactiveEdges) {
-        edges.push(e)
-      } else {
-        edgesOmitted++
-        truncated = true
-      }
-    }
-    return {
-      nodes,
-      edges,
-      scope,
-      epoch: typeof data?.epoch === 'string' ? data.epoch : epoch,
-      total,
-      truncated,
-      edgesOmitted,
-      // When the app built this graph; null from a runtime that doesn't say.
-      computedAt:
-        typeof data?.computedAt === 'number' && Number.isFinite(data.computedAt)
-          ? data.computedAt
-          : null,
-      policy,
-    }
-  }
-
-  private storeGraph(result: ReactiveGraphResult): void {
-    this.lastGraph = result
-    if (result.scope === null) this.reactiveGraph = { nodes: result.nodes, edges: result.edges }
   }
 
   /** A summary reply (§6.7 I): resolves only the matching request. */
   ingestReactiveSummary(data: Payload | undefined): void {
     const requestId = typeof data?.requestId === 'string' ? data.requestId : undefined
-    const pull = requestId === undefined ? undefined : this.pulls.get(requestId)
-    if (pull?.kind !== 'summary') return
-    if (pull.epoch !== null && typeof data?.epoch === 'string' && data.epoch !== pull.epoch) return
-    this.settle(requestId!, this.normalizeSummary(data, pull.epoch))
+    const pull = requestId === undefined ? undefined : this.matchingPull(requestId, 'summary', data)
+    if (pull) this.settle(requestId!, normalizeSummary(data, pull.epoch))
   }
 
-  private normalizeSummary(data: Payload | undefined, epoch: string | null): ReactiveSummary {
-    const rows = head<unknown>(data?.rows, SUMMARY_DEFAULTS.maxTopK).map(raw => {
-      const r = asPayload(raw)
-      const nodes = asPayload(r?.nodes)
-      const row: ReactiveSummaryRow = {
-        componentId: nonNegInt(r?.componentId),
-        file: typeof r?.file === 'string' ? r.file : '',
-        nodes: {
-          state: nonNegInt(nodes?.state),
-          derived: nonNegInt(nodes?.derived),
-          effect: nonNegInt(nodes?.effect),
-        },
-        changes: nonNegInt(r?.changes),
-        renders: nonNegInt(r?.renders),
-        renderMs: typeof r?.renderMs === 'number' && r.renderMs >= 0 ? r.renderMs : 0,
-      }
-      if (r?.kind === 'module') row.kind = 'module'
-      return row
-    })
-    const w = asPayload(data?.window)
-    const components = asPayload(data?.components)
-    const other = asPayload(data?.other)
-    const capabilities = asPayload(data?.capabilities)
-    return {
-      epoch: typeof data?.epoch === 'string' ? data.epoch : epoch,
-      window: {
-        ms: nonNegInt(w?.ms),
-        since: nonNegInt(w?.since),
-        until: nonNegInt(w?.until),
-        sampledActiveMs: nonNegInt(w?.sampledActiveMs),
-      },
-      policy: 'sampled-200ms',
-      coverage: 'component-init',
-      components: {
-        total: typeof components?.total === 'number' ? components.total : null,
-        withActivity: nonNegInt(components?.withActivity),
-      },
-      rows,
-      other:
-        typeof other?.components === 'number' && typeof other.nodes === 'number'
-          ? { components: other.components, nodes: other.nodes }
-          : null,
-      truncated: data?.truncated === true,
-      // Only what the runtime says it implements; never assumed.
-      capabilities: {
-        valueInspection: capabilities?.valueInspection === true,
-        signalHistory: capabilities?.signalHistory === true,
-        writeCause: capabilities?.writeCause === true,
-      },
-      ...(validBaseline(data?.baseline) && { baseline: { ...data.baseline } }),
+  /** The pending pull `requestId` names, if the reply is of its kind and from its epoch. */
+  private matchingPull(
+    requestId: string,
+    kind: PendingPull['kind'],
+    data: Payload | undefined,
+  ): PendingPull | undefined {
+    const pull = this.pulls.get(requestId)
+    if (pull?.kind !== kind) return undefined
+    if (pull.epoch !== null && typeof data?.epoch === 'string' && data.epoch !== pull.epoch) {
+      return undefined
     }
-  }
-
-  ingestFps(sample: FpsSample): void {
-    this.received.fps++
-    this.fpsSamples.push(sample)
-    if (this.fpsSamples.length > LIMITS.fpsSamples) {
-      this.fpsSamples = this.fpsSamples.slice(-LIMITS.fpsSamples)
-    }
-    this.bump('fps')
-    this.hooks.onFpsSample?.(sample)
-  }
-
-  ingestRuntimeError(error: RuntimeError): void {
-    this.received.runtimeErrors++
-    this.runtimeErrors.push(error)
-    if (this.runtimeErrors.length > LIMITS.runtimeErrors) {
-      this.runtimeErrors = this.runtimeErrors.slice(-LIMITS.runtimeErrors)
-    }
-    this.bump('errors')
-  }
-
-  recordLoadProfile(profile: LoadProfile): void {
-    this.received.loadProfiles++
-    this.loadProfiles.push(profile)
-    if (this.loadProfiles.length > LIMITS.loadProfiles) {
-      this.loadProfiles = this.loadProfiles.slice(-LIMITS.loadProfiles)
-    }
-    this.bump('loadProfiles')
-    this.hooks.onLoadProfile?.(profile)
-  }
-
-  /**
-   * A warning identical to one held is not recorded again: a component is
-   * compiled once per environment (client and SSR), each time warning anew.
-   */
-  recordCompilerWarning(warning: CompilerWarning): void {
-    const held = this.compilerWarnings.some(
-      w =>
-        w.file === warning.file &&
-        w.line === warning.line &&
-        w.column === warning.column &&
-        w.code === warning.code &&
-        w.message === warning.message,
-    )
-    if (held) return
-    this.received.compilerWarnings++
-    this.compilerWarnings.push(warning)
-    if (this.compilerWarnings.length > LIMITS.compilerWarnings) {
-      this.compilerWarnings = this.compilerWarnings.slice(-LIMITS.compilerWarnings)
-    }
-    this.bump('errors')
-  }
-
-  clearLoadProfiles(): void {
-    this.loadProfiles = []
-    this.received.loadProfiles = 0
-    this.bump('loadProfiles')
-  }
-
-  clearErrors(): void {
-    this.compilerWarnings = []
-    this.runtimeErrors = []
-    this.received.compilerWarnings = 0
-    this.received.runtimeErrors = 0
-    this.bump('errors')
-  }
-
-  clearFps(): void {
-    this.fpsSamples = []
-    this.received.fps = 0
-    this.bump('fps')
-  }
-
-  clearStateTimeline(): void {
-    this.timeline = []
-    this.timelineSizes = []
-    this.timelineEpochs = []
-    this.timelineBytes = 0
-    this.timelineDrops.clear()
-    this.timelineTooLarge.clear()
-    this.markTimelineReset()
-    this.hot?.send(HOT_EVENTS.clearStateTimeline, {})
+    return pull
   }
 
   /**
@@ -1064,104 +673,51 @@ export class Collector {
    * the last result for the same scope, marked `stale`.
    */
   requestReactiveGraph(req: ReactiveGraphRequest = {}): Promise<ReactiveGraphResult> {
-    const scope =
-      typeof req.componentId === 'number' &&
-      Number.isInteger(req.componentId) &&
-      req.componentId >= 0
-        ? req.componentId
-        : null
+    const id = req.componentId
+    const scope = typeof id === 'number' && Number.isInteger(id) && id >= 0 ? id : null
     const maxNodes = clampInt(req.maxNodes, 1, LIMITS.reactiveNodes, LIMITS.reactiveNodes)
     const maxEdges = clampInt(req.maxEdges, 1, LIMITS.reactiveEdges, LIMITS.reactiveEdges)
     const epoch = this.servedEpoch ?? null
+    // No page load has sent its tree: a component id means nothing yet, and
+    // asking every tab would let any of them answer for it (review MUST-1).
     if (scope !== null && epoch === null) {
-      // No page load has sent its tree: a component id means nothing yet, and
-      // asking every tab would let any of them answer for it (review MUST-1).
-      return Promise.resolve({
-        nodes: [],
-        edges: [],
-        scope,
-        epoch,
-        total: null,
-        truncated: false,
-        edgesOmitted: 0,
-        computedAt: null,
-        policy: 'scoped',
-        stale: true,
-        staleReason: 'no-runtime',
-      })
+      return Promise.resolve(emptyGraph(scope, epoch, 'no-runtime'))
     }
+    // The id belongs to an earlier page load; another instance may reuse it now.
     if (scope !== null && typeof req.epoch === 'string' && req.epoch !== epoch) {
-      // The id belongs to an earlier page load; another instance may reuse it now.
-      return Promise.resolve({
-        nodes: [],
-        edges: [],
-        scope,
-        epoch,
-        total: null,
-        truncated: false,
-        edgesOmitted: 0,
-        computedAt: null,
-        policy: 'scoped',
-        stale: true,
-        staleReason: 'epoch-changed',
-      })
+      return Promise.resolve(emptyGraph(scope, epoch, 'epoch-changed'))
     }
-    const key = `graph|${epoch ?? ''}|${scope ?? '*'}|${maxNodes}|${maxEdges}`
-    return this.keyedPull<ReactiveGraphResult>(
-      'graph',
-      key,
+    return this.keyedPull<ReactiveGraphResult>({
+      kind: 'graph',
+      key: `graph|${epoch ?? ''}|${scope ?? '*'}|${maxNodes}|${maxEdges}`,
       epoch,
       scope,
-      HOT_EVENTS.requestReactiveGraph,
-      { ...(scope !== null && { componentId: scope }), maxNodes, maxEdges },
-      reason => ({
-        nodes: [],
-        edges: [],
-        scope,
-        epoch,
-        total: null,
-        truncated: false,
-        edgesOmitted: 0,
-        computedAt: null,
-        policy: scope === null ? 'global-head' : 'scoped',
-        stale: true,
-        staleReason: reason,
-      }),
-    )
+      event: HOT_EVENTS.requestReactiveGraph,
+      payload: { ...(scope !== null && { componentId: scope }), maxNodes, maxEdges },
+      empty: reason => emptyGraph(scope, epoch, reason),
+    })
   }
 
   /** Ask the runtime for the overview aggregate (§6.7 I); never captures the graph. */
   requestReactiveSummary(req: ReactiveSummaryRequest = {}): Promise<ReactiveSummary> {
-    const topK = clampInt(req.topK, 1, SUMMARY_DEFAULTS.maxTopK, SUMMARY_DEFAULTS.topK)
+    const { topK: defaultTopK, maxTopK, windowMs: defaultWindow } = SUMMARY_DEFAULTS
+    const topK = clampInt(req.topK, 1, maxTopK, defaultTopK)
     const windowMs = clampInt(
       req.windowMs,
       SUMMARY_DEFAULTS.minWindowMs,
       SUMMARY_DEFAULTS.maxWindowMs,
-      SUMMARY_DEFAULTS.windowMs,
+      defaultWindow,
     )
     const epoch = this.servedEpoch ?? null
-    const key = `summary|${epoch ?? ''}|${topK}|${windowMs}`
-    return this.keyedPull<ReactiveSummary>(
-      'summary',
-      key,
+    return this.keyedPull<ReactiveSummary>({
+      kind: 'summary',
+      key: `summary|${epoch ?? ''}|${topK}|${windowMs}`,
       epoch,
-      null,
-      HOT_EVENTS.requestReactiveSummary,
-      { topK, windowMs },
-      reason => ({
-        epoch,
-        window: { ms: windowMs, since: 0, until: 0, sampledActiveMs: 0 },
-        policy: 'sampled-200ms',
-        coverage: 'component-init',
-        components: { total: null, withActivity: 0 },
-        rows: [],
-        other: null,
-        truncated: false,
-        capabilities: { valueInspection: false, signalHistory: false, writeCause: false },
-        stale: true,
-        staleReason: reason,
-      }),
-    )
+      scope: null,
+      event: HOT_EVENTS.requestReactiveSummary,
+      payload: { topK, windowMs },
+      empty: reason => emptySummary(epoch, windowMs, reason),
+    })
   }
 
   /**
@@ -1170,40 +726,38 @@ export class Collector {
    * the matching reply resolves it. On timeout (or without a runtime) the
    * last result for the same key is returned with `stale: true`.
    */
-  private keyedPull<T extends ReactiveGraphResult | ReactiveSummary>(
-    kind: PendingPull['kind'],
-    key: string,
-    epoch: string | null,
-    scope: number | null,
-    event: string,
-    payload: Record<string, unknown>,
-    empty: (reason: 'timeout' | 'no-runtime') => T,
-  ): Promise<T> {
+  private keyedPull<T extends PullResult>(req: {
+    kind: PendingPull['kind']
+    key: string
+    epoch: string | null
+    scope: number | null
+    event: string
+    payload: Record<string, unknown>
+    empty: (reason: 'timeout' | 'no-runtime') => T
+  }): Promise<T> {
+    const { key, epoch } = req
     const fallback = (reason: 'timeout' | 'no-runtime'): T => {
       const last = this.pullCache.get(key)
-      return last ? ({ ...last.value, stale: true, staleReason: reason } as T) : empty(reason)
+      return last ? ({ ...last.value, stale: true, staleReason: reason } as T) : req.empty(reason)
     }
+    const hot = this.hot
+    if (!hot) return Promise.resolve(fallback('no-runtime'))
     const cached = this.pullCache.get(key)
-    if (!this.hot) return Promise.resolve(fallback('no-runtime'))
     if (cached && Date.now() - cached.at < PULL_FRESHNESS) return Promise.resolve(cached.value as T)
     const existing = this.pullInflight.get(key) as Promise<T> | undefined
     if (existing) return existing
-    const hot = this.hot
     const requestId = `r${++this.requestSeq}`
     const promise = new Promise<T>(resolve => {
-      const timer = setTimeout(() => {
-        this.pulls.delete(requestId)
-        resolve(fallback('timeout'))
-      }, RUNTIME_REQUEST_TIMEOUT)
       this.pulls.set(requestId, {
-        kind,
+        kind: req.kind,
         key,
         epoch,
-        scope,
+        scope: req.scope,
         resolve: resolve as PendingPull['resolve'],
-        timer,
+        fallback,
+        timer: setTimeout(() => this.settle(requestId, 'timeout'), RUNTIME_REQUEST_TIMEOUT),
       })
-      hot.send(event, { requestId, ...(epoch !== null && { epoch }), ...payload })
+      hot.send(req.event, { requestId, ...(epoch !== null && { epoch }), ...req.payload })
     }).finally(() => {
       if (this.pullInflight.get(key) === promise) this.pullInflight.delete(key)
     })
@@ -1211,113 +765,64 @@ export class Collector {
     return promise
   }
 
-  /** Resolve a pending pull with a fresh result and cache it under its key. */
-  private settle(requestId: string, value: ReactiveGraphResult | ReactiveSummary): void {
+  /**
+   * Resolve a pending pull: with a fresh result (cached under its key), or
+   * with its fallback when the runtime did not answer.
+   */
+  private settle(requestId: string, outcome: PullResult | 'timeout' | 'no-runtime'): void {
     const pull = this.pulls.get(requestId)
     if (!pull) return
     this.pulls.delete(requestId)
     clearTimeout(pull.timer)
+    if (typeof outcome === 'string') {
+      pull.resolve(pull.fallback(outcome))
+      return
+    }
     this.pullCache.delete(pull.key)
-    this.pullCache.set(pull.key, { value, at: Date.now() })
+    this.pullCache.set(pull.key, { value: outcome, at: Date.now() })
     while (this.pullCache.size > MAX_CACHED_PULLS) {
       this.pullCache.delete(this.pullCache.keys().next().value!)
     }
-    if (pull.kind === 'graph') this.storeGraph(value as ReactiveGraphResult)
-    pull.resolve(value)
-  }
-
-  /** Answer every pending keyed pull from its cache (or empty), marked stale. */
-  private flushPulls(reason: 'timeout' | 'no-runtime'): void {
-    for (const [id, pull] of this.pulls) {
-      this.pulls.delete(id)
-      clearTimeout(pull.timer)
-      const cached = this.pullCache.get(pull.key)
-      if (cached) {
-        pull.resolve({ ...cached.value, stale: true, staleReason: reason })
-      } else if (pull.kind === 'graph') {
-        pull.resolve({
-          nodes: [],
-          edges: [],
-          scope: pull.scope,
-          epoch: pull.epoch,
-          total: null,
-          truncated: false,
-          edgesOmitted: 0,
-          computedAt: null,
-          policy: pull.scope === null ? 'global-head' : 'scoped',
-          stale: true,
-          staleReason: reason,
-        })
-      } else {
-        pull.resolve({
-          epoch: pull.epoch,
-          window: { ms: 0, since: 0, until: 0, sampledActiveMs: 0 },
-          policy: 'sampled-200ms',
-          coverage: 'component-init',
-          components: { total: null, withActivity: 0 },
-          rows: [],
-          other: null,
-          truncated: false,
-          capabilities: { valueInspection: false, signalHistory: false, writeCause: false },
-          stale: true,
-          staleReason: reason,
-        })
-      }
-    }
-  }
-
-  /** Ask the browser runtime for a fresh state timeline; falls back to the last one. */
-  requestStateTimeline(): Promise<StateChange[]> {
-    return this.pull(
-      'stateTimeline',
-      HOT_EVENTS.requestStateTimeline,
-      this.stateTimelineResolvers,
-      () => this.stateTimeline,
-    )
+    if (pull.kind === 'graph') this.lastGraph = outcome as ReactiveGraphResult
+    pull.resolve(outcome)
   }
 
   /**
-   * Concurrent callers share one in-flight pull, and a result younger than
-   * {@link PULL_FRESHNESS} is reused, so several polling clients never make
-   * the user's app rebuild the same data more than once a second.
+   * Ask the browser runtime for a fresh state timeline; falls back to the
+   * last one. Concurrent callers share one in-flight pull, and a result
+   * younger than {@link PULL_FRESHNESS} is reused, so several polling clients
+   * never make the user's app rebuild the same data more than once a second.
    */
-  private pull<T>(
-    key: 'stateTimeline',
-    event: string,
-    resolvers: Array<(value: T) => void>,
-    cached: () => T,
-  ): Promise<T> {
-    if (!this.hot || Date.now() - this.lastPull[key] < PULL_FRESHNESS) {
-      return Promise.resolve(cached())
-    }
-    const existing = this.inflight[key] as Promise<T> | undefined
-    if (existing) return existing
+  requestStateTimeline(): Promise<StateChange[]> {
     const hot = this.hot
-    const promise = new Promise<T>(resolve => {
-      const resolver = (value: T) => {
+    if (!hot || Date.now() - this.lastTimelinePull < PULL_FRESHNESS) {
+      return Promise.resolve(this.stateTimeline)
+    }
+    if (this.timelineInflight) return this.timelineInflight
+    const promise = new Promise<StateChange[]>(resolve => {
+      const resolver = (value: StateChange[]) => {
         clearTimeout(timeout)
         resolve(value)
       }
       const timeout = setTimeout(() => {
         // Remove this resolver to prevent a leak, then answer from cache.
-        const idx = resolvers.indexOf(resolver)
-        if (idx !== -1) resolvers.splice(idx, 1)
-        resolve(cached())
+        this.timelineResolvers = this.timelineResolvers.filter(r => r !== resolver)
+        resolve(this.stateTimeline)
       }, RUNTIME_REQUEST_TIMEOUT)
-      resolvers.push(resolver)
-      hot.send(event, {})
+      this.timelineResolvers.push(resolver)
+      hot.send(HOT_EVENTS.requestStateTimeline, {})
     }).finally(() => {
-      if (this.inflight[key] === promise) this.inflight[key] = undefined
+      if (this.timelineInflight === promise) this.timelineInflight = undefined
     })
-    this.inflight[key] = promise as never
+    this.timelineInflight = promise
     return promise
   }
 
   // Snapshot then reset before resolving so concurrent requests that push
   // during the resolve loop are not silently dropped.
   private flushStateTimeline(): void {
-    const pending = this.stateTimelineResolvers
-    this.stateTimelineResolvers = []
+    const pending = this.timelineResolvers
+    this.timelineResolvers = []
     for (const resolve of pending) resolve(this.stateTimeline)
   }
 }

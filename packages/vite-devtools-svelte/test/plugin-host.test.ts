@@ -206,13 +206,13 @@ describe('MCP server wiring', () => {
     callHook(s.plugins.find(p => p.name.endsWith(':load-profile'))!.configureServer, {})
     ;(globalThis as any).__svelte_devtools_record_load('/', PAGE, 'server', 1, 2)
 
-    expect(deps.getLiveComponents()).toEqual([component])
-    expect(deps.getLiveSnapshot!()).toMatchObject({ epoch: 'e1', total: 1 })
+    expect(deps.getLiveSnapshot().components).toEqual([component])
+    expect(deps.getLiveSnapshot()).toMatchObject({ epoch: 'e1', total: 1 })
     expect(deps.getRenderProfiles()).toEqual([{ id: 1, renders: 2 }])
     expect(deps.getFpsSamples()).toEqual([{ timestamp: 1, fps: 60 }])
     expect(deps.getLoadProfiles()).toMatchObject([{ route: '/', file: PAGE }])
-    expect(deps.getStateTimelineDelta!().changes.map(c => c.id)).toEqual(['n'])
-    expect(deps.getCaptureInfo!().liveComponents?.total).toBe(1)
+    expect(deps.getStateTimelineDelta().changes.map(c => c.id)).toEqual(['n'])
+    expect(deps.getCaptureInfo().liveComponents?.total).toBe(1)
     expect(deps.getProject().routesDir).toBe(path.join(FIXTURES, 'src/routes'))
     expect(deps.getRoutes().length).toBeGreaterThan(0)
     expect(deps.getComponentRelations().length).toBeGreaterThan(0)
@@ -256,7 +256,7 @@ describe('MCP server wiring', () => {
     })
     expect((await graph).nodes).toEqual([{ id: '1:a' }])
 
-    const scoped = deps.getReactiveScope!({ componentId: 1 })
+    const scoped = deps.getReactiveScope({ componentId: 1 })
     expect(lastRequest('request-reactive-graph')).toMatchObject({ componentId: 1 })
     s.emit('reactive-graph', {
       requestId: lastRequest('request-reactive-graph').requestId,
@@ -266,7 +266,7 @@ describe('MCP server wiring', () => {
     })
     expect((await scoped).stale).toBeFalsy()
 
-    const summary = deps.getReactiveSummary!({ topK: 5 })
+    const summary = deps.getReactiveSummary({ topK: 5 })
     s.emit('reactive-summary', {
       requestId: lastRequest('request-reactive-summary').requestId,
       epoch: 'e1',

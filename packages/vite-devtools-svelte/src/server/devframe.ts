@@ -71,59 +71,33 @@ export interface SvelteDevtoolsHost {
 
 const filePath = z.string().min(1).max(4096)
 
+/** A JSON-serializable RPC function without arguments. */
+function plain<N extends string, R>(type: 'query' | 'action', name: N, handler: () => R) {
+  return defineRpcFunction({ name, type, jsonSerializable: true, handler })
+}
+const query = <N extends string, R>(name: N, handler: () => R) => plain('query', name, handler)
+const action = <N extends string, R>(name: N, handler: () => R) => plain('action', name, handler)
+
 export function createRpcFunctions(host: SvelteDevtoolsHost) {
   const { collector } = host
   const project = () => analyzeProject(host.root())
   const routes = () => analyzeRoutes(project().routesDir)
 
   return [
-    defineRpcFunction({
-      name: 'get-project',
-      type: 'query',
-      jsonSerializable: true,
-      handler: () => project(),
-    }),
-    defineRpcFunction({
-      name: 'get-routes',
-      type: 'query',
-      jsonSerializable: true,
-      handler: () => routes(),
-    }),
-    defineRpcFunction({
-      name: 'get-assets',
-      type: 'query',
-      jsonSerializable: true,
-      handler: () => analyzeAssets(project().staticDir, host.publicBase()),
-    }),
-    defineRpcFunction({
-      name: 'get-component-relations',
-      type: 'query',
-      jsonSerializable: true,
-      handler: () => analyzeComponents(host.root()),
-    }),
-    defineRpcFunction({
-      name: 'get-svelte-files',
-      type: 'query',
-      jsonSerializable: true,
-      handler: () => analyzeComponents(host.root()).map(c => ({ file: c.file, name: c.name })),
-    }),
-    defineRpcFunction({
-      name: 'get-live-components',
-      type: 'query',
-      jsonSerializable: true,
-      handler: () => collector.liveComponents,
-    }),
-    defineRpcFunction({
-      name: 'get-live-components-meta',
-      type: 'query',
-      jsonSerializable: true,
-      handler: (): LiveComponentsMeta => ({
-        total: collector.liveComponentsTotal,
-        kept: collector.liveComponents.length,
-        truncated: collector.liveComponentsTotal > collector.liveComponents.length,
-        ...collector.epochInfo,
-      }),
-    }),
+    query('get-project', project),
+    query('get-routes', routes),
+    query('get-assets', () => analyzeAssets(project().staticDir, host.publicBase())),
+    query('get-component-relations', () => analyzeComponents(host.root())),
+    query('get-svelte-files', () =>
+      analyzeComponents(host.root()).map(c => ({ file: c.file, name: c.name })),
+    ),
+    query('get-live-components', () => collector.liveComponents),
+    query('get-live-components-meta', (): LiveComponentsMeta => ({
+      total: collector.liveComponentsTotal,
+      kept: collector.liveComponents.length,
+      truncated: collector.liveComponentsTotal > collector.liveComponents.length,
+      ...collector.epochInfo,
+    })),
     defineRpcFunction({
       name: 'set-active',
       type: 'action',
@@ -163,12 +137,7 @@ export function createRpcFunctions(host: SvelteDevtoolsHost) {
         host.openInEditor(line > 0 ? `${resolved}:${line}` : resolved)
       },
     }),
-    defineRpcFunction({
-      name: 'get-render-profiles',
-      type: 'query',
-      jsonSerializable: true,
-      handler: () => collector.renderProfiles,
-    }),
+    query('get-render-profiles', () => collector.renderProfiles),
     defineRpcFunction({
       name: 'get-reactive-graph',
       type: 'query',
@@ -204,30 +173,10 @@ export function createRpcFunctions(host: SvelteDevtoolsHost) {
       returns: z.custom<ReactiveSummary>(),
       handler: req => collector.requestReactiveSummary(req ?? {}),
     }),
-    defineRpcFunction({
-      name: 'get-capture-info',
-      type: 'query',
-      jsonSerializable: true,
-      handler: (): CaptureInfoMap => collector.getCaptureInfo(),
-    }),
-    defineRpcFunction({
-      name: 'get-load-profiles',
-      type: 'query',
-      jsonSerializable: true,
-      handler: () => collector.loadProfiles,
-    }),
-    defineRpcFunction({
-      name: 'clear-load-profiles',
-      type: 'action',
-      jsonSerializable: true,
-      handler: () => collector.clearLoadProfiles(),
-    }),
-    defineRpcFunction({
-      name: 'get-state-timeline',
-      type: 'query',
-      jsonSerializable: true,
-      handler: () => collector.requestStateTimeline(),
-    }),
+    query('get-capture-info', (): CaptureInfoMap => collector.getCaptureInfo()),
+    query('get-load-profiles', () => collector.loadProfiles),
+    action('clear-load-profiles', () => collector.clearLoadProfiles()),
+    query('get-state-timeline', () => collector.requestStateTimeline()),
     defineRpcFunction({
       name: 'get-state-timeline-delta',
       type: 'query',
@@ -237,24 +186,9 @@ export function createRpcFunctions(host: SvelteDevtoolsHost) {
       // Served from the buffer the runtime pushes into; never pulls the app.
       handler: ({ since }) => collector.getStateTimelineDelta(since),
     }),
-    defineRpcFunction({
-      name: 'get-versions',
-      type: 'query',
-      jsonSerializable: true,
-      handler: () => ({ ...collector.versions }),
-    }),
-    defineRpcFunction({
-      name: 'clear-state-timeline',
-      type: 'action',
-      jsonSerializable: true,
-      handler: () => collector.clearStateTimeline(),
-    }),
-    defineRpcFunction({
-      name: 'get-api-endpoints',
-      type: 'query',
-      jsonSerializable: true,
-      handler: () => analyzeApiEndpoints(routes()),
-    }),
+    query('get-versions', () => ({ ...collector.versions })),
+    action('clear-state-timeline', () => collector.clearStateTimeline()),
+    query('get-api-endpoints', () => analyzeApiEndpoints(routes())),
     defineRpcFunction({
       name: 'send-api-request',
       type: 'action',
@@ -270,62 +204,18 @@ export function createRpcFunctions(host: SvelteDevtoolsHost) {
       returns: z.custom<ApiResponse>(),
       handler: input => sendApiRequest(input, { allowedOrigins: host.serverOrigins() }),
     }),
-    defineRpcFunction({
-      name: 'get-compiler-warnings',
-      type: 'query',
-      jsonSerializable: true,
-      handler: () => collector.compilerWarnings,
-    }),
-    defineRpcFunction({
-      name: 'get-runtime-errors',
-      type: 'query',
-      jsonSerializable: true,
-      handler: () => collector.runtimeErrors,
-    }),
-    defineRpcFunction({
-      name: 'clear-errors',
-      type: 'action',
-      jsonSerializable: true,
-      handler: () => collector.clearErrors(),
-    }),
+    query('get-compiler-warnings', () => collector.compilerWarnings),
+    query('get-runtime-errors', () => collector.runtimeErrors),
+    action('clear-errors', () => collector.clearErrors()),
     defineRpcFunction({
       name: 'inspect-file',
       type: 'query',
       jsonSerializable: true,
       args: [z.object({ file: filePath })],
       returns: z.custom<InspectResult>(),
-      handler: async ({ file }): Promise<InspectResult> => {
-        const empty: InspectResult = { source: '', compiled: '', file }
-        let resolved: string
-        let source: string
-        try {
-          resolved = resolveWithinRoot(host.root(), file)
-          source = fs.readFileSync(resolved, 'utf-8')
-        } catch {
-          return empty
-        }
-        if (!host.transformRequest) return { ...empty, source }
-        try {
-          const result = await host.transformRequest(resolved)
-          const map = parseSourceMap(result?.map)
-          return {
-            source,
-            compiled: result?.code ?? '',
-            file,
-            mappings: map?.mappings,
-            sources: map?.sources,
-          }
-        } catch {
-          return { source, compiled: '// Transform failed', file }
-        }
-      },
+      handler: ({ file }) => inspectFile(host, file),
     }),
-    defineRpcFunction({
-      name: 'get-module-graph',
-      type: 'query',
-      jsonSerializable: true,
-      handler: () => buildModuleGraph(host.root(), host.modules()),
-    }),
+    query('get-module-graph', () => buildModuleGraph(host.root(), host.modules())),
     defineRpcFunction({
       name: 'get-og-preview',
       type: 'action',
@@ -334,25 +224,36 @@ export function createRpcFunctions(host: SvelteDevtoolsHost) {
       returns: z.custom<OGPreview>(),
       handler: ({ url }) => getOGPreview(url, { allowedOrigins: host.serverOrigins() }),
     }),
-    defineRpcFunction({
-      name: 'get-build-analysis',
-      type: 'query',
-      jsonSerializable: true,
-      handler: () => analyzeBuild(host.root()),
-    }),
-    defineRpcFunction({
-      name: 'get-fps',
-      type: 'query',
-      jsonSerializable: true,
-      handler: () => collector.fpsSamples,
-    }),
-    defineRpcFunction({
-      name: 'clear-fps',
-      type: 'action',
-      jsonSerializable: true,
-      handler: () => collector.clearFps(),
-    }),
+    query('get-build-analysis', () => analyzeBuild(host.root())),
+    query('get-fps', () => collector.fpsSamples),
+    action('clear-fps', () => collector.clearFps()),
   ] as const
+}
+
+/** A project file's source and its compiled output (with source map) from the dev server. */
+async function inspectFile(host: SvelteDevtoolsHost, file: string): Promise<InspectResult> {
+  let resolved: string
+  let source: string
+  try {
+    resolved = resolveWithinRoot(host.root(), file)
+    source = fs.readFileSync(resolved, 'utf-8')
+  } catch {
+    return { source: '', compiled: '', file }
+  }
+  if (!host.transformRequest) return { source, compiled: '', file }
+  try {
+    const result = await host.transformRequest(resolved)
+    const map = parseSourceMap(result?.map)
+    return {
+      source,
+      compiled: result?.code ?? '',
+      file,
+      mappings: map?.mappings,
+      sources: map?.sources,
+    }
+  } catch {
+    return { source, compiled: '// Transform failed', file }
+  }
 }
 
 /**

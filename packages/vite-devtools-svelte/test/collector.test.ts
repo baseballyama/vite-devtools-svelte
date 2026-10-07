@@ -11,6 +11,7 @@ import {
   STATE_TIMELINE_BYTES,
 } from '../src/server/collector.js'
 import type { HotChannel, HotClient } from '../src/server/collector.js'
+import { normalizeSummary } from '../src/server/reactive.js'
 
 function fakeHot() {
   const listeners = new Map<string, (payload: unknown, client: HotClient) => void>()
@@ -71,8 +72,8 @@ describe('Collector ingestion caps', () => {
         to: String((i + 1) % 4000),
       })),
     })
-    expect(c.reactiveGraph.nodes).toHaveLength(LIMITS.reactiveNodes)
-    expect(c.reactiveGraph.edges).toHaveLength(LIMITS.reactiveEdges)
+    expect(c.getCaptureInfo().reactiveNodes?.captured).toBe(LIMITS.reactiveNodes)
+    expect(c.getCaptureInfo().reactiveEdges?.captured).toBe(LIMITS.reactiveEdges)
     expect(c.getCaptureInfo().reactiveNodes).toMatchObject({
       captured: LIMITS.reactiveNodes,
       total: 6000,
@@ -99,6 +100,15 @@ describe('Collector ingestion caps', () => {
     expect(c.compilerWarnings).toHaveLength(LIMITS.compilerWarnings)
   })
 
+  it('ignores component entries that are not objects with a numeric id', () => {
+    const c = new Collector()
+    const ok = { id: 1, parentId: null }
+    c.ingestComponents({ epoch: 'e', components: [null, 'x', { name: 'no id' }, ok] })
+    c.ingestComponents({ epoch: 'e', added: [null, { id: '2' }] })
+    expect(c.liveComponents).toEqual([ok])
+    expect(c.liveComponentsTotal).toBe(1)
+  })
+
   it('treats non-array payloads as empty without throwing', () => {
     const c = new Collector()
     c.ingestComponents({ components: 'nope' })
@@ -108,7 +118,7 @@ describe('Collector ingestion caps', () => {
     expect(c.liveComponents).toEqual([])
     expect(c.renderProfiles).toEqual([])
     expect(c.stateTimeline).toEqual([])
-    expect(c.reactiveGraph).toEqual({ nodes: [], edges: [] })
+    expect(c.getCaptureInfo().reactiveNodes?.captured).toBe(0)
   })
 
   it('bumps per-dataset versions on ingest and clear', () => {
@@ -381,7 +391,7 @@ describe('Collector pulls', () => {
     const p = c.requestStateTimeline()
     vi.advanceTimersByTime(RUNTIME_REQUEST_TIMEOUT + 1)
     await expect(p).resolves.toEqual([])
-    expect((c as any).stateTimelineResolvers).toHaveLength(0)
+    expect((c as any).timelineResolvers).toHaveLength(0)
   })
 
   it('shares one in-flight pull between concurrent callers and reuses fresh results', async () => {
@@ -980,15 +990,14 @@ describe('Collector state timeline baseline disclosure (review B1/B2)', () => {
   })
 
   it('passes a valid summary baseline through, drops a malformed one', () => {
-    const c = new Collector() as any
     expect(
-      c.normalizeSummary({ baseline: { complete: false, pendingNodes: 3 } }, 'e').baseline,
+      normalizeSummary({ baseline: { complete: false, pendingNodes: 3 } }, 'e').baseline,
     ).toEqual({
       complete: false,
       pendingNodes: 3,
     })
     expect(
-      c.normalizeSummary({ baseline: { complete: 1, pendingNodes: 3 } }, 'e'),
+      normalizeSummary({ baseline: { complete: 1, pendingNodes: 3 } }, 'e'),
     ).not.toHaveProperty('baseline')
   })
 })
