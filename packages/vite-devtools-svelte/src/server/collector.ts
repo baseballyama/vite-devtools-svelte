@@ -1005,7 +1005,20 @@ export class Collector {
     this.hooks.onLoadProfile?.(profile)
   }
 
+  /**
+   * A warning identical to one held is not recorded again: a component is
+   * compiled once per environment (client and SSR), each time warning anew.
+   */
   recordCompilerWarning(warning: CompilerWarning): void {
+    const held = this.compilerWarnings.some(
+      w =>
+        w.file === warning.file &&
+        w.line === warning.line &&
+        w.column === warning.column &&
+        w.code === warning.code &&
+        w.message === warning.message,
+    )
+    if (held) return
     this.received.compilerWarnings++
     this.compilerWarnings.push(warning)
     if (this.compilerWarnings.length > LIMITS.compilerWarnings) {

@@ -203,7 +203,7 @@ describe('MCP server wiring', () => {
         { id: 'n', name: 'n', componentFile: PAGE, oldValue: 0, newValue: 1, timestamp: 2 },
       ],
     })
-    callHook(s.plugins.find(p => p.name.endsWith(':load-profile-server'))!.configureServer, {})
+    callHook(s.plugins.find(p => p.name.endsWith(':load-profile'))!.configureServer, {})
     ;(globalThis as any).__svelte_devtools_record_load('/', PAGE, 'server', 1, 2)
 
     expect(deps.getLiveComponents()).toEqual([component])
@@ -217,6 +217,26 @@ describe('MCP server wiring', () => {
     expect(deps.getRoutes().length).toBeGreaterThan(0)
     expect(deps.getComponentRelations().length).toBeGreaterThan(0)
     expect(deps.sessions).toBeInstanceOf(SessionStore)
+  })
+
+  it('sessions measure the live collector', async () => {
+    const s = setup()
+    s.configure()
+    const { sessions } = await mcpDeps(s)
+    callHook(s.plugins.find(p => p.name.endsWith(':load-profile'))!.configureServer, {})
+    const profile = { componentId: 1, file: PAGE, name: 'Page', renderCount: 0, totalRenderTime: 0 }
+    s.emit('profiles', { epoch: 'e1', profiles: [profile] })
+    sessions.start('run', false)
+    s.emit('fps', { timestamp: 1, fps: 20 })
+    ;(globalThis as any).__svelte_devtools_record_load('/', PAGE, 'server', 5, 2)
+    s.emit('profiles', {
+      epoch: 'e1',
+      profiles: [{ ...profile, renderCount: 2, totalRenderTime: 4 }],
+    })
+    const delta = sessions.deltaOf(sessions.end('discard'))
+    expect(delta.fps).toMatchObject({ samples: 1, min: 20, drops: 1 })
+    expect(delta.loadProfiles).toMatchObject({ count: 1, avgDuration: 5 })
+    expect(delta.components).toMatchObject([{ componentId: 1, renderCountDelta: 2 }])
   })
 
   it('graph and summary pulls go to the runtime over the hot channel', async () => {

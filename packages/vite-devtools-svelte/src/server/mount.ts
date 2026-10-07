@@ -12,7 +12,9 @@ import { DEVFRAME_BASE } from './devframe.js'
 const WILDCARD = new Set(['0.0.0.0', '::'])
 const LOOPBACK = new Set(['127.0.0.1', '::1', 'localhost'])
 
-function formatHost(address: string): string {
+/** `address` as a URL host: `localhost` for loopback / wildcard bindings, IPv6 bracketed. */
+export function urlHost(address: string): string {
+  if (LOOPBACK.has(address) || WILDCARD.has(address)) return 'localhost'
   return address.includes(':') ? `[${address}]` : address
 }
 
@@ -29,7 +31,7 @@ function networkOrigins(address: AddressInfo, proto: string): string[] {
         .filter(i => i && !i.internal)
         .map(i => i!.address)
     : [address.address]
-  return hosts.map(h => `${proto}://${formatHost(h)}:${address.port}`)
+  return hosts.map(h => `${proto}://${urlHost(h)}:${address.port}`)
 }
 
 /**
