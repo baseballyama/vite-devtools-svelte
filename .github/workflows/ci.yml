@@ -116,8 +116,9 @@ jobs:
       - name: Build plugin
         run: pnpm -C packages/vite-devtools-svelte build
 
-      - name: Run tests (plugin + client)
-        run: pnpm test
+      # Coverage thresholds are enforced per package (vitest.config.ts).
+      - name: Run tests with coverage (plugin + client)
+        run: pnpm test:coverage
 
       - name: Build client UI
         run: pnpm build:client

@@ -54,8 +54,9 @@ describe('derived consumers', () => {
       loadProfiles: [],
       fpsSamples: [],
     })
-    expect(issues.filter(i => (i.kind as string) === 'derived-orphan')).toEqual([])
-    expect(c).toBeTruthy()
+    // a handful of signals read by markup and one effect: nothing to report
+    expect(issues).toEqual([])
+    expect(problems.orphanDeriveds.map(d => d.id)).toEqual([`${c.id}:neverRead`])
     r.destroy()
   })
 })

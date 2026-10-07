@@ -1,5 +1,8 @@
+import fs from 'node:fs'
 import vm from 'node:vm'
 
+// @ts-expect-error -- Svelte ships no types for its internal entry
+import * as original from 'svelte/internal/client'
 import { describe, it, expect } from 'vitest'
 
 import {
@@ -9,295 +12,96 @@ import {
   WRAPPER_MODULE_ID,
   wrapperCode,
 } from '../src/runtime/index.js'
+// @ts-expect-error -- browser source without declarations (served as text)
+import * as wrapper from '../src/runtime/wrapper.js'
 
-// =====================================================================
-// Module Constants
-// =====================================================================
+// Behaviour of the runtime and the wrapper is covered by test/perf (the
+// runtime in a fake browser) and test/reactivity (real Svelte components
+// through the wrapper). This file pins the module contract the plugin serves.
 
-describe('runtime module constants', () => {
-  it('should export the correct virtual module ID', () => {
-    expect(RUNTIME_MODULE_ID).toBe('virtual:svelte-devtools-runtime')
-  })
-
-  it('should export the resolved module ID with null byte prefix', () => {
-    expect(RESOLVED_RUNTIME_ID).toBe('\0virtual:svelte-devtools-runtime')
-  })
-
-  it('should export the wrapper module ID with null byte prefix', () => {
-    expect(WRAPPER_MODULE_ID).toBe('\0svelte-devtools:wrapped-client')
-  })
-
-  it('should export non-empty runtime code', () => {
-    expect(runtimeCode.length).toBeGreaterThan(0)
-  })
-
-  it('should export non-empty wrapper code', () => {
-    expect(wrapperCode.length).toBeGreaterThan(0)
+describe('virtual module ids', () => {
+  it.each([
+    ['RUNTIME_MODULE_ID', RUNTIME_MODULE_ID, 'virtual:svelte-devtools-runtime'],
+    // `\0`: Rollup/Vite convention, so no other plugin tries to load them
+    ['RESOLVED_RUNTIME_ID', RESOLVED_RUNTIME_ID, '\0virtual:svelte-devtools-runtime'],
+    ['WRAPPER_MODULE_ID', WRAPPER_MODULE_ID, '\0svelte-devtools:wrapped-client'],
+  ])('%s', (_, actual, expected) => {
+    expect(actual).toBe(expected)
   })
 })
 
-// =====================================================================
-// Wrapper Code Structure
-// =====================================================================
-
-describe('wrapper code structure', () => {
-  it('should import from svelte/internal/client', () => {
-    expect(wrapperCode).toContain("from 'svelte/internal/client'")
+describe('served sources', () => {
+  it.each([
+    ['runtime', runtimeCode, 'client.js'],
+    ['wrapper', wrapperCode, 'wrapper.js'],
+  ])('the %s text is its source file, verbatim', (_, code, file) => {
+    const source = fs.readFileSync(new URL(`../src/runtime/${file}`, import.meta.url), 'utf8')
+    expect(code).toBe(source)
   })
 
-  it('should re-export everything from svelte/internal/client', () => {
-    expect(wrapperCode).toContain("export * from 'svelte/internal/client'")
-  })
-
-  it('should export wrapped push function', () => {
-    expect(wrapperCode).toContain('export function push(')
-  })
-
-  it('should export wrapped pop function', () => {
-    expect(wrapperCode).toContain('export function pop(')
-  })
-
-  it('should export wrapped state function', () => {
-    expect(wrapperCode).toContain('export function state(')
-  })
-
-  it('should export wrapped derived function', () => {
-    expect(wrapperCode).toContain('export function derived(')
-  })
-
-  it('should export wrapped proxy function', () => {
-    expect(wrapperCode).toContain('export function proxy(')
-  })
-
-  it('should export wrapped tag function', () => {
-    expect(wrapperCode).toContain('export function tag(')
-  })
-
-  it('should export wrapped tag_proxy function', () => {
-    expect(wrapperCode).toContain('export function tag_proxy(')
-  })
-
-  it('should export wrapped user_effect function', () => {
-    expect(wrapperCode).toContain('export function user_effect(')
-  })
-
-  it('should export wrapped user_pre_effect function', () => {
-    expect(wrapperCode).toContain('export function user_pre_effect(')
-  })
-
-  it('should delegate to __svelte_original for all wrapped functions', () => {
-    expect(wrapperCode).toContain('__svelte_original.push.apply')
-    expect(wrapperCode).toContain('__svelte_original.pop.apply')
-    expect(wrapperCode).toContain('__svelte_original.state.apply')
-    expect(wrapperCode).toContain('__svelte_original.derived.apply')
-    expect(wrapperCode).toContain('__svelte_original.proxy.apply')
-    expect(wrapperCode).toContain('__svelte_original.tag.apply')
-    expect(wrapperCode).toContain('__svelte_original.tag_proxy.apply')
-    expect(wrapperCode).toContain('__trackUserEffect(__svelte_original.user_effect,')
-    expect(wrapperCode).toContain('__trackUserEffect(__svelte_original.user_pre_effect,')
-  })
-
-  it('should use __dt() helper for devtools access', () => {
-    expect(wrapperCode).toContain('function __dt()')
-    expect(wrapperCode).toContain('window.__SVELTE_DEVTOOLS__')
-  })
-
-  it('should maintain a component ID stack', () => {
-    expect(wrapperCode).toContain('__idStack')
-    expect(wrapperCode).toContain('__currentId()')
-  })
-
-  it('should track pending signal type for tag()', () => {
-    expect(wrapperCode).toContain('__pendingSignal')
-    // The wrapper sets __pendingSignal.type in state/derived/proxy functions
-    expect(wrapperCode).toContain("__pendingSignal.type = 'state'")
-    expect(wrapperCode).toContain("__pendingSignal.type = 'derived'")
-    expect(wrapperCode).toContain("__pendingSignal.type = 'proxy'")
-  })
-
-  it('push should read _pendingFile and call register()', () => {
-    expect(wrapperCode).toContain('dt._pendingFile')
-    expect(wrapperCode).toContain('dt.register(file)')
-  })
-
-  it('push should call startInit()', () => {
-    expect(wrapperCode).toContain('dt.startInit(id)')
-  })
-
-  it('push should register cleanup via __svelte_original.user_effect', () => {
-    // Uses the REAL user_effect (not wrapped) to avoid recursion
-    expect(wrapperCode).toContain('__svelte_original.user_effect')
-    expect(wrapperCode).toContain('dt.unmount(id)')
-  })
-
-  it('pop should call endInit() and registered()', () => {
-    expect(wrapperCode).toContain('dt.endInit(id)')
-    expect(wrapperCode).toContain('dt.registered(id)')
-  })
-
-  it('tag should distinguish state from derived using __pendingSignal', () => {
-    expect(wrapperCode).toContain('__pendingSignal.ref === signal')
-    expect(wrapperCode).toContain('dt.trackState(')
-    expect(wrapperCode).toContain('dt.trackDerived(')
-  })
-
-  it('tag_proxy should call trackProxy()', () => {
-    expect(wrapperCode).toContain('dt.trackProxy(')
-  })
-
-  it('user_effect registers the node and binds the effect on its first run', () => {
-    expect(wrapperCode).toContain('dt.trackUserEffect(')
-    expect(wrapperCode).toContain('dt.bindEffect(')
-  })
-
-  it('should be parseable JavaScript', () => {
-    expect(() => {
-      const testCode = wrapperCode
-        .replaceAll(/import .* from .*/g, '// import removed')
-        .replaceAll(/export \* from .*/g, '// re-export removed')
-        .replaceAll(/export \{[^}]*\}/g, '// alias export removed')
-        .replaceAll('export function', 'function')
-      // Compile only (never run): a syntax error throws here.
-      return new vm.Script(testCode)
-    }).not.toThrow()
+  it('the runtime is a self-contained script (no imports) that parses', () => {
+    // `import.meta` is only valid in modules; the runtime uses nothing else.
+    const script = runtimeCode.replaceAll('import.meta.hot', 'undefined')
+    expect(script).not.toMatch(/^\s*(import|export)\b/m)
+    expect(() => new vm.Script(script)).not.toThrow()
   })
 })
 
-// =====================================================================
-// Wrapper Code: Render Profiling & Block Attribution
-// =====================================================================
+// The wrapper replaces `svelte/internal/client` for app code: every export the
+// compiled components may use must still be there, and anything it does not
+// override must be Svelte's own binding.
+describe('svelte/internal/client wrapper export surface', () => {
+  const originalNames = Object.keys(original)
+  const wrapperNames = Object.keys(wrapper)
+  const overridden = wrapperNames.filter(
+    name =>
+      (wrapper as Record<string, unknown>)[name] !== (original as Record<string, unknown>)[name],
+  )
 
-describe('wrapper render profiling', () => {
-  it('should wrap template_effect and deferred_template_effect', () => {
-    expect(wrapperCode).toContain('export function template_effect(')
-    expect(wrapperCode).toContain('export function deferred_template_effect(')
-    expect(wrapperCode).toContain('__svelte_original.template_effect.apply')
-    expect(wrapperCode).toContain('__svelte_original.deferred_template_effect.apply')
+  it('re-exports every export of svelte/internal/client', () => {
+    expect(originalNames.filter(name => !wrapperNames.includes(name))).toEqual([])
+    expect(originalNames.length).toBeGreaterThan(100)
   })
 
-  it('should capture the owning component id at effect creation', () => {
-    expect(wrapperCode).toContain('function __wrapTemplateEffect(')
+  it('adds no export Svelte does not have (an override of a removed API)', () => {
+    expect(wrapperNames.filter(name => !originalNames.includes(name))).toEqual([])
   })
 
-  it('should skip the initial (mount-time) run', () => {
-    expect(wrapperCode).toContain('initialRun')
-  })
-
-  it('should pool durations per microtask and record once per flush', () => {
-    expect(wrapperCode).toContain('__pendingRenderDurations')
-    expect(wrapperCode).toContain('__flushRenderDurations')
-    expect(wrapperCode).toContain('queueMicrotask')
-    expect(wrapperCode).toContain('dt.recordRender(')
-    expect(wrapperCode).toContain('dt.recordRenderTime(')
-  })
-
-  it('should wrap block helpers for owner attribution', () => {
-    expect(wrapperCode).toContain('function __wrapBlock(')
-    expect(wrapperCode).toContain('export function each(')
-    expect(wrapperCode).toContain('export function key(')
-    expect(wrapperCode).toContain('export function component(')
-    expect(wrapperCode).toContain('export function boundary(')
-  })
-
-  it('should export reserved-word blocks (if/await) via aliases', () => {
-    expect(wrapperCode).toContain('export { __if_block as if, __await_block as await }')
-    expect(wrapperCode).toContain('__svelte_original.if.apply')
-    expect(wrapperCode).toContain('__svelte_original.await.apply')
-  })
-})
-
-// =====================================================================
-// Runtime Code Structure
-// =====================================================================
-
-describe('runtime code structure', () => {
-  it('should initialize __SVELTE_DEVTOOLS__ on window', () => {
-    expect(runtimeCode).toContain('window.__SVELTE_DEVTOOLS__')
-  })
-
-  it('should only initialize once', () => {
-    expect(runtimeCode).toContain('!window.__SVELTE_DEVTOOLS__')
-  })
-
-  it('should have _pendingFile property', () => {
-    expect(runtimeCode).toContain('_pendingFile: null')
-  })
-
-  it('should number effects per component', () => {
-    expect(runtimeCode).toContain('_effectSeq: new Map()')
-  })
-
-  it('should have register() method', () => {
-    expect(runtimeCode).toContain('register(file)')
-  })
-
-  it('should have trackState/trackDerived/trackProxy/trackEffect methods', () => {
-    expect(runtimeCode).toContain('trackState(signal, name, componentId, owner)')
-    expect(runtimeCode).toContain('trackDerived(signal, name, componentId, owner)')
-    expect(runtimeCode).toContain('trackProxy(proxy, name, componentId, owner)')
-    expect(runtimeCode).toContain('trackEffect(effect, name, componentId)')
-    expect(runtimeCode).toContain('trackUserEffect(kind, componentId, owner)')
-  })
-
-  it('trackProxy should NOT use probeSignals (simplified)', () => {
-    expect(runtimeCode).not.toContain('probeSignals')
-    expect(runtimeCode).not.toContain('_probeSignals')
-  })
-
-  it('should NOT have __registerEffect (removed, handled by wrapper)', () => {
-    expect(runtimeCode).not.toContain('__registerEffect')
-  })
-
-  it('should use WeakRef for signal tracking', () => {
-    expect(runtimeCode).toContain('new WeakRef(')
-  })
-
-  it('should poll state values for timeline', () => {
-    expect(runtimeCode).toContain('setInterval')
-    expect(runtimeCode).toContain('_pollStateValues')
-  })
-
-  it('should limit state timeline to 500 entries', () => {
-    // ring: at most 500 entries (plus a byte budget), oldest removed first
-    expect(runtimeCode).toContain('all.length - cut > 500')
-  })
-
-  it('should purge all per-component maps on unmount via _cleanupComponent', () => {
-    expect(runtimeCode).toContain('_cleanupComponent(id)')
-    expect(runtimeCode).toContain('this._profiles.delete(id)')
-    expect(runtimeCode).toContain('this._initStartTimes.delete(id)')
-  })
-
-  it('should purge nodeId-keyed maps in _cleanupReactiveNodes', () => {
-    expect(runtimeCode).toContain('this._reactiveProxies.delete(nodeId)')
-    expect(runtimeCode).toContain('this._stateSnapshots.delete(nodeId)')
-    expect(runtimeCode).toContain('this._stateSnapshotStrs.delete(nodeId)')
-  })
-
-  it('should refresh the profile view after unmount', () => {
-    const unmountBody = runtimeCode.slice(
-      runtimeCode.indexOf('unmount(id)'),
-      runtimeCode.indexOf('_cleanupComponent(id) {'),
+  it('overrides exactly the instrumented functions, with functions', () => {
+    expect(overridden.toSorted()).toEqual(
+      [
+        'await',
+        'boundary',
+        'component',
+        'deferred_template_effect',
+        'derived',
+        'each',
+        'if',
+        'key',
+        'pop',
+        'proxy',
+        'push',
+        'state',
+        'tag',
+        'tag_proxy',
+        'template_effect',
+        'user_effect',
+        'user_pre_effect',
+      ].toSorted(),
     )
-    expect(unmountBody).toContain('this._scheduleProfileUpdate()')
+    const kinds = (mod: object) =>
+      overridden.map(name => [name, typeof (mod as Record<string, unknown>)[name]])
+    const functions = overridden.map(name => [name, 'function'])
+    expect(kinds(wrapper)).toEqual(functions)
+    expect(kinds(original)).toEqual(functions)
   })
 
-  it('should capture runtime errors', () => {
-    expect(runtimeCode).toContain("window.addEventListener('error'")
-    expect(runtimeCode).toContain("window.addEventListener('unhandledrejection'")
-  })
-
-  it('should listen for HMR events from server', () => {
-    expect(runtimeCode).toContain("import.meta.hot.on('svelte-devtools:request-reactive-graph'")
-    expect(runtimeCode).toContain("import.meta.hot.on('svelte-devtools:request-state-timeline'")
-    expect(runtimeCode).toContain("import.meta.hot.on('svelte-devtools:clear-state-timeline'")
-  })
-
-  it('should be parseable JavaScript', () => {
-    expect(() => {
-      const testCode = runtimeCode.replaceAll('import.meta.hot', 'null')
-      // Compile only (never run): a syntax error throws here.
-      return new vm.Script(testCode)
-    }).not.toThrow()
+  it('without a devtools runtime (no window), overrides behave like Svelte', () => {
+    const s = wrapper.state(41)
+    expect(s.v).toBe(41)
+    expect(wrapper.tag(s, 'count')).toBe(s)
+    const p = wrapper.proxy({ a: [1, 2] })
+    expect(p).toEqual({ a: [1, 2] })
+    expect(wrapper.tag_proxy(p, 'items')).toBe(p)
   })
 })

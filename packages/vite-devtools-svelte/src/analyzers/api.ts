@@ -1,30 +1,61 @@
 import fs from 'node:fs'
 
+import { parseSync } from 'vite'
+
 import { assertOutboundUrl } from '../server/security.js'
 import type { OutboundUrlOptions } from '../server/security.js'
 import type { ApiEndpoint, ApiResponse, RouteInfo } from '../types.js'
+import { fetchWithTimeout } from './http.js'
 
-const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
+/** The request handlers a SvelteKit `+server` file may export, in display order. */
+const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as const
 
-/** List `+server` endpoints and the HTTP methods they export. */
+/**
+ * Names a `+server` module exports. Parsed, not substring-matched: the old
+ * `content.includes('export const GET')` also matched `export const GETTER`
+ * and commented-out code, and missed `export { handler as GET }`. Null when
+ * the module cannot be read or parsed.
+ */
+export function exportedNames(code: string, filename: string): Set<string> | null {
+  // The language (js / ts) follows the file extension.
+  const { program, errors } = parseSync(filename, code)
+  if (errors.length > 0) return null
+  const names = new Set<string>()
+  for (const node of program.body) {
+    if (node.type !== 'ExportNamedDeclaration') continue
+    const decl = node.declaration
+    if (decl?.type === 'FunctionDeclaration' && decl.id) names.add(decl.id.name)
+    else if (decl?.type === 'VariableDeclaration') {
+      for (const d of decl.declarations) if (d.id.type === 'Identifier') names.add(d.id.name)
+    }
+    for (const spec of node.specifiers) {
+      const exported = spec.exported
+      names.add(exported.type === 'Literal' ? exported.value : exported.name)
+    }
+  }
+  return names
+}
+
+/**
+ * List `+server` endpoints and the HTTP methods they export. A `fallback`
+ * handler answers every method. `methods` is empty when nothing is known
+ * (unreadable or unparsable file, no handler exports).
+ */
 export function analyzeApiEndpoints(routes: RouteInfo[]): ApiEndpoint[] {
   const endpoints: ApiEndpoint[] = []
   for (const route of routes) {
     const serverFile = route.files.find(f => f.type === 'endpoint')
     if (!serverFile) continue
-    let content = ''
+    let names: Set<string> | null = null
     try {
-      content = fs.readFileSync(serverFile.path, 'utf-8')
+      const code = fs.readFileSync(serverFile.path, 'utf-8')
+      names = exportedNames(code, serverFile.path)
     } catch {
-      /* file may not exist */
+      /* file vanished or is unreadable */
     }
-    const methods = HTTP_METHODS.filter(
-      m =>
-        content.includes(`export const ${m}`) ||
-        content.includes(`export async function ${m}`) ||
-        content.includes(`export function ${m}`),
-    )
-    if (methods.length === 0) methods.push('GET')
+    const methods: string[] = names?.has('fallback')
+      ? [...HTTP_METHODS]
+      : HTTP_METHODS.filter(m => names?.has(m))
     endpoints.push({ route: route.id, path: route.path, methods, file: serverFile.path })
   }
   return endpoints
@@ -38,29 +69,57 @@ export interface ApiRequestInput {
   body: string
 }
 
+/** The header object typed by the user: empty, or a JSON object of string values. */
+function parseHeaders(raw: string): Record<string, string> {
+  if (!raw.trim()) return {}
+  const parsed: unknown = JSON.parse(raw)
+  if (
+    typeof parsed !== 'object' ||
+    parsed === null ||
+    Array.isArray(parsed) ||
+    !Object.values(parsed).every(v => typeof v === 'string')
+  ) {
+    throw new TypeError('Headers must be a JSON object of string values')
+  }
+  return parsed as Record<string, string>
+}
+
 /**
  * Send a request to a public URL or the dev server itself (SSRF-guarded) and
- * report the response. Redirects are returned, never followed.
+ * report the response. Redirects are returned, never followed; the request
+ * gives up after {@link fetchWithTimeout}'s timeout. Every failure is a
+ * `status: 0` response whose `statusText` says why.
  */
 export async function sendApiRequest(
   input: ApiRequestInput,
   options: OutboundUrlOptions = {},
+  timeoutMs?: number,
 ): Promise<ApiResponse> {
   const start = performance.now()
   const duration = () => Math.round((performance.now() - start) * 100) / 100
   try {
     await assertOutboundUrl(input.url, options)
-    // Shape is validated by fetch() itself (a TypeError lands in the catch).
-    const parsedHeaders = (input.headers ? JSON.parse(input.headers) : {}) as RequestInit['headers']
-    const init: RequestInit = { method: input.method, headers: parsedHeaders, redirect: 'manual' }
+    const init: RequestInit = { method: input.method, headers: parseHeaders(input.headers) }
     if (input.body && input.method !== 'GET' && input.method !== 'HEAD') init.body = input.body
-    const res = await fetch(input.url, init)
-    const body = await res.text()
-    const headers: Record<string, string> = {}
-    res.headers.forEach((v, k) => {
-      headers[k] = v
-    })
-    return { status: res.status, statusText: res.statusText, headers, body, duration: duration() }
+    return await fetchWithTimeout(
+      input.url,
+      init,
+      async res => {
+        const body = await res.text()
+        const headers: Record<string, string> = {}
+        res.headers.forEach((v, k) => {
+          headers[k] = v
+        })
+        return {
+          status: res.status,
+          statusText: res.statusText,
+          headers,
+          body,
+          duration: duration(),
+        }
+      },
+      timeoutMs,
+    )
   } catch (e) {
     return { status: 0, statusText: String(e), headers: {}, body: '', duration: duration() }
   }

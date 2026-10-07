@@ -7,11 +7,16 @@ import type {
   ReactiveSummaryRow,
 } from './types.js'
 
-// Pure helpers only; the RPC layer is not exercised here.
-vi.mock('./rpc.js', () => ({ getReactiveGraph: vi.fn(), getReactiveSummary: vi.fn() }))
+// The RPC layer is mocked: fetchGraph / fetchSummary are checked for the request they send.
+const rpc = vi.hoisted(() => ({ getReactiveGraph: vi.fn(), getReactiveSummary: vi.fn() }))
+vi.mock('./rpc.js', () => rpc)
 const {
-  EMPTY_GRAPH,
   baselineNotice,
+  fetchGraph,
+  fetchSummary,
+  fileNeighbourhood,
+  isEpochChanged,
+  nodeCount,
   BASELINE_UNKNOWN,
   groupByFile,
   isValueSummary,
@@ -20,7 +25,6 @@ const {
   sameGraph,
   sameValue,
 } = await import('./reactive.js')
-const { haystack, haystackMatcher, matcher } = await import('./match.js')
 
 const node = (id: string, componentId: number, value?: unknown): ReactiveNode => ({
   id,
@@ -109,10 +113,6 @@ describe('sameGraph / sameValue', () => {
     expect(sameValue({ a: [1] }, { a: [1] })).toBe(true)
     expect(sameValue({ a: 1 }, null)).toBe(false)
   })
-
-  it('EMPTY_GRAPH is the whole-app shape with nothing known', () => {
-    expect(EMPTY_GRAPH).toMatchObject({ scope: null, total: null, truncated: false })
-  })
 })
 
 describe('isValueSummary', () => {
@@ -158,26 +158,6 @@ describe('groupByFile', () => {
   })
 })
 
-/** `m(...args)`, or `null` when the query produced no matcher. */
-function applyOrNull<A extends unknown[]>(
-  m: ((...args: A) => boolean) | null,
-  ...args: A
-): boolean | null {
-  return m ? m(...args) : null
-}
-
-describe('haystackMatcher', () => {
-  it('matches exactly like matcher()', () => {
-    const fields = ['count', undefined, 'src/lib/Counter.svelte', '42'] as const
-    for (const q of ['', 'COUNT', 'counter 42', 'lib\ncount', 'missing', '  ']) {
-      const a = matcher(q)
-      const b = haystackMatcher(q)
-      expect(b === null).toBe(a === null)
-      expect(applyOrNull(b, haystack(...fields))).toBe(applyOrNull(a, ...fields))
-    }
-  })
-})
-
 describe('baselineNotice', () => {
   it('discloses pending states, says nothing when complete, and says unknown when unreported', () => {
     expect(baselineNotice({ complete: false, pendingNodes: 3 })).toBe(
@@ -187,5 +167,183 @@ describe('baselineNotice', () => {
     expect(baselineNotice({ complete: true, pendingNodes: 0 })).toBeNull()
     expect(baselineNotice()).toBe(BASELINE_UNKNOWN)
     expect(baselineNotice(null)).toBe(BASELINE_UNKNOWN)
+  })
+})
+
+describe('normalizeGraph (current server, partial reply)', () => {
+  it('fills missing optional fields without inventing data and drops a false stale flag', () => {
+    const g = normalizeGraph({ policy: 'scoped' } as unknown as ReactiveGraphResult, 3)
+    expect(g).toEqual({
+      nodes: [],
+      edges: [],
+      scope: null,
+      epoch: null,
+      total: null,
+      truncated: false,
+      edgesOmitted: 0,
+      policy: 'scoped',
+      computedAt: null,
+    })
+    const notStale = normalizeGraph(
+      { ...legacy, policy: 'global-head', stale: false } as unknown as ReactiveGraphResult,
+      null,
+    )
+    expect('stale' in notStale).toBe(false)
+  })
+
+  it('narrowing to a component with no nodes leaves nothing and counts every edge as omitted', () => {
+    const g = normalizeGraph(legacy, 42)
+    expect(g.nodes).toEqual([])
+    expect(g.edges).toEqual([])
+    expect(g.edgesOmitted).toBe(2)
+  })
+})
+
+describe('fetchGraph / fetchSummary', () => {
+  it('asks for the whole app within the caps', async () => {
+    rpc.getReactiveGraph.mockResolvedValueOnce(legacy)
+    const g = await fetchGraph(null)
+    expect(rpc.getReactiveGraph).toHaveBeenLastCalledWith({ maxNodes: 5000, maxEdges: 20000 })
+    expect(g.policy).toBe('global-head')
+  })
+
+  it('sends the component and its page load (epoch) for a scoped request and narrows an old reply', async () => {
+    rpc.getReactiveGraph.mockResolvedValueOnce(legacy)
+    const g = await fetchGraph({ componentId: 2, epoch: 'e7' })
+    expect(rpc.getReactiveGraph).toHaveBeenLastCalledWith({
+      componentId: 2,
+      epoch: 'e7',
+      maxNodes: 5000,
+      maxEdges: 20000,
+    })
+    expect(g.nodes.map(n => n.id)).toEqual(['2:c'])
+    expect(g.policy).toBe('server-filter')
+  })
+
+  it('propagates RPC failures', async () => {
+    rpc.getReactiveGraph.mockRejectedValueOnce(new Error('down'))
+    await expect(fetchGraph(null)).rejects.toThrow('down')
+  })
+
+  it('fetchSummary forwards the request and the reply', async () => {
+    const reply = { rows: [] }
+    rpc.getReactiveSummary.mockResolvedValueOnce(reply)
+    await expect(fetchSummary({ topK: 5 })).resolves.toBe(reply)
+    expect(rpc.getReactiveSummary).toHaveBeenLastCalledWith({ topK: 5 })
+  })
+})
+
+describe('sameGraph field by field', () => {
+  const base = normalizeGraph(legacy, null)
+  const total = { nodes: 3, nodesKind: 'registered' as const, edges: 2 }
+  it.each<[string, Partial<ReactiveGraphResult>]>([
+    ['epoch', { epoch: 'x' }],
+    ['truncated', { truncated: true }],
+    ['policy', { policy: 'scoped' }],
+    ['edgesOmitted', { edgesOmitted: 1 }],
+    ['staleReason', { staleReason: 'timeout' }],
+    ['total.nodes', { total }],
+  ])('differs on %s', (_, patch) => {
+    expect(sameGraph(base, { ...base, ...patch })).toBe(false)
+  })
+
+  it('compares totals by content, and ignores computedAt (a cache timestamp)', () => {
+    const a = { ...base, total: { ...total } }
+    expect(sameGraph(a, { ...base, total: { ...total } })).toBe(true)
+    expect(sameGraph(a, { ...base, total: { ...total, nodesKind: 'sent' } })).toBe(false)
+    expect(sameGraph(a, { ...base, total: { ...total, edges: null } })).toBe(false)
+    expect(sameGraph(base, { ...base, computedAt: 123 })).toBe(true)
+  })
+
+  it.each<[string, (n: ReactiveNode) => ReactiveNode]>([
+    ['id', n => ({ ...n, id: 'z' })],
+    ['type', n => ({ ...n, type: 'derived' })],
+    ['name', n => ({ ...n, name: 'z' })],
+    ['componentId', n => ({ ...n, componentId: 9 })],
+    ['componentFile', n => ({ ...n, componentFile: 'z' })],
+  ])('differs on node %s', (_, change) => {
+    expect(
+      sameGraph(base, { ...base, nodes: [change(base.nodes[0]!), ...base.nodes.slice(1)] }),
+    ).toBe(false)
+  })
+
+  it('differs on node or edge count', () => {
+    expect(sameGraph(base, { ...base, nodes: base.nodes.slice(1) })).toBe(false)
+    expect(sameGraph(base, { ...base, edges: base.edges.slice(1) })).toBe(false)
+    expect(sameGraph(base, { ...base, edges: [base.edges[0]!, { from: '1:b', to: '1:a' }] })).toBe(
+      false,
+    )
+  })
+})
+
+describe('sameValue', () => {
+  it('falls back to false for unserialisable objects', () => {
+    const a: Record<string, unknown> = {}
+    a['self'] = a
+    expect(sameValue(a, { self: {} })).toBe(false)
+    expect(sameValue(a, a)).toBe(true)
+    expect(sameValue(1, { a: 1 })).toBe(false)
+  })
+})
+
+describe('small helpers', () => {
+  it('isEpochChanged only for that stale reason', () => {
+    expect(isEpochChanged({ staleReason: 'epoch-changed' })).toBe(true)
+    expect(isEpochChanged({ staleReason: 'timeout' })).toBe(false)
+    expect(isEpochChanged({})).toBe(false)
+  })
+
+  it('nodeCount sums the three node kinds', () => {
+    expect(nodeCount({ state: 1, derived: 2, effect: 4 })).toBe(7)
+  })
+
+  it('nodeValueText truncates real values but never runtime summaries', () => {
+    expect(nodeValueText('x'.repeat(20), 5)).toBe('"xxx…')
+    expect(nodeValueText('[123456]', 3)).toBe('[123456]')
+  })
+
+  it('baselineNotice formats large counts with grouping', () => {
+    expect(baselineNotice({ complete: false, pendingNodes: 1234 })).toContain(
+      (1234).toLocaleString(),
+    )
+  })
+
+  it('groupByFile of nothing is nothing', () => {
+    expect(groupByFile([])).toEqual([])
+  })
+})
+
+describe('fileNeighbourhood', () => {
+  const ns = [node('1:a', 1), node('1:b', 1), node('2:c', 2), node('3:d', 3), node('4:e', 4)]
+
+  it('is the file nodes plus both ends of edges that touch them', () => {
+    const edges = [
+      { from: '1:a', to: '2:c' },
+      { from: '3:d', to: '1:b' },
+      { from: '4:e', to: '3:d' }, // touches d, which joined via the previous edge
+    ]
+    expect([...fileNeighbourhood(ns, edges, 'src/C1.svelte')].toSorted()).toEqual([
+      '1:a',
+      '1:b',
+      '2:c',
+      '3:d',
+      '4:e',
+    ])
+  })
+
+  it('a single pass: an edge seen before its endpoint joins is not followed', () => {
+    const edges = [
+      { from: '4:e', to: '3:d' },
+      { from: '3:d', to: '1:b' },
+    ]
+    expect([...fileNeighbourhood(ns, edges, 'src/C1.svelte')].toSorted()).toEqual([
+      '1:a',
+      '1:b',
+      '3:d',
+    ])
+  })
+
+  it('is empty for an unknown file without edges to it', () => {
+    expect(fileNeighbourhood(ns, [{ from: '1:a', to: '2:c' }], 'nope').size).toBe(0)
   })
 })

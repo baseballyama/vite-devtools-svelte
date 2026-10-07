@@ -26,7 +26,10 @@ interface Point {
 
 /** Background box grouping one component's nodes within one layer. */
 interface ComponentBox {
+  /** Display name (`shortFile`). */
   file: string
+  /** Full path: the identity of the group. */
+  componentFile: string
   x: number
   y: number
   w: number
@@ -53,7 +56,14 @@ export interface Propagation {
 /** File name without directory or `.svelte` extension. */
 export function shortFile(file: string): string {
   if (!file) return ''
-  return file.split('/').pop()?.replace('.svelte', '') ?? ''
+  // Only a trailing `.svelte` is the component extension: module state lives
+  // in `x.svelte.ts`, which must not read as `x.ts`. Windows separators too.
+  return (
+    file
+      .split(/[\\/]/)
+      .pop()
+      ?.replace(/\.svelte$/, '') ?? ''
+  )
 }
 
 /** Layered DAG layout with component grouping and barycenter ordering. */
@@ -72,23 +82,27 @@ export function layoutGraph(
     adj.set(n.id, [])
     radj.set(n.id, [])
   }
+  // An edge to a node outside `nodes` would be layered as an unknown id and
+  // crash the sort below; callers filter them, but the layout must not rely on it.
+  edges = edges.filter(e => nodeById.has(e.from) && nodeById.has(e.to))
+  // From here on every id in `edges` has entries in the maps above.
   for (const e of edges) {
-    adj.get(e.from)?.push(e.to)
-    radj.get(e.to)?.push(e.from)
-    inDegree.set(e.to, (inDegree.get(e.to) ?? 0) + 1)
+    adj.get(e.from)!.push(e.to)
+    radj.get(e.to)!.push(e.from)
+    inDegree.set(e.to, inDegree.get(e.to)! + 1)
   }
 
   // --- Layer assignment (topological sort BFS) ---
   const layers: string[][] = []
-  let queue = nodes.filter(n => (inDegree.get(n.id) ?? 0) === 0).map(n => n.id)
+  let queue = nodes.filter(n => inDegree.get(n.id) === 0).map(n => n.id)
   const visited = new Set<string>()
   while (queue.length > 0) {
     layers.push([...queue])
     for (const id of queue) visited.add(id)
     const next: string[] = []
     for (const id of queue) {
-      for (const target of adj.get(id) ?? []) {
-        inDegree.set(target, (inDegree.get(target) ?? 0) - 1)
+      for (const target of adj.get(id)!) {
+        inDegree.set(target, inDegree.get(target)! - 1)
         if (inDegree.get(target) === 0 && !visited.has(target)) next.push(target)
       }
     }
@@ -122,13 +136,10 @@ export function layoutGraph(
     for (const layer of layers.slice(1)) {
       const bary = new Map<string, number>()
       for (const id of layer) {
-        const preds = radj.get(id) ?? []
-        if (preds.length > 0) {
-          const avg = preds.reduce((s, p) => s + (posInLayer.get(p) ?? 0), 0) / preds.length
-          bary.set(id, avg)
-        } else {
-          bary.set(id, posInLayer.get(id) ?? 0)
-        }
+        // Past the first layer every node has a predecessor: it was layered
+        // when its last incoming edge was consumed, or sits in a cycle.
+        const preds = radj.get(id)!
+        bary.set(id, preds.reduce((s, p) => s + posInLayer.get(p)!, 0) / preds.length)
       }
       // Stable sort by barycenter, keeping component groups together
       layer.sort((a, b) => {
@@ -136,7 +147,7 @@ export function layoutGraph(
           nb = nodeById.get(b)!
         const cmp = na.componentFile.localeCompare(nb.componentFile)
         if (cmp !== 0) return cmp
-        return (bary.get(a) ?? 0) - (bary.get(b) ?? 0)
+        return bary.get(a)! - bary.get(b)!
       })
       for (const [j, id] of layer.entries()) posInLayer.set(id, j)
     }
@@ -146,12 +157,12 @@ export function layoutGraph(
       const layer = layers[i]!
       const bary = new Map<string, number>()
       for (const id of layer) {
-        const succs = adj.get(id) ?? []
+        const succs = adj.get(id)!
         if (succs.length > 0) {
-          const avg = succs.reduce((s, p) => s + (posInLayer.get(p) ?? 0), 0) / succs.length
+          const avg = succs.reduce((s, p) => s + posInLayer.get(p)!, 0) / succs.length
           bary.set(id, avg)
         } else {
-          bary.set(id, posInLayer.get(id) ?? 0)
+          bary.set(id, posInLayer.get(id)!)
         }
       }
       layer.sort((a, b) => {
@@ -159,7 +170,7 @@ export function layoutGraph(
           nb = nodeById.get(b)!
         const cmp = na.componentFile.localeCompare(nb.componentFile)
         if (cmp !== 0) return cmp
-        return (bary.get(a) ?? 0) - (bary.get(b) ?? 0)
+        return bary.get(a)! - bary.get(b)!
       })
       for (const [j, id] of layer.entries()) posInLayer.set(id, j)
     }
@@ -210,8 +221,8 @@ export function layoutGraph(
       // Compute ideal Y for each node based on neighbors
       const idealY = new Map<string, number>()
       for (const id of layer) {
-        const preds = radj.get(id) ?? []
-        const succs = adj.get(id) ?? []
+        const preds = radj.get(id)!
+        const succs = adj.get(id)!
         const neighbors = [...preds, ...succs].filter(nid => positions.has(nid))
         if (neighbors.length > 0) {
           const avgY = neighbors.reduce((s, nid) => s + positions.get(nid)!.y, 0) / neighbors.length
@@ -257,16 +268,19 @@ export function layoutGraph(
   const BOX_PAD = 14
   const componentBoxes: ComponentBox[] = []
   for (const [i, layer] of layers.entries()) {
-    // Collect nodes per component in this layer
+    // Collect nodes per component in this layer. Keyed by the full path:
+    // two `Row.svelte` in different folders are different groups (keyed by
+    // the short name, one box would span both and the nodes between them).
     const groups = new Map<string, Point[]>()
     for (const id of layer) {
       const n = nodeById.get(id)!
       const pos = positions.get(id)!
-      const file = shortFile(n.componentFile)
-      if (!groups.has(file)) groups.set(file, [])
-      groups.get(file)!.push(pos)
+      const group = groups.get(n.componentFile)
+      if (group) group.push(pos)
+      else groups.set(n.componentFile, [pos])
     }
-    for (const [file, poses] of groups) {
+    for (const [componentFile, poses] of groups) {
+      const file = shortFile(componentFile)
       let minY_ = Infinity
       let maxY_ = -Infinity
       for (const p of poses) {
@@ -276,6 +290,7 @@ export function layoutGraph(
       const x = PADDING + i * LAYER_GAP_X
       componentBoxes.push({
         file,
+        componentFile,
         x: x - BOX_PAD,
         y: minY_ - BOX_PAD,
         w: NODE_W + BOX_PAD * 2,

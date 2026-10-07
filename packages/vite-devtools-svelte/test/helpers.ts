@@ -1,3 +1,7 @@
+import fs from 'node:fs'
+import path from 'node:path'
+import { setTimeout as sleep } from 'node:timers/promises'
+
 import type { Plugin } from 'vite'
 
 import { Collector } from '../src/server/collector.js'
@@ -62,4 +66,40 @@ export function resolvePlugins(plugins: Plugin[], config: Record<string, unknown
 /** The code of a transform hook result (`string` or `{ code }`). */
 export function codeOf(result: unknown): string {
   return typeof result === 'string' ? result : (result as { code: string }).code
+}
+
+/**
+ * Poll `read` until `ok(value)` holds (default: truthy) and return that value.
+ * Integration tests wait on observable state, never for a fixed time.
+ */
+export async function waitFor<T>(
+  read: () => T | Promise<T>,
+  ok: (value: T) => boolean = Boolean,
+  ms = 5000,
+): Promise<T> {
+  const end = Date.now() + ms
+  for (;;) {
+    const value = await read()
+    if (ok(value)) return value
+    if (Date.now() > end)
+      throw new Error(`timed out; last value: ${JSON.stringify(value)?.slice(0, 300)}`)
+    await sleep(20)
+  }
+}
+
+/**
+ * Whether devframe has written a trusted client's auth token (as stored by
+ * the shimmed `localStorage`) to its store under `home`. devframe persists
+ * with a debounce; a restart before that would forget the client.
+ */
+export function authTokenPersisted(home: string, localStore: Map<string, string>): boolean {
+  const tokens = [...localStore.values()].filter(v => v.length >= 16)
+  if (tokens.length === 0) return false
+  return fs
+    .readdirSync(home, { recursive: true, withFileTypes: true })
+    .filter(e => e.isFile())
+    .some(e => {
+      const text = fs.readFileSync(path.join(e.parentPath, e.name), 'utf8')
+      return tokens.some(t => text.includes(t))
+    })
 }

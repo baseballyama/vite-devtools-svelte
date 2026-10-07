@@ -72,6 +72,87 @@ describe('injectIntoSvelteKitInternal', () => {
   })
 })
 
+/** A generated module whose app template literal is `app` (already JSON-escaped). */
+const internalWith = (app: string, eol = '\n') =>
+  [
+    'export const options = {',
+    '\ttemplates: {',
+    `\t\tapp: ({ head, body }) => "${app}",`,
+    '\t\terror: ({ message }) => "<html><body>" + message + "</body></html>"',
+    '\t}',
+    '};',
+    '',
+  ].join(eol)
+
+const TAG = String.raw`<script type=\"module\" src=\"/__devtools/embedded.js\"></script>`
+
+describe('injectIntoSvelteKitInternal: app.html edge cases', () => {
+  it.each([
+    [
+      '`</body>` in an HTML comment before the real one',
+      String.raw`<html><body><!-- </body> -->" + body + "</body></html>`,
+      String.raw`<html><body><!-- </body> -->" + body + "${TAG}</body></html>`,
+    ],
+    [
+      '`</body>` inside an inline script string',
+      String.raw`<body><script>const s = \"</body>\"</script>" + body + "</body>`,
+      String.raw`<body><script>const s = \"</body>\"</script>" + body + "${TAG}</body>`,
+    ],
+    [
+      'escaped CRLF line endings in app.html',
+      String.raw`<html>\r\n<body>" + body + "</body>\r\n</html>\r\n`,
+      String.raw`<html>\r\n<body>" + body + "${TAG}</body>\r\n</html>\r\n`,
+    ],
+    [
+      'an unrelated script already present (old inject URL)',
+      String.raw`<body>" + body + "<script src=\"/@id/@vitejs/devtools/client/inject\"></script></body>`,
+      String.raw`<body>" + body + "<script src=\"/@id/@vitejs/devtools/client/inject\"></script>${TAG}</body>`,
+    ],
+  ])('%s: the tag goes before the document closing tag', (_, app, expected) => {
+    expect(injectIntoSvelteKitInternal(internalWith(app))).toBe(internalWith(expected))
+  })
+
+  it('handles a CRLF generated module (line ends after the literal)', () => {
+    const app = '<body>" + body + "</body>'
+    expect(injectIntoSvelteKitInternal(internalWith(app, '\r\n'))).toBe(
+      internalWith(`<body>" + body + "${TAG}</body>`, '\r\n'),
+    )
+  })
+
+  it('patches exactly once; a second pass is a no-op', () => {
+    const once = injectIntoSvelteKitInternal(internalWith('<body></body>'))!
+    expect(once.split('/__devtools/embedded.js')).toHaveLength(2)
+    expect(injectIntoSvelteKitInternal(once)).toBeNull()
+  })
+
+  it('never touches the error template', () => {
+    const out = injectIntoSvelteKitInternal(internalWith('<body></body>'))!
+    const errorLine = out.split('\n').find(l => l.includes('error:'))!
+    expect(errorLine).not.toContain('embedded.js')
+  })
+
+  it('a multi-line app literal (unexpected shape) falls back to the first `</body>`', () => {
+    const code = 'export const options = { templates: {\napp: () => `<body>\n</body>`\n} }'
+    expect(injectIntoSvelteKitInternal(code)).toBe(code.replace('</body>', `${TAG}</body>`))
+  })
+
+  it.each([
+    ['no `app:` key', 'export const options = { templates: { page: "<body></body>" } }'],
+    [
+      'the app literal on the last line (no newline)',
+      'export const options = { templates: { app: () => "<body></body>" } }',
+    ],
+  ])('%s: the first `</body>` after the marker', (_, code) => {
+    expect(injectIntoSvelteKitInternal(code)).toBe(code.replace('</body>', `${TAG}</body>`))
+  })
+
+  it('a `</body>` only before the templates marker is not a target', () => {
+    expect(
+      injectIntoSvelteKitInternal('// </body>\nexport const options = { templates: { app: x } }'),
+    ).toBeNull()
+  })
+})
+
 describe('sveltekitTemplateInjector plugin', () => {
   let hosted = true
   const plugin = sveltekitTemplateInjector(() => hosted)

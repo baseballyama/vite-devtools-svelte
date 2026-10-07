@@ -47,6 +47,18 @@ const WARN_SINK = Symbol.for('vite-devtools-svelte:warn-sink')
 // counter tells the old instance that a newer server exists.
 let serverGeneration = 0
 
+/**
+ * Whether the request's `x-svelte-devtools-token` header is exactly `token`.
+ * Constant-time for equal lengths (the length itself is not secret: every
+ * token is a UUID). A repeated header (string array) is never accepted.
+ */
+export function isValidMcpToken(header: string | string[] | undefined, token: string): boolean {
+  if (typeof header !== 'string') return false
+  const given = Buffer.from(header)
+  const expected = Buffer.from(token)
+  return given.length === expected.length && crypto.timingSafeEqual(given, expected)
+}
+
 /** Collect every module the dev server knows, across Vite 8 environments (legacy graph as fallback). */
 function collectModules(server: ViteDevServer): GraphModuleLike[] {
   const modules: GraphModuleLike[] = []
@@ -200,9 +212,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       // is *not* required because MCP clients are local processes that don't
       // run inside a browser tab; the token is the gate.
       const handleMcp = async (req: IncomingMessage, res: ServerResponse) => {
-        const tokenHeader = req.headers['x-svelte-devtools-token']
-        const token = Array.isArray(tokenHeader) ? tokenHeader[0] : tokenHeader
-        if (token !== mcpToken) {
+        if (!isValidMcpToken(req.headers['x-svelte-devtools-token'], mcpToken)) {
           res.statusCode = 403
           res.end('Forbidden')
           return
@@ -247,10 +257,16 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
         }
       }
       // Connect middleware ignores the returned promise: route any rejection
-      // to the logger instead of leaving it unhandled.
+      // (e.g. building the MCP server threw) to the logger, and answer the
+      // request instead of leaving the client hanging.
       devServer.middlewares.use('/__svelte-devtools/mcp', (req, res) => {
         handleMcp(req, res).catch((e: unknown) => {
           devServer.config.logger.error(`[svelte-devtools] MCP handler error: ${String(e)}`)
+          if (!res.headersSent) {
+            res.statusCode = 500
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ error: String(e) }))
+          }
         })
       })
     },
@@ -339,10 +355,13 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       if (!componentTracking) return null
       if (id.includes('node_modules')) return null
       if (config?.command !== 'serve') return null
+      // Client modules only: the runtime is browser code, and a server
+      // render has no devtools to report to.
+      if (transformOptions?.ssr) return null
       const [file = id] = id.split('?')
       const modified = file.endsWith('.svelte')
-        ? injectComponentTracking(code, id)
-        : SVELTE_MODULE_RE.test(file) && !transformOptions?.ssr
+        ? injectComponentTracking(code, file)
+        : SVELTE_MODULE_RE.test(file)
           ? injectModuleTracking(code, file)
           : null
       return modified === null ? null : { code: modified, map: null }
@@ -375,8 +394,11 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       const safeType = JSON.stringify(loadType)
 
       // Replace the exported load function with a profiled version.
-      // Supports both `export const load = ...` and `export (async) function load(...)` patterns.
-      let transformed = code.replace(/export\s+const\s+load\s*=\s*/, `const __original_load = `)
+      // Supports `export const|let|var load = ...` and `export (async) function load(...)`.
+      let transformed = code.replace(
+        /export\s+(const|let|var)\s+load\s*=\s*/,
+        `$1 __original_load = `,
+      )
 
       if (transformed === code) {
         // Try `export function load` / `export async function load` pattern
@@ -388,15 +410,23 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
 
       if (transformed === code) return null // no match found
 
+      // Measuring must never change what load does: a result JSON can't
+      // encode (a universal load may return BigInts, cycles, class
+      // instances…) is recorded with size 0 instead of failing the load, and
+      // a recorder failure is swallowed. A load that throws (including
+      // SvelteKit's `redirect()` / `error()`) rethrows unchanged, unrecorded.
       const profiledExport = `
 export const load = async (event) => {
   const __start = performance.now();
   const __result = await __original_load(event);
-  const __duration = performance.now() - __start;
-  const __dataSize = JSON.stringify(__result || {}).length;
-  if (typeof globalThis.__svelte_devtools_record_load === 'function') {
-    globalThis.__svelte_devtools_record_load(${safeRoute}, ${safeFile}, ${safeType}, __duration, __dataSize);
-  }
+  try {
+    const __duration = performance.now() - __start;
+    let __dataSize = 0;
+    try { __dataSize = JSON.stringify(__result || {}).length; } catch {}
+    if (typeof globalThis.__svelte_devtools_record_load === 'function') {
+      globalThis.__svelte_devtools_record_load(${safeRoute}, ${safeFile}, ${safeType}, __duration, __dataSize);
+    }
+  } catch {}
   return __result;
 };
 `
@@ -445,15 +475,18 @@ export const load = async (event) => {
         [WARN_SINK]?: (msg: string) => void
       }
       const wrapped = WARN_SINK in logger
-      logger[WARN_SINK] = msg => {
-        // Svelte compiler warnings usually contain file paths and codes
+      logger[WARN_SINK] = raw => {
+        // Svelte compiler warnings usually contain file paths and codes.
+        // Colours are stripped first: a path right after a colour code would
+        // otherwise not count as starting a word and lose its file/position.
+        // oxlint-disable-next-line no-control-regex -- intentional: strip ANSI escape sequences
+        const msg = raw.replaceAll(/\u001B\[[0-9;]*m/g, '').trim()
         if (!msg.includes('.svelte') || config?.command !== 'serve') return
         const fileMatch = msg.match(/(?:^|\s)((?:\/|\.\/|\w:)[^\s:]+\.svelte)(?::(\d+):(\d+))?/)
         const codeMatch = msg.match(/\(([a-z0-9_-]+)\)/)
         collector.recordCompilerWarning({
           code: codeMatch?.[1] ?? 'unknown',
-          // oxlint-disable-next-line no-control-regex -- intentional: strip ANSI escape sequences
-          message: msg.replaceAll(/\u001B\[[0-9;]*m/g, '').trim(),
+          message: msg,
           file: fileMatch?.[1] ?? '',
           line: fileMatch?.[2] ? Number(fileMatch[2]) : undefined,
           column: fileMatch?.[3] ? Number(fileMatch[3]) : undefined,

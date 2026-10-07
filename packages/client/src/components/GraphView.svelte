@@ -297,7 +297,7 @@
       </defs>
 
       <!-- Component group backgrounds -->
-      {#each layout.componentBoxes as box (`${box.x}:${box.file}`)}
+      {#each layout.componentBoxes as box (`${box.x}:${box.componentFile}`)}
         <rect
           x={box.x}
           y={box.y}

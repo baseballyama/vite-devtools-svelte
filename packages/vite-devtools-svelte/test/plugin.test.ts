@@ -17,72 +17,24 @@ import { callHook, resolvePlugins } from './helpers.js'
 // Plugin Factory: svelteDevtools()
 // =====================================================================
 
+const shape = (p: Plugin) => ({
+  name: p.name,
+  enforce: p.enforce,
+  apply: typeof p.apply === 'function' ? 'fn' : p.apply,
+})
+
 describe('svelteDevtools factory', () => {
-  it('should return an array of 6 plugins', () => {
-    const plugins = svelteDevtools()
-    expect(Array.isArray(plugins)).toBe(true)
-    expect(plugins.length).toBe(6)
-  })
-
-  it('should return plugins with correct names', () => {
-    const plugins = svelteDevtools()
-    const names = plugins.map(p => p.name)
-    expect(names).toContain('vite-devtools-svelte')
-    expect(names).toContain('vite-devtools-svelte:tracking')
-    expect(names).toContain('vite-devtools-svelte:load-profile')
-    expect(names).toContain('vite-devtools-svelte:load-profile-server')
-    expect(names).toContain('vite-devtools-svelte:sveltekit-template-injector')
-    expect(names).toContain('vite-devtools-svelte:warning-capture')
-  })
-
-  it('should NOT include effect-tracking plugin (removed)', () => {
-    const plugins = svelteDevtools()
-    const names = plugins.map(p => p.name)
-    expect(names).not.toContain('vite-devtools-svelte:effect-tracking')
-  })
-
-  it('should have correct enforce order', () => {
-    const plugins = svelteDevtools()
-    const mainPlugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
-    const tracking = plugins.find(p => p.name === 'vite-devtools-svelte:tracking')!
-    const loadProfile = plugins.find(p => p.name === 'vite-devtools-svelte:load-profile')!
-    const warningCapture = plugins.find(p => p.name === 'vite-devtools-svelte:warning-capture')!
-
-    expect(mainPlugin.enforce).toBe('pre')
-    expect(tracking.enforce).toBe('post')
-    expect(loadProfile.enforce).toBe('post')
-    expect(warningCapture.enforce).toBe('post')
-  })
-
-  it('main plugin should come before tracking plugin', () => {
-    const plugins = svelteDevtools()
-    const mainIdx = plugins.findIndex(p => p.name === 'vite-devtools-svelte')
-    const trackingIdx = plugins.findIndex(p => p.name === 'vite-devtools-svelte:tracking')
-    expect(mainIdx).toBeLessThan(trackingIdx)
-  })
-
-  it('should accept empty options', () => {
-    expect(() => svelteDevtools({})).not.toThrow()
-  })
-
-  it('should accept componentTracking option', () => {
-    expect(() => svelteDevtools({ componentTracking: false })).not.toThrow()
-    expect(() => svelteDevtools({ componentTracking: true })).not.toThrow()
-  })
-
-  it('should default componentTracking to true', () => {
-    const plugins = svelteDevtools()
-    resolvePlugins(plugins)
-    const trackingPlugin = plugins.find(p => p.name === 'vite-devtools-svelte:tracking')!
-    const code = `
-import * as $ from 'svelte/internal/client';
-function Component($$anchor) {
-  $.push($$anchor, true);
-  $.pop();
-}
-`
-    const result = callHook(trackingPlugin.transform, code, '/test/src/lib/Counter.svelte')
-    expect(result).not.toBeNull()
+  it('returns the dev-only plugins in hook order', () => {
+    // main (pre) resolves the wrapper before vite-plugin-svelte compiles;
+    // the transforms (post) see compiled output.
+    expect(svelteDevtools().map(shape)).toEqual([
+      { name: 'vite-devtools-svelte', enforce: 'pre', apply: 'serve' },
+      { name: 'vite-devtools-svelte:tracking', enforce: 'post', apply: 'serve' },
+      { name: 'vite-devtools-svelte:load-profile', enforce: 'post', apply: 'serve' },
+      { name: 'vite-devtools-svelte:load-profile-server', enforce: undefined, apply: 'serve' },
+      { name: 'vite-devtools-svelte:warning-capture', enforce: 'post', apply: 'serve' },
+      { name: 'vite-devtools-svelte:sveltekit-template-injector', enforce: 'post', apply: 'fn' },
+    ])
   })
 })
 
@@ -98,90 +50,104 @@ function getMainPlugin(): Plugin {
 }
 
 describe('mainPlugin virtual module resolution', () => {
-  // Runtime virtual module
-  it('should resolve the runtime virtual module ID', () => {
+  it('resolves and loads the runtime virtual module', () => {
     const plugin = getMainPlugin()
-    const resolved = callHook(plugin.resolveId, RUNTIME_MODULE_ID)
-    expect(resolved).toBe(RESOLVED_RUNTIME_ID)
+    expect(callHook(plugin.resolveId, RUNTIME_MODULE_ID)).toBe(RESOLVED_RUNTIME_ID)
+    expect(callHook(plugin.load, RESOLVED_RUNTIME_ID)).toBe(runtimeCode)
+    expect(callHook(plugin.load, WRAPPER_MODULE_ID)).toBe(wrapperCode)
   })
 
-  it('should load the runtime code for the resolved ID', () => {
-    const plugin = getMainPlugin()
-    const loaded = callHook(plugin.load, RESOLVED_RUNTIME_ID)
-    expect(loaded).toBe(runtimeCode)
+  it.each([
+    ['app component', '/test/src/lib/Counter.svelte', WRAPPER_MODULE_ID],
+    ['app Svelte module', '/test/src/lib/cart.svelte.ts', WRAPPER_MODULE_ID],
+    ['app module with a query', '/test/src/App.svelte?direct', WRAPPER_MODULE_ID],
+    ['a dependency (node_modules)', '/test/node_modules/svelte/src/index.js', null],
+    ['a nested dependency', '/test/node_modules/.pnpm/x/node_modules/lib/A.svelte', null],
+    // the wrapper itself imports the real module: redirecting it would loop
+    ['the wrapper (virtual \\0 id)', WRAPPER_MODULE_ID, null],
+    ['another virtual module', '\0virtual:other', null],
+    ['no importer (entry)', undefined, null],
+  ])('svelte/internal/client imported by %s → %s', (_, importer, expected) => {
+    expect(callHook(getMainPlugin().resolveId, 'svelte/internal/client', importer)).toBe(expected)
   })
 
-  // svelte/internal/client wrapper
-  it('should intercept svelte/internal/client from user code', () => {
-    const plugin = getMainPlugin()
-    const resolved = callHook(
-      plugin.resolveId,
-      'svelte/internal/client',
-      '/test/src/lib/Counter.svelte',
-    )
-    expect(resolved).toBe(WRAPPER_MODULE_ID)
+  it.each([
+    ['svelte', '/test/src/App.svelte'],
+    ['svelte/internal/server', '/test/src/App.svelte'],
+    ['svelte/internal/client/index.js', '/test/src/App.svelte'],
+    ['some-other-module', '/test/src/App.svelte'],
+  ])('defers %s to Vite', (id, importer) => {
+    expect(callHook(getMainPlugin().resolveId, id, importer)).toBeNull()
   })
 
-  it('should NOT intercept svelte/internal/client from node_modules', () => {
-    const plugin = getMainPlugin()
-    const resolved = callHook(
-      plugin.resolveId,
-      'svelte/internal/client',
-      '/test/node_modules/svelte/src/index.js',
-    )
-    expect(resolved).toBeNull()
+  it('defers unknown ids to other loaders', () => {
+    expect(callHook(getMainPlugin().load, '/test/src/App.svelte')).toBeNull()
   })
 
-  it('should NOT intercept svelte/internal/client from virtual modules (\\0 prefix)', () => {
-    const plugin = getMainPlugin()
-    const resolved = callHook(
-      plugin.resolveId,
-      'svelte/internal/client',
-      '\0svelte-devtools:wrapped-client',
-    )
-    expect(resolved).toBeNull()
-  })
-
-  it('should NOT intercept svelte/internal/client without importer', () => {
-    const plugin = getMainPlugin()
-    const resolved = callHook(plugin.resolveId, 'svelte/internal/client')
-    expect(resolved).toBeNull()
-  })
-
-  it('should NOT intercept svelte/internal/client in build mode', () => {
-    const plugins = svelteDevtools()
-    const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
-    resolvePlugins([plugin], { command: 'build' })
-    const resolved = callHook(
-      plugin.resolveId,
-      'svelte/internal/client',
-      '/test/src/lib/Counter.svelte',
-    )
-    expect(resolved).toBeNull()
-  })
-
-  it('should NOT intercept svelte/internal/client when componentTracking is disabled', () => {
+  it('does not redirect svelte/internal/client when componentTracking is disabled', () => {
     const plugins = svelteDevtools({ componentTracking: false })
     const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
     resolvePlugins([plugin])
-    const resolved = callHook(
-      plugin.resolveId,
-      'svelte/internal/client',
-      '/test/src/lib/Counter.svelte',
-    )
-    expect(resolved).toBeNull()
+    expect(callHook(plugin.resolveId, 'svelte/internal/client', '/test/src/A.svelte')).toBeNull()
+    // the runtime itself is still served (the dock works without tracking)
+    expect(callHook(plugin.resolveId, RUNTIME_MODULE_ID)).toBe(RESOLVED_RUNTIME_ID)
+  })
+})
+
+// Plugins are `apply: 'serve'`, but a hook can still be reached outside dev
+// (a plugin list reused by another tool, `vite build --watch` setups): each
+// hook re-checks the command and is inert during a build.
+describe('build command: every hook is inert', () => {
+  const plugins = svelteDevtools()
+  resolvePlugins(plugins, { command: 'build' })
+  const byName = (name: string) => plugins.find(p => p.name === name)!
+  const main = byName('vite-devtools-svelte')
+
+  it.each([
+    ['resolveId(runtime)', () => callHook(main.resolveId, RUNTIME_MODULE_ID)],
+    [
+      'resolveId(svelte/internal/client)',
+      () => callHook(main.resolveId, 'svelte/internal/client', '/test/src/A.svelte'),
+    ],
+    ['load(runtime)', () => callHook(main.load, RESOLVED_RUNTIME_ID)],
+    ['load(wrapper)', () => callHook(main.load, WRAPPER_MODULE_ID)],
+    [
+      'tracking transform',
+      () =>
+        callHook(
+          byName('vite-devtools-svelte:tracking').transform,
+          '\t$.push($$props, true, A);',
+          '/test/src/A.svelte',
+        ),
+    ],
+    [
+      'load-profile transform',
+      () =>
+        callHook(
+          byName('vite-devtools-svelte:load-profile').transform,
+          'export const load = () => ({})',
+          '/test/src/routes/+page.ts',
+        ),
+    ],
+  ])('%s → null', (_, run) => {
+    expect(run()).toBeNull()
   })
 
-  it('should load the wrapper code for the wrapper module ID', () => {
-    const plugin = getMainPlugin()
-    const loaded = callHook(plugin.load, WRAPPER_MODULE_ID)
-    expect(loaded).toBe(wrapperCode)
+  it('transformIndexHtml injects nothing', () => {
+    expect((main.transformIndexHtml as { handler: () => unknown }).handler()).toEqual([])
   })
 
-  it('should return null (defer) for other module IDs', () => {
-    const plugin = getMainPlugin()
-    expect(callHook(plugin.resolveId, 'some-other-module')).toBeNull()
-    expect(callHook(plugin.load, 'some-other-id')).toBeNull()
+  it('compiler warnings are not captured', async () => {
+    const forwarded: string[] = []
+    const logger = { warn: (msg: string) => forwarded.push(msg) }
+    const built = svelteDevtools()
+    resolvePlugins(built, { command: 'build', logger, root: FIXTURES })
+    logger.warn('/test/src/A.svelte:1:1 (x) w')
+    expect(forwarded).toHaveLength(1)
+    const warnings = await (
+      await hubHandlers(built)
+    ).get('svelte-devtools:get-compiler-warnings')!()
+    expect(warnings).toEqual([])
   })
 })
 
@@ -204,14 +170,6 @@ describe('mainPlugin transformIndexHtml', () => {
     expect(result[0].attrs.type).toBe('module')
     expect(result[0].children).toContain(RUNTIME_MODULE_ID)
     expect(result[0].injectTo).toBe('head-prepend')
-  })
-
-  it('should not inject anything in build mode', () => {
-    const plugins = svelteDevtools()
-    const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
-    resolvePlugins([plugin], { command: 'build' })
-    const result = (plugin.transformIndexHtml as { handler: () => any }).handler()
-    expect(result).toEqual([])
   })
 })
 
@@ -412,6 +370,45 @@ describe('warningCapturePlugin', () => {
     expect(warnings).toHaveLength(1)
     expect(warnings[0]).toMatchObject({ code: 'a11y_no_redundant_roles', line: 5, column: 2 })
     expect(forwarded).toHaveLength(2)
+  })
+
+  it.each([
+    [
+      'path, position and code',
+      '/a/src/A.svelte:5:2 (a11y_no_redundant_roles) msg',
+      { file: '/a/src/A.svelte', line: 5, column: 2, code: 'a11y_no_redundant_roles' },
+    ],
+    [
+      'ANSI colours stripped from the message',
+      '\u001B[33m./src/B.svelte:1:3 (css_unused_selector) unused\u001B[39m',
+      {
+        file: './src/B.svelte',
+        line: 1,
+        code: 'css_unused_selector',
+        message: './src/B.svelte:1:3 (css_unused_selector) unused',
+      },
+    ],
+    [
+      'a path without a position',
+      'warning in C:/proj/src/C.svelte (x_code) text',
+      { file: 'C:/proj/src/C.svelte', line: undefined, column: undefined, code: 'x_code' },
+    ],
+    ['no code', '/a/src/D.svelte:2:1 something odd', { file: '/a/src/D.svelte', code: 'unknown' }],
+    [
+      'no recognisable path',
+      'Foo.svelte mentioned (a_code)',
+      { file: '', line: undefined, code: 'a_code' },
+    ],
+  ])('parses a compiler warning with %s', async (_, msg, expected) => {
+    const plugins = svelteDevtools()
+    const logger = { warn: (_msg: string) => {} }
+    resolve(plugins, { logger })
+    logger.warn(msg)
+    const warnings = await (
+      await hubHandlers(plugins)
+    ).get('svelte-devtools:get-compiler-warnings')!()
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0]).toMatchObject(expected)
   })
 
   it('does not stack wrappers on a reused customLogger and feeds the newest plugin instance', async () => {

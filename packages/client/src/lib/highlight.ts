@@ -16,9 +16,38 @@ function esc(s: string) {
   return s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
 }
 
-function tokJS(code: string): Tok[] {
+/**
+ * What an unterminated construct leaves open at the end of a line: block
+ * comments and template literals continue on the next one (JSDoc blocks,
+ * multi-line templates in compiled output).
+ */
+type JSState = 'code' | 'comment' | 'template'
+
+/** Index after the closing backtick of a template literal, or -1 if it runs past the line. */
+function templateEnd(code: string, from: number): number {
+  for (let j = from; j < code.length; j++) {
+    if (code[j] === '\\') j++
+    else if (code[j] === '`') return j + 1
+  }
+  return -1
+}
+
+function tokJS(code: string, state: { s: JSState }): Tok[] {
   const toks: Tok[] = []
   let i = 0
+  if (state.s === 'comment') {
+    const end = code.indexOf('*/')
+    if (end === -1) return [{ t: code, c: 'hl-cm' }]
+    toks.push({ t: code.slice(0, end + 2), c: 'hl-cm' })
+    i = end + 2
+    state.s = 'code'
+  } else if (state.s === 'template') {
+    const end = templateEnd(code, 0)
+    if (end === -1) return [{ t: code, c: 'hl-st' }]
+    toks.push({ t: code.slice(0, end), c: 'hl-st' })
+    i = end
+    state.s = 'code'
+  }
   while (i < code.length) {
     const ch = code.charAt(i)
     if (/\s/.test(ch)) {
@@ -32,7 +61,29 @@ function tokJS(code: string): Tok[] {
       toks.push({ t: code.slice(i), c: 'hl-cm' })
       break
     }
-    if (ch === '`' || ch === '"' || ch === "'") {
+    if (ch === '/' && code[i + 1] === '*') {
+      const end = code.indexOf('*/', i + 2)
+      if (end === -1) {
+        toks.push({ t: code.slice(i), c: 'hl-cm' })
+        state.s = 'comment'
+        break
+      }
+      toks.push({ t: code.slice(i, end + 2), c: 'hl-cm' })
+      i = end + 2
+      continue
+    }
+    if (ch === '`') {
+      const end = templateEnd(code, i + 1)
+      if (end === -1) {
+        toks.push({ t: code.slice(i), c: 'hl-st' })
+        state.s = 'template'
+        break
+      }
+      toks.push({ t: code.slice(i, end), c: 'hl-st' })
+      i = end
+      continue
+    }
+    if (ch === '"' || ch === "'") {
       let j = i + 1
       while (j < code.length && code[j] !== ch) {
         if (code[j] === '\\') j++
@@ -68,13 +119,35 @@ function tokJS(code: string): Tok[] {
   return toks
 }
 
+/**
+ * Index of the `>` closing the tag that opens at `from` (or the line end).
+ * A `>` inside a quoted value or a `{…}` expression does not close it:
+ * `onclick={() => n++}` and `class:on={n > 0}` are one tag.
+ */
+function tagEnd(code: string, from: number): number {
+  let depth = 0
+  let quote = ''
+  let j = from
+  for (; j < code.length; j++) {
+    const c = code[j]
+    if (quote) {
+      if (c === quote) quote = ''
+    } else if (depth > 0) {
+      if (c === '{') depth++
+      else if (c === '}') depth--
+    } else if (c === '{') depth++
+    else if (c === '"' || c === "'") quote = c
+    else if (c === '>') break
+  }
+  return j
+}
+
 function tokHTML(code: string): Tok[] {
   const toks: Tok[] = []
   let i = 0
   while (i < code.length) {
     if (code[i] === '<') {
-      let j = i
-      while (j < code.length && code[j] !== '>') j++
+      const j = tagEnd(code, i)
       const tag = code.slice(i, j + 1)
       const m = tag.match(/^(<\/?[\w:-]+)/)
       if (!m) {
@@ -156,7 +229,8 @@ function tokCSS(code: string): Tok[] {
       { t: pm[3]!, c: 'hl-cv' },
       { t: pm[4]! },
     ]
-  const sm = tr.match(/^([^{]+)(\s*\{)\s*$/)
+  // Trailing whitespace stays in the `{` token: dropping it lost source text.
+  const sm = tr.match(/^([^{]+?)(\s*\{\s*)$/)
   if (sm) return [{ t: ind }, { t: sm[1]!, c: 'hl-cs' }, { t: sm[2]! }]
   return [{ t: code }]
 }
@@ -170,10 +244,12 @@ function render(toks: Tok[]): string {
 /** Highlight a .svelte file line by line, tracking <script>/<style> blocks. */
 export function highlightSvelte(lines: string[]): string[] {
   let sec: 'template' | 'script' | 'style' = 'template'
+  const js = { s: 'code' as JSState }
   return lines.map(line => {
     const tr = line.trim()
     if (tr.startsWith('<script')) {
       if (!tr.includes('</script>')) sec = 'script'
+      js.s = 'code'
       return render(tokHTML(line))
     }
     if (tr.startsWith('</script')) {
@@ -188,12 +264,13 @@ export function highlightSvelte(lines: string[]): string[] {
       sec = 'template'
       return render(tokHTML(line))
     }
-    if (sec === 'script') return render(tokJS(line))
+    if (sec === 'script') return render(tokJS(line, js))
     if (sec === 'style') return render(tokCSS(line))
     return render(tokHTML(line))
   })
 }
 
 export function highlightJS(lines: string[]): string[] {
-  return lines.map(l => render(tokJS(l)))
+  const js = { s: 'code' as JSState }
+  return lines.map(l => render(tokJS(l, js)))
 }

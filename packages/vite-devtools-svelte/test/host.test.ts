@@ -1,7 +1,6 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { setTimeout as sleep } from 'node:timers/promises'
 
 import { connectDevframe } from 'devframe/client'
 import type { DevframeRpcClient } from 'devframe/client'
@@ -22,6 +21,7 @@ function rpc(client: DevframeRpcClient, method: string, ...args: unknown[]): Pro
   return (client as unknown as { call: UntypedCall }).call(method, ...args)
 }
 import { svelteDevtools } from '../src/plugin.js'
+import { authTokenPersisted, waitFor } from './helpers.js'
 
 const FIXTURES_DIR = path.resolve(import.meta.dirname, 'fixtures')
 
@@ -61,14 +61,6 @@ async function connect(): Promise<DevframeRpcClient> {
   })
   clients.push(client)
   return client
-}
-
-async function waitFor(check: () => boolean, ms = 3000) {
-  const end = Date.now() + ms
-  while (!check()) {
-    if (Date.now() > end) throw new Error('timed out')
-    await sleep(20)
-  }
 }
 
 function wsProbe(url: string, wsOrigin: string): Promise<'open' | 'rejected'> {
@@ -161,8 +153,8 @@ describe('standalone host (initDevframe on the Vite dev server)', () => {
   })
 
   it('survives a dev-server restart; a new client is re-trusted by its stored token', async () => {
-    // devframe persists tokens with a 100 ms debounce; let it flush first.
-    await sleep(300)
+    // devframe persists tokens with a debounce: the restart must come after.
+    await waitFor(() => authTokenPersisted(tmpHome, store))
     const before = await connect()
     await waitFor(() => before.status === 'connected')
     await server.restart()
@@ -175,7 +167,7 @@ describe('standalone host (initDevframe on the Vite dev server)', () => {
     const routes = (await rpc(after, 'svelte-devtools:get-routes')) as unknown[]
     expect(routes.length).toBeGreaterThan(0)
     // several sequential steps (flush wait, connect, full Vite restart, reconnect),
-    // each bounded by its own 3 s waitFor
+    // each bounded by its own 5 s waitFor
   }, 20_000)
 })
 
