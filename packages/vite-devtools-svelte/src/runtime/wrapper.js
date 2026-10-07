@@ -14,7 +14,7 @@ function __currentId() {
 // Tracks the most recently created signal for type determination in tag()
 const __pendingSignal = { ref: null, type: null }
 
-// Component context -> devtools id (review B1b). A component created later
+// Component context -> devtools id. A component created later
 // by a block update ({#each}/{#if} after mount) runs outside its parent's
 // push..pop, where the runtime's init stack is empty (the wrapper stack
 // below covers the wrapped block helpers; this covers the rest). Svelte (5.56.8,
@@ -117,32 +117,20 @@ export function pop() {
 
 // --- Signal Creation (type markers) ---
 
-export function state() {
-  const signal = __svelte_original.state.apply(null, arguments)
-  try {
+// The created signal/proxy is remembered with its type for the tag() call
+// the compiler (dev) emits right after it.
+function __marking(original, type) {
+  return function () {
+    const signal = original.apply(null, arguments)
     __pendingSignal.ref = signal
-    __pendingSignal.type = 'state'
-  } catch {}
-  return signal
+    __pendingSignal.type = type
+    return signal
+  }
 }
 
-export function derived() {
-  const signal = __svelte_original.derived.apply(null, arguments)
-  try {
-    __pendingSignal.ref = signal
-    __pendingSignal.type = 'derived'
-  } catch {}
-  return signal
-}
-
-export function proxy() {
-  const p = __svelte_original.proxy.apply(null, arguments)
-  try {
-    __pendingSignal.ref = p
-    __pendingSignal.type = 'proxy'
-  } catch {}
-  return p
-}
+export const state = __marking(__svelte_original.state, 'state')
+export const derived = __marking(__svelte_original.derived, 'derived')
+export const proxy = __marking(__svelte_original.proxy, 'proxy')
 
 // --- Signal Tagging (Svelte dev mode) ---
 
@@ -256,8 +244,8 @@ let __renderFlushScheduled = false
 function __flushRenderDurations() {
   __renderFlushScheduled = false
   const dt = __dt()
-  for (const [cid, duration] of __pendingRenderDurations) {
-    if (dt) {
+  if (dt) {
+    for (const [cid, duration] of __pendingRenderDurations) {
       try {
         dt.recordRender(cid)
       } catch {}
@@ -304,21 +292,23 @@ function __wrapTemplateEffect(args) {
   return wrapped
 }
 
-export function template_effect() {
-  let args = arguments
-  try {
-    args = __wrapTemplateEffect(arguments)
-  } catch {}
-  return __svelte_original.template_effect.apply(null, args)
+// `original` called with the arguments rewritten by `wrapArgs`, or with the
+// original arguments when rewriting fails.
+function __withArgs(original, wrapArgs) {
+  return function () {
+    let args = arguments
+    try {
+      args = wrapArgs(arguments)
+    } catch {}
+    return original.apply(null, args)
+  }
 }
 
-export function deferred_template_effect() {
-  let args = arguments
-  try {
-    args = __wrapTemplateEffect(arguments)
-  } catch {}
-  return __svelte_original.deferred_template_effect.apply(null, args)
-}
+export const template_effect = __withArgs(__svelte_original.template_effect, __wrapTemplateEffect)
+export const deferred_template_effect = __withArgs(
+  __svelte_original.deferred_template_effect,
+  __wrapTemplateEffect,
+)
 
 // --- Block Attribution ---
 //
@@ -376,54 +366,12 @@ function __wrapBlock(args) {
   return wrapped
 }
 
-export function each() {
-  let args = arguments
-  try {
-    args = __wrapBlock(arguments)
-  } catch {}
-  return __svelte_original.each.apply(null, args)
-}
-
-export function key() {
-  let args = arguments
-  try {
-    args = __wrapBlock(arguments)
-  } catch {}
-  return __svelte_original.key.apply(null, args)
-}
-
-export function component() {
-  let args = arguments
-  try {
-    args = __wrapBlock(arguments)
-  } catch {}
-  return __svelte_original.component.apply(null, args)
-}
-
-export function boundary() {
-  let args = arguments
-  try {
-    args = __wrapBlock(arguments)
-  } catch {}
-  return __svelte_original.boundary.apply(null, args)
-}
-
-// 'if' and 'await' are reserved words, so they cannot be declared as
-// function names and are exported via aliases instead.
-function __if_block() {
-  let args = arguments
-  try {
-    args = __wrapBlock(arguments)
-  } catch {}
-  return __svelte_original.if.apply(null, args)
-}
-
-function __await_block() {
-  let args = arguments
-  try {
-    args = __wrapBlock(arguments)
-  } catch {}
-  return __svelte_original.await.apply(null, args)
-}
+export const each = __withArgs(__svelte_original.each, __wrapBlock)
+export const key = __withArgs(__svelte_original.key, __wrapBlock)
+export const component = __withArgs(__svelte_original.component, __wrapBlock)
+export const boundary = __withArgs(__svelte_original.boundary, __wrapBlock)
+// 'if' and 'await' are reserved words: exported via aliases.
+const __if_block = __withArgs(__svelte_original.if, __wrapBlock)
+const __await_block = __withArgs(__svelte_original.await, __wrapBlock)
 
 export { __if_block as if, __await_block as await }

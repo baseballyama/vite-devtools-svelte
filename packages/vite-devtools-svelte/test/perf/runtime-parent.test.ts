@@ -95,11 +95,14 @@ function addedIn(msgs: any[]): any[] {
 }
 
 function loadWrapper(ns: any, window: Record<string, any>) {
+  // The module syntax as plain script: imports and re-exports dropped,
+  // `export function` / `export const` declarations kept.
   const body = wrapperCode
-    .replace(/^import \* as __svelte_original from 'svelte\/internal\/client';?$/m, '')
-    .replace(/^export \* from 'svelte\/internal\/client';?$/m, '')
-    .replaceAll(/^export function /gm, 'function ')
-    .replace(/^export \{[^}]*\};?$/m, '')
+    .split('\n')
+    .filter(line => !line.startsWith('import ') && !line.startsWith('export *'))
+    .filter(line => !line.startsWith('export {'))
+    .map(line => (line.startsWith('export ') ? line.slice('export '.length) : line))
+    .join('\n')
   // Evaluates the wrapper module's own source against the model namespace.
   // oxlint-disable-next-line typescript/no-implied-eval -- running the wrapper source under test is the point
   return new Function('__svelte_original', 'window', `${body}\nreturn { push, pop, each };`)(
