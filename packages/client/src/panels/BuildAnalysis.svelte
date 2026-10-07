@@ -117,7 +117,9 @@
     </EmptyState>
   {:else}
     <div class="layout">
-      <div class="composition" aria-label="Bundle composition">
+      <!-- `role="group"`: an aria-label on a role-less div is ignored by
+           assistive tech (ARIA prohibits naming the generic role). -->
+      <div class="composition" role="group" aria-label="Bundle composition">
         <div class="total">
           <span class="muted">Total</span> <strong class="num">{formatBytes(total)}</strong>
         </div>

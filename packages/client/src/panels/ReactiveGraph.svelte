@@ -668,7 +668,8 @@
     <EmptyState title="Reading activity…" />
   {:else}
     <div class="overview">
-      <dl class="record" aria-label="What this overview covers">
+      <!-- role="group": `aria-label` is ignored on a role-less <dl>. -->
+      <dl class="record" role="group" aria-label="What this overview covers">
         <div>
           <dt>Window</dt>
           <dd>

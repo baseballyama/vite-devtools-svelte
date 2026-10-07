@@ -65,12 +65,14 @@
     <div class="palette" role="dialog" aria-modal="true" aria-label="Command palette">
       <div class="field">
         <Icon name="search" size={15} />
+        <!-- Named: a placeholder alone is not an accessible label. -->
         <input
           bind:this={input}
           bind:value={query}
           oninput={() => (index = 0)}
           {onkeydown}
           placeholder="Go to panel or run a command…"
+          aria-label="Search commands"
           role="combobox"
           aria-expanded="true"
           aria-controls="palette-list"
