@@ -31,7 +31,6 @@ describe('svelteDevtools factory', () => {
       { name: 'vite-devtools-svelte', enforce: 'pre', apply: 'serve' },
       { name: 'vite-devtools-svelte:tracking', enforce: 'post', apply: 'serve' },
       { name: 'vite-devtools-svelte:load-profile', enforce: 'post', apply: 'serve' },
-      { name: 'vite-devtools-svelte:load-profile-server', enforce: undefined, apply: 'serve' },
       { name: 'vite-devtools-svelte:warning-capture', enforce: 'post', apply: 'serve' },
       { name: 'vite-devtools-svelte:sveltekit-template-injector', enforce: 'post', apply: 'fn' },
     ])
@@ -135,19 +134,6 @@ describe('build command: every hook is inert', () => {
 
   it('transformIndexHtml injects nothing', () => {
     expect((main.transformIndexHtml as { handler: () => unknown }).handler()).toEqual([])
-  })
-
-  it('compiler warnings are not captured', async () => {
-    const forwarded: string[] = []
-    const logger = { warn: (msg: string) => forwarded.push(msg) }
-    const built = svelteDevtools()
-    resolvePlugins(built, { command: 'build', logger, root: FIXTURES })
-    logger.warn('/test/src/A.svelte:1:1 (x) w')
-    expect(forwarded).toHaveLength(1)
-    const warnings = await (
-      await hubHandlers(built)
-    ).get('svelte-devtools:get-compiler-warnings')!()
-    expect(warnings).toEqual([])
   })
 })
 
@@ -366,76 +352,81 @@ describe('middleware mode disposal (closeServer hook)', () => {
 // Warning Capture Plugin
 // =====================================================================
 
+async function warnings(plugins: Plugin[]) {
+  return (await hubHandlers(plugins)).get('svelte-devtools:get-compiler-warnings')!()
+}
+
 describe('warningCapturePlugin', () => {
-  it('captures Svelte compiler warnings and still forwards them', async () => {
-    const plugins = svelteDevtools()
-    const forwarded: string[] = []
-    const logger = { warn: (msg: string) => forwarded.push(msg) }
-    resolve(plugins, { logger })
-    logger.warn('/test/src/lib/Counter.svelte:5:2 (a11y_no_redundant_roles) Warning message')
-    logger.warn('unrelated warning')
-    const warnings = await (
-      await hubHandlers(plugins)
-    ).get('svelte-devtools:get-compiler-warnings')!()
-    expect(warnings).toHaveLength(1)
-    expect(warnings[0]).toMatchObject({ code: 'a11y_no_redundant_roles', line: 5, column: 2 })
-    expect(forwarded).toHaveLength(2)
-  })
+  type Warning = {
+    code: string
+    message: string
+    filename?: string
+    start?: { line: number; column: number }
+  }
+  type OnWarn = (w: Warning, defaultHandler: (w: Warning) => void) => void
 
-  it.each([
-    [
-      'path, position and code',
-      '/a/src/A.svelte:5:2 (a11y_no_redundant_roles) msg',
-      { file: '/a/src/A.svelte', line: 5, column: 2, code: 'a11y_no_redundant_roles' },
-    ],
-    [
-      'ANSI colours stripped from the message',
-      '\u001B[33m./src/B.svelte:1:3 (css_unused_selector) unused\u001B[39m',
+  /** vite-plugin-svelte's config plugin, holding the options its compile reads `onwarn` from. */
+  function sveltePlugin(onwarn?: OnWarn) {
+    return { name: 'vite-plugin-svelte:config', api: { options: { onwarn } } }
+  }
+
+  const WARNING: Warning = {
+    code: 'a11y_no_redundant_roles',
+    message: 'Redundant role',
+    filename: '/test/src/lib/Counter.svelte',
+    start: { line: 5, column: 2 },
+  }
+
+  it('records the structured warning and still runs the default handler', async () => {
+    const plugins = svelteDevtools()
+    const vps = sveltePlugin()
+    resolve(plugins, { plugins: [vps] })
+    const printed: Warning[] = []
+    ;(vps.api.options.onwarn as OnWarn)(WARNING, w => {
+      printed.push(w)
+    })
+    expect(printed).toEqual([WARNING])
+    expect(await warnings(plugins)).toEqual([
       {
-        file: './src/B.svelte',
-        line: 1,
-        code: 'css_unused_selector',
-        message: './src/B.svelte:1:3 (css_unused_selector) unused',
+        code: 'a11y_no_redundant_roles',
+        message: 'Redundant role',
+        file: '/test/src/lib/Counter.svelte',
+        line: 5,
+        column: 2,
       },
-    ],
-    [
-      'a path without a position',
-      'warning in C:/proj/src/C.svelte (x_code) text',
-      { file: 'C:/proj/src/C.svelte', line: undefined, column: undefined, code: 'x_code' },
-    ],
-    ['no code', '/a/src/D.svelte:2:1 something odd', { file: '/a/src/D.svelte', code: 'unknown' }],
-    [
-      'no recognisable path',
-      'Foo.svelte mentioned (a_code)',
-      { file: '', line: undefined, code: 'a_code' },
-    ],
-  ])('parses a compiler warning with %s', async (_, msg, expected) => {
-    const plugins = svelteDevtools()
-    const logger = { warn: (_msg: string) => {} }
-    resolve(plugins, { logger })
-    logger.warn(msg)
-    const warnings = await (
-      await hubHandlers(plugins)
-    ).get('svelte-devtools:get-compiler-warnings')!()
-    expect(warnings).toHaveLength(1)
-    expect(warnings[0]).toMatchObject(expected)
+    ])
   })
 
-  it('does not stack wrappers on a reused customLogger and feeds the newest plugin instance', async () => {
-    const forwarded: string[] = []
-    const logger = { warn: (msg: string) => forwarded.push(msg) }
-    const first = svelteDevtools()
-    resolve(first, { logger })
-    const second = svelteDevtools() // config-file restart: fresh plugin instances, same logger
-    resolve(second, { logger })
-    logger.warn('/a/App.svelte:1:1 (x) w')
-    expect(forwarded).toHaveLength(1)
-    expect(
-      await (await hubHandlers(second)).get('svelte-devtools:get-compiler-warnings')!(),
-    ).toHaveLength(1)
-    expect(
-      await (await hubHandlers(first)).get('svelte-devtools:get-compiler-warnings')!(),
-    ).toHaveLength(0)
+  it("defers to the user's onwarn (which may silence the warning)", async () => {
+    const plugins = svelteDevtools()
+    const user = vi.fn<OnWarn>()
+    const vps = sveltePlugin(user)
+    resolve(plugins, { plugins: [vps] })
+    const defaultHandler = vi.fn<(w: Warning) => void>()
+    ;(vps.api.options.onwarn as OnWarn)(WARNING, defaultHandler)
+    expect(user).toHaveBeenCalledWith(WARNING, defaultHandler)
+    expect(defaultHandler).not.toHaveBeenCalled()
+    expect(await warnings(plugins)).toHaveLength(1)
+  })
+
+  it('skips warnings from dependencies', async () => {
+    const plugins = svelteDevtools()
+    const vps = sveltePlugin()
+    resolve(plugins, { plugins: [vps] })
+    const onwarn = vps.api.options.onwarn as OnWarn
+    onwarn({ ...WARNING, filename: '/test/node_modules/lib/A.svelte' }, () => {})
+    onwarn({ code: 'x', message: 'no file' }, () => {})
+    expect(await warnings(plugins)).toEqual([
+      { code: 'x', message: 'no file', file: '', line: undefined, column: undefined },
+    ])
+  })
+
+  it('is inert without vite-plugin-svelte and outside dev', () => {
+    const plugins = svelteDevtools()
+    expect(() => resolve(plugins, { plugins: [] })).not.toThrow()
+    const vps = sveltePlugin()
+    resolve(svelteDevtools(), { command: 'build', plugins: [vps] })
+    expect(vps.api.options.onwarn).toBeUndefined()
   })
 })
 
@@ -443,11 +434,11 @@ describe('warningCapturePlugin', () => {
 // Load Profile Server Plugin
 // =====================================================================
 
-describe('loadProfileServerPlugin', () => {
+describe('loadProfilePlugin recorder', () => {
   it('records load timings from the transformed load wrapper', async () => {
     const plugins = svelteDevtools()
     resolve(plugins)
-    const serverPlugin = plugins.find(p => p.name === 'vite-devtools-svelte:load-profile-server')!
+    const serverPlugin = plugins.find(p => p.name === 'vite-devtools-svelte:load-profile')!
     callHook(serverPlugin.configureServer, {})
     ;(globalThis as any).__svelte_devtools_record_load('/', '/r/+page.ts', 'universal', 1.234, 10)
     const loads = await (await hubHandlers(plugins)).get('svelte-devtools:get-load-profiles')!()

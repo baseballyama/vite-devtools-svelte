@@ -377,9 +377,59 @@ describe('loadProfilePlugin: profiled load functions', () => {
     expect(lines.slice(0, 4)).toEqual([
       'import x from "./x"',
       '',
-      'const __original_load = async () => x',
+      'const load = async () => x',
       'export const ssr = false',
     ])
+  })
+
+  it('ignores `export const load` in comments and strings', async () => {
+    const rec = installRecorder()
+    const mod = await loadModule(
+      [
+        '// was: export const load = () => null',
+        'export const note = "export function load() {}"',
+        'export const load = () => ({ ok: 1 })',
+      ].join('\n'),
+      PAGE,
+    )
+    expect(await mod.load()).toEqual({ ok: 1 })
+    expect(mod.note).toBe('export function load() {}')
+    expect(rec).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the other names of a shared `export const` declaration exported', async () => {
+    installRecorder()
+    const mod = await loadModule(
+      'export const ssr = false, load = () => ({ ok: 1 }), csr = true',
+      PAGE,
+    )
+    expect({ ssr: mod.ssr, csr: mod.csr }).toEqual({ ssr: false, csr: true })
+    expect(await mod.load()).toEqual({ ok: 1 })
+  })
+
+  it('the module keeps calling its own load, unwrapped', async () => {
+    const rec = installRecorder()
+    const mod = await loadModule(
+      'export function load() { return { n: 1 } }\nexport const twice = () => [load(), load()]',
+      PAGE,
+    )
+    expect((mod.twice as () => unknown)()).toEqual([{ n: 1 }, { n: 1 }])
+    expect(rec).not.toHaveBeenCalled()
+  })
+
+  it('takes the route from <root>/src/routes, not from the first "routes" in the path', async () => {
+    const rec = installRecorder()
+    const id = '/home/routes/app/src/routes/blog/+page.ts'
+    const result = callHook(
+      loadProfile({ root: '/home/routes/app' }).transform,
+      'export const load = () => ({})',
+      id,
+    )
+    const file = path.join(tmpDir, `m${moduleSeq++}.mjs`)
+    fs.writeFileSync(file, codeOf(result))
+    const mod: LoadModule = await import(/* @vite-ignore */ pathToFileURL(file).href)
+    await mod.load()
+    expect(rec.mock.calls[0]![0]).toBe('/blog')
   })
 
   it.each([
@@ -391,6 +441,8 @@ describe('loadProfilePlugin: profiled load functions', () => {
     ['/app/src/routes/(app)/admin/[id]/+layout.server.ts', '/(app)/admin/[id]', 'server'],
     // a load file outside a routes directory (custom layout): root route
     ['/app/+page.ts', '/', 'universal'],
+    // a "routes" substring that is not a directory of its own
+    ['/srv/routes-app/src/routes/blog/+page.ts', '/blog', 'universal'],
   ])('%s → route %s, %s load', async (id, route, type) => {
     const rec = installRecorder()
     const mod = await loadModule('export const load = () => ({})', id)
@@ -403,6 +455,8 @@ describe('loadProfilePlugin: profiled load functions', () => {
     ['an API endpoint', '/app/src/routes/api/+server.ts', 'export const load = () => ({})', {}],
     ['node_modules', '/app/node_modules/kit/src/routes/+page.ts', 'export const load = 1', {}],
     ['a non-exported load', '/app/src/routes/+page.ts', 'const load = () => ({})', {}],
+    ['a file merely ending in +page.ts', '/app/src/lib/x+page.ts', 'export const load = 1', {}],
+    ['a syntax error', '/app/src/routes/+page.ts', 'export const load = (', {}],
     ['a load-free route module', '/app/src/routes/+page.ts', 'export const ssr = false', {}],
     [
       '`export { load }` (not supported)',

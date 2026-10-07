@@ -1,5 +1,4 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { z } from 'zod'
 
 import type {
@@ -494,8 +493,6 @@ export function buildMcpServer(deps: McpDeps): McpServer {
 
   return server
 }
-
-export { StreamableHTTPServerTransport }
 
 function avg(xs: number[]): number {
   if (xs.length === 0) return 0

@@ -7,8 +7,9 @@ import type { AddressInfo } from 'node:net'
 import type { Plugin } from 'vite'
 import { afterEach, describe, it, expect, vi } from 'vitest'
 
+import { isValidMcpToken } from '../src/mcp/http.js'
 import * as mcpServerModule from '../src/mcp/server.js'
-import { isValidMcpToken, svelteDevtools } from '../src/plugin.js'
+import { svelteDevtools } from '../src/plugin.js'
 import { callHook, resolvePlugins } from './helpers.js'
 
 vi.mock('../src/mcp/server.js', async importOriginal => {
@@ -168,7 +169,7 @@ describe('MCP endpoint errors', () => {
       error: 'Error: factory failed',
     })
     expect(s.server.config.logger.error).toHaveBeenCalledWith(
-      '[svelte-devtools] MCP handler error: Error: factory failed',
+      expect.stringContaining('[svelte-devtools] MCP handler error: Error: factory failed'),
     )
   })
 
