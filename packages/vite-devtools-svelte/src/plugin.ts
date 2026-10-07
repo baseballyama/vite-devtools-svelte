@@ -325,16 +325,23 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     },
 
     // Inject the runtime into the user's app
-    transformIndexHtml() {
-      if (config.command !== 'serve') return []
-      return [
-        {
-          tag: 'script',
-          attrs: { type: 'module' },
-          children: `import '${RUNTIME_MODULE_ID}'`,
-          injectTo: 'head-prepend',
-        },
-      ]
+    // 'pre': the tag is injected before Vite's own HTML processing, which
+    // rewrites the inline module's bare `virtual:` import to a URL the browser
+    // can load (as a normal-order hook, the browser requested
+    // 'virtual:svelte-devtools-runtime' itself and failed with a CORS error).
+    transformIndexHtml: {
+      order: 'pre',
+      handler() {
+        if (config.command !== 'serve') return []
+        return [
+          {
+            tag: 'script',
+            attrs: { type: 'module' },
+            children: `import '${RUNTIME_MODULE_ID}'`,
+            injectTo: 'head-prepend',
+          },
+        ]
+      },
     },
 
     // Vite DevTools integration: only invoked by `@vitejs/devtools`. The kit

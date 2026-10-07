@@ -223,7 +223,10 @@ describe('mainPlugin transformIndexHtml', () => {
         plugins: [],
       } as any)
     }
-    const result = (plugin.transformIndexHtml as Function)!()
+    const hook = plugin.transformIndexHtml as { order: string; handler: Function }
+    // before Vite's HTML processing, which rewrites the inline bare import
+    expect(hook.order).toBe('pre')
+    const result = hook.handler()
     expect(Array.isArray(result)).toBe(true)
     expect(result.length).toBe(1)
     expect(result[0].tag).toBe('script')
@@ -243,7 +246,7 @@ describe('mainPlugin transformIndexHtml', () => {
         plugins: [],
       } as any)
     }
-    const result = (plugin.transformIndexHtml as Function)!()
+    const result = (plugin.transformIndexHtml as { handler: Function }).handler()
     expect(result).toEqual([])
   })
 })
