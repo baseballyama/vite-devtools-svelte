@@ -97,7 +97,7 @@ describe('router: navigation', () => {
   })
 })
 
-describe('OTP_HASH', () => {
+describe('hashOtp', () => {
   it.each([
     ['#devframe_otp=123456', '123456'],
     ['#/fps?devframe_otp=1', '1'],
@@ -105,14 +105,16 @@ describe('OTP_HASH', () => {
     ['#a=b&devframe_otp=9', '9'],
     // Only the leading digits are the code.
     ['#devframe_otp=12a', '12'],
-    ['#devframe_otp=abc', undefined],
-    ['#devframe_otp=', undefined],
-    ['#xdevframe_otp=1', undefined],
-    ['#/devframe_otp=1', undefined],
-    ['devframe_otp=1', undefined],
-    ['', undefined],
+    // A later parameter still counts when an earlier one has no code.
+    ['#devframe_otp=x&devframe_otp=5', '5'],
+    ['#devframe_otp=abc', null],
+    ['#devframe_otp=', null],
+    ['#xdevframe_otp=1', null],
+    ['#/devframe_otp=1', null],
+    ['devframe_otp=1', null],
+    ['', null],
   ])('%j → %s', async (hash, code) => {
-    const { OTP_HASH } = await load('')
-    expect(OTP_HASH.exec(hash)?.[1]).toBe(code)
+    const { hashOtp } = await load('')
+    expect(hashOtp(hash)).toBe(code)
   })
 })

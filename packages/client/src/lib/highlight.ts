@@ -2,6 +2,8 @@
  * Tiny line-oriented syntax highlighter for Svelte source and compiled JS.
  * Output is escaped HTML with `hl-*` classes (styled in CodePane).
  */
+import { isDigit, isIdentStart, isSpace, isWord, skip } from './chars.js'
+
 type Tok = { t: string; c?: string }
 
 const JS_KW = new Set(
@@ -50,9 +52,8 @@ function tokJS(code: string, state: { s: JSState }): Tok[] {
   }
   while (i < code.length) {
     const ch = code.charAt(i)
-    if (/\s/.test(ch)) {
-      let j = i
-      while (j < code.length && /\s/.test(code.charAt(j))) j++
+    if (isSpace(ch)) {
+      const j = skip(code, i, isSpace)
       toks.push({ t: code.slice(i, j) })
       i = j
       continue
@@ -93,16 +94,14 @@ function tokJS(code: string, state: { s: JSState }): Tok[] {
       i = j + 1
       continue
     }
-    if (/\d/.test(ch) && (i === 0 || !/\w/.test(code.charAt(i - 1)))) {
-      let j = i
-      while (j < code.length && /[\d.e_]/.test(code.charAt(j))) j++
+    if (isDigit(ch) && !isWord(code[i - 1])) {
+      const j = skip(code, i, c => isDigit(c) || c === '.' || c === 'e' || c === '_')
       toks.push({ t: code.slice(i, j), c: 'hl-nm' })
       i = j
       continue
     }
-    if (/[a-zA-Z_$]/.test(ch)) {
-      let j = i
-      while (j < code.length && /[\w$.]/.test(code.charAt(j))) j++
+    if (isIdentStart(ch)) {
+      const j = skip(code, i, c => isWord(c) || c === '$' || c === '.')
       const w = code.slice(i, j)
       let c: string | undefined
       if (w.startsWith('$.') || RUNES.has(w.split('.')[0]!)) c = 'hl-sv'
@@ -142,6 +141,9 @@ function tagEnd(code: string, from: number): number {
   return j
 }
 
+const isTagName = (c: string | undefined) => isWord(c) || c === ':' || c === '-'
+const isAttrName = (c: string | undefined) => isTagName(c) || c === '|'
+
 function tokHTML(code: string): Tok[] {
   const toks: Tok[] = []
   let i = 0
@@ -149,20 +151,21 @@ function tokHTML(code: string): Tok[] {
     if (code[i] === '<') {
       const j = tagEnd(code, i)
       const tag = code.slice(i, j + 1)
-      const m = tag.match(/^(<\/?[\w:-]+)/)
-      if (!m) {
+      const nameStart = tag[1] === '/' ? 2 : 1
+      const nameEnd = skip(tag, nameStart, isTagName)
+      if (nameEnd === nameStart) {
         toks.push({ t: tag, c: 'hl-tg' })
         i = j + 1
         continue
       }
-      const head = m[1]!
-      toks.push({ t: head, c: 'hl-tg' })
-      let rest = tag.slice(head.length)
+      toks.push({ t: tag.slice(0, nameEnd), c: 'hl-tg' })
+      let rest = tag.slice(nameEnd)
       while (rest.length > 0) {
-        const am = rest.match(/^(\s+)([\w:|-]+)(=)/)
-        if (am) {
-          toks.push({ t: am[1]! }, { t: am[2]!, c: 'hl-at' }, { t: '=' })
-          rest = rest.slice(am[0].length)
+        const ws = skip(rest, 0, isSpace)
+        const attr = ws > 0 ? skip(rest, ws, isAttrName) : 0
+        if (attr > ws && rest[attr] === '=') {
+          toks.push({ t: rest.slice(0, ws) }, { t: rest.slice(ws, attr), c: 'hl-at' }, { t: '=' })
+          rest = rest.slice(attr + 1)
           if (rest[0] === '"' || rest[0] === "'") {
             const q = rest[0]
             let k = 1
@@ -182,10 +185,9 @@ function tokHTML(code: string): Tok[] {
           }
           continue
         }
-        const bm = rest.match(/^(\s+)([\w:|-]+)/)
-        if (bm) {
-          toks.push({ t: bm[1]! }, { t: bm[2]!, c: 'hl-at' })
-          rest = rest.slice(bm[0].length)
+        if (attr > ws) {
+          toks.push({ t: rest.slice(0, ws) }, { t: rest.slice(ws, attr), c: 'hl-at' })
+          rest = rest.slice(attr)
         } else {
           toks.push({
             t: rest.charAt(0),
@@ -220,18 +222,28 @@ function tokHTML(code: string): Tok[] {
 function tokCSS(code: string): Tok[] {
   const tr = code.trimStart()
   const ind = code.slice(0, code.length - tr.length)
-  const pm = tr.match(/^([\w-]+)(\s*:\s*)(.+?)(;?\s*)$/)
-  if (pm)
-    return [
-      { t: ind },
-      { t: pm[1]!, c: 'hl-cp' },
-      { t: pm[2]! },
-      { t: pm[3]!, c: 'hl-cv' },
-      { t: pm[4]! },
-    ]
+  const body = tr.trimEnd()
+  // A rule opener first: `a:hover {` would also read as `prop: value`.
   // Trailing whitespace stays in the `{` token: dropping it lost source text.
-  const sm = tr.match(/^([^{]+?)(\s*\{\s*)$/)
-  if (sm) return [{ t: ind }, { t: sm[1]!, c: 'hl-cs' }, { t: sm[2]! }]
+  const brace = tr.indexOf('{')
+  if (brace > 0 && brace === body.length - 1) {
+    const sel = tr.slice(0, brace).trimEnd()
+    return [{ t: ind }, { t: sel, c: 'hl-cs' }, { t: tr.slice(sel.length) }]
+  }
+  const name = skip(tr, 0, c => isWord(c) || c === '-')
+  const colon = skip(tr, name, isSpace)
+  if (name > 0 && tr[colon] === ':') {
+    const value = skip(tr, colon + 1, isSpace)
+    const end = body.endsWith(';') && body.length - 1 > value ? body.length - 1 : body.length
+    if (end > value)
+      return [
+        { t: ind },
+        { t: tr.slice(0, name), c: 'hl-cp' },
+        { t: tr.slice(name, value) },
+        { t: tr.slice(value, end), c: 'hl-cv' },
+        { t: tr.slice(end) },
+      ]
+  }
   return [{ t: code }]
 }
 

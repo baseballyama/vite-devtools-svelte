@@ -114,7 +114,7 @@
 
   function isTyping(t: EventTarget | null) {
     const el = t as HTMLElement | null
-    return !!el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))
+    return !!el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))
   }
 
   function onkeydown(e: KeyboardEvent) {

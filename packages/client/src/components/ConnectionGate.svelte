@@ -1,8 +1,9 @@
 <script lang="ts">
   import { tick } from 'svelte'
 
+  import { digitsOf } from '../lib/chars.js'
   import { connection } from '../lib/connection.svelte.js'
-  import { OTP_HASH, router } from '../lib/router.svelte.js'
+  import { hashOtp, router } from '../lib/router.svelte.js'
   import Button from './Button.svelte'
   import Icon from './Icon.svelte'
 
@@ -12,6 +13,7 @@
    * is down. Nothing renders while connected.
    */
   let code = $state('')
+  const digits = $derived(digitsOf(code))
   let busy = $state(false)
   let failed = $state(false)
   let requested = $state(false)
@@ -50,14 +52,13 @@
   $effect(() => {
     if (status !== 'unauthorized' || !connection.canAuth) return
     const onHash = () => {
-      const m = OTP_HASH.exec(location.hash)
-      if (!m) return
+      const c = hashOtp(location.hash)
+      if (c === null) return
       history.replaceState(
         history.state,
         '',
         `${location.pathname}${location.search}#/${router.current}`,
       )
-      const c = m[1]!
       if (linkCodes.has(c) || busy) return
       linkCodes.add(c)
       code = c
@@ -69,9 +70,8 @@
 
   async function submit(e: SubmitEvent) {
     e.preventDefault()
-    const c = code.replace(/\D/g, '')
-    if (c.length < 6 || busy) return
-    await verify(c)
+    if (digits.length < 6 || busy) return
+    await verify(digits)
   }
 
   async function verify(c: string) {
@@ -115,11 +115,7 @@
         {#if failed}<p class="err" role="alert">
             That code did not work — check the terminal and try again.
           </p>{/if}
-        <Button
-          type="submit"
-          variant="primary"
-          disabled={busy || code.replace(/\D/g, '').length < 6}
-        >
+        <Button type="submit" variant="primary" disabled={busy || digits.length < 6}>
           {busy ? 'Verifying…' : 'Connect'}
         </Button>
         <button

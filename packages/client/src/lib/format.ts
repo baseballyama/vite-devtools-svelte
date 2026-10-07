@@ -6,7 +6,7 @@
  * (e.g. raw FS paths surfaced from analyzers on Windows) renders correctly.
  */
 
-const PATH_SEP = /[\\/]/
+const segments = (path: string) => path.replaceAll('\\', '/').split('/')
 
 /**
  * Last `depth` segments of a path, joined with `/`. Useful for compact
@@ -18,8 +18,7 @@ const PATH_SEP = /[\\/]/
  *   shortPath('Counter.svelte') // → 'Counter.svelte'
  */
 export function shortPath(path: string, depth = 2): string {
-  if (!path) return ''
-  return path.split(PATH_SEP).slice(-depth).join('/')
+  return segments(path).slice(-depth).join('/')
 }
 
 /**
@@ -30,8 +29,7 @@ export function shortPath(path: string, depth = 2): string {
  *   basename('') // → ''
  */
 export function basename(path: string): string {
-  if (!path) return ''
-  return path.split(PATH_SEP).pop() ?? ''
+  return segments(path).pop()!
 }
 
 /**
@@ -45,8 +43,10 @@ export function basename(path: string): string {
  */
 export function componentName(file: string | undefined | null, fallback = 'Unknown'): string {
   if (!file) return fallback
+  // Only a trailing `.svelte` is the component extension: module state lives
+  // in `x.svelte.ts`, which must not read as `x.ts`.
   const last = basename(file)
-  return last.replace(/\.svelte$/, '') || fallback
+  return (last.endsWith('.svelte') ? last.slice(0, -'.svelte'.length) : last) || fallback
 }
 
 const BYTE_UNITS = ['KB', 'MB', 'GB', 'TB'] as const
