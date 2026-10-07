@@ -167,7 +167,14 @@ jobs:
       # built site fails the step. The live site ('before') and vite.dev
       # ('reference') are captured best effort for comparison only.
       - name: Install Chromium (workspace playwright-core)
-        run: pnpm exec playwright-core install --with-deps chromium
+        # The apt mirror occasionally stalls mid-download (a 10-minute job
+        # timeout on main): cap each attempt and retry.
+        run: |
+          for attempt in 1 2 3; do
+            timeout 180 pnpm exec playwright-core install --with-deps chromium && exit 0
+            echo "Chromium install attempt $attempt failed or timed out; retrying"
+          done
+          exit 1
 
       - name: Site screenshots + QA
         run: node site/scripts/capture.mjs --out=site-shots --build=site/build
@@ -289,7 +296,14 @@ jobs:
         run: node e2e/compat/prepare.mjs ${{ matrix.profile }}
 
       - name: Install Chromium (workspace playwright-core)
-        run: pnpm exec playwright-core install --with-deps chromium
+        # The apt mirror occasionally stalls mid-download (a 10-minute job
+        # timeout on main): cap each attempt and retry.
+        run: |
+          for attempt in 1 2 3; do
+            timeout 180 pnpm exec playwright-core install --with-deps chromium && exit 0
+            echo "Chromium install attempt $attempt failed or timed out; retrying"
+          done
+          exit 1
 
       - name: Smoke test
         run: node e2e/compat/smoke.mjs ${{ matrix.profile }} ${{ matrix.mode == 'dock' && '--dock' || '' }} --tier=2
@@ -310,7 +324,7 @@ jobs:
     name: Reactivity e2e (MCP)
     needs: [test]
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -328,7 +342,14 @@ jobs:
         run: pnpm build
 
       - name: Install Chromium (workspace playwright-core)
-        run: pnpm exec playwright-core install --with-deps chromium
+        # The apt mirror occasionally stalls mid-download (a 10-minute job
+        # timeout on main): cap each attempt and retry.
+        run: |
+          for attempt in 1 2 3; do
+            timeout 180 pnpm exec playwright-core install --with-deps chromium && exit 0
+            echo "Chromium install attempt $attempt failed or timed out; retrying"
+          done
+          exit 1
 
       - name: Reactivity e2e
         run: node e2e/reactivity.mjs
@@ -346,7 +367,7 @@ jobs:
     name: Reactivity UI screenshots
     needs: [test, compat]
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -364,7 +385,14 @@ jobs:
         run: pnpm build
 
       - name: Install Chromium (workspace playwright-core)
-        run: pnpm exec playwright-core install --with-deps chromium
+        # The apt mirror occasionally stalls mid-download (a 10-minute job
+        # timeout on main): cap each attempt and retry.
+        run: |
+          for attempt in 1 2 3; do
+            timeout 180 pnpm exec playwright-core install --with-deps chromium && exit 0
+            echo "Chromium install attempt $attempt failed or timed out; retrying"
+          done
+          exit 1
 
       - name: Capture
         run: node scripts/screenshots/reactivity.mjs --out=reactivity-shots
@@ -397,7 +425,7 @@ jobs:
   release-dry-run:
     name: Release dry run (no publish)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
