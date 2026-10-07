@@ -31,9 +31,12 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # Type-aware lint resolves each SvelteKit app's tsconfig, which extends
-      # the generated .svelte-kit/tsconfig.json.
-      - name: SvelteKit sync
-        run: pnpm sync:kit
+      # the generated .svelte-kit/tsconfig.json; sync loads each app's
+      # vite.config, which imports the built plugin.
+      - name: Build plugin + SvelteKit sync
+        run: |
+          pnpm build:plugin
+          pnpm sync:kit
 
       - name: Lint (oxlint, type-aware)
         run: pnpm exec oxlint
