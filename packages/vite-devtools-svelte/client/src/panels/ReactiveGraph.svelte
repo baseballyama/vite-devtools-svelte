@@ -448,7 +448,7 @@
       <dl class="record" aria-label="What this overview covers">
         <div><dt>Window</dt><dd>last {Math.round(s.window.ms / 1000)} s · sampled while active for {Math.round(s.window.sampledActiveMs / 1000)} s</dd></div>
         <div><dt>Changes</dt><dd>$state sampled every 200 ms; several writes within one sample count once</dd></div>
-        <div><dt>Coverage</dt><dd>state created during component init; module-level <code>.svelte.ts</code> state is not tracked</dd></div>
+        <div><dt>Coverage</dt><dd>state created during component init and in <code>.svelte.js/.ts</code> module bodies; reads from the markup appear as the component's <em>markup</em> node</dd></div>
         <div><dt>Components</dt><dd>{s.components.withActivity.toLocaleString()} active of {totalLabel(s.components.total)} registered</dd></div>
         <div>
           <dt>Not available yet</dt>
