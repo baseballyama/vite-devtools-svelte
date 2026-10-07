@@ -15,6 +15,7 @@
     "perf:fixture": "node perf/generate-large-app.mjs",
     "perf:bench": "node perf/bench-browser.mjs",
     "perf:noop": "node perf/check-prod-noop.mjs",
+    "e2e:reactivity": "node scripts/reactivity-e2e.mjs",
     "changeset": "changeset",
     "version": "changeset version",
     "release": "pnpm build && changeset publish"

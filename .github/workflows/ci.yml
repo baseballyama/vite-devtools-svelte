@@ -253,6 +253,42 @@ jobs:
         if: always()
         run: git diff --exit-code -- pnpm-lock.yaml examples/ playground/ packages/
 
+  # Reactivity end to end through MCP (scripts/reactivity-e2e.mjs): the
+  # playground's /lab page (module/class state, context, props, bind:,
+  # {#each}/{@const}, snippets, {#key}, {#await}, <svelte:boundary>, HMR) in
+  # Chromium; checks the component tree, graph edges, problems and timeline.
+  reactivity-e2e:
+    name: Reactivity e2e (MCP)
+    needs: [test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build plugin and client UI
+        run: pnpm build
+
+      - name: Install Chromium (workspace playwright-core)
+        run: pnpm exec playwright-core install --with-deps chromium
+
+      - name: Reactivity e2e
+        run: node scripts/reactivity-e2e.mjs
+
+      # the HMR edit is undone by the script
+      - name: Repo unchanged
+        if: always()
+        run: git diff --exit-code -- pnpm-lock.yaml examples/ playground/ packages/
+
   # Screenshots of the reactivity UI on the SvelteKit 2 sample with the real
   # runtime (scripts/screenshots/reactivity.mjs). Images are scanned for
   # machine paths, codes and tokens before being written; a hit fails the
