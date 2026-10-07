@@ -114,8 +114,33 @@ describe('injectComponentTracking', () => {
     expect(pushLine).toMatch(/_pendingFile = "\/a\.svelte"; \} \$\.push\(\$\$props/)
   })
 
+  it('ignores a markup line that starts with `$.push($$props` (multi-line template string)', () => {
+    const code = compileClient(
+      '<script>let n = $state(0)</script><pre>\n$.push($$props, true);</pre>{n}',
+    )
+    const markupLine = code.split('\n').find(l => l.startsWith('$.push($$props'))!
+    expect(markupLine).toBeDefined()
+    const out = injectComponentTracking(code, '/a.svelte')!
+    insertedHint(code, out)
+    expect(out.split('\n')).toContain(markupLine)
+    const tagged = out.split('\n').find(l => l.includes('_pendingFile'))!
+    // the component's own statement, not the markup line
+    expect(tagged.trimStart().startsWith('if (typeof window')).toBe(true)
+    expect(tagged).toContain('; } $.push($$props, true, ')
+  })
+
+  it('finds the call at the very start of the module', () => {
+    const out = injectComponentTracking('$.push($$props)', '/a.svelte')!
+    expect(out.endsWith('} $.push($$props)')).toBe(true)
+  })
+
+  it('returns null for ambiguous unparsable code', () => {
+    const code = '$.push($$props, true);\n$.push($$props, true); ('
+    expect(injectComponentTracking(code, '/a.svelte')).toBeNull()
+  })
+
   it('tags only the first component context push of a module', () => {
-    const twice = `${COUNTER}\n${COUNTER.replaceAll('Counter', 'Other')}`
+    const twice = `${COUNTER}\nfunction Other($$anchor, $$props) {\n\t$.push($$props, true);\n\treturn $.pop();\n}`
     const out = injectComponentTracking(twice, '/a.svelte')!
     expect(out.split('_pendingFile').length - 1).toBe(1)
   })
@@ -131,6 +156,11 @@ describe('injectComponentTracking', () => {
         .code,
     ],
     ['`$.push(` only inside a string', 'const s = "$.push($$props, true)"'],
+    ['another identifier', '\t$.push($$propsX, true)'],
+    [
+      'several `$.push($$props` texts but no such call',
+      'const a = `\n$.push($$props)`, b = `\n$.push($$props)`\n$.push()\n$.pop($$props)\n$[push]($$props)',
+    ],
   ])('returns null for %s', (_, code) => {
     expect(injectComponentTracking(code, '/a.svelte')).toBeNull()
   })

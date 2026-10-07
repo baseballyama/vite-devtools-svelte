@@ -9,6 +9,23 @@ function __hash(str) {
   return (h >>> 0).toString(36)
 }
 
+// [A-Za-z_$], plus [0-9] after the first character (Svelte's identifier test
+// for proxy labels).
+function __isIdentChar(ch, first) {
+  return (
+    (ch >= 'a' && ch <= 'z') ||
+    (ch >= 'A' && ch <= 'Z') ||
+    ch === '_' ||
+    ch === '$' ||
+    (!first && ch >= '0' && ch <= '9')
+  )
+}
+
+// A proxy label path segment ends at `i`: the end, or the next segment.
+function __segmentEnd(label, i) {
+  return i === label.length || label[i] === '.' || label[i] === '['
+}
+
 // Wire shape of one component in a components message.
 function __componentEntry(instance) {
   return {
@@ -853,13 +870,39 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     },
 
     // '.items[0].text' -> ['items', '0', 'text']; null for ' version' and
-    // anything else that is not a property path.
+    // anything else that is not a property path. Svelte's labels: `.prop`
+    // for an identifier, `[0]` for an index, `['prop']` otherwise — the
+    // quoted name is not escaped, so it ends at the first `']` that is
+    // followed by the next segment or the end.
     _labelPath(rest) {
       const path = []
-      const re = /\.([A-Za-z_$][\w$]*)|\[(\d+)\]|\['((?:[^'\\]|\\.)*)'\]/y
-      let m
-      while (re.lastIndex < rest.length && (m = re.exec(rest))) path.push(m[1] ?? m[2] ?? m[3])
-      return re.lastIndex === rest.length || rest.length === 0 ? path : null
+      let i = 0
+      while (i < rest.length) {
+        let end
+        if (rest[i] === '.') {
+          end = i + 1
+          while (end < rest.length && __isIdentChar(rest[end], end === i + 1)) end++
+          if (end === i + 1) return null
+          path.push(rest.slice(i + 1, end))
+        } else if (rest.startsWith("['", i)) {
+          end = rest.indexOf("']", i + 2)
+          while (end !== -1 && !__segmentEnd(rest, end + 2)) end = rest.indexOf("']", end + 1)
+          if (end === -1) return null
+          path.push(rest.slice(i + 2, end))
+          end += 2
+        } else if (rest[i] === '[') {
+          end = i + 1
+          while (end < rest.length && rest[end] >= '0' && rest[end] <= '9') end++
+          if (end === i + 1 || rest[end] !== ']') return null
+          path.push(rest.slice(i + 1, end))
+          end++
+        } else {
+          return null
+        }
+        if (!__segmentEnd(rest, end)) return null
+        i = end
+      }
+      return path
     },
 
     // Own-property walk (getOwnPropertyDescriptor does not create sources on
