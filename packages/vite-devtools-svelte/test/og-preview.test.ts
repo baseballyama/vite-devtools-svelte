@@ -7,7 +7,8 @@ import path from 'node:path'
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 
-import { decodeBody, decodeEntities, getOGPreview, parseMetaTags } from '../src/analyzers/og.js'
+import { decodeEntities } from '../src/analyzers/html.js'
+import { decodeBody, getOGPreview, parseMetaTags } from '../src/analyzers/og.js'
 import { createTestHost, rpcHandlers } from './helpers.js'
 
 vi.mock('node:dns/promises', () => ({
@@ -74,6 +75,26 @@ describe('parseMetaTags', () => {
     ['no content', '<meta property="og:title">', []],
     ['charset meta', '<meta charset="utf-8">', []],
     ['metadata is not meta', '<metadata property="og:title" content="T">', []],
+    ['in a comment', '<!-- <meta property="og:title" content="T"> -->', []],
+    [
+      'in a script string',
+      `<script>const s = '<meta property="og:title" content="T">'</SCRIPT >`,
+      [],
+    ],
+    ['in an unclosed script', `<script>'<meta property="og:title" content="T">'`, []],
+    ['in a style', '<style>/* <meta property="og:title" content="T"> */</style>', []],
+    ['unterminated quote', '<meta property="og:title" content="T>', []],
+    ['truncated tag', '<meta property="og:title" content="T"', []],
+    [
+      'after a doctype, a lone < and an end tag with attributes',
+      '<!DOCTYPE html><p>a < b</p x=">"><?pi?><meta property="og:title" content="T"/>',
+      [['og:title', 'T']],
+    ],
+    [
+      'valueless attributes and a name starting with =',
+      '<meta itemscope =x property="og:title" content=T/>',
+      [['og:title', 'T/']],
+    ],
     [
       'several, in document order',
       '<meta property="a" content="1"><p><meta name="b" content="2">',
@@ -98,6 +119,9 @@ describe('decodeEntities', () => {
     ['&nbsp;', ' '],
     ['no entities', 'no entities'],
     ['& alone', '& alone'],
+    ['&constructor; &toString;', '&constructor; &toString;'], // not Object.prototype members
+    ['&x &#65;', '&x A'],
+    ['&#x;&#;&#1a;', '&#x;&#;&#1a;'],
   ])('%j → %j', (input, output) => {
     expect(decodeEntities(input)).toBe(output)
   })
@@ -109,6 +133,7 @@ describe('decodeBody (charset)', () => {
   const sjis = new Uint8Array([0x82, 0xa0, 0x82, 0xa2]) // あい
   const join = (prefix: string, bytes: Uint8Array) => new Uint8Array([...utf8(prefix), ...bytes])
   const httpEquiv = '<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">'
+  const quotedEquiv = `<meta http-equiv="Content-Type" content="text/html; charset = 'shift_jis'">`
 
   it.each<[label: string, bytes: Uint8Array, contentType: string | null, text: string]>([
     ['utf-8 default', utf8('あい'), null, 'あい'],
@@ -128,6 +153,20 @@ describe('decodeBody (charset)', () => {
       '<meta charset="shift_jis">é',
     ],
     ['unknown label falls back to utf-8', utf8('é'), 'text/html; charset=nope-42', 'é'],
+    [
+      'only a charset or http-equiv meta declares one',
+      join('<meta name="d" content="about charset=shift_jis">', utf8('é')),
+      null,
+      '<meta name="d" content="about charset=shift_jis">é',
+    ],
+    [
+      'quoted http-equiv charset, after one without',
+      join(`<meta http-equiv="content-type" content="text/html">${quotedEquiv}`, sjis),
+      null,
+      `<meta http-equiv="content-type" content="text/html">${quotedEquiv}あい`,
+    ],
+    ['unterminated quoted charset', utf8('é'), 'text/html; charset="shift_jis', 'é'],
+    ['charset without =', utf8('é'), 'text/html; charsets; charset=utf-8', 'é'],
   ])('%s', (_label, bytes, contentType, text) => {
     expect(decodeBody(bytes, contentType)).toBe(text)
   })
@@ -177,6 +216,13 @@ describe('getOGPreview', () => {
     )
     const r = await getOGPreview(PAGE)
     expect(r).toMatchObject({ title: 'A & B page', description: 'd <3' })
+  })
+
+  it('the document <title> is not one in an svg, comment or script', async () => {
+    serve(
+      `<!-- <title>C</title> --><script>'<title>S</title>'</script><svg><title>Icon</title></svg><svg/><TITLE>Doc</TITLE>`,
+    )
+    expect((await getOGPreview(PAGE)).title).toBe('Doc')
   })
 
   it('og tags take precedence over <title> and meta description', async () => {

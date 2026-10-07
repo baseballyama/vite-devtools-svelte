@@ -310,6 +310,70 @@ describe('analyzeComponents', () => {
     ])
   })
 
+  it('reads imports from the parsed scripts only', () => {
+    const r = tree({
+      'src/A.svelte': [
+        '<!-- <script>import Gone from "./Gone.svelte"</script> -->',
+        '<script lang="ts" module>',
+        "  export { default as Re } from './Re.svelte'",
+        '</script>',
+        '<script lang="ts">',
+        "  // import Commented from './Commented.svelte'",
+        '  const text = "import Quoted from \'./Quoted.svelte\'"',
+        "  import type Typed from './Typed.svelte'",
+        "  import { type Named } from './Named.svelte'",
+        "  export type { Props } from './Exported.svelte'",
+        "  import './Side.svelte'",
+        "  const Lazy = import('./Lazy.svelte')",
+        '  const Tpl = import(`./Tpl.svelte`)',
+        "  const name = 'X'",
+        '  const Dyn = import(`./${name}.svelte`)',
+        "  const Cat = import('./' + 'Cat.svelte')",
+        '  const Var = import(name)',
+        "  const Esc = import('./Esc\\x2e.svelte')",
+        '</script>',
+        "<p>import Markup from './Markup.svelte'</p>",
+      ].join('\n'),
+      ...Object.fromEntries(
+        [
+          'Gone',
+          'Re',
+          'Commented',
+          'Quoted',
+          'Typed',
+          'Named',
+          'Exported',
+          'Side',
+          'Lazy',
+          'Tpl',
+          'X',
+          'Cat',
+          'Esc',
+          'Markup',
+        ].map(n => [`src/${n}.svelte`, '']),
+      ),
+    })
+    const a = analyzeComponents(r).find(c => c.name === 'A')!
+    expect(a.imports).toEqual(
+      ['Re', 'Side', 'Lazy', 'Tpl'].map(n => path.join('src', `${n}.svelte`)),
+    )
+  })
+
+  it('re-reads a component once it changes, and forgets removed ones', () => {
+    const r = tree({ 'src/A.svelte': '', 'src/B.svelte': '', 'src/C.svelte': '' })
+    const file = path.join(r, 'src', 'A.svelte')
+    const importsOfA = () => analyzeComponents(r).find(c => c.name === 'A')!.imports
+    expect(importsOfA()).toEqual([])
+    fs.writeFileSync(file, "<script>import B from './B.svelte'</script>")
+    expect(importsOfA()).toEqual([path.join('src', 'B.svelte')])
+    fs.writeFileSync(file, "<script>import C from './C.svelte'</script>") // same size
+    const later = new Date(Date.now() + 5000)
+    fs.utimesSync(file, later, later)
+    expect(importsOfA()).toEqual([path.join('src', 'C.svelte')])
+    fs.rmSync(path.join(r, 'src', 'B.svelte'))
+    expect(analyzeComponents(r).map(c => c.name)).not.toContain('B')
+  })
+
   it('returns [] without a src directory', () => {
     expect(analyzeComponents(tree({}))).toEqual([])
   })
@@ -333,44 +397,83 @@ describe('analyzeComponents', () => {
 
 describe('findReactiveLine', () => {
   const source = [
-    '<script>', // 1
-    '  let count = $state(0)', // 2
-    '  const doubled = $derived(count * 2)', // 3
-    '  var legacy = 1', // 4
-    '  let countdown = 0', // 5
-    '  $effect.pre(() => {})', // 6
-    '  $effect(() => {})', // 7
-    '  let $odd.name = 1', // 8
-    '  let a, b = 1', // 9
-    '  let a$ = 2', // 10
-    '  let a$b = 3', // 11
-    '  outlet zz', // 12
-    '</script>',
+    '<!-- <script>let count = 1</script> -->', // 1
+    '<script module lang="ts">', // 2
+    '  export const shared = $state(0)', // 3
+    '</script>', // 4
+    '<script lang="ts" generics="T extends Record<string, unknown>">', // 5
+    '  // let count = 1; $effect(() => {})', // 6
+    "  const note = 'let count = 2; $effect.pre('", // 7
+    '  let count = $state(0)', // 8
+    '  const doubled = $derived(count * 2)', // 9
+    '  var legacy = 1', // 10
+    '  let countdown = 0', // 11
+    '  $effect.pre(() => {})', // 12
+    '  $effect(() => {})', // 13
+    '  $effect(() => {})', // 14
+    '  let a, b = 1', // 15
+    '  let a$ = 2', // 16
+    '  let a$b = 3', // 17
+    '  let { x, y: renamed = 1, ...rest } = $props<T>()', // 18
+    '  let [, second, [deep], ...more] = [0, 1, [2]]', // 19
+    '  class Counter { n = $state(0); #p = $state(1) }', // 20
+    '  const zz = outlet', // 21
+    '</script>', // 22
+    '<p>let markup = 1</p>', // 23
   ].join('\n')
 
   it.each<[name: string, type: string, line: number]>([
-    ['count', 'state', 2],
-    ['doubled', 'derived', 3],
-    ['legacy', 'state', 4],
-    ['countdown', 'state', 5], // `count` must not match `countdown` and vice versa
-    ['anything', 'effect', 6], // the first effect of either kind
-    ['$odd.name', 'state', 8], // regex metacharacters are escaped
+    ['count', 'state', 8], // not the HTML comment, JS comment or string before it
+    ['doubled', 'derived', 9],
+    ['legacy', 'state', 10],
+    ['countdown', 'state', 11], // `count` must not match `countdown` and vice versa
+    ['shared', 'state', 3], // the module script
+    ['effect_pre_1', 'effect', 12],
+    ['effect_1', 'effect', 13],
+    ['effect_2', 'effect', 14],
+    ['effect_3', 'effect', 12], // no third $effect: the first effect of either kind
+    ['anything', 'effect', 12],
     ['missing', 'state', 0],
-    ['b', 'state', 0], // only the first declarator of a statement
     ['', 'state', 0],
-    ['a', 'state', 9],
-    ['a$', 'state', 10], // a trailing `$` still ends the name
-    ['a$b', 'state', 11],
-    ['zz', 'state', 0], // `let` must start a word
+    ['a', 'state', 15],
+    ['b', 'state', 15], // a later declarator of the statement
+    ['a$', 'state', 16], // a trailing `$` still ends the name
+    ['a$b', 'state', 17],
+    ['x', 'state', 18],
+    ['renamed', 'state', 18],
+    ['rest', 'state', 18],
+    ['y', 'state', 0], // a property key, not a binding
+    ['second', 'state', 19],
+    ['deep', 'state', 19],
+    ['more', 'state', 19],
+    ['Counter.n', 'state', 20],
+    ['Counter.#p', 'state', 20],
+    ['n', 'state', 0], // a field is named after its class
+    ['outlet', 'state', 0], // only declarations count
+    ['markup', 'state', 0], // markup is not code
   ])('%s (%s) → line %i', (name, type, line) => {
     expect(findReactiveLine(source, name, type)).toBe(line)
+  })
+
+  it('reads a .svelte.js / .svelte.ts module as a whole', () => {
+    const module = ['export class Store {', '  items = $state([])', '}', 'let total = $state(0)']
+    expect(findReactiveLine(module.join('\n'), 'Store.items', 'state')).toBe(2)
+    expect(findReactiveLine(module.join('\n'), 'total', 'state')).toBe(4)
   })
 
   it('returns 0 for an effect when the source has none', () => {
     expect(findReactiveLine('let a = 1', 'a', 'effect')).toBe(0)
   })
 
-  it('handles CRLF sources', () => {
-    expect(findReactiveLine('<script>\r\n  let x = $state(1)\r\n', 'x', 'state')).toBe(2)
+  it('returns 0 when the script does not parse', () => {
+    expect(findReactiveLine('<script>\n  let count = \n</script>', 'count', 'state')).toBe(0)
+    expect(findReactiveLine('<script>\n  let count = 1', 'count', 'state')).toBe(0) // unclosed
+    expect(findReactiveLine('<script\n', 'count', 'state')).toBe(0) // unclosed tag
+    expect(findReactiveLine('<!-- <script>let count = 1</script>', 'count', 'state')).toBe(0)
+  })
+
+  it('handles CRLF and non-ASCII sources', () => {
+    const crlf = '<script>\r\n  const s = "日本語😀"\r\n  let x = $state(1)\r\n</script>'
+    expect(findReactiveLine(crlf, 'x', 'state')).toBe(3)
   })
 })

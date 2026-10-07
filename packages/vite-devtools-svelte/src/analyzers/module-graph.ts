@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
+import { isInside } from '../server/security.js'
 import type { ModuleGraphData, ModuleNode } from '../types.js'
 
 /** Minimal shape of a Vite module-graph node that we read. */
@@ -16,12 +17,6 @@ function classify(file: string): ModuleNode['type'] {
   if (ext === '.js') return 'js'
   if (ext === '.css') return 'css'
   return 'other'
-}
-
-/** Whether `file` lies inside `root` (`..foo/x` does; `../x` and other drives do not). */
-function isInside(root: string, file: string): boolean {
-  const rel = path.relative(root, file)
-  return rel !== '' && rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel)
 }
 
 /**
@@ -42,10 +37,11 @@ export function buildModuleGraph(root: string, allModules: GraphModuleLike[]): M
   const idMap = new Map<string, ModuleNode>()
 
   for (const mod of allModules) {
+    // one node per file across environments and query variants
+    if (!mod.file || idMap.has(mod.file) || !isInside(root, mod.file)) continue
+    const id = path.relative(root, mod.file)
     // a node_modules path segment (not `src/node_modules_utils.ts`)
-    if (!mod.file || mod.file.split(/[\\/]/).includes('node_modules')) continue
-    if (!isInside(root, mod.file)) continue
-    if (idMap.has(mod.file)) continue // deduplicate across environments
+    if (id.split(path.sep).includes('node_modules')) continue
     let size: number | undefined
     try {
       size = fs.statSync(mod.file).size
@@ -53,7 +49,7 @@ export function buildModuleGraph(root: string, allModules: GraphModuleLike[]): M
       /* ignore */
     }
     const node: ModuleNode = {
-      id: path.relative(root, mod.file),
+      id,
       file: mod.file,
       type: classify(mod.file),
       importedBy: [],
@@ -64,27 +60,19 @@ export function buildModuleGraph(root: string, allModules: GraphModuleLike[]): M
     modules.push(node)
   }
 
-  // Edges, deduplicated with Sets
-  const importSets = new Map<ModuleNode, Set<string>>()
-  const importedBySets = new Map<ModuleNode, Set<string>>()
+  // Edges, each once (a module's variants share one node)
+  const edges = new Map<ModuleNode, Set<ModuleNode>>()
   for (const mod of allModules) {
     const node = mod.file ? idMap.get(mod.file) : undefined
     if (!node) continue
-    let imports = importSets.get(node)
-    if (!imports) importSets.set(node, (imports = new Set()))
+    let targets = edges.get(node)
+    if (!targets) edges.set(node, (targets = new Set()))
     for (const imp of mod.importedModules) {
-      const impNode = imp.file ? idMap.get(imp.file) : undefined
-      if (!impNode || impNode === node) continue
-      if (!imports.has(impNode.id)) {
-        imports.add(impNode.id)
-        node.imports.push(impNode.id)
-      }
-      let by = importedBySets.get(impNode)
-      if (!by) importedBySets.set(impNode, (by = new Set()))
-      if (!by.has(node.id)) {
-        by.add(node.id)
-        impNode.importedBy.push(node.id)
-      }
+      const target = imp.file ? idMap.get(imp.file) : undefined
+      if (!target || target === node || targets.has(target)) continue
+      targets.add(target)
+      node.imports.push(target.id)
+      target.importedBy.push(node.id)
     }
   }
 

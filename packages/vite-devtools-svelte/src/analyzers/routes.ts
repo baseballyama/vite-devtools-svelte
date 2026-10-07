@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import type { RouteInfo, ParamInfo, RouteFile } from '../types.js'
+import { HEX_DIGITS, WORD_CHARS, consistsOf } from './text.js'
 
 export function analyzeRoutes(routesDir: string): RouteInfo[] {
   if (!fs.existsSync(routesDir)) return []
@@ -56,12 +57,16 @@ function scanDirectory(dir: string, rootDir: string, routes: RouteInfo[]): void 
  * `+page@(group).svelte`, `+layout@item.svelte`, …): those were not
  * recognised before, so a route whose page resets its layout vanished.
  */
-const ROUTE_FILE = /^\+(page|layout|error|server)(@[^/\\]*)?(?:\.(server))?\.(svelte|js|ts)$/
-
 export function classifyFile(name: string): RouteFile['type'] | null {
-  const m = ROUTE_FILE.exec(name)
-  if (!m) return null
-  const [, kind, reset, server, ext] = m
+  const dot = name.lastIndexOf('.')
+  const ext = name.slice(dot + 1)
+  if (!name.startsWith('+') || (ext !== 'svelte' && ext !== 'js' && ext !== 'ts')) return null
+  let stem = name.slice(1, dot) // `page@(group)`, `layout.server`, …
+  const server = stem.endsWith('.server')
+  if (server) stem = stem.slice(0, -'.server'.length)
+  const at = stem.indexOf('@')
+  const reset = at !== -1
+  const kind = reset ? stem.slice(0, at) : stem
   if (ext === 'svelte') {
     if (server) return null
     if (kind === 'page') return 'page'
@@ -75,9 +80,6 @@ export function classifyFile(name: string): RouteFile['type'] | null {
   if (kind === 'layout') return server ? 'layout-load-server' : 'layout-load'
   return null // `+error.js`
 }
-
-/** Inside brackets: `name`, `...name`, each with an optional `=matcher`. */
-const PARAM = /^(\.\.\.)?(\w+)(?:=(\w+))?$/
 
 /**
  * URL pattern and params of a route id (`/`-separated, relative to
@@ -93,7 +95,8 @@ export function parseRouteId(id: string): { routePath: string; params: ParamInfo
   const params: ParamInfo[] = []
   const out: string[] = []
   for (const segment of id.split('/')) {
-    if (!segment || /^\(.+\)$/.test(segment)) continue
+    const group = segment.length > 2 && segment.startsWith('(') && segment.endsWith(')')
+    if (!segment || group) continue
     out.push(parseSegment(segment, params))
   }
   return { routePath: '/' + out.join('/'), params }
@@ -102,44 +105,47 @@ export function parseRouteId(id: string): { routePath: string; params: ParamInfo
 function parseSegment(segment: string, params: ParamInfo[]): string {
   let result = ''
   let i = 0
-  while (i < segment.length) {
-    if (segment[i] !== '[') {
-      result += segment[i]
-      i++
-      continue
-    }
-    const optional = segment.startsWith('[[', i)
-    const close = segment.indexOf(optional ? ']]' : ']', i)
+  for (let open = segment.indexOf('['); open !== -1; open = segment.indexOf('[', i)) {
+    result += segment.slice(i, open)
+    const optional = segment.startsWith('[[', open)
+    const close = segment.indexOf(optional ? ']]' : ']', open)
     if (close === -1) {
-      result += segment.slice(i)
+      i = open
       break
     }
-    const inner = segment.slice(i + (optional ? 2 : 1), close)
-    const end = close + (optional ? 2 : 1)
-    const escaped = optional ? null : decodeEscape(inner)
-    const param = PARAM.exec(inner)
-    if (escaped !== null) {
-      result += escaped
-    } else if (param) {
-      const [, rest, name, matcher] = param
-      const info: ParamInfo = { name: name!, optional, rest: !!rest }
-      if (matcher) info.matcher = matcher
-      params.push(info)
-      result += rest ? `*${name}` : `:${name}${optional ? '?' : ''}`
-    } else {
-      result += segment.slice(i, end)
-    }
-    i = end
+    const inner = segment.slice(open + (optional ? 2 : 1), close)
+    i = close + (optional ? 2 : 1)
+    result +=
+      (optional ? null : decodeEscape(inner)) ??
+      parseParam(inner, optional, params) ??
+      segment.slice(open, i)
   }
-  return result
+  return result + segment.slice(i)
+}
+
+/**
+ * Inside brackets: `name` or `...name`, each with an optional `=matcher`.
+ * Records the param and returns its pattern; null when `inner` is not one.
+ */
+function parseParam(inner: string, optional: boolean, params: ParamInfo[]): string | null {
+  const rest = inner.startsWith('...')
+  const [name = '', matcher, extra] = inner.slice(rest ? 3 : 0).split('=')
+  const valid =
+    consistsOf(name, WORD_CHARS) &&
+    (matcher === undefined || consistsOf(matcher, WORD_CHARS)) &&
+    extra === undefined
+  if (!valid) return null
+  params.push(matcher === undefined ? { name, optional, rest } : { name, optional, rest, matcher })
+  return rest ? `*${name}` : `:${name}${optional ? '?' : ''}`
 }
 
 /** The character of an `x+nn` / `u+nnnn` escape, or null when `inner` is not one. */
 function decodeEscape(inner: string): string | null {
-  const hex = /^x\+([0-9a-f]{2})$/i.exec(inner)
-  if (hex) return String.fromCodePoint(Number.parseInt(hex[1]!, 16))
-  const uni = /^u\+([0-9a-f]{4,6})$/i.exec(inner)
-  if (!uni) return null
-  const code = Number.parseInt(uni[1]!, 16)
+  const prefix = inner.slice(0, 2).toLowerCase()
+  const hex = inner.slice(2)
+  const sized =
+    prefix === 'x+' ? hex.length === 2 : prefix === 'u+' && hex.length >= 4 && hex.length <= 6
+  if (!sized || !consistsOf(hex, HEX_DIGITS)) return null
+  const code = Number.parseInt(hex, 16)
   return code <= 0x10ffff ? String.fromCodePoint(code) : null
 }
