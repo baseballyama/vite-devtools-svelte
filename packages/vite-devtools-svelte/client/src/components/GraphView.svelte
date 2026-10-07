@@ -222,7 +222,7 @@
         const cmp = na.componentFile.localeCompare(nb.componentFile)
         if (cmp !== 0) return cmp
         // Within same component: state before derived before effect
-        const typeOrder = { state: 0, derived: 1, effect: 2 }
+        const typeOrder = { state: 0, derived: 1, effect: 2, template: 3 }
         return (typeOrder[na.type] ?? 3) - (typeOrder[nb.type] ?? 3)
       })
     }
@@ -458,6 +458,7 @@
       case 'state': return 'var(--color-info)'
       case 'derived': return 'var(--color-success)'
       case 'effect': return 'var(--color-error)'
+      case 'template': return 'var(--purple)'
       default: return 'var(--color-text-muted)'
     }
   }
@@ -466,6 +467,7 @@
       case 'state': return '#3b82f6'
       case 'derived': return '#22c55e'
       case 'effect': return '#ef4444'
+      case 'template': return '#a855f7'
       default: return '#999'
     }
   }

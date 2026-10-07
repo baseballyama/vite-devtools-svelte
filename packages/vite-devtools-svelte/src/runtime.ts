@@ -49,12 +49,24 @@ const __pendingSignal = { ref: null, type: null };
 // parent's template, so active_effect.ctx at push time IS the parent's
 // context. Each context is mapped to its id once the component mounted
 // (inside its own deferred effect, where active_effect.ctx is the
-// component's own context). Weak map: no leak, no Svelte state touched.
-const __idByContext = new WeakMap();
+// component's own context). The map lives on the runtime (dt._idByContext)
+// so the reactive graph can name the component of any effect it reaches.
+// Weak map: no leak, no Svelte state touched.
 function __parentFromContext() {
+  const dt = __dt();
   const effect = __svelte_original.active_effect;
   const ctx = effect ? effect.ctx : null;
-  return ctx ? __idByContext.get(ctx) : undefined;
+  return dt && ctx && dt._idByContext ? dt._idByContext.get(ctx) : undefined;
+}
+
+// Owner of a signal/effect created right now: the component whose init (or
+// wrapped block callback) is running, else — outside init, e.g. an effect
+// created while another effect runs — the component of the active effect.
+function __owner() {
+  const cid = __currentId();
+  if (cid !== null) return cid;
+  const fromContext = __parentFromContext();
+  return fromContext === undefined ? null : fromContext;
 }
 
 // --- Component Lifecycle ---
@@ -91,7 +103,7 @@ export function push() {
         __svelte_original.user_effect(() => {
           try {
             const own = __svelte_original.active_effect;
-            if (own && own.ctx) __idByContext.set(own.ctx, id);
+            if (own && own.ctx) dt._idByContext.set(own.ctx, id);
           } catch {}
           return () => { try { dt.unmount(id); } catch {} };
         });
@@ -150,13 +162,14 @@ export function tag(signal, name) {
   const result = __svelte_original.tag.apply(null, arguments);
   try {
     const dt = __dt();
-    const cid = __currentId();
+    const cid = __owner();
     if (dt && cid !== null) {
       const type = (__pendingSignal.ref === signal) ? __pendingSignal.type : 'state';
+      const owner = __svelte_original.active_effect;
       if (type === 'derived') {
-        dt.trackDerived(signal, name, cid);
+        dt.trackDerived(signal, name, cid, owner);
       } else {
-        dt.trackState(signal, name, cid);
+        dt.trackState(signal, name, cid, owner);
       }
     }
     __pendingSignal.ref = null;
@@ -169,9 +182,9 @@ export function tag_proxy(proxy, name) {
   const result = __svelte_original.tag_proxy.apply(null, arguments);
   try {
     const dt = __dt();
-    const cid = __currentId();
+    const cid = __owner();
     if (dt && cid !== null) {
-      dt.trackProxy(proxy, name, cid);
+      dt.trackProxy(proxy, name, cid, __svelte_original.active_effect);
     }
     __pendingSignal.ref = null;
     __pendingSignal.type = null;
@@ -180,34 +193,50 @@ export function tag_proxy(proxy, name) {
 }
 
 // --- Effect Tracking ---
+//
+// A top-level $effect in a component is deferred by Svelte until mount:
+// user_effect() returns undefined and the effect object is created later,
+// in pop(). So the node is registered now (named per component) and bound
+// to the real effect object on its first run, where active_effect IS the
+// effect; the Svelte runtime then keeps effect.deps current, which is what
+// getReactiveGraph() reads to build edges. The wrapped callback forwards
+// this, arguments and the return value (teardown) unchanged.
 
-export function user_effect() {
-  const result = __svelte_original.user_effect.apply(null, arguments);
+function __trackUserEffect(original, kind, args) {
+  let cid = null;
+  let dt = null;
+  let fn = null;
   try {
-    const dt = __dt();
-    const cid = __currentId();
-    if (dt && cid !== null) {
-      dt._effectCounter = (dt._effectCounter || 0) + 1;
-      // Track the effect OBJECT (not the callback). The Svelte runtime
-      // populates result.deps with the signals this effect depends on,
-      // which is what getReactiveGraph() reads to build edges.
-      dt.trackEffect(result, 'effect_' + dt._effectCounter, cid);
-    }
+    dt = __dt();
+    fn = args[0];
+    if (dt && typeof fn === 'function') cid = __owner();
   } catch {}
+  if (cid === null) return original.apply(null, args);
+  let nodeId = null;
+  let bound = false;
+  const wrapped = Array.prototype.slice.call(args);
+  wrapped[0] = function () {
+    if (!bound) {
+      bound = true;
+      try { dt.bindEffect(nodeId, __svelte_original.active_effect); } catch {}
+    }
+    return fn.apply(this, arguments);
+  };
+  try { nodeId = dt.trackUserEffect(kind, cid, __svelte_original.active_effect); } catch {}
+  const result = original.apply(null, wrapped);
+  if (result && !bound) {
+    bound = true;
+    try { dt.bindEffect(nodeId, result); } catch {}
+  }
   return result;
 }
 
+export function user_effect() {
+  return __trackUserEffect(__svelte_original.user_effect, 'effect', arguments);
+}
+
 export function user_pre_effect() {
-  const result = __svelte_original.user_pre_effect.apply(null, arguments);
-  try {
-    const dt = __dt();
-    const cid = __currentId();
-    if (dt && cid !== null) {
-      dt._effectCounter = (dt._effectCounter || 0) + 1;
-      dt.trackEffect(result, 'effect_pre_' + dt._effectCounter, cid);
-    }
-  } catch {}
-  return result;
+  return __trackUserEffect(__svelte_original.user_pre_effect, 'effect_pre', arguments);
 }
 
 // --- Render Profiling ---
@@ -250,7 +279,7 @@ function __recordRenderDuration(cid, duration) {
 // __idStack at effect-creation time. User exceptions propagate untouched;
 // only the args are built inside try so the original is called exactly once.
 function __wrapTemplateEffect(args) {
-  const cid = __currentId();
+  const cid = __owner();
   const fn = args[0];
   if (cid === null || typeof fn !== 'function') return args;
   const wrapped = Array.prototype.slice.call(args);
@@ -295,20 +324,36 @@ export function deferred_template_effect() {
 // so effects created inside land on the innermost owner. Child components
 // push their own id on top, keeping nested attribution correct.
 
+// A component whose init throws (caught by <svelte:boundary>, or by the
+// block's caller) never reaches pop(): its id would stay on both stacks and
+// every later signal/child would be attributed to it. On the way out — normal
+// or thrown — the stack is cut back to its depth on entry, and ids left
+// above it are dropped as aborted inits (registered, never mounted).
 function __wrapBlockFn(fn, cid) {
   return function () {
-    let pushed = false;
-    try { __idStack.push(cid); pushed = true; } catch {}
+    let depth = -1;
+    try { depth = __idStack.length; __idStack.push(cid); } catch {}
     try {
       return fn.apply(this, arguments);
     } finally {
-      if (pushed) { try { __idStack.pop(); } catch {} }
+      if (depth !== -1) {
+        try {
+          if (__idStack.length > depth + 1) {
+            const dt = __dt();
+            const aborted = __idStack.slice(depth + 1);
+            for (let i = aborted.length - 1; i >= 0; i--) {
+              try { if (dt) dt.abortInit(aborted[i]); } catch {}
+            }
+          }
+          __idStack.length = depth;
+        } catch {}
+      }
     }
   };
 }
 
 function __wrapBlock(args) {
-  const cid = __currentId();
+  const cid = __owner();
   if (cid === null) return args;
   const wrapped = Array.prototype.slice.call(args);
   for (let i = 0; i < wrapped.length; i++) {
@@ -381,7 +426,6 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     _stack: [],
     _pendingParent: undefined,
     _pendingFile: null,
-    _effectCounter: 0,
     _debounceTimer: null,
     _listeners: new Set(),
 
@@ -406,6 +450,21 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     // _forgetNode: a scoped graph resolves dependencies without scanning
     // every node (§6.7 D).
     _idBySignal: new WeakMap(),
+    // proxy -> nodeId (tag_proxy nodes; the marker above is per node)
+    _idByProxy: new WeakMap(),
+    // Svelte component context -> component id (set by the wrapper on mount)
+    _idByContext: new WeakMap(),
+    // componentId -> (name -> last suffix) for names declared more than once
+    // per instance ({@const} in {#each} items, several $state class instances)
+    _nameSeq: new Map(),
+    // componentId -> { effect, effect_pre } counters: effect names are
+    // numbered per component, so instances of one file match
+    _effectSeq: new Map(),
+    // Every tracked node id (dense, swap-remove like _pollIds) for the
+    // incremental liveness sweep, and its cursor.
+    _sweepIds: [],
+    _sweepIndex: new Map(),
+    _sweepCursor: 0,
     // Polling bookkeeping (§6.7 D): $state node ids in a dense array kept up
     // to date incrementally (_pollIndex: nodeId -> position; removal is
     // swap-with-last), a cursor carried across ticks, nodes found changed but
@@ -525,6 +584,8 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       // never sent, so it cancels out.
       if (this._active && !this._pendingAdded.delete(id)) this._pendingRemoved.add(id);
       this._cleanupReactiveNodes(id);
+      this._effectSeq.delete(id);
+      this._nameSeq.delete(id);
       this._instances.delete(id);
       this._profiles.delete(id);
       this._initStartTimes.delete(id);
@@ -534,15 +595,22 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       const nodeIds = this._nodesByComponent.get(componentId);
       if (!nodeIds) return;
       this._nodesByComponent.delete(componentId);
-      for (const nodeId of nodeIds) this._forgetNode(nodeId);
+      for (const nodeId of [...nodeIds]) this._forgetNode(nodeId);
     },
 
     _forgetNode(nodeId) {
       const entry = this._reactiveNodes.get(nodeId);
-      if (entry) this._countNode(entry.meta.componentId, entry.meta.type, -1);
+      if (entry) {
+        this._countNode(entry.meta.componentId, entry.meta.type, -1);
+        const set = this._nodesByComponent.get(entry.meta.componentId);
+        if (set) set.delete(nodeId);
+      }
       const signal = entry && entry.signal.deref();
       if (signal && this._idBySignal.get(signal) === nodeId) this._idBySignal.delete(signal);
+      const proxy = this._reactiveProxies.get(nodeId)?.deref();
+      if (proxy && this._idByProxy.get(proxy) === nodeId) this._idByProxy.delete(proxy);
       this._pollRemove(nodeId);
+      this._sweepRemove(nodeId);
       this._pollDirty.delete(nodeId);
       this._reactiveNodes.delete(nodeId);
       this._reactiveProxies.delete(nodeId);
@@ -550,6 +618,99 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       if (this._stateSnapshotStrs) this._stateSnapshotStrs.delete(nodeId);
       this._pollMeta.delete(nodeId);
       this._lastSnapshotSize.delete(nodeId);
+    },
+
+    // A node is live while its signal is reachable, its component is mounted,
+    // and the effect it was created in (an {#each} item, an effect run) has
+    // not been destroyed. Svelte nulls effect.fn when it destroys an effect
+    // (internal/client destroy_effect), which is checked instead of the
+    // internal DESTROYED flag value. Returns the signal or null.
+    _liveSignal(nodeId) {
+      const entry = this._reactiveNodes.get(nodeId);
+      if (!entry) return null;
+      const signal = entry.signal.deref();
+      if (signal && this._instances.has(entry.meta.componentId) && this._ownerAlive(entry)) {
+        if (!entry.effect) return signal;
+        // a bound effect is destroyed when Svelte clears its callback
+        if (signal.fn !== null) return signal;
+      }
+      this._forgetNode(nodeId);
+      return null;
+    },
+
+    _ownerAlive(entry) {
+      if (!entry.owner) return true;
+      const owner = entry.owner.deref();
+      return !!owner && owner.fn !== null;
+    },
+
+    _sweepAdd(nodeId) {
+      if (this._sweepIndex.has(nodeId)) return;
+      this._sweepIndex.set(nodeId, this._sweepIds.length);
+      this._sweepIds.push(nodeId);
+    },
+
+    _sweepRemove(nodeId) {
+      const i = this._sweepIndex.get(nodeId);
+      if (i === undefined) return;
+      const ids = this._sweepIds;
+      const last = ids.pop();
+      this._sweepIndex.delete(nodeId);
+      if (i < ids.length) {
+        ids[i] = last;
+        this._sweepIndex.set(last, i);
+      }
+    },
+
+    // Liveness of up to \`max\` nodes, continuing from a cursor (each poll
+    // tick): nodes of destroyed {#each} items / effect runs leave the counts
+    // and the graph without waiting for a graph request or GC.
+    _sweepNodes(max) {
+      const ids = this._sweepIds;
+      for (let n = 0; n < max && ids.length > 0; n++) {
+        if (this._sweepCursor >= ids.length) this._sweepCursor = 0;
+        const nodeId = ids[this._sweepCursor];
+        // a forgotten node's slot is refilled by the last id: re-check it
+        if (this._liveSignal(nodeId)) this._sweepCursor++;
+      }
+    },
+
+    // Unique node id for a signal: componentId:name, or componentId:name#k
+    // when this instance already holds a live node of that name for another
+    // signal. The same signal (re-tagged) keeps its id.
+    _nodeIdFor(identity, byIdentity, componentId, name) {
+      const known = byIdentity.get(identity);
+      if (known !== undefined && this._reactiveNodes.has(known)) return known;
+      const base = componentId + ':' + name;
+      if (!this._reactiveNodes.has(base) || !this._liveSignal(base)) return base;
+      let seq = this._nameSeq.get(componentId);
+      if (!seq) {
+        seq = new Map();
+        this._nameSeq.set(componentId, seq);
+      }
+      let k = seq.get(name) || 1;
+      let id;
+      do {
+        k++;
+        id = base + '#' + k;
+      } while (this._reactiveNodes.has(id) && this._liveSignal(id));
+      seq.set(name, k);
+      return id;
+    },
+
+    _registerNode(nodeId, componentId, type, name, signalRef, owner, extra) {
+      const instance = this._instances.get(componentId);
+      this._trackNodeCount(nodeId, componentId, type);
+      const entry = {
+        signal: signalRef,
+        owner: owner ? new WeakRef(owner) : null,
+        meta: { id: nodeId, type, name, componentId, componentFile: instance ? instance.file : '' },
+      };
+      if (extra) Object.assign(entry, extra);
+      this._reactiveNodes.set(nodeId, entry);
+      this._indexNode(nodeId, componentId);
+      this._sweepAdd(nodeId);
+      return entry;
     },
 
     _indexNode(nodeId, componentId) {
@@ -848,61 +1009,83 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
 
     // --- Phase 2: Reactive Graph Tracking ---
 
-    trackState(signal, name, componentId) {
-      const instance = this._instances.get(componentId);
-      const nodeId = componentId + ':' + name;
-      this._trackNodeCount(nodeId, componentId, 'state');
-      this._reactiveNodes.set(nodeId, {
-        signal: new WeakRef(signal),
-        meta: { id: nodeId, type: 'state', name, componentId, componentFile: instance ? instance.file : '' }
-      });
+    // \`owner\` (optional): the effect active when the signal was created; the
+    // node dies with it (an {#each} item's {@const}, a class instance created
+    // in an effect run).
+    trackState(signal, name, componentId, owner) {
+      const nodeId = this._nodeIdFor(signal, this._idBySignal, componentId, name);
+      this._registerNode(nodeId, componentId, 'state', name, new WeakRef(signal), owner);
       this._idBySignal.set(signal, nodeId);
-      this._indexNode(nodeId, componentId);
       this._pollAdd(nodeId);
     },
 
-    trackProxy(proxy, name, componentId) {
-      const instance = this._instances.get(componentId);
-      const nodeId = componentId + ':' + name;
+    trackProxy(proxy, name, componentId, owner) {
+      const nodeId = this._nodeIdFor(proxy, this._idByProxy, componentId, name);
       this._reactiveProxies.set(nodeId, new WeakRef(proxy));
       // The proxy itself stays weakly held (_reactiveProxies). The marker is
       // held strongly so the node is not GC-dropped while the component lives;
       // _cleanupComponent removes it on unmount.
       const marker = { v: '(proxy)', _isProxy: true };
-      this._trackNodeCount(nodeId, componentId, 'state');
-      this._reactiveNodes.set(nodeId, {
-        signal: { deref: () => marker },
-        meta: { id: nodeId, type: 'state', name, componentId, componentFile: instance ? instance.file : '' }
-      });
+      this._registerNode(nodeId, componentId, 'state', name, { deref: () => marker }, owner);
       this._idBySignal.set(marker, nodeId);
-      this._indexNode(nodeId, componentId);
+      this._idByProxy.set(proxy, nodeId);
       this._pollAdd(nodeId);
     },
 
-    trackDerived(signal, name, componentId) {
-      const instance = this._instances.get(componentId);
-      const nodeId = componentId + ':' + name;
-      this._trackNodeCount(nodeId, componentId, 'derived');
-      this._reactiveNodes.set(nodeId, {
-        signal: new WeakRef(signal),
-        meta: { id: nodeId, type: 'derived', name, componentId, componentFile: instance ? instance.file : '' }
-      });
+    trackDerived(signal, name, componentId, owner) {
+      const nodeId = this._nodeIdFor(signal, this._idBySignal, componentId, name);
+      this._registerNode(nodeId, componentId, 'derived', name, new WeakRef(signal), owner);
       this._idBySignal.set(signal, nodeId);
-      this._indexNode(nodeId, componentId);
     },
 
+    // A user effect object (already created). Kept for callers that have one.
     trackEffect(effect, name, componentId) {
-      const instance = this._instances.get(componentId);
       const nodeId = componentId + ':' + name;
       const target = effect || { v: undefined, _isEffect: true };
-      this._trackNodeCount(nodeId, componentId, 'effect');
-      this._reactiveNodes.set(nodeId, {
-        signal: new WeakRef(target),
-        meta: { id: nodeId, type: 'effect', name, componentId, componentFile: instance ? instance.file : '' }
-      });
+      this._registerNode(nodeId, componentId, 'effect', name, effect ? new WeakRef(target) : { deref: () => target });
       this._idBySignal.set(target, nodeId);
-      this._indexNode(nodeId, componentId);
       return effect;
+    },
+
+    // $effect / $effect.pre being created now (the wrapper). The effect object
+    // may not exist yet (deferred to mount): the node holds a placeholder
+    // until bindEffect() is called on the effect's first run. kind: 'effect'
+    // | 'effect_pre'; names are effect_1, effect_pre_1, ... per component.
+    trackUserEffect(kind, componentId, owner) {
+      let seq = this._effectSeq.get(componentId);
+      if (!seq) {
+        seq = { effect: 0, effect_pre: 0 };
+        this._effectSeq.set(componentId, seq);
+      }
+      const name = kind + '_' + ++seq[kind];
+      const nodeId = componentId + ':' + name;
+      const placeholder = { v: undefined, _isEffect: true };
+      this._registerNode(nodeId, componentId, 'effect', name, { deref: () => placeholder }, owner);
+      return nodeId;
+    },
+
+    bindEffect(nodeId, effect) {
+      const entry = nodeId !== null && this._reactiveNodes.get(nodeId);
+      if (!entry || !effect || typeof effect !== 'object') return;
+      entry.signal = new WeakRef(effect);
+      entry.effect = true;
+      this._idBySignal.set(effect, nodeId);
+    },
+
+    // A component whose init threw (the wrapper unwinds its stack): it never
+    // mounted and never will, so it leaves the tree and the init stack.
+    abortInit(id) {
+      const idx = this._stack.indexOf(id);
+      if (idx !== -1) this._stack.splice(idx, 1);
+      const instance = this._instances.get(id);
+      if (!instance) return;
+      if (instance.parentId !== null) {
+        const parent = this._instances.get(instance.parentId);
+        if (parent) parent.children.delete(id);
+      }
+      this._removeChildren(id);
+      this._cleanupComponent(id);
+      this._scheduleUpdate();
     },
 
     _graphNode(nodeId, entry, signal) {
@@ -914,6 +1097,10 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
             node.value = Array.isArray(proxy) ? '[' + proxy.length + ']' : '{' + Object.keys(proxy).length + '}';
           } catch { node.value = '(proxy)'; }
         }
+      } else if (node.type === 'derived' && typeof signal.v === 'symbol') {
+        // Svelte computes a derived lazily: until something reads it, v is
+        // the UNINITIALIZED marker (a symbol)
+        node.unevaluated = true;
       } else if (node.type !== 'effect' && signal.v !== undefined && typeof signal.v !== 'symbol') {
         try {
           const v = signal.v;
@@ -940,6 +1127,13 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     //    dereferenced; total.nodes is the registered count (may include
     //    nodes whose signal was already collected, nodesKind 'registered')
     //    and total.edges is null when the walk stopped early (not guessed).
+    // Template consumers: the compiler turns every dynamic part of the markup
+    // ({expr}, attributes, {#if}/{#each}/{#key}/{#await} conditions,
+    // <svelte:head>) into effects that are not tracked one by one. A read
+    // from such an effect is reported as an edge to the synthetic node
+    // '<componentId>:(template)' (type 'template') of the component the
+    // effect belongs to (effect.ctx), so a value only the markup reads is
+    // not shown without readers.
     getReactiveGraph(componentId, caps) {
       const scoped = componentId !== undefined && componentId !== null;
       const maxNodes = this._graphCap(caps && caps.maxNodes, 5000);
@@ -948,18 +1142,25 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       // Live signal of a tracked node, or null (forgets dead / unmounted nodes).
       const liveSignal = (nodeId) => {
         if (live.has(nodeId)) return live.get(nodeId);
-        const entry = this._reactiveNodes.get(nodeId);
-        let signal = entry ? entry.signal.deref() : null;
-        if (entry && (!signal || !this._instances.has(entry.meta.componentId))) {
-          this._forgetNode(nodeId);
-          signal = null;
-        }
-        live.set(nodeId, signal || null);
-        return signal || null;
+        const signal = this._liveSignal(nodeId);
+        live.set(nodeId, signal);
+        return signal;
       };
       const idOf = (dep) => {
         const id = this._idBySignal.get(dep);
         return id !== undefined && liveSignal(id) === dep ? id : null;
+      };
+      // Synthetic template nodes reached in this build: id -> componentId.
+      const templates = new Map();
+      // Template node of an untracked effect (no reactions: not a derived),
+      // or null when its component is unknown / unmounted.
+      const templateOf = (effect) => {
+        if (!effect || 'reactions' in effect || !effect.ctx) return null;
+        const cid = this._idByContext.get(effect.ctx);
+        if (cid === undefined || !this._instances.has(cid)) return null;
+        const id = cid + ':(template)';
+        templates.set(id, cid);
+        return id;
       };
 
       const included = new Set();
@@ -983,8 +1184,9 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
         else edgesOmitted++;
       };
       // Walk a signal's neighbours (deps or reactions) through untracked
-      // intermediates until tracked nodes are reached.
-      const walk = (start, field, onHit) => {
+      // intermediates until tracked nodes are reached. onTemplate (reactions
+      // only) receives the template node of each untracked effect reached.
+      const walk = (start, field, onHit, onTemplate) => {
         if (!start) return;
         const visited = new Set();
         const queue = [...start];
@@ -994,8 +1196,14 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
           if (!dep || visited.has(dep)) continue;
           visited.add(dep);
           const id = idOf(dep);
-          if (id) onHit(id);
-          else if (dep[field]) for (const d of dep[field]) queue.push(d);
+          if (id) {
+            if (onHit) onHit(id);
+          } else if (dep[field]) {
+            for (const d of dep[field]) queue.push(d);
+          } else if (onTemplate) {
+            const t = templateOf(dep);
+            if (t) onTemplate(t);
+          }
         }
       };
 
@@ -1007,7 +1215,8 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
           if (!signal) continue;
           see(nodeId);
           walk(signal.deps, 'deps', (depId) => addEdge(depId, nodeId));
-          walk(signal.reactions, 'reactions', (rId) => addEdge(nodeId, rId));
+          const toReader = (rId) => addEdge(nodeId, rId);
+          walk(signal.reactions, 'reactions', toReader, toReader);
         }
         totalNodes = seen.size;
         totalEdges = edgeSet.size;
@@ -1023,15 +1232,25 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
           if (!signal) continue;
           see(nodeId);
           walk(signal.deps, 'deps', (depId) => addEdge(depId, nodeId));
+          // tracked readers are found from their own deps; only template
+          // readers need the reactions side
+          walk(signal.reactions, 'reactions', null, (t) => addEdge(nodeId, t));
         }
-        // registered count, minus nodes found dead while building
-        totalNodes = this._reactiveNodes.size;
+        // registered count (+ template nodes reached), minus nodes found
+        // dead while building
+        totalNodes = this._reactiveNodes.size + templates.size;
         totalEdges = complete ? edgeSet.size : null;
         truncated = !complete || edgesOmitted > 0;
       }
 
       const nodes = [];
       for (const nodeId of included) {
+        const cid = templates.get(nodeId);
+        if (cid !== undefined) {
+          const instance = this._instances.get(cid);
+          nodes.push({ id: nodeId, type: 'template', name: '(template)', componentId: cid, componentFile: instance ? instance.file : '' });
+          continue;
+        }
         const signal = liveSignal(nodeId);
         if (signal) nodes.push(this._graphNode(nodeId, this._reactiveNodes.get(nodeId), signal));
       }
@@ -1185,10 +1404,13 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     // timeline is a sample, policy 'sampled-200ms'; not counted as dropped).
     _pollStateValues(baseline) {
       const HINT_NODES = 4096;
+      const SWEEP_NODES = 2048;
       const BUDGET_MS = 2;
       const DEEP_MS = 0.5;
       const now = performance.now();
       if (!baseline) {
+        // nodes of destroyed {#each} items / effect runs leave the counts
+        this._sweepNodes(SWEEP_NODES);
         this._deepCredit = Math.min(10 * DEEP_MS, (this._deepCredit || 0) + DEEP_MS);
         // this tick samples 200 ms of wall time (window.sampledActiveMs)
         const bucket = this._bucket();

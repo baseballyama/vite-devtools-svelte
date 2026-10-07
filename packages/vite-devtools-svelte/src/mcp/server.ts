@@ -144,7 +144,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     {
       title: 'Reactive graph problems',
       description:
-        'Classified reactive graph issues: over-connected effects, orphan deriveds, isolated nodes. Returns categories instead of the full graph.',
+        'Classified reactive graph issues: over-connected effects, orphan deriveds (declared but never evaluated so far — may still be read later, e.g. in a branch not shown yet), isolated nodes (no tracked dependency or reader; reads from the markup count as readers). Returns categories instead of the full graph.',
       inputSchema: { effectMaxDeps: z.number().int().min(1).optional() },
     },
     async ({ effectMaxDeps }) => {

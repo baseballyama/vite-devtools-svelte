@@ -88,11 +88,18 @@ export interface RenderProfile {
 
 export interface ReactiveNode {
   id: string
-  type: 'state' | 'derived' | 'effect'
+  /**
+   * `template`: synthetic node standing for all markup effects of one
+   * component (`<componentId>:(template)`); edges into it are reads from the
+   * markup ({expr}, attributes, block conditions, <svelte:head>).
+   */
+  type: 'state' | 'derived' | 'effect' | 'template'
   name: string
   componentId: number
   componentFile: string
   value?: unknown
+  /** A `$derived` nothing has read yet (Svelte computes deriveds lazily). */
+  unevaluated?: true
 }
 
 export interface ReactiveEdge {

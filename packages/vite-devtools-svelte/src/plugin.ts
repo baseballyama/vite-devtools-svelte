@@ -55,6 +55,27 @@ function collectModules(server: ViteDevServer): GraphModuleLike[] {
   return modules
 }
 
+/**
+ * Component-tracking transform for one compiled client `.svelte` module:
+ * imports the runtime and names the file for the wrapper's next `push()`.
+ * `null` when the module has no component (`$.push(`) to track.
+ *
+ * Nothing is inserted as a new line, so every original line keeps its
+ * number (`map: null` = mappings unchanged; stack traces and the
+ * compiler's sourcemap stay aligned).
+ */
+export function injectComponentTracking(code: string, id: string): string | null {
+  if (!code.includes('$.push(')) return null
+  const safeId = JSON.stringify(id)
+  return (
+    `import '${RUNTIME_MODULE_ID}';` +
+    code.replace(
+      /(\$\.push\([^)]+\);?)/,
+      `if (typeof window !== 'undefined' && window.__SVELTE_DEVTOOLS__) { window.__SVELTE_DEVTOOLS__._pendingFile = ${safeId}; } $1`,
+    )
+  )
+}
+
 export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
   const { componentTracking = true } = options
 
@@ -319,20 +340,8 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       if (!id.endsWith('.svelte')) return null
       if (id.includes('node_modules')) return null
       if (config?.command !== 'serve') return null
-      if (!code.includes('$.push(')) return null
-
-      const safeId = JSON.stringify(id)
-
-      const importLine = `import '${RUNTIME_MODULE_ID}';\n`
-
-      const modified =
-        importLine +
-        code.replace(
-          /(\$\.push\([^)]+\);?)/,
-          `if (typeof window !== 'undefined' && window.__SVELTE_DEVTOOLS__) { window.__SVELTE_DEVTOOLS__._pendingFile = ${safeId}; }\n$1`,
-        )
-
-      return { code: modified, map: null }
+      const modified = injectComponentTracking(code, id)
+      return modified === null ? null : { code: modified, map: null }
     },
   }
 
