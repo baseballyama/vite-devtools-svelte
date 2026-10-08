@@ -164,8 +164,8 @@ export const panels: Panel[] = [
     title: 'Build',
     tagline: 'What your production build contains',
     description:
-      'Chunks of the last production build with their sizes and share of the total, a composition bar by type, and the modules inside each chunk.',
-    highlights: ['JS / CSS / other composition', 'Chunk inspector with its modules'],
+      'Chunks of the last production build with their sizes and share of the total, and a composition bar by type.',
+    highlights: ['JS / CSS / other composition', 'Largest chunks first'],
     images: ['v2-panel-build.jpg'],
   },
   {

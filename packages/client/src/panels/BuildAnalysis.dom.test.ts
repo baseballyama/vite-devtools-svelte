@@ -7,16 +7,16 @@ import type { BuildAnalysis as Build, BuildChunk } from '../lib/types.js'
 import { layout, settle } from '../test/dom.js'
 import BuildAnalysis from './BuildAnalysis.svelte'
 
-function chunk(file: string, size: number, modules: string[], isEntry = false): BuildChunk {
-  return { name: file.split('/').pop()!.split('.')[0]!, file, size, modules, isEntry }
+function chunk(file: string, size: number, isEntry = false): BuildChunk {
+  return { name: file.split('/').pop()!.split('.')[0]!, file, size, isEntry }
 }
 
 const build: Build = {
   chunks: [
-    chunk('assets/index.js', 300_000, ['src/main.ts', 'src/App.svelte'], true),
-    chunk('assets/vendor.mjs', 100_000, ['node_modules/svelte/index.js']),
-    chunk('assets/index.css', 50_000, ['src/app.css']),
-    chunk('assets/logo.svg', 2_000, []),
+    chunk('assets/index.js', 300_000, true),
+    chunk('assets/vendor.mjs', 100_000),
+    chunk('assets/index.css', 50_000),
+    chunk('assets/logo.svg', 2_000),
   ],
   totalSize: 452_000,
   timestamp: Date.UTC(2026, 0, 2, 3, 4, 5),
@@ -108,9 +108,8 @@ describe('BuildAnalysis', () => {
     expect(files()).toEqual(['assets/index.js', 'assets/vendor.mjs'])
     await user.click(screen.getByRole('radio', { name: /^All/ }))
 
-    // Matches a module inside the chunk, not just the file name.
-    await user.type(screen.getByRole('searchbox'), 'App.svelte')
-    expect(files()).toEqual(['assets/index.js'])
+    await user.type(screen.getByRole('searchbox'), 'vendor')
+    expect(files()).toEqual(['assets/vendor.mjs'])
     await user.clear(screen.getByRole('searchbox'))
     await user.type(screen.getByRole('searchbox'), 'zzz')
     expect(screen.getByRole('status').textContent).toContain('No chunks match')
@@ -125,8 +124,6 @@ describe('BuildAnalysis', () => {
       user.click(within(screen.getByRole('columnheader', { name })).getByRole('button'))
     await sortBy('Chunk')
     expect(files()[0]).toBe('assets/index.css')
-    await sortBy('Modules')
-    expect(files()[0]).toBe('assets/index.js')
     await sortBy('Share')
     expect(screen.getByRole('columnheader', { name: 'Share' }).getAttribute('aria-sort')).toBe(
       'descending',
@@ -146,21 +143,24 @@ describe('BuildAnalysis', () => {
     ])
   })
 
-  it('shows the modules of the selected chunk and closes the details', async () => {
+  it('shows the size and share of the selected chunk and closes the details', async () => {
     const user = userEvent.setup()
     vi.mocked(rpc.getBuildAnalysis).mockResolvedValue(build)
     render(BuildAnalysis)
     await settle()
-    await user.type(screen.getByRole('searchbox'), 'main')
+    await user.type(screen.getByRole('searchbox'), 'index.js')
     await user.click(within(list()).getAllByRole('option')[0]!)
     const details = screen.getByRole('complementary', { name: 'index.js details' })
-    expect(details.textContent).toContain('Modules 2')
     expect(details.textContent).toContain('entry')
-    expect([...details.querySelectorAll('.mods li')].map(li => li.textContent)).toEqual([
-      'src/main.ts',
-      'src/App.svelte',
-    ])
-    expect(details.querySelector('.mods mark')!.textContent).toBe('main')
+    const stats = Object.fromEntries(
+      [...details.querySelectorAll('dl div')].map(d => [
+        d.querySelector('dt')!.textContent,
+        d.querySelector('dd')!.textContent,
+      ]),
+    )
+    // 300 000 of 452 000 bytes
+    expect(stats).toEqual({ Size: '293.0 KB', 'Share of total': '66.4%' })
+    expect(details.textContent).not.toContain('Modules')
     await user.click(within(details).getByRole('button', { name: 'Close details (Esc)' }))
     expect(screen.queryByRole('complementary')).toBeNull()
 

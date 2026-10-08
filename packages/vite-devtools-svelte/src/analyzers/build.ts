@@ -48,7 +48,6 @@ export function analyzeBuild(root: string): BuildAnalysis {
         name: entry.name,
         file: path.relative(root, full),
         size: stat.size,
-        modules: [],
         isEntry: entry.name.includes('index') || entry.name.includes('start'),
       })
     }

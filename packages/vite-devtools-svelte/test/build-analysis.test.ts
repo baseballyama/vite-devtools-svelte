@@ -75,14 +75,13 @@ describe('analyzeBuild', () => {
     expect(analyzeBuild(r).totalSize).toBe(8)
   })
 
-  it('chunk entries carry name, relative file and empty modules', () => {
+  it('chunk entries carry name, relative file, size and entry flag', () => {
     const r = root({ '.svelte-kit/output/app.js': 'abc' })
     expect(analyzeBuild(r).chunks).toEqual([
       {
         name: 'app.js',
         file: path.join('.svelte-kit', 'output', 'app.js'),
         size: 3,
-        modules: [],
         isEntry: false,
       },
     ])

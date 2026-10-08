@@ -402,7 +402,6 @@ export interface BuildChunk {
   name: string
   file: string
   size: number
-  modules: string[]
   isEntry: boolean
 }
 
