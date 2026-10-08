@@ -1,5 +1,11 @@
 # vite-devtools-svelte
 
+## 0.6.2
+
+### Patch Changes
+
+- [#128](https://github.com/baseballyama/vite-devtools-svelte/pull/128) [`ce18e36`](https://github.com/baseballyama/vite-devtools-svelte/commit/ce18e36d99984de5303d51953856367b01d242ac) Thanks [@baseballyama](https://github.com/baseballyama)! - Build panel: removed the Modules column and the module list in the chunk details. The build output on disk does not say which modules a chunk contains, so they always showed 0 and an empty list. The details now show the chunk's size and its share of the total.
+
 ## 0.6.1
 
 ### Patch Changes
