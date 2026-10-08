@@ -11,6 +11,7 @@
   import SearchField from '../components/SearchField.svelte'
   import Segmented from '../components/Segmented.svelte'
   import SplitView from '../components/SplitView.svelte'
+  import StatList from '../components/StatList.svelte'
   import type { Column, SortState, TableRowState, Tone } from '../components/types.js'
   import { formatBytes, basename } from '../lib/format.js'
   import { matcher } from '../lib/match.js'
@@ -33,11 +34,10 @@
   const chunks = $derived(build.data?.chunks ?? [])
   const rows = $derived.by(() => {
     const m = matcher(query)
-    return chunks.filter(
-      c => (kind === 'all' || kindOf(c) === kind) && (!m || m(c.file, c.name, ...c.modules)),
-    )
+    return chunks.filter(c => (kind === 'all' || kindOf(c) === kind) && (!m || m(c.file, c.name)))
   })
   const total = $derived(build.data?.totalSize ?? 0)
+  const share = (c: BuildChunk) => (total ? ((c.size / total) * 100).toFixed(1) : '0')
   const maxSize = $derived(chunks.reduce((m, c) => Math.max(m, c.size), 1))
   const current = $derived(selected ? (chunks.find(c => c.file === selected) ?? null) : null)
 
@@ -60,15 +60,6 @@
       label: 'Chunk',
       width: 'minmax(0, 1fr)',
       sort: (a, b) => a.file.localeCompare(b.file),
-    },
-    {
-      id: 'modules',
-      label: 'Modules',
-      width: '72px',
-      align: 'end',
-      descFirst: true,
-      minWidth: 560,
-      sort: (a, b) => a.modules.length - b.modules.length,
     },
     {
       id: 'share',
@@ -102,7 +93,7 @@
         { value: 'other', label: 'Other', count: byKind.other.count },
       ]}
     />
-    <SearchField bind:value={query} placeholder="Filter chunks or modules…" count={rows.length} />
+    <SearchField bind:value={query} placeholder="Filter chunks…" count={rows.length} />
   {/snippet}
   {#snippet actions()}
     {#if build.data?.timestamp}<span class="stamp"
@@ -173,10 +164,7 @@
                 <span class="truncate mono file"><Highlight text={c.file} {query} /></span>
                 {#if c.isEntry}<Badge tone="accent">entry</Badge>{/if}
               </span>
-              {#if visible.has('modules')}<span class="end num muted">{c.modules.length}</span>{/if}
-              {#if visible.has('share')}<span class="end num faint"
-                  >{total ? ((c.size / total) * 100).toFixed(1) : 0}%</span
-                >{/if}
+              {#if visible.has('share')}<span class="end num faint">{share(c)}%</span>{/if}
               <span class="size end">
                 <span class="bar {kindOf(c)}" style:width="{Math.max(2, (c.size / maxSize) * 60)}px"
                 ></span>
@@ -197,14 +185,13 @@
                   <Badge>{formatBytes(current.size)}</Badge>
                   {#if current.isEntry}<Badge tone="accent">entry</Badge>{/if}
                 {/snippet}
-                <h3 class="section-title">
-                  Modules <span class="num">{current.modules.length}</span>
-                </h3>
-                <ul class="mods">
-                  {#each current.modules.slice(0, 1000) as m, i (i)}
-                    <li class="mono truncate" title={m}><Highlight text={m} {query} /></li>
-                  {/each}
-                </ul>
+                <StatList
+                  variant="grid"
+                  items={[
+                    { label: 'Size', value: formatBytes(current.size) },
+                    { label: 'Share of total', value: `${share(current)}%` },
+                  ]}
+                />
               </Inspector>
             {/if}
           {/snippet}
@@ -296,15 +283,5 @@
   }
   .big {
     color: var(--yellow);
-  }
-  .mods {
-    list-style: none;
-    margin: 0;
-    padding: 0 14px;
-    font-size: var(--fs-xs);
-    color: var(--fg-muted);
-  }
-  .mods li {
-    padding: 2px 0;
   }
 </style>
