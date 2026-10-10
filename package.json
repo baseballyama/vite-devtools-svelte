@@ -32,22 +32,22 @@
     "@changesets/changelog-github": "^1.0.1",
     "@changesets/cli": "^3.0.3",
     "@typescript/native": "npm:typescript@^7.0.2",
-    "axe-core": "^4.11.0",
+    "axe-core": "^4.14.0",
     "eslint": "^10.12.0",
-    "eslint-plugin-svelte": "^3.23.0",
+    "eslint-plugin-svelte": "^3.23.1",
     "globals": "^17.13.0",
-    "knip": "^6.39.0",
+    "knip": "^6.41.0",
     "oxfmt": "^0.72.0",
     "oxlint": "^1.87.0",
-    "oxlint-tsgolint": "^7.0.2003",
-    "playwright-core": "1.63.0",
+    "oxlint-tsgolint": "^7.0.2004",
+    "playwright-core": "1.64.0",
     "publint": "^0.3.25",
     "sherif": "^1.13.0",
     "svelte": "^5.57.1",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.71.1"
   },
-  "packageManager": "pnpm@12.9.1",
+  "packageManager": "pnpm@12.11.2",
   "sherif": {
     "ignorePackage": [
       "plain-svelte"
