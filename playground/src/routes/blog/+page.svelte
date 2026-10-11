@@ -1,12 +1,22 @@
+<script lang="ts">
+  import { resolve } from '$app/paths'
+
+  const posts = [
+    { slug: 'hello-world', title: 'Hello World' },
+    { slug: 'getting-started', title: 'Getting Started with Svelte DevTools' },
+    { slug: 'advanced-features', title: 'Advanced Features' },
+  ]
+</script>
+
 <svelte:head>
   <title>Blog - Svelte DevTools Playground</title>
 </svelte:head>
 
 <h1>Blog</h1>
 <ul class="posts">
-  <li><a href="/blog/hello-world">Hello World</a></li>
-  <li><a href="/blog/getting-started">Getting Started with Svelte DevTools</a></li>
-  <li><a href="/blog/advanced-features">Advanced Features</a></li>
+  {#each posts as post (post.slug)}
+    <li><a href={resolve('/blog/[slug]', { slug: post.slug })}>{post.title}</a></li>
+  {/each}
 </ul>
 
 <style>
