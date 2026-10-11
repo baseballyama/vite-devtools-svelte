@@ -12,8 +12,8 @@
         "dock": "vite.config.ts"
       },
       "versions": {
-        "svelte": "5.57.1",
-        "vite": "8.3.2",
+        "svelte": "5.57.2",
+        "vite": "8.3.4",
         "@sveltejs/vite-plugin-svelte": "7.3.1",
         "@vitejs/devtools": "0.7.6"
       },
@@ -50,8 +50,8 @@
       },
       "versions": {
         "@sveltejs/kit": "2.70.3",
-        "svelte": "5.57.1",
-        "vite": "8.3.2",
+        "svelte": "5.57.2",
+        "vite": "8.3.4",
         "@sveltejs/vite-plugin-svelte": "7.3.1",
         "@vitejs/devtools": "0.7.6"
       },
@@ -98,9 +98,9 @@
         "dock": "vite.config.ts"
       },
       "versions": {
-        "@sveltejs/kit": "3.0.0",
-        "svelte": "5.57.1",
-        "vite": "8.3.2",
+        "@sveltejs/kit": "3.0.1",
+        "svelte": "5.57.2",
+        "vite": "8.3.4",
         "@sveltejs/vite-plugin-svelte": "7.3.1",
         "@sveltejs/adapter-auto": "8.0.0",
         "@vitejs/devtools": "0.7.6"
@@ -141,12 +141,12 @@
     },
     {
       "dir": "examples/strict-csp-app",
-      "kit": "3.0.0",
+      "kit": "3.0.1",
       "note": "Existing strict-CSP example, not a compat profile. Built and type-checked in the CI job \"Playground production build\"."
     },
     {
       "dir": "playground",
-      "kit": "3.0.0",
+      "kit": "3.0.1",
       "note": "Built and type-checked in the CI job \"Playground production build\"."
     }
   ]
