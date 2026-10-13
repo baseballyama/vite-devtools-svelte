@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { resolve } from '$app/paths'
+
   import type { PageProps } from './$types'
 
   let { data }: PageProps = $props()
@@ -9,7 +11,7 @@
 </svelte:head>
 
 <article>
-  <a href="/blog">&larr; Back to Blog</a>
+  <a href={resolve('/blog')}>&larr; Back to Blog</a>
   <h1>{data.title}</h1>
   <p>{data.content}</p>
 </article>

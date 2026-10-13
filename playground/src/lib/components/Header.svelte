@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from '$app/paths'
   import { page } from '$app/state'
 
   const isDev = import.meta.env.DEV
@@ -7,11 +8,12 @@
 <header>
   <nav>
     <div class="links">
-      <a href="/" class:active={page.url.pathname === '/'}>Home</a>
-      <a href="/about" class:active={page.url.pathname === '/about'}>About</a>
-      <a href="/blog" class:active={page.url.pathname.startsWith('/blog')}>Blog</a>
+      <a href={resolve('/')} class:active={page.url.pathname === '/'}>Home</a>
+      <a href={resolve('/about')} class:active={page.url.pathname === '/about'}>About</a>
+      <a href={resolve('/blog')} class:active={page.url.pathname.startsWith('/blog')}>Blog</a>
     </div>
     {#if isDev}
+      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- served by the DevTools middleware, not a SvelteKit route -->
       <a class="devtools-link" href="/__devtools/" target="_blank" rel="noreferrer">
         Open DevTools ↗
       </a>
