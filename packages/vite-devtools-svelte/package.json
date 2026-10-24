@@ -48,10 +48,10 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "@vitejs/devtools-kit": "^0.7.6",
-    "devframe": "^1.2.3",
-    "zod": "^4.6.5"
+    "devframe": "^1.2.6",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
