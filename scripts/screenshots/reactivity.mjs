@@ -194,7 +194,7 @@ const dialog = ui.getByRole('dialog', { name: 'Authorize this browser' })
 await dialog.waitFor({ timeout: 20_000 })
 let code = null
 for (let i = 0; i < 100 && !code; i++) {
-  const t = log.slice(from).replace(ANSI, '')
+  const t = log.slice(from).replaceAll(ANSI, '')
   code =
     [...t.matchAll(/auth code\s+(\d{6})/g)].at(-1)?.[1] ??
     [...t.matchAll(/devframe_otp=(\d{6})/g)].at(-1)?.[1] ??

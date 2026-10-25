@@ -237,7 +237,7 @@
     <div>
       <h3>Vite DevTools dock</h3>
       <p class="muted">
-        Install <code>@vitejs/devtools</code> ≥ 0.7.6 and add <code>DevTools()</code> to your Vite config:
+        Install <code>@vitejs/devtools</code> ≥ 0.8.0 and add <code>DevTools()</code> to your Vite config:
         the same panels open as an entry in the Vite DevTools dock.
       </p>
     </div>

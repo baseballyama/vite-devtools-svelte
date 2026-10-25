@@ -81,11 +81,11 @@ export default defineConfig({
         </div>
         <div class="req">
           <dt>SvelteKit</dt>
-          <dd>recommended for full feature set</dd>
+          <dd>2 or 3 — recommended for full feature set</dd>
         </div>
         <div class="req">
           <dt>@vitejs/devtools</dt>
-          <dd>≥ 0.7.6 — optional, only for the in-page dock</dd>
+          <dd>≥ 0.8.0 — optional, only for the in-page dock</dd>
         </div>
       </dl>
     </div>

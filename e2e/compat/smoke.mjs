@@ -739,7 +739,7 @@ async function openDockEntry(page) {
 async function waitCode(srv, from) {
   for (let i = 0; i < 100; i++) {
     // the auth box is ANSI-coloured
-    const code = lastAuthCode(srv.log.slice(from).replace(ANSI, ''))
+    const code = lastAuthCode(srv.log.slice(from).replaceAll(ANSI, ''))
     if (code) return code
     await sleep(100)
   }

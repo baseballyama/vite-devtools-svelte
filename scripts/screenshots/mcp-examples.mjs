@@ -266,7 +266,7 @@ try {
 
   // The registration line the dev server prints, with the secrets replaced.
   const printed = log
-    .replace(ANSI, '')
+    .replaceAll(ANSI, '')
     .split('\n')
     .find(l => l.includes('claude mcp add'))
   manifest.printedRegisterCommand = printed
