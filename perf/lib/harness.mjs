@@ -252,7 +252,7 @@ export async function startServer({ appDir, port, withDevtools, home }) {
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   let log = ''
-  const cleanLog = () => log.replace(ANSI, '')
+  const cleanLog = () => log.replaceAll(ANSI, '')
   child.stdout.on('data', d => {
     log += d
   })
@@ -261,7 +261,7 @@ export async function startServer({ appDir, port, withDevtools, home }) {
   })
   const base = `http://localhost:${port}`
   for (let i = 0; i < 1800; i++) {
-    if (child.exitCode !== null) throw new Error(`vite exited early:\n${log.replace(ANSI, '')}`)
+    if (child.exitCode !== null) throw new Error(`vite exited early:\n${log.replaceAll(ANSI, '')}`)
     try {
       const res = await fetch(`${base}/bench`)
       if (res.ok) {
@@ -280,7 +280,7 @@ export async function startServer({ appDir, port, withDevtools, home }) {
     await sleep(100)
   }
   await stopServer({ child })
-  throw new Error(`vite did not become ready:\n${log.replace(ANSI, '')}`)
+  throw new Error(`vite did not become ready:\n${log.replaceAll(ANSI, '')}`)
 }
 
 /** Stops only the child we spawned (graceful, then forced). */
