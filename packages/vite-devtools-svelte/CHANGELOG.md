@@ -1,5 +1,12 @@
 # vite-devtools-svelte
 
+## 0.7.0
+
+### Minor Changes
+
+- [#135](https://github.com/baseballyama/vite-devtools-svelte/pull/135) [`2f30ab8`](https://github.com/baseballyama/vite-devtools-svelte/commit/2f30ab81adc34f77cb35895adf2d94da8ad6aa6e) Thanks [@baseballyama](https://github.com/baseballyama)! - - SvelteKit 2 and 3 are both supported, and `@sveltejs/kit` is now declared as an optional peer dependency (`^2.0.0 || ^3.0.0`). Plain Svelte + Vite apps without SvelteKit keep working.
+  - The plugin now uses `@vitejs/devtools-kit` 0.8. To show the panels inside the Vite DevTools dock, install `@vitejs/devtools` 0.8.0 or later.
+
 ## 0.6.2
 
 ### Patch Changes
