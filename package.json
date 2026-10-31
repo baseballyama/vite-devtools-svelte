@@ -33,21 +33,21 @@
     "@changesets/cli": "^3.0.3",
     "@typescript/native": "npm:typescript@^7.0.2",
     "axe-core": "^4.14.0",
-    "eslint": "^10.13.0",
+    "eslint": "^10.14.0",
     "eslint-plugin-svelte": "^3.23.1",
     "globals": "^17.13.0",
-    "knip": "^6.42.1",
-    "oxfmt": "^0.74.0",
-    "oxlint": "^1.89.0",
+    "knip": "^6.44.1",
+    "oxfmt": "^0.75.0",
+    "oxlint": "^1.90.0",
     "oxlint-tsgolint": "^7.0.2005",
     "playwright-core": "1.64.1",
     "publint": "^0.3.25",
     "sherif": "^1.13.0",
     "svelte": "^5.57.2",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.72.0"
+    "typescript-eslint": "^8.72.1"
   },
-  "packageManager": "pnpm@12.15.0",
+  "packageManager": "pnpm@12.16.1",
   "sherif": {
     "ignorePackage": [
       "plain-svelte"
