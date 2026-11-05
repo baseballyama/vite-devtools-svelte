@@ -232,10 +232,13 @@ served by a dev middleware and never reaches a build). It turns a UI selection
 into context a coding agent can act on:
 
 1. Click **Inspect** and pick one or more elements; a click is swallowed, so
-   the app does not navigate or submit. The button can be dragged anywhere
-   (double-click it to return to its corner) and remembers where you put it;
-   the panel opens on whichever side of the button has room. No global
-   keyboard shortcut is registered, so browser shortcuts keep working.
+   the app does not navigate or submit. Picked elements keep a numbered
+   outline (the same number as their entry in the panel) and it follows the
+   page as it scrolls or re-renders; clicking a picked element again un-picks
+   it. The button can be dragged anywhere (double-click it to return to its
+   corner) and remembers where you put it; the panel opens on whichever side of
+   the button has room. No global keyboard shortcut is registered, so browser
+   shortcuts keep working.
 2. Add the instructions you would type in chat.
 3. **Copy prompt** puts one markdown document on the clipboard: the page and
    viewport, your instructions, then per selection the element location

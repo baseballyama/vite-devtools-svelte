@@ -193,9 +193,10 @@ export default defineConfig({
         </header>
         <p>
           Opt in to get a floating button in your own pages. Click <strong>Inspect</strong> (drag
-          the button anywhere; it remembers where you put it), pick one or more elements, add the
-          instructions you would type in chat, and <strong>Copy prompt</strong> puts a markdown document
-          on the clipboard.
+          the button anywhere; it remembers where you put it), pick one or more elements — each
+          keeps a numbered outline that follows the page — add the instructions you would type in
+          chat, and
+          <strong>Copy prompt</strong> puts a markdown document on the clipboard.
         </p>
         <CodeBlock code={toolbarCode} lang="ts" filename="vite.config.ts" />
         <p>

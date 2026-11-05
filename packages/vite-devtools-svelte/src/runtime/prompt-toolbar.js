@@ -99,6 +99,16 @@ export function fenceLanguage(file) {
   return ''
 }
 
+/** The element a pick started on: text nodes and comments resolve upwards. */
+function elementOf(node) {
+  let element = node
+  while (element?.nodeType !== 1) {
+    if (!element) return null
+    element = element.parentElement ?? element.parentNode
+  }
+  return element
+}
+
 function inlineCode(value) {
   return '`' + String(value) + '`'
 }
@@ -624,8 +634,22 @@ const STYLES = `
   button.icon { height: 22px; padding: 0 6px; font-size: 12px; color: #94a3b8; }
   .status { color: #86efac; font-size: 12px; }
   .status[data-tone="error"] { color: #fca5a5; }
+  /* A picked element keeps a numbered outline: the prompt lists the same
+     numbers, and the page keeps showing what is in it. */
+  .mark {
+    position: fixed; z-index: 1; pointer-events: none;
+    border: 2px solid #22c55e; background: rgb(34 197 94 / 12%); border-radius: 3px;
+  }
+  .mark[hidden] { display: none; }
+  .mark .badge {
+    position: absolute; left: -2px; top: -18px;
+    min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
+    background: #16a34a; color: #fff; text-align: center;
+    font: 600 11px/18px ui-sans-serif, system-ui, sans-serif;
+    box-shadow: 0 1px 4px rgb(0 0 0 / 30%);
+  }
   .highlight {
-    position: fixed; z-index: 1; pointer-events: none; display: none;
+    position: fixed; z-index: 2; pointer-events: none; display: none;
     border: 2px solid #3b82f6; background: rgb(59 130 246 / 14%); border-radius: 3px;
   }
   .tip {
@@ -653,18 +677,35 @@ class PromptToolbar {
       y: typeof stored.y === 'number' ? stored.y : null,
     }
     this.selections = []
+    this.marks = new Map()
     this.picking = false
     this.panelOpen = false
     this.tipFrame = null
+    this.markFrame = null
     this.root = host.attachShadow({ mode: 'open' })
     this.render()
-    window.addEventListener('resize', () => this.applyPosition())
+    // Marks follow the page: scrolling (also of a scrollable ancestor), a
+    // resize, the app re-rendering around the picked elements, and those
+    // elements changing size.
+    window.addEventListener('scroll', () => this.scheduleMarks(), { capture: true, passive: true })
+    window.addEventListener('resize', () => {
+      this.applyPosition()
+      this.scheduleMarks()
+    })
+    this.pageObserver =
+      typeof MutationObserver === 'function'
+        ? new MutationObserver(() => this.scheduleMarks())
+        : null
+    this.resizeObserver =
+      typeof ResizeObserver === 'function' ? new ResizeObserver(() => this.scheduleMarks()) : null
   }
 
   render() {
     const style = document.createElement('style')
     style.textContent = STYLES
 
+    const marks = document.createElement('div')
+    marks.className = 'marks'
     const highlight = document.createElement('div')
     highlight.className = 'highlight'
     const tip = document.createElement('div')
@@ -701,6 +742,7 @@ class PromptToolbar {
     // Panel first: the dock stays at the anchored spot, the panel above it.
     shell.append(panel, dock)
 
+    this.marksLayer = marks
     this.highlight = highlight
     this.tip = tip
     this.dock = dock
@@ -708,7 +750,7 @@ class PromptToolbar {
     this.count = count
     this.panel = panel
     this.shell = shell
-    this.root.append(style, highlight, tip, shell)
+    this.root.append(style, marks, highlight, tip, shell)
 
     this.renderPanel()
     this.applyPosition()
@@ -782,6 +824,7 @@ class PromptToolbar {
 
     panel.append(head, body)
     this.renderDock()
+    this.scheduleMarks()
   }
 
   /** The picked count next to the inspect button, and its open/closed state. */
@@ -800,7 +843,7 @@ class PromptToolbar {
     text.className = 'text'
     const name = document.createElement('div')
     name.className = 'name'
-    name.textContent = elementTitle(selection.payload?.element)
+    name.textContent = index + 1 + '. ' + elementTitle(selection.payload?.element)
     const where = document.createElement('div')
     where.className = 'where'
     where.textContent = selection.payload?.source
@@ -816,6 +859,7 @@ class PromptToolbar {
       event.stopPropagation()
       this.selections.splice(index, 1)
       this.renderPanel()
+      this.hideHighlight()
     })
     chip.append(text, remove)
     return chip
@@ -854,6 +898,72 @@ class PromptToolbar {
       this.renderPanel()
       this.fitPanel()
     }
+  }
+
+  /** Coalesce mark updates into one frame (scroll and mutation bursts). */
+  scheduleMarks() {
+    if (this.markFrame !== null) return
+    this.markFrame = requestAnimationFrame(() => {
+      this.markFrame = null
+      this.syncMarks()
+    })
+  }
+
+  /** One numbered outline per selection, positioned over the element. */
+  syncMarks() {
+    if (!this.marksLayer) return
+    for (const [selection, mark] of this.marks) {
+      if (this.selections.includes(selection)) continue
+      mark.remove()
+      this.marks.delete(selection)
+      this.resizeObserver?.unobserve(selection.element)
+    }
+    if (this.selections.length === 0) {
+      this.pageObserver?.disconnect()
+      return
+    }
+    this.pageObserver?.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+    })
+    this.selections.forEach((selection, index) => {
+      let mark = this.marks.get(selection)
+      if (!mark) {
+        mark = this.createMark()
+        this.marks.set(selection, mark)
+        this.resizeObserver?.observe(selection.element)
+      }
+      const badge = mark.firstElementChild
+      if (badge) badge.textContent = String(index + 1)
+      const element = selection.element
+      const rect = element?.isConnected ? element.getBoundingClientRect() : null
+      const onScreen =
+        rect !== null &&
+        (rect.width > 0 || rect.height > 0) &&
+        rect.bottom > 0 &&
+        rect.top < window.innerHeight &&
+        rect.right > 0 &&
+        rect.left < window.innerWidth
+      mark.hidden = !onScreen
+      if (!onScreen) return
+      mark.style.left = rect.left + 'px'
+      mark.style.top = rect.top + 'px'
+      mark.style.width = rect.width + 'px'
+      mark.style.height = rect.height + 'px'
+      // The badge sits above the box, unless that would leave the viewport.
+      if (badge) badge.style.top = rect.top < 22 ? '0px' : '-18px'
+    })
+  }
+
+  createMark() {
+    const mark = document.createElement('div')
+    mark.className = 'mark'
+    const badge = document.createElement('span')
+    badge.className = 'badge'
+    mark.append(badge)
+    this.marksLayer.append(mark)
+    return mark
   }
 
   /** One cursor for the whole page while picking; the page keeps its own otherwise. */
@@ -1054,6 +1164,11 @@ class PromptToolbar {
       this.hideHighlight()
       return
     }
+    if (this.selections.some(selection => selection.element === element)) {
+      // Already outlined by its mark: a second box would only add noise.
+      this.hideHighlight()
+      return
+    }
     const rect = element.getBoundingClientRect()
     this.highlight.style.display = 'block'
     this.highlight.style.left = rect.left + 'px'
@@ -1094,8 +1209,21 @@ class PromptToolbar {
       this.showStatus(payload.error, 'error')
       return
     }
+    const element = elementOf(node)
+    // The numbered outline replaces the hover box: the element is picked now.
+    this.hideHighlight()
+    // Picking the same element again un-picks it: the outline is the feedback
+    // either way.
+    const existing = this.selections.findIndex(selection => selection.element === element)
+    if (existing !== -1) {
+      this.selections.splice(existing, 1)
+      this.setPanelOpen(true)
+      this.renderPanel()
+      this.showStatus('Removed ' + (payload.element?.tag ?? 'element'))
+      return
+    }
     const source = this.options.source ? await this.loadSource(payload) : null
-    this.selections.push({ payload, source })
+    this.selections.push({ payload, source, element })
     this.setPanelOpen(true)
     this.renderPanel()
     this.showStatus('Added ' + (payload.element?.tag ?? 'element'))
@@ -1116,6 +1244,7 @@ class PromptToolbar {
   clearSelections() {
     this.selections = []
     this.renderPanel()
+    this.hideHighlight()
     this.showStatus('Cleared')
   }
 
