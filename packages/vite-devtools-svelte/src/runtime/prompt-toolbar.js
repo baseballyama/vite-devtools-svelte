@@ -16,6 +16,24 @@
 export const TOOLBAR_HOST_ID = '__svelte-devtools-prompt'
 
 const STORAGE_KEY = 'vite-devtools-svelte:prompt-toolbar'
+
+// While picking, the page's own cursors (a pointer over links, a text caret
+// over inputs, resize arrows over handles) promise an interaction that will not
+// happen: a pick swallows the click. One cursor for the whole document says
+// "you are picking an element" and nothing else. The rule lives in the light
+// DOM so it reaches elements the toolbar never touches; it does not apply to
+// the toolbar's own shadow tree, which keeps its own cursors.
+const PICKING_CLASS = '__svelte-devtools-picking'
+const PICKING_STYLE_ID = PICKING_CLASS + '-cursor'
+const PICKING_CURSOR = 'crosshair'
+const PICKING_CSS =
+  'html.' +
+  PICKING_CLASS +
+  ', html.' +
+  PICKING_CLASS +
+  ' * { cursor: ' +
+  PICKING_CURSOR +
+  ' !important; }'
 const MAX_SELECTIONS = 10
 const MAX_SOURCE_LINES = 24
 const MAX_PROMPT_CHARS = 60000
@@ -617,7 +635,11 @@ const STYLES = `
     font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     box-shadow: 0 8px 20px -10px rgb(0 0 0 / 60%);
   }
-  :host([data-picking="true"]) { cursor: crosshair; }
+  /* The picking cursor is inherited from the host: the toolbar is still
+     interactive, so its own controls keep their usual cursors. */
+  .panel, .panel * { cursor: auto; }
+  .panel textarea { cursor: text; }
+  .panel button { cursor: pointer; }
 `
 
 class PromptToolbar {
@@ -834,6 +856,23 @@ class PromptToolbar {
     }
   }
 
+  /** One cursor for the whole page while picking; the page keeps its own otherwise. */
+  setPickingCursor(picking) {
+    const html = document.documentElement
+    const existing = document.querySelector('#' + PICKING_STYLE_ID)
+    if (!picking) {
+      html.classList.remove(PICKING_CLASS)
+      existing?.remove()
+      return
+    }
+    if (existing) return
+    const style = document.createElement('style')
+    style.id = PICKING_STYLE_ID
+    style.textContent = PICKING_CSS
+    document.head.append(style)
+    html.classList.add(PICKING_CLASS)
+  }
+
   togglePicking() {
     this.setPicking(!this.picking)
   }
@@ -843,6 +882,7 @@ class PromptToolbar {
     this.picking = picking
     this.host.dataset.picking = String(picking)
     this.fab.dataset.active = String(picking)
+    this.setPickingCursor(picking)
     const capture = true
     if (picking) {
       document.addEventListener('pointermove', this.onPointerMove, capture)

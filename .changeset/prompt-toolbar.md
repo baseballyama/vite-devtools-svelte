@@ -12,3 +12,4 @@ Details worth knowing:
 - Values are bounded before they reach the clipboard, and large props/state are summarised (`{id, name}`, `[12 items]`) instead of dumping page `data` blobs.
 - Frames from `node_modules` are filtered out, and when markup is rendered by one component but written in another (`{@render children()}`), the chain labels which one defines it.
 - No global keyboard shortcut is registered (it would fight browser shortcuts); the button is dragged, and its position is remembered.
+- While picking, the page's own cursors (pointer over links, text caret over inputs) are replaced by one picking cursor: a pick does not activate the element, so it should not promise that it will. The toolbar's own controls keep their cursors.
