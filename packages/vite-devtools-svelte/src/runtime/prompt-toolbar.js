@@ -217,6 +217,41 @@ export function summarizeValue(json) {
   return renderValue(value)
 }
 
+// Written with the values in them while they still fit: `{status: "ok",
+// latencyMs: 12}` explains a component, a bare list of keys does not. Past the
+// budget the structure alone is shown, so a page's `data` blob cannot flood
+// the prompt.
+const INLINE_BUDGET = 240
+const INLINE_ITEMS = 6
+const INLINE_DEPTH = 2
+const INLINE_STRING = 40
+
+/** `key: value`, with the quotes JSON would need only where they matter. */
+function inlineKey(name) {
+  return /^[A-Za-z_$][\w$]*$/.test(name) ? name : JSON.stringify(name)
+}
+
+function inlineValue(value, depth) {
+  if (value === null) return 'null'
+  if (typeof value === 'string') {
+    const text = value.length > INLINE_STRING ? value.slice(0, INLINE_STRING) + '…' : value
+    return JSON.stringify(text)
+  }
+  if (typeof value !== 'object') return String(value)
+  if (depth >= INLINE_DEPTH) return Array.isArray(value) ? '[…]' : '{…}'
+  if (Array.isArray(value)) {
+    const shown = value.slice(0, INLINE_ITEMS).map(item => inlineValue(item, depth + 1))
+    if (value.length > shown.length) shown.push('…' + (value.length - shown.length) + ' more')
+    return '[' + shown.join(', ') + ']'
+  }
+  const entries = Object.entries(value)
+  const shown = entries
+    .slice(0, INLINE_ITEMS)
+    .map(([name, item]) => inlineKey(name) + ': ' + inlineValue(item, depth + 1))
+  if (entries.length > shown.length) shown.push('…' + (entries.length - shown.length) + ' more')
+  return '{' + shown.join(', ') + '}'
+}
+
 function renderValue(value) {
   if (value === null) return 'null'
   if (typeof value === 'string') {
@@ -224,13 +259,18 @@ function renderValue(value) {
     return JSON.stringify(text)
   }
   if (typeof value !== 'object') return String(value)
-  const json = JSON.stringify(value)
-  if (json.length <= 120) return json
+  const inline = inlineValue(value, 0)
+  if (inline.length <= INLINE_BUDGET) return inline
   if (Array.isArray(value)) return '[' + value.length + ' items]'
   const keys = Object.keys(value)
   if (keys.length === 0) return '{}'
-  const shown = keys.slice(0, 6).join(', ')
-  return '{' + shown + (keys.length > 6 ? ', …' + (keys.length - 6) + ' more' : '') + '}'
+  const shown = keys.slice(0, INLINE_ITEMS).join(', ')
+  return (
+    '{' +
+    shown +
+    (keys.length > INLINE_ITEMS ? ', …' + (keys.length - INLINE_ITEMS) + ' more' : '') +
+    '}'
+  )
 }
 
 /** `key=value, key2=value2` for a props JSON string, bounded. */

@@ -297,14 +297,48 @@ describe('summarizeValue / summarizeProps', () => {
   it('keeps small values readable', () => {
     expect(summarizeValue('false')).toBe('false')
     expect(summarizeValue('"Seu espaço"')).toBe('"Seu espaço"')
-    expect(summarizeValue('{"editing":false}')).toBe('{"editing":false}')
+    expect(summarizeValue('{"editing":false}')).toBe('{editing: false}')
+    expect(summarizeValue('{"last-active":1}')).toBe('{"last-active": 1}')
   })
 
-  it('summarises large values instead of dumping them', () => {
-    const big = JSON.stringify({ id: 'x'.repeat(200), name: 'Agent workspace' })
-    expect(summarizeValue(big)).toBe('{id, name}')
+  it('keeps the values of a small object, which is what explains the component', () => {
+    const health = JSON.stringify({
+      status: 'ok',
+      service: 'web',
+      database: 'ok',
+      uptimeSeconds: 1234,
+      latencyMs: 12,
+      timestamp: '2026-11-05T09:47:48.222Z',
+    })
+    expect(summarizeValue(health)).toBe(
+      '{status: "ok", service: "web", database: "ok", uptimeSeconds: 1234, latencyMs: 12, timestamp: "2026-11-05T09:47:48.222Z"}',
+    )
+    // nested objects and lists are inlined too
+    expect(summarizeValue('{"a": {"b": 1}, "c": [1, 2]}')).toBe('{a: {b: 1}, c: [1, 2]}')
+  })
+
+  it('summarises values past the budget instead of dumping them', () => {
+    // six keys with long strings do not fit: structure only
+    const wide = Object.fromEntries(
+      ['a', 'b', 'c', 'd', 'e', 'f'].map(key => [key, 'x'.repeat(40)]),
+    )
+    expect(summarizeValue(JSON.stringify(wide))).toBe('{a, b, c, d, e, f}')
+    // a long list of numbers still inlines its first items
     const list = Array.from({ length: 60 }, (_, index) => index)
-    expect(summarizeValue(JSON.stringify(list))).toBe('[60 items]')
+    expect(summarizeValue(JSON.stringify(list))).toBe('[0, 1, 2, 3, 4, 5, …54 more]')
+    // wide records do not fit: structure only
+    const records = Array.from({ length: 60 }, (_, index) => ({
+      a: 'x'.repeat(40) + index,
+      b: 'x'.repeat(40) + index,
+      c: 'x'.repeat(40) + index,
+      d: 'x'.repeat(40) + index,
+      e: 'x'.repeat(40) + index,
+      f: 'x'.repeat(40) + index,
+    }))
+    expect(summarizeValue(JSON.stringify(records))).toBe('[60 items]')
+    // six items inline, a note for the rest
+    const rows = Array.from({ length: 9 }, (_, index) => ({ id: index }))
+    expect(summarizeValue(JSON.stringify(rows))).toContain('…3 more')
   })
 
   it('renders props as name=value pairs, dropping the $$slots plumbing', () => {
@@ -316,7 +350,7 @@ describe('summarizeValue / summarizeProps', () => {
       data: { locale: 'pt', user: { id: 'x'.repeat(200) } },
     })
     expect(summarizeProps(props)).toBe(
-      'title="Welcome back.", compact=true, children="() => {…}", data={locale, user}',
+      'title="Welcome back.", compact=true, children="() => {…}", data={locale: "pt", user: {id: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…"}}',
     )
   })
 })

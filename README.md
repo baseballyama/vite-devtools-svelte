@@ -264,7 +264,9 @@ rendered it. Two practical details:
 - Props and `$state` values are summarised when large (`{id, name}`, `[12 items]`)
   instead of dumping page `data` blobs; frames from `node_modules` (SvelteKit
   internals) are filtered out, and every value is bounded before it reaches the
-  clipboard.
+  clipboard: objects keep their scalar values inline while they fit a budget
+  (`{status: "ok", latencyMs: 12}`), and only oversized ones fall back to
+  `{id, name}` / `[12 items]`.
 
 ## How It Works
 
