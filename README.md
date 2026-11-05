@@ -246,6 +246,10 @@ into context a coding agent can act on:
    in, the component instance chain with props and live `$state`/`$derived`
    values, and a numbered source window around the selected line.
 
+An element is identified by its tag, id and authored classes (Svelte's
+`svelte-xxxx` hashes are dropped) together with its location and markup: the
+copy the app renders inside it is not copied into the prompt.
+
 What it reports comes from two places: Svelte's own dev metadata
 (`__svelte_meta.loc` / `.parent`, via `add_locations` and `add_svelte_meta`) and
 the runtime's component tree, so each element resolves to the instance that

@@ -250,17 +250,14 @@ export function summarizeProps(json) {
   return text.length > 400 ? text.slice(0, 400) + '…' : text
 }
 
+// Tag, id and authored classes: the element is identified by where it lives
+// and what it is, not by the copy the app happens to render inside it.
 function elementTitle(element) {
   if (!element) return 'element'
   const tag = element.tag ?? 'element'
   const id = element.id ? '#' + element.id : ''
-  const classes =
-    element.classes && element.classes.length > 0 ? '.' + element.classes.join('.') : ''
-  // Long text is the whole subtree (a container), not a label: it would only
-  // bury the file location under page copy.
-  const label = element.text && element.text.length <= 60 ? element.text : ''
-  const text = label ? ' — "' + label.replaceAll('"', "'") + '"' : ''
-  return tag + id + classes + text
+  const classes = (element.classes ?? []).filter(name => !name.startsWith('svelte-'))
+  return tag + id + (classes.length > 0 ? '.' + classes.join('.') : '')
 }
 
 function renderState(component, options) {
@@ -593,7 +590,7 @@ const STYLES = `
   .panel {
     pointer-events: auto;
     width: min(420px, calc(100vw - 36px));
-    max-height: min(70vh, 620px); overflow: auto;
+    max-height: min(70vh, 620px); overflow-y: auto; overflow-x: hidden;
     background: #0b1220; color: #e5e7eb;
     border: 1px solid #1f2a3d; border-radius: 14px;
     box-shadow: 0 24px 60px -24px rgb(0 0 0 / 70%);
@@ -622,7 +619,7 @@ const STYLES = `
   textarea:focus { outline: 2px solid #2563eb; outline-offset: -1px; }
   .options { display: flex; flex-wrap: wrap; gap: 4px 12px; color: #cbd5e1; font-size: 12px; }
   .options label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
-  .actions { display: flex; align-items: center; gap: 8px; }
+  .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
   button {
     height: 30px; padding: 0 12px; border-radius: 8px; border: 1px solid #1f2a3d;
     background: #111827; color: #e5e7eb; cursor: pointer;

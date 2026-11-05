@@ -15,7 +15,6 @@ interface Inspected {
     id: string
     classes: string[]
     attrs: Record<string, string>
-    text: string
     outerHTML: string
     size: string
     selector: string
@@ -77,7 +76,9 @@ describe('inspectElement', () => {
 
     expect(payload.error).toBeUndefined()
     expect(payload.element.tag).toBe('li')
-    expect(payload.element.text).toBe('B false')
+    // The element is identified by markup, not by the copy it renders.
+    expect(payload.element.outerHTML).toContain('B false')
+    expect(payload.element).not.toHaveProperty('text')
     expect(payload.element.selector).toBe('div > li:nth-of-type(2)')
 
     // The element is declared in the child component's markup, and Svelte

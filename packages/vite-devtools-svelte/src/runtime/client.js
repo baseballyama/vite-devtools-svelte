@@ -212,12 +212,6 @@ function __elementInfo(element) {
     const cut = outerHTML.lastIndexOf('>', 600)
     outerHTML = (cut > 0 ? outerHTML.slice(0, cut + 1) : outerHTML.slice(0, 600)) + ' …'
   }
-  let text = ''
-  try {
-    text = (element.textContent ?? '').replaceAll(/\s+/g, ' ').trim()
-  } catch {
-    text = ''
-  }
   const attrs = {}
   try {
     const list = element.attributes ?? []
@@ -236,7 +230,6 @@ function __elementInfo(element) {
     id: element.id ?? '',
     classes: Array.from(element.classList ?? []),
     attrs,
-    text: text.length > 160 ? text.slice(0, 160) + '…' : text,
     outerHTML,
     size: Math.round(rect.width) + '×' + Math.round(rect.height),
     selector: __elementPath(element),

@@ -65,7 +65,6 @@ interface Payload {
     id: string
     classes: string[]
     attrs: Record<string, string>
-    text: string
     outerHTML: string
     size: string
     selector: string
@@ -101,7 +100,6 @@ const payload: Payload = {
     id: 'save',
     classes: ['primary'],
     attrs: { id: 'save', class: 'primary', type: 'submit' },
-    text: 'Save',
     outerHTML: '<button id="save" class="primary" type="submit">Save</button>',
     size: '96×32',
     selector: 'main > form > button#save.primary',
@@ -326,7 +324,8 @@ describe('summarizeValue / summarizeProps', () => {
 describe('formatSelection', () => {
   it('reports location, DOM path and the component chain with state', () => {
     const text = formatSelection(payload, source, {}, ROOT)
-    expect(text).toContain('### Selected element button#save.primary — "Save"')
+    // Identification only: tag, id and authored classes (no `svelte-xxxx`).
+    expect(text).toContain('### Selected element button#save.primary')
     expect(text).toContain('- markup: `src/lib/components/Form.svelte:12:2`')
     expect(text).toContain('- DOM path: `main > form > button#save.primary`')
     expect(text).toContain('- attributes: id="save" type="submit"')
