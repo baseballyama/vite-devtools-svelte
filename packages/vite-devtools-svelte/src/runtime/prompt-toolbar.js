@@ -304,7 +304,7 @@ function renderState(component, options) {
   const lines = []
   if (options.props && component.props) {
     const props = summarizeProps(component.props)
-    if (props) lines.push('  - props (at mount): ' + props)
+    if (props) lines.push('  - props: ' + props)
   }
   if (options.state && component.state && component.state.length > 0) {
     for (const node of component.state) {

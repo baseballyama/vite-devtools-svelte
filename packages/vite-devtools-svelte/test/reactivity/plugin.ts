@@ -21,6 +21,13 @@ const wrapperCode = fs.readFileSync(
   new URL('../../src/runtime/wrapper.js', import.meta.url),
   'utf8',
 )
+// Mirrors `wrapperModule(true)` in the plugin: the reactivity fixtures exercise
+// the prompt toolbar's element instrumentation.
+const wrapperToolbarCode = fs.readFileSync(
+  new URL('../../src/runtime/wrapper-toolbar.js', import.meta.url),
+  'utf8',
+)
+const wrapperModule = `${wrapperCode}\n${wrapperToolbarCode}`
 
 export function reactivityHarnessPlugin(): Plugin[] {
   return [
@@ -41,7 +48,7 @@ export function reactivityHarnessPlugin(): Plugin[] {
       },
       load(id) {
         if (id === RESOLVED_RUNTIME_ID) return runtimeCode
-        if (id === WRAPPER_MODULE_ID) return wrapperCode
+        if (id === WRAPPER_MODULE_ID) return wrapperModule
         return null
       },
     },

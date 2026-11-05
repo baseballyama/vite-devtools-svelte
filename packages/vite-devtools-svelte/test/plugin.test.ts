@@ -10,6 +10,7 @@ import {
   runtimeCode,
   WRAPPER_MODULE_ID,
   wrapperCode,
+  wrapperModule,
 } from '../src/runtime/index.js'
 import { callHook, resolvePlugins } from './helpers.js'
 
@@ -81,6 +82,20 @@ describe('mainPlugin virtual module resolution', () => {
 
   it('defers unknown ids to other loaders', () => {
     expect(callHook(getMainPlugin().load, '/test/src/App.svelte')).toBeNull()
+  })
+
+  it('serves the element instrumentation only when the prompt toolbar is on', () => {
+    // Off by default: the wrapper is Svelte's own exports plus the tracking
+    // overrides, and nothing walks the DOM or retains props.
+    expect(callHook(getMainPlugin().load, WRAPPER_MODULE_ID)).toBe(wrapperCode)
+    const enabled = svelteDevtools({ promptToolbar: true }).find(
+      p => p.name === 'vite-devtools-svelte',
+    )!
+    resolvePlugins([enabled])
+    const served = callHook(enabled.load, WRAPPER_MODULE_ID)
+    expect(served).toBe(wrapperModule(true))
+    expect(served).toContain('add_locations')
+    expect(served).toContain('add_svelte_meta')
   })
 
   it('does not redirect svelte/internal/client when componentTracking is disabled', () => {

@@ -369,7 +369,7 @@ describe('formatSelection', () => {
     expect(text).toContain('1. Form — `src/lib/components/Form.svelte`')
     expect(text).toContain('  - rendered by `src/routes/settings/+page.svelte:8:2`')
     expect(text).toContain('  - renders: 3')
-    expect(text).toContain('  - props (at mount): title="Profile"')
+    expect(text).toContain('  - props: title="Profile"')
     expect(text).toContain('  - $state saving = false')
     expect(text).toContain('  - $derived label = "Save"')
     expect(text).toContain('2. SettingsPage — `src/routes/settings/+page.svelte`')
@@ -436,7 +436,7 @@ describe('formatSelection', () => {
       ROOT,
     )
     expect(text).not.toContain('$state saving')
-    expect(text).not.toContain('props (at mount)')
+    expect(text).not.toContain('  - props:')
     expect(text).not.toContain('Template context')
     expect(text).not.toContain('Source of')
     expect(text).toContain('1. Form')

@@ -86,20 +86,36 @@ function __clampInt(v, lo, hi, d) {
 // --- Bounded snapshots for the prompt toolbar ---
 //
 // Values copied out of the running app end up in a model prompt, so they are
-// bounded (an app can hold megabytes of state) and never throw. Objects keep
-// their JSON shape up to a depth/entry budget; whatever is dropped is
-// reported in the text instead of silently vanishing. Getters that throw or
-// proxies that cannot be read degrade to a marker, never to a broken payload.
+// bounded (an app can hold megabytes of state) and never throw. One inspection
+// shares a single node/character budget across the props and every state node it
+// reports, so a click cannot walk an unbounded slice of the app; whatever is
+// dropped is reported as `…` inside the value instead of vanishing silently,
+// and the JSON always stays parseable (the toolbar summarises it from there).
 const __PROMPT_MAX_DEPTH = 4
 const __PROMPT_MAX_ENTRIES = 25
 const __PROMPT_MAX_STRING = 320
-const __PROMPT_MAX_CHARS = 6000
+const __PROMPT_BUDGET = { nodes: 2000, chars: 20000 }
+const __PROMPT_TRUNCATED = '…'
 
-function __promptClone(value, depth, seen) {
+/** A fresh budget for one inspection (props + state of the whole chain). */
+function __promptBudget() {
+  return { nodes: __PROMPT_BUDGET.nodes, chars: __PROMPT_BUDGET.chars }
+}
+
+function __promptSpend(budget, chars) {
+  budget.nodes--
+  budget.chars -= chars
+  return budget.nodes >= 0 && budget.chars >= 0
+}
+
+function __promptClone(value, depth, seen, budget) {
+  if (!__promptSpend(budget, 0)) return __PROMPT_TRUNCATED
   if (value === null) return null
   const type = typeof value
   if (type === 'string') {
-    return value.length > __PROMPT_MAX_STRING ? value.slice(0, __PROMPT_MAX_STRING) + '…' : value
+    const text =
+      value.length > __PROMPT_MAX_STRING ? value.slice(0, __PROMPT_MAX_STRING) + '…' : value
+    return __promptSpend(budget, text.length) ? text : __PROMPT_TRUNCATED
   }
   if (type === 'number') return Number.isFinite(value) ? value : String(value)
   if (type === 'boolean' || type === 'undefined') return value
@@ -113,8 +129,14 @@ function __promptClone(value, depth, seen) {
     if (Array.isArray(value)) {
       const out = []
       const length = Math.min(value.length, __PROMPT_MAX_ENTRIES)
-      for (let i = 0; i < length; i++) out.push(__promptClone(value[i], depth + 1, seen))
-      if (value.length > length) out.push('… ' + (value.length - length) + ' more')
+      for (let i = 0; i < length; i++) {
+        if (budget.nodes <= 0) {
+          out.push(__PROMPT_TRUNCATED)
+          break
+        }
+        out.push(__promptClone(value[i], depth + 1, seen, budget))
+      }
+      if (value.length > out.length) out.push('… ' + (value.length - out.length) + ' more')
       return out
     }
     if (value instanceof Date) {
@@ -128,30 +150,34 @@ function __promptClone(value, depth, seen) {
     const keys = Object.keys(value)
     const length = Math.min(keys.length, __PROMPT_MAX_ENTRIES)
     for (let i = 0; i < length; i++) {
+      if (budget.nodes <= 0) {
+        out['…'] = keys.length - i + ' more keys'
+        break
+      }
       const key = keys[i]
       try {
-        out[key] = __promptClone(value[key], depth + 1, seen)
+        out[key] = __promptClone(value[key], depth + 1, seen, budget)
       } catch {
         out[key] = '(unreadable)'
       }
     }
-    if (keys.length > length) out['…'] = keys.length - length + ' more keys'
+    if (keys.length > length && budget.nodes > 0) out['…'] = keys.length - length + ' more keys'
     return out
   } finally {
     seen.delete(value)
   }
 }
 
-// JSON text for one value, bounded and printable (never throws).
-function __promptValue(value) {
+// JSON text for one value, bounded and printable (never throws, always valid
+// JSON so the toolbar can summarise it structurally).
+function __promptValue(value, budget) {
   let text
   try {
-    text = JSON.stringify(__promptClone(value, 0, new Set()))
+    text = JSON.stringify(__promptClone(value, 0, new Set(), budget))
   } catch {
     text = null
   }
-  if (text === undefined || text === null) return '(unserializable)'
-  return text.length > __PROMPT_MAX_CHARS ? text.slice(0, __PROMPT_MAX_CHARS) + '…' : text
+  return text ?? '(unserializable)'
 }
 
 // The element a click landed on: text nodes and comments resolve upwards.
@@ -827,6 +853,8 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       const element = __closestElement(node)
       const located = element ? __locateComponent(element) : { meta: null }
       const loc = located?.meta?.loc ?? null
+      // One budget for the whole answer: props and state of every instance.
+      const budget = __promptBudget()
       return {
         epoch: this._epoch,
         page: __pageInfo(),
@@ -843,7 +871,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
             }
           : null,
         template: __templateStack(located?.meta?.parent ?? null),
-        components: this._componentChain(located?.componentId ?? null),
+        components: this._componentChain(located?.componentId ?? null, budget),
       }
     },
 
@@ -877,7 +905,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     },
 
     // The selected instance and its ancestors, innermost first.
-    _componentChain(componentId) {
+    _componentChain(componentId, budget = __promptBudget()) {
       const chain = []
       let id = componentId
       for (let depth = 0; id !== null && depth < 32; depth++) {
@@ -889,8 +917,10 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
           name: instance.name,
           file: instance.file,
           usage: this._instanceUsage.get(id) ?? null,
-          props: this._instanceProps.has(id) ? __promptValue(this._instanceProps.get(id)) : null,
-          state: this._componentState(id),
+          props: this._instanceProps.has(id)
+            ? __promptValue(this._instanceProps.get(id), budget)
+            : null,
+          state: this._componentState(id, budget),
           renders: profile ? profile.renderCount : 0,
         })
         id = instance.parentId
@@ -900,19 +930,23 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
 
     // Named $state / $derived of one instance with their current values.
     // Effects are skipped (they hold no data) and each value is bounded.
-    _componentState(componentId) {
+    _componentState(componentId, budget = __promptBudget()) {
       const nodeIds = this._nodesByComponent.get(componentId)
       if (!nodeIds) return []
       const out = []
       for (const nodeId of nodeIds) {
-        if (out.length >= 40) break
+        if (out.length >= 40 || budget.nodes <= 0) break
         const entry = this._reactiveNodes.get(nodeId)
         if (!entry || entry.meta.type === 'effect' || entry.meta.type === 'effect_pre') continue
         const signal = entry.signal.deref()
         if (!signal) continue
         const value = this._readStateValue(nodeId, signal)
         if (value === __NO_VALUE) continue
-        out.push({ name: entry.meta.name, type: entry.meta.type, value: __promptValue(value) })
+        out.push({
+          name: entry.meta.name,
+          type: entry.meta.type,
+          value: __promptValue(value, budget),
+        })
       }
       return out
     },

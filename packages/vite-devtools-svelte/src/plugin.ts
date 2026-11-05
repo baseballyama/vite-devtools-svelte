@@ -16,7 +16,7 @@ import {
   RESOLVED_RUNTIME_ID,
   runtimeCode,
   WRAPPER_MODULE_ID,
-  wrapperCode,
+  wrapperModule,
 } from './runtime/index.js'
 import {
   injectComponentTracking,
@@ -263,7 +263,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     load(id) {
       if (!serving()) return null
       if (id === RESOLVED_RUNTIME_ID) return runtimeCode
-      if (id === WRAPPER_MODULE_ID) return wrapperCode
+      if (id === WRAPPER_MODULE_ID) return wrapperModule(promptToolbar)
       return null
     },
 

@@ -1,8 +1,10 @@
 import { flushSync } from 'svelte'
 import { describe, it, expect, afterEach } from 'vitest'
 
+import BigState from './fixtures/BigState.svelte'
 import Child from './fixtures/Child.svelte'
 import Todos from './fixtures/Todos.svelte'
+import TwoRoots from './fixtures/TwoRoots.svelte'
 import { dt, render } from './harness.js'
 
 // Element inspection is what the prompt toolbar copies: a clicked DOM node
@@ -133,6 +135,32 @@ describe('inspectElement', () => {
     const payload = inspect(text)
     expect(payload.source?.file.endsWith('/TodoItem.svelte')).toBe(true)
     expect(payload.components[0]?.name).toBe('TodoItem')
+  })
+
+  it('stamps every root of a multi-root template, not just the first', () => {
+    // A template with several top-level nodes (a typical `+page.svelte`), with
+    // a component between them: the sibling walk must reach the last root.
+    const r = mountIt(TwoRoots)
+    for (const selector of ['.first', 'p.third']) {
+      const payload = inspect(element(r, selector))
+      expect(payload.components.map(c => c.name)).toEqual(['TwoRoots'])
+      expect(payload.source?.file.endsWith('/TwoRoots.svelte')).toBe(true)
+    }
+    // and the child component keeps its own attribution
+    const child = inspect(element(r, 'span'))
+    expect(child.components.map(c => c.name)).toEqual(['Child', 'TwoRoots'])
+  })
+
+  it('bounds a huge state value with parseable JSON, not a sliced string', () => {
+    const r = mountIt(BigState)
+    const payload = inspect(element(r, 'p.big'))
+    const state = payload.components[0]!.state.find(node => node.name === 'blob')
+    expect(state).toBeDefined()
+    // Valid JSON (the toolbar summarises from it), inside the inspection budget.
+    const parsed = JSON.parse(state!.value) as { text: string; list: unknown[] }
+    expect(parsed.text.length).toBeLessThanOrEqual(321)
+    expect(Array.isArray(parsed.list)).toBe(true)
+    expect(state!.value.length).toBeLessThan(6000)
   })
 
   it('locateElement is the cheap lookup behind the hover tooltip', () => {
