@@ -6,6 +6,7 @@ import {
 } from '../src/server/template-injector.js'
 import {
   PROMPT_TOOLBAR_PATH,
+  promptToolbarModule,
   promptToolbarTag,
   promptToolbarTagForTemplate,
   promptToolbarUrl,
@@ -19,23 +20,30 @@ const FAKE_INTERNAL_JS = `export const options = {
 `
 
 describe('prompt toolbar URL and tags', () => {
-  it('respects the base and carries the root for relative paths', () => {
-    const url = promptToolbarUrl('/', '/home/me/app', 'v1')
-    expect(url).toBe('/' + PROMPT_TOOLBAR_PATH + '?root=%2Fhome%2Fme%2Fapp&version=v1')
-    expect(promptToolbarUrl('/base/', '/home/me/app', 'v1')).toMatch(/^\/base\/__svelte-devtools\//)
+  it('respects the base and carries no configuration in the URL', () => {
+    expect(promptToolbarUrl('/')).toBe('/' + PROMPT_TOOLBAR_PATH)
+    expect(promptToolbarUrl('/base/')).toBe(`/base/${PROMPT_TOOLBAR_PATH}`)
   })
 
   it('builds a module script tag, escaped for SvelteKit’s JS template literal', () => {
-    const url = promptToolbarUrl('/', '/home/me/app', 'v1')
+    const url = promptToolbarUrl('/')
     expect(promptToolbarTag(url)).toBe(`<script type="module" src="${url}"></script>`)
     expect(promptToolbarTagForTemplate(url)).toBe(
       `<script type=\\"module\\" src=\\"${url}\\"></script>`,
     )
   })
+
+  it('writes the root and the base into the served script, not the page', () => {
+    const code = promptToolbarModule('/home/me/app', '/base/')
+    expect(code.startsWith('globalThis.__SVELTE_DEVTOOLS_PROMPT_CONFIG__ = ')).toBe(true)
+    const config = JSON.parse(code.split('\n')[0]!.split(' = ')[1]!)
+    expect(config).toEqual({ root: '/home/me/app', base: '/base/' })
+    expect(code).toContain('mountToolbar')
+  })
 })
 
 describe('injectIntoSvelteKitTemplate', () => {
-  const toolbarTag = promptToolbarTagForTemplate(promptToolbarUrl('/', '/home/me/app', 'v1'))
+  const toolbarTag = promptToolbarTagForTemplate(promptToolbarUrl('/'))
 
   it('adds the toolbar next to the devtools dock tag', () => {
     const withDock = injectIntoSvelteKitInternal(FAKE_INTERNAL_JS)!

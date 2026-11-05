@@ -119,8 +119,11 @@ describe('SvelteKit template injection follows the host', () => {
     expect(res.headers.get('content-type')).toMatch(/javascript/)
     const body = await res.text()
     expect(body).toContain('mountToolbar')
-    // the project root travels in the query, so copied paths stay relative
-    expect(src).toContain('root=' + encodeURIComponent(root))
+    // The root and the base are written into the script, not the page: the
+    // markup is the same on every machine and no absolute path leaks into it.
+    expect(src).not.toContain('?')
+    expect(body).toContain('__SVELTE_DEVTOOLS_PROMPT_CONFIG__')
+    expect(body).toContain(`"root":${JSON.stringify(root)}`)
   }, 20_000)
 
   it('the prompt toolbar is opt-in: off by default', async () => {

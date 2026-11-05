@@ -96,8 +96,6 @@ function collectModules(server: ViteDevServer): GraphModuleLike[] {
 
 export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
   const { componentTracking = true, clientAuth = true, promptToolbar = false } = options
-  // Cache-busting for the toolbar script, whose URL the app HTML carries.
-  const toolbarVersion = Date.now().toString(36)
 
   let config: ResolvedConfig
   let server: ViteDevServer | undefined
@@ -226,7 +224,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       // Last, so the standalone mount and the MCP endpoint keep their
       // positions in the middleware stack (and this route cannot shadow
       // either of them).
-      if (promptToolbar) servePromptToolbar(devServer, config.base)
+      if (promptToolbar) servePromptToolbar(devServer, config.base, root)
     },
 
     // Middleware-mode mounts have no `httpServer` close event; dispose them
@@ -287,7 +285,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
         if (promptToolbar) {
           tags.push({
             tag: 'script',
-            attrs: { type: 'module', src: promptToolbarUrl(config.base, root, toolbarVersion) },
+            attrs: { type: 'module', src: promptToolbarUrl(config.base) },
             injectTo: 'body',
           })
         }
@@ -383,10 +381,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     warningCapturePlugin,
     sveltekitTemplateInjector(
       () => hostedByViteDevtools,
-      () =>
-        promptToolbar
-          ? [promptToolbarTagForTemplate(promptToolbarUrl(config.base, root, toolbarVersion))]
-          : [],
+      () => (promptToolbar ? [promptToolbarTagForTemplate(promptToolbarUrl(config.base))] : []),
     ),
   ]
 }

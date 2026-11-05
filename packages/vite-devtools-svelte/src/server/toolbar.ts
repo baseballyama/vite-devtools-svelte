@@ -8,15 +8,15 @@ import { promptToolbarCode } from '../runtime/index.js'
  * `transformIndexHtml`, so the app template can only reference a real URL, and
  * a static file needs no import rewrites (the toolbar imports nothing).
  *
- * The project root travels in the query string so relative paths in the copied
- * prompt read like the repository (`src/lib/...`) instead of absolute ones.
+ * What it needs from the project — the root, for repository-relative paths, and
+ * the Vite base, for `/@fs` source reads — is written into the *served script*,
+ * not the URL: the page markup stays the same on every machine.
  */
 export const PROMPT_TOOLBAR_PATH = '__svelte-devtools/prompt-toolbar.js'
 
 /** URL of the toolbar script, absolute to the served page (respects `base`). */
-export function promptToolbarUrl(base: string, root: string, version: string): string {
-  const query = new URLSearchParams({ root, version })
-  return `${base}${PROMPT_TOOLBAR_PATH}?${query.toString()}`
+export function promptToolbarUrl(base: string): string {
+  return `${base}${PROMPT_TOOLBAR_PATH}`
 }
 
 /** `<script type="module" src>` for the toolbar, as plain HTML. */
@@ -34,16 +34,25 @@ export function promptToolbarTagForTemplate(url: string): string {
 }
 
 /**
+ * The served script: the toolbar source plus one line of configuration. The
+ * root never reaches the page's HTML (where it would be visible to anything
+ * reading the markup), and `JSON.stringify` keeps the values safe to inline.
+ */
+export function promptToolbarModule(root: string, base: string): string {
+  return `globalThis.__SVELTE_DEVTOOLS_PROMPT_CONFIG__ = ${JSON.stringify({ root, base })}\n${promptToolbarCode}`
+}
+
+/**
  * Serve the toolbar script. Registered on the dev server's own middleware
  * stack before SvelteKit's catch-all handler, so the URL never reaches the
  * app router.
  */
-export function servePromptToolbar(server: ViteDevServer, base: string): void {
+export function servePromptToolbar(server: ViteDevServer, base: string, root: string): void {
   server.middlewares.use(`${base}${PROMPT_TOOLBAR_PATH}`, (_request, response) => {
     response.statusCode = 200
     response.setHeader('Content-Type', 'text/javascript; charset=utf-8')
     response.setHeader('Cache-Control', 'no-store')
     response.setHeader('X-Content-Type-Options', 'nosniff')
-    response.end(promptToolbarCode)
+    response.end(promptToolbarModule(root, base))
   })
 }

@@ -499,17 +499,19 @@ function devtoolsRuntime() {
   return typeof window === 'undefined' ? null : (window.__SVELTE_DEVTOOLS__ ?? null)
 }
 
-/** Project root and version, handed over by the dev server in the script URL. */
+/**
+ * Project root and Vite base, written into this script by the dev server (see
+ * `promptToolbarModule`). The page's markup never carries them.
+ */
 function toolbarConfig() {
-  try {
-    const url = new URL(import.meta.url)
+  const config = globalThis.__SVELTE_DEVTOOLS_PROMPT_CONFIG__
+  if (config && typeof config === 'object') {
     return {
-      root: url.searchParams.get('root') ?? '',
-      version: url.searchParams.get('version') ?? '',
+      root: typeof config.root === 'string' ? config.root : '',
+      base: typeof config.base === 'string' ? config.base : '/',
     }
-  } catch {
-    return { root: '', version: '' }
   }
+  return { root: '', base: '/' }
 }
 
 function readStorage() {
@@ -553,11 +555,13 @@ function saveOptions(options) {
 // `/@fs/<abs>?raw` is Vite's raw-module URL: it returns the file text, which
 // is exactly the Svelte source behind the compiled component. Svelte's
 // locations are usually root-relative, Vite's `/@fs/` needs an absolute path.
-async function fetchSource(file, root) {
+async function fetchSource(file, root, base) {
   if (!file) return null
   const absolute = file.startsWith('/') ? file : String(root).replace(/\/?$/, '') + '/' + file
   try {
-    const response = await fetch('/@fs' + absolute + '?raw')
+    // `/@fs` is served under the configured base: with `base: '/app/'` a bare
+    // `/@fs/...` request 404s in Vite's base middleware.
+    const response = await fetch(base + '@fs' + absolute + '?raw')
     if (!response.ok) return null
     const text = await response.text()
     const match = /export default (".*")\s*;?\s*$/s.exec(text)
@@ -1274,7 +1278,7 @@ class PromptToolbar {
   async loadSource(payload) {
     const file = payload?.source?.file ?? payload?.components?.[0]?.file ?? null
     if (!file) return null
-    const text = await fetchSource(file, this.config.root)
+    const text = await fetchSource(file, this.config.root, this.config.base)
     return text ? { file, text } : null
   }
 
