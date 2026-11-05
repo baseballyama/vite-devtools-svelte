@@ -78,6 +78,12 @@ export function push() {
       const id = dt.register(file)
       __idStack.push(id)
       dt.startInit(id)
+      // What the compiler knows about this instance but the runtime cannot
+      // see: the props object it was called with, and the frame of the tag
+      // that created it (file/line/column of `<Child />` in the parent).
+      try {
+        dt.setInstanceContext(id, arguments[0], __componentFrame())
+      } catch {}
       try {
         __svelte_original.user_effect(() => {
           try {
@@ -310,6 +316,93 @@ export const deferred_template_effect = __withArgs(
   __wrapTemplateEffect,
 )
 
+// --- Source Locations (element inspection) ---
+//
+// Svelte's dev compile wraps every component tag and block in
+// `add_svelte_meta()`, and every element it creates in `add_locations()`.
+// Both are imported from `svelte/internal/client`, which this module
+// replaces, so they can be wrapped:
+//
+// - a parallel frame stack mirrors Svelte's own `dev_stack` (not exported)
+//   and additionally carries the devtools id of the component that rendered
+//   the frame, so an instance can record where its tag sits in the parent;
+// - every element Svelte locates is stamped with the id of the component
+//   that created it (`__svelte_meta.dtComponentId`). That stamp is what
+//   turns a clicked DOM node into a component instance, and through the
+//   instance tree into its props and $state.
+//
+// Svelte's own metadata (`__svelte_meta.loc` / `.parent`) is left untouched.
+const __metaStack = []
+
+function __fileOf(component) {
+  try {
+    return component?.[__svelte_original.FILENAME] ?? null
+  } catch {
+    return null
+  }
+}
+
+// Nearest enclosing component tag frame. A component can also be created
+// inside a block or a snippet, whose own frame is then on top: the stack is
+// read backwards instead of trusting its head.
+function __componentFrame() {
+  for (let i = __metaStack.length - 1; i >= 0; i--) {
+    if (__metaStack[i].type === 'component') return __metaStack[i]
+  }
+  return null
+}
+
+export function add_svelte_meta() {
+  const frame = {
+    type: arguments[1],
+    file: __fileOf(arguments[2]),
+    line: arguments[3],
+    column: arguments[4],
+    componentId: null,
+  }
+  try {
+    frame.componentId = __currentId()
+    const additional = arguments[5]
+    if (additional) for (const key of Object.keys(additional)) frame[key] = additional[key]
+  } catch {}
+  __metaStack.push(frame)
+  try {
+    return __svelte_original.add_svelte_meta.apply(null, arguments)
+  } finally {
+    __metaStack.pop()
+  }
+}
+
+// Elements of one `add_locations()` call are created together, for one
+// component instance: walking the returned fragment is cheaper than one
+// observer, and bounded so a huge fragment cannot stall a render.
+const __STAMP_LIMIT = 20000
+
+function __stampLocations(root, componentId) {
+  if (!root || componentId === null) return
+  const stack = [root]
+  let visited = 0
+  while (stack.length > 0 && visited < __STAMP_LIMIT) {
+    const node = stack.pop()
+    visited++
+    if (node.nodeType === 1 && node.__svelte_meta) node.__svelte_meta.dtComponentId = componentId
+    for (let child = node.firstChild; child; child = child.nextSibling) stack.push(child)
+  }
+}
+
+export function add_locations(fn, filename, locations) {
+  const located = __svelte_original.add_locations(fn, filename, locations)
+  return function () {
+    const dom = located.apply(null, arguments)
+    try {
+      // `__owner()` falls back to the context-derived owner: markup created by
+      // a snippet or an effect runs outside the component's push()..pop().
+      __stampLocations(dom, __owner())
+    } catch {}
+    return dom
+  }
+}
+
 // --- Block Attribution ---
 //
 // Svelte creates render effects synchronously at creation time. At mount this
@@ -370,6 +463,7 @@ export const each = __withArgs(__svelte_original.each, __wrapBlock)
 export const key = __withArgs(__svelte_original.key, __wrapBlock)
 export const component = __withArgs(__svelte_original.component, __wrapBlock)
 export const boundary = __withArgs(__svelte_original.boundary, __wrapBlock)
+
 // 'if' and 'await' are reserved words: exported via aliases.
 const __if_block = __withArgs(__svelte_original.if, __wrapBlock)
 const __await_block = __withArgs(__svelte_original.await, __wrapBlock)

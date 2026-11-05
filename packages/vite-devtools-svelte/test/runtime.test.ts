@@ -70,6 +70,8 @@ describe('svelte/internal/client wrapper export surface', () => {
   it('overrides exactly the instrumented functions, with functions', () => {
     expect(overridden.toSorted()).toEqual(
       [
+        'add_locations',
+        'add_svelte_meta',
         'await',
         'boundary',
         'component',

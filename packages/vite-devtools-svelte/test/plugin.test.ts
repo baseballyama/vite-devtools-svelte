@@ -151,11 +151,26 @@ describe('mainPlugin transformIndexHtml', () => {
     expect(hook.order).toBe('pre')
     const result = hook.handler()
     expect(Array.isArray(result)).toBe(true)
+    // The prompt toolbar is opt-in: the runtime is the only injected script.
     expect(result.length).toBe(1)
     expect(result[0].tag).toBe('script')
     expect(result[0].attrs.type).toBe('module')
     expect(result[0].children).toContain(RUNTIME_MODULE_ID)
     expect(result[0].injectTo).toBe('head-prepend')
+  })
+
+  it('adds the prompt toolbar when it is enabled', () => {
+    const plugin = svelteDevtools({ promptToolbar: true }).find(
+      p => p.name === 'vite-devtools-svelte',
+    )!
+    resolvePlugins([plugin])
+    const hook = plugin.transformIndexHtml as { handler: () => any }
+    const result = hook.handler()
+    expect(result).toHaveLength(2)
+    // served as a static dev-only module, not through Vite's module graph
+    expect(result[1].tag).toBe('script')
+    expect(result[1].attrs.src).toContain('prompt-toolbar.js')
+    expect(result[1].injectTo).toBe('body')
   })
 })
 

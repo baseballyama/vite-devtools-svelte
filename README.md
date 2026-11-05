@@ -21,6 +21,7 @@ Svelte DevTools for Vite, built on [Devframe](https://devfra.me/). Provides 15 s
 - **FPS Monitor** — Real-time frame rate monitoring with historical data
 - **Asset Browser** — Browse and preview static assets with metadata
 - **Overview** — Project summary with versions and dependency info
+- **Prompt toolbar** — Pick elements in the app itself and copy a markdown prompt (source locations, component chain, props, `$state`, source window) for your coding agent
 
 ### Screenshots
 
@@ -218,8 +219,45 @@ svelteDevtools({
   // Require the one-time code for the standalone DevTools (default: true).
   // In the Vite DevTools dock use DevTools({ clientAuth: false }) instead.
   clientAuth: true,
+  // Inject the floating prompt toolbar into the app's own pages (default: false)
+  promptToolbar: false,
 })
 ```
+
+### Prompt toolbar
+
+Opt-in with `svelteDevtools({ promptToolbar: true })`. The dev server then
+injects a small floating toolbar into your app's own HTML (dev only — it is
+served by a dev middleware and never reaches a build). It turns a UI selection
+into context a coding agent can act on:
+
+1. Click **Inspect** and pick one or more elements; a click is swallowed, so
+   the app does not navigate or submit. The button can be dragged anywhere
+   (double-click it to return to its corner) and remembers where you put it;
+   the panel opens on whichever side of the button has room. No global
+   keyboard shortcut is registered, so browser shortcuts keep working.
+2. Add the instructions you would type in chat.
+3. **Copy prompt** puts one markdown document on the clipboard: the page and
+   viewport, your instructions, then per selection the element location
+   (`file:line:column`), DOM path and markup, the Svelte template frames it sits
+   in, the component instance chain with props and live `$state`/`$derived`
+   values, and a numbered source window around the selected line.
+
+What it reports comes from two places: Svelte's own dev metadata
+(`__svelte_meta.loc` / `.parent`, via `add_locations` and `add_svelte_meta`) and
+the runtime's component tree, so each element resolves to the instance that
+rendered it. Two practical details:
+
+- Svelte records a location only for the elements it needs for error
+  attribution, so a static `<p>` deep in a big markup block often has none and
+  the nearest recorded element is an ancestor. The toolbar matches the element
+  against its file (tag plus its authored classes/attributes) and reports that
+  line, with a note naming the match and the line Svelte recorded. The hover
+  tooltip prefixes `~` for such inherited locations.
+- Props and `$state` values are summarised when large (`{id, name}`, `[12 items]`)
+  instead of dumping page `data` blobs; frames from `node_modules` (SvelteKit
+  internals) are filtered out, and every value is bounded before it reaches the
+  clipboard.
 
 ## How It Works
 
@@ -346,6 +384,23 @@ pnpm -C packages/vite-devtools-svelte test:watch
 pnpm lint
 pnpm format
 ```
+
+### Using a local checkout in another app
+
+The plugin is consumed through its `dist/`, so a checkout can drive a real app
+without publishing. Build once, then point the app's installed package at it
+(re-run `pnpm build:plugin` after every source change):
+
+```bash
+pnpm -C packages/vite-devtools-svelte build:plugin
+
+# in the app repository, repo-local and undone by the next `pnpm install`
+ln -sfn ../path/to/vite-devtools-svelte/packages/vite-devtools-svelte \
+  node_modules/vite-devtools-svelte
+```
+
+Restart the app's dev server afterwards: the plugin (and the injected prompt
+toolbar script) is loaded once at startup.
 
 ### Reproducible environment with Nix (optional)
 

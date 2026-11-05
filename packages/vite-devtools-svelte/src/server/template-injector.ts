@@ -62,21 +62,20 @@ const INJECT_TAG = `<script type=\\"module\\" src=\\"${INJECT_SCRIPT_URL}\\"></s
 const BODY_CLOSE = '</body>'
 
 /**
- * Transform `.svelte-kit/generated/server/internal.js` to add the
- * `@vitejs/devtools` inject script right before `</body>` inside the app
- * template literal. Exposed for unit testing.
+ * Insert `tag` right before the `</body>` of the app template literal.
+ * Exposed for unit testing.
  *
  * Returns the new source if a substitution was made, or `null` to signal
  * "nothing to do" (already injected, structural marker missing, etc.).
  */
-export function injectIntoSvelteKitInternal(code: string): string | null {
+export function injectIntoSvelteKitTemplate(code: string, tag: string): string | null {
   // Cheap structural sanity check — bail if SvelteKit changed how it generates
   // the template object. The companion test asserts this branch is reachable.
   if (!code.includes(TEMPLATE_APP_MARKER)) return null
   if (!code.includes(BODY_CLOSE)) return null
 
   // Idempotence: don't double-inject across HMR re-runs.
-  if (code.includes(INJECT_SCRIPT_URL)) return null
+  if (code.includes(tag)) return null
 
   // Only patch the literal that follows the `templates: {` marker, so a
   // future `</body>` mentioned in unrelated source code won't be touched.
@@ -94,20 +93,34 @@ export function injectIntoSvelteKitInternal(code: string): string | null {
   const bodyIdx = onAppLine > appIdx ? onAppLine : code.indexOf(BODY_CLOSE, markerIdx)
   if (bodyIdx === -1) return null
 
-  return code.slice(0, bodyIdx) + INJECT_TAG + code.slice(bodyIdx)
+  return code.slice(0, bodyIdx) + tag + code.slice(bodyIdx)
 }
 
 /**
- * Vite plugin: inject the Vite DevTools dock bootstrap into SvelteKit's
- * dev-only generated server template. Dev-only by construction.
+ * Transform `.svelte-kit/generated/server/internal.js` to add the
+ * `@vitejs/devtools` inject script right before `</body>` inside the app
+ * template literal. Exposed for unit testing.
+ */
+export function injectIntoSvelteKitInternal(code: string): string | null {
+  return injectIntoSvelteKitTemplate(code, INJECT_TAG)
+}
+
+/**
+ * Vite plugin: inject tags into SvelteKit's dev-only generated server
+ * template (a normal `transform` on `.svelte-kit/generated/…`), because
+ * SvelteKit serves its HTML without Vite's `transformIndexHtml`.
  *
- * Only when the Vite DevTools hub is actually present: standalone has no
- * hub serving `/__devtools/embedded.js`, so the tag would fail to load.
+ * The dock bootstrap is injected only when the Vite DevTools hub is actually
+ * present: standalone has no hub serving `/__devtools/embedded.js`, so the tag
+ * would fail to load. Extra tags (the prompt toolbar) come from `extraTags`.
  * `isHosted` is read in `transform` rather than `apply` because `apply` runs
  * while the plugin list is still being resolved; every `configResolved` hook
  * has finished before the server transforms its first module.
  */
-export function sveltekitTemplateInjector(isHosted: () => boolean): Plugin {
+export function sveltekitTemplateInjector(
+  isHosted: () => boolean,
+  extraTags: () => string[] = () => [],
+): Plugin {
   return {
     name: 'vite-devtools-svelte:sveltekit-template-injector',
     enforce: 'post',
@@ -115,8 +128,14 @@ export function sveltekitTemplateInjector(isHosted: () => boolean): Plugin {
 
     transform(code, id) {
       if (!GENERATED_SERVER_SUFFIXES.some(suffix => id.endsWith(suffix))) return null
-      if (!isHosted()) return null
-      const next = injectIntoSvelteKitInternal(code)
+      // The dock bootstrap is injected last, so it stays the tag directly
+      // before `</body>` (and the served page keeps one stable anchor).
+      const tags = [...extraTags(), ...(isHosted() ? [INJECT_TAG] : [])]
+      let next: string | null = null
+      for (const tag of tags) {
+        const injected = injectIntoSvelteKitTemplate(next ?? code, tag)
+        if (injected !== null) next = injected
+      }
       return next === null ? null : { code: next, map: null }
     },
   }

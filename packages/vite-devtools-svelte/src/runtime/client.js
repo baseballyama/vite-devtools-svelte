@@ -83,6 +83,209 @@ function __clampInt(v, lo, hi, d) {
   return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d
 }
 
+// --- Bounded snapshots for the prompt toolbar ---
+//
+// Values copied out of the running app end up in a model prompt, so they are
+// bounded (an app can hold megabytes of state) and never throw. Objects keep
+// their JSON shape up to a depth/entry budget; whatever is dropped is
+// reported in the text instead of silently vanishing. Getters that throw or
+// proxies that cannot be read degrade to a marker, never to a broken payload.
+const __PROMPT_MAX_DEPTH = 4
+const __PROMPT_MAX_ENTRIES = 25
+const __PROMPT_MAX_STRING = 320
+const __PROMPT_MAX_CHARS = 6000
+
+function __promptClone(value, depth, seen) {
+  if (value === null) return null
+  const type = typeof value
+  if (type === 'string') {
+    return value.length > __PROMPT_MAX_STRING ? value.slice(0, __PROMPT_MAX_STRING) + '…' : value
+  }
+  if (type === 'number') return Number.isFinite(value) ? value : String(value)
+  if (type === 'boolean' || type === 'undefined') return value
+  if (type === 'bigint') return String(value) + 'n'
+  if (type === 'function') return '() => {…}'
+  if (type === 'symbol') return __describe(value)
+  if (seen.has(value)) return '[circular]'
+  if (depth >= __PROMPT_MAX_DEPTH) return Array.isArray(value) ? '[…]' : '{…}'
+  seen.add(value)
+  try {
+    if (Array.isArray(value)) {
+      const out = []
+      const length = Math.min(value.length, __PROMPT_MAX_ENTRIES)
+      for (let i = 0; i < length; i++) out.push(__promptClone(value[i], depth + 1, seen))
+      if (value.length > length) out.push('… ' + (value.length - length) + ' more')
+      return out
+    }
+    if (value instanceof Date) {
+      try {
+        return value.toISOString()
+      } catch {
+        return '(invalid date)'
+      }
+    }
+    const out = {}
+    const keys = Object.keys(value)
+    const length = Math.min(keys.length, __PROMPT_MAX_ENTRIES)
+    for (let i = 0; i < length; i++) {
+      const key = keys[i]
+      try {
+        out[key] = __promptClone(value[key], depth + 1, seen)
+      } catch {
+        out[key] = '(unreadable)'
+      }
+    }
+    if (keys.length > length) out['…'] = keys.length - length + ' more keys'
+    return out
+  } finally {
+    seen.delete(value)
+  }
+}
+
+// JSON text for one value, bounded and printable (never throws).
+function __promptValue(value) {
+  let text
+  try {
+    text = JSON.stringify(__promptClone(value, 0, new Set()))
+  } catch {
+    text = null
+  }
+  if (text === undefined || text === null) return '(unserializable)'
+  return text.length > __PROMPT_MAX_CHARS ? text.slice(0, __PROMPT_MAX_CHARS) + '…' : text
+}
+
+// The element a click landed on: text nodes and comments resolve upwards.
+function __closestElement(node) {
+  let el = node
+  while (el?.nodeType !== 1) {
+    if (!el) return null
+    el = el.parentElement ?? el.parentNode
+  }
+  return el
+}
+
+// Deepest Svelte source location above `element`, and the nearest component
+// instance the wrapper stamped on it (`__svelte_meta.dtComponentId`).
+function __locateComponent(element) {
+  let meta = null
+  let metaElement = null
+  let componentId = null
+  for (let el = element; el; el = el.parentElement) {
+    const m = el.__svelte_meta
+    if (!m) continue
+    if (!meta) {
+      meta = m
+      metaElement = el
+    }
+    if (componentId === null && typeof m.dtComponentId === 'number') componentId = m.dtComponentId
+    if (meta && componentId !== null) break
+  }
+  return { meta, element: metaElement, componentId }
+}
+
+// Svelte's own dev stack of enclosing frames (component tags and blocks),
+// innermost first: file/line/column of each `<Tag>` or block opener.
+function __templateStack(parent) {
+  const stack = []
+  for (let frame = parent; frame && stack.length < 32; frame = frame.parent) {
+    stack.push({
+      type: String(frame.type ?? ''),
+      file: frame.file ?? null,
+      line: frame.line ?? null,
+      column: frame.column ?? null,
+      componentTag: frame.componentTag ?? null,
+    })
+  }
+  return stack
+}
+
+function __elementInfo(element) {
+  if (!element) return null
+  let outerHTML = ''
+  try {
+    outerHTML = element.outerHTML ?? ''
+  } catch {
+    outerHTML = ''
+  }
+  // Truncate at a tag boundary: half an attribute tells an agent nothing.
+  if (outerHTML.length > 600) {
+    const cut = outerHTML.lastIndexOf('>', 600)
+    outerHTML = (cut > 0 ? outerHTML.slice(0, cut + 1) : outerHTML.slice(0, 600)) + ' …'
+  }
+  let text = ''
+  try {
+    text = (element.textContent ?? '').replaceAll(/\s+/g, ' ').trim()
+  } catch {
+    text = ''
+  }
+  const attrs = {}
+  try {
+    const list = element.attributes ?? []
+    for (let i = 0; i < list.length && i < 24; i++) {
+      const value = list[i].value ?? ''
+      attrs[list[i].name] = value.length > 120 ? value.slice(0, 120) + '…' : value
+    }
+  } catch {
+    /* exotic element */
+  }
+  const rect = element.getBoundingClientRect
+    ? element.getBoundingClientRect()
+    : { width: 0, height: 0 }
+  return {
+    tag: (element.tagName ?? '').toLowerCase(),
+    id: element.id ?? '',
+    classes: Array.from(element.classList ?? []),
+    attrs,
+    text: text.length > 160 ? text.slice(0, 160) + '…' : text,
+    outerHTML,
+    size: Math.round(rect.width) + '×' + Math.round(rect.height),
+    selector: __elementPath(element),
+  }
+}
+
+// A stable, readable CSS-ish path for the element (`main > ul > li:nth-of-type(2)`).
+function __elementPath(element) {
+  const parts = []
+  let el = element
+  for (let depth = 0; el && depth < 6; el = el.parentElement, depth++) {
+    const tag = (el.tagName ?? '').toLowerCase()
+    if (!tag || tag === 'html' || tag === 'body') break
+    let part = tag
+    if (el.id) {
+      part += '#' + el.id
+    } else if (el.parentElement) {
+      const siblings = el.parentElement.children ?? []
+      let position = 0
+      let sameTag = 0
+      for (let i = 0; i < siblings.length; i++) {
+        if (siblings[i].tagName !== el.tagName) continue
+        sameTag++
+        if (siblings[i] === el) position = sameTag
+      }
+      if (sameTag > 1) part += ':nth-of-type(' + position + ')'
+    }
+    if (el.classList && el.classList.length > 0) part += '.' + Array.from(el.classList).join('.')
+    parts.unshift(part)
+  }
+  return parts.join(' > ')
+}
+
+function __pageInfo() {
+  const view = typeof window === 'undefined' ? null : window
+  let title = ''
+  try {
+    title = typeof document === 'undefined' ? '' : (document.title ?? '')
+  } catch {
+    title = ''
+  }
+  return {
+    url: view?.location ? view.location.href : '',
+    path: view?.location ? view.location.pathname : '',
+    title,
+    viewport: view ? view.innerWidth + '×' + view.innerHeight : '',
+  }
+}
+
 if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
   const __NO_VALUE = Symbol('no value')
   // State timeline ring: every read sees at most 500 entries and
@@ -93,6 +296,12 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
   const __SVELTE_DT = {
     _nextId: 0,
     _instances: new Map(),
+    // Component instance context the wrapper records at init: the props object
+    // the compiler passed, and the frame of the tag that created the
+    // instance (file/line/column of `<Child />` in the parent). Read by the
+    // element inspector (prompt toolbar).
+    _instanceUsage: new Map(),
+    _instanceProps: new Map(),
     _stack: [],
     _pendingParent: undefined,
     _pendingFile: null,
@@ -280,6 +489,8 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       this._effectSeq.delete(id)
       this._nameSeq.delete(id)
       this._instances.delete(id)
+      this._instanceUsage.delete(id)
+      this._instanceProps.delete(id)
       this._profiles.delete(id)
       this._initStartTimes.delete(id)
     },
@@ -586,6 +797,131 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
 
     getTree() {
       return Array.from(this._instances.values(), __componentEntry)
+    },
+
+    // --- Element inspection (prompt toolbar) ---
+
+    // Recorded by the wrapper's push(): what the compiler knows about a new
+    // instance but the runtime cannot see by itself.
+    setInstanceContext(id, props, usage) {
+      if (usage?.type === 'component') {
+        this._instanceUsage.set(id, {
+          file: usage.file ?? null,
+          line: usage.line ?? null,
+          column: usage.column ?? null,
+          componentTag: usage.componentTag ?? null,
+        })
+      }
+      try {
+        if (props !== null && typeof props === 'object') this._instanceProps.set(id, props)
+      } catch {
+        /* the props object is a best-effort extra */
+      }
+    },
+
+    // Everything the prompt toolbar reports for one clicked DOM node: where
+    // the element is declared, the component instances that rendered it (with
+    // their props and live $state), and the page it happened on. Never throws.
+    inspectElement(node) {
+      try {
+        return this._inspectElement(node)
+      } catch (error) {
+        return { error: __describe(error) }
+      }
+    },
+
+    _inspectElement(node) {
+      const element = __closestElement(node)
+      const located = element ? __locateComponent(element) : { meta: null }
+      const loc = located?.meta?.loc ?? null
+      return {
+        epoch: this._epoch,
+        page: __pageInfo(),
+        element: __elementInfo(element),
+        // `enclosing` is true when Svelte only recorded a location for an
+        // ancestor: the compiler emits locations for the elements it needs
+        // for error attribution, not for every static element.
+        source: loc
+          ? {
+              file: loc.file ?? null,
+              line: loc.line ?? null,
+              column: loc.column ?? null,
+              enclosing: located?.element !== element,
+            }
+          : null,
+        template: __templateStack(located?.meta?.parent ?? null),
+        components: this._componentChain(located?.componentId ?? null),
+      }
+    },
+
+    // Cheap lookup behind the toolbar's hover tooltip: where the element is
+    // declared and the component instance that rendered it.
+    locateElement(node) {
+      try {
+        const element = __closestElement(node)
+        const located = element ? __locateComponent(element) : { meta: null, componentId: null }
+        const loc = located?.meta?.loc ?? null
+        const instance =
+          located?.componentId === null || located?.componentId === undefined
+            ? null
+            : this._instances.get(located.componentId)
+        return {
+          source: loc
+            ? {
+                file: loc.file ?? null,
+                line: loc.line ?? null,
+                column: loc.column ?? null,
+                enclosing: located?.element !== element,
+              }
+            : null,
+          component: instance
+            ? { id: instance.id, name: instance.name, file: instance.file }
+            : null,
+        }
+      } catch {
+        return { source: null, component: null }
+      }
+    },
+
+    // The selected instance and its ancestors, innermost first.
+    _componentChain(componentId) {
+      const chain = []
+      let id = componentId
+      for (let depth = 0; id !== null && depth < 32; depth++) {
+        const instance = this._instances.get(id)
+        if (!instance) break
+        const profile = this._profiles.get(id)
+        chain.push({
+          id,
+          name: instance.name,
+          file: instance.file,
+          usage: this._instanceUsage.get(id) ?? null,
+          props: this._instanceProps.has(id) ? __promptValue(this._instanceProps.get(id)) : null,
+          state: this._componentState(id),
+          renders: profile ? profile.renderCount : 0,
+        })
+        id = instance.parentId
+      }
+      return chain
+    },
+
+    // Named $state / $derived of one instance with their current values.
+    // Effects are skipped (they hold no data) and each value is bounded.
+    _componentState(componentId) {
+      const nodeIds = this._nodesByComponent.get(componentId)
+      if (!nodeIds) return []
+      const out = []
+      for (const nodeId of nodeIds) {
+        if (out.length >= 40) break
+        const entry = this._reactiveNodes.get(nodeId)
+        if (!entry || entry.meta.type === 'effect' || entry.meta.type === 'effect_pre') continue
+        const signal = entry.signal.deref()
+        if (!signal) continue
+        const value = this._readStateValue(nodeId, signal)
+        if (value === __NO_VALUE) continue
+        out.push({ name: entry.meta.name, type: entry.meta.type, value: __promptValue(value) })
+      }
+      return out
     },
 
     // --- Render profiling ---

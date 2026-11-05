@@ -2,7 +2,7 @@ import crypto from 'node:crypto'
 import path from 'node:path'
 
 import { launchEditor } from 'devframe/utils/launch-editor'
-import type { Plugin, ResolvedConfig, ViteDevServer } from 'vite'
+import type { HtmlTagDescriptor, Plugin, ResolvedConfig, ViteDevServer } from 'vite'
 
 import { analyzeComponents } from './analyzers/components.js'
 import type { GraphModuleLike } from './analyzers/module-graph.js'
@@ -30,6 +30,11 @@ import type { SvelteDevtoolsHost } from './server/devframe.js'
 import { LOAD_RECORDER, profileLoad } from './server/load-profile.js'
 import { mountStandalone, urlHost } from './server/mount.js'
 import { sveltekitTemplateInjector } from './server/template-injector.js'
+import {
+  promptToolbarTagForTemplate,
+  promptToolbarUrl,
+  servePromptToolbar,
+} from './server/toolbar.js'
 import type { LoadProfile } from './types.js'
 
 export interface SvelteDevtoolsOptions {
@@ -52,6 +57,18 @@ export interface SvelteDevtoolsOptions {
    * @default true
    */
   clientAuth?: boolean
+  /**
+   * Inject the floating prompt toolbar into the app's own pages in dev: pick
+   * elements, add instructions, copy a markdown prompt with the selected
+   * elements' source locations, component instances, props and $state.
+   *
+   * The toolbar is served by the dev server and injected into the HTML, so it
+   * never reaches a production build. It is opt-in: a floating button in the
+   * app's own pages is a visible change, and it reads project files through
+   * the dev server.
+   * @default false
+   */
+  promptToolbar?: boolean
 }
 
 /** Name of `@vitejs/devtools`' config plugin; its presence means the hub will call our `devtools.setup`. */
@@ -78,7 +95,9 @@ function collectModules(server: ViteDevServer): GraphModuleLike[] {
 }
 
 export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
-  const { componentTracking = true, clientAuth = true } = options
+  const { componentTracking = true, clientAuth = true, promptToolbar = false } = options
+  // Cache-busting for the toolbar script, whose URL the app HTML carries.
+  const toolbarVersion = Date.now().toString(36)
 
   let config: ResolvedConfig
   let server: ViteDevServer | undefined
@@ -203,6 +222,11 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
             }),
         }),
       )
+
+      // Last, so the standalone mount and the MCP endpoint keep their
+      // positions in the middleware stack (and this route cannot shadow
+      // either of them).
+      if (promptToolbar) servePromptToolbar(devServer, config.base)
     },
 
     // Middleware-mode mounts have no `httpServer` close event; dispose them
@@ -252,7 +276,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       order: 'pre',
       handler() {
         if (!serving()) return []
-        return [
+        const tags: HtmlTagDescriptor[] = [
           {
             tag: 'script',
             attrs: { type: 'module' },
@@ -260,6 +284,14 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
             injectTo: 'head-prepend',
           },
         ]
+        if (promptToolbar) {
+          tags.push({
+            tag: 'script',
+            attrs: { type: 'module', src: promptToolbarUrl(config.base, root, toolbarVersion) },
+            injectTo: 'body',
+          })
+        }
+        return tags
       },
     },
 
@@ -349,6 +381,12 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     trackingPlugin,
     loadProfilePlugin,
     warningCapturePlugin,
-    sveltekitTemplateInjector(() => hostedByViteDevtools),
+    sveltekitTemplateInjector(
+      () => hostedByViteDevtools,
+      () =>
+        promptToolbar
+          ? [promptToolbarTagForTemplate(promptToolbarUrl(config.base, root, toolbarVersion))]
+          : [],
+    ),
   ]
 }

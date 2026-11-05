@@ -105,4 +105,26 @@ describe('SvelteKit template injection follows the host', () => {
     expect((await res.text()).length).toBeGreaterThan(0)
     expect(src).toBe(INJECT_URL)
   }, 30_000)
+
+  it('serves the prompt toolbar and injects it into the app template', async () => {
+    const code = await transformedInternal([svelteDevtools({ promptToolbar: true })])
+    const src =
+      /<script type=\\"module\\" src=\\"([^"\\]*prompt-toolbar[^"\\]*)\\"><\/script><\/body>/.exec(
+        code,
+      )?.[1]
+    expect(src).toBeDefined()
+    // the browser fetches it from the URL the tag carries
+    const res = await fetch(`${lastOrigin}${src}`)
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toMatch(/javascript/)
+    const body = await res.text()
+    expect(body).toContain('mountToolbar')
+    // the project root travels in the query, so copied paths stay relative
+    expect(src).toContain('root=' + encodeURIComponent(root))
+  }, 20_000)
+
+  it('the prompt toolbar is opt-in: off by default', async () => {
+    const code = await transformedInternal([svelteDevtools()])
+    expect(code).not.toContain('prompt-toolbar')
+  }, 20_000)
 })

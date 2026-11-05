@@ -4,6 +4,8 @@
 // oxlint-disable-next-line import/default -- `?raw` modules are resolved by Vite
 import runtimeSource from './client.js?raw'
 // oxlint-disable-next-line import/default -- `?raw` modules are resolved by Vite
+import promptToolbarSource from './prompt-toolbar.js?raw'
+// oxlint-disable-next-line import/default -- `?raw` modules are resolved by Vite
 import wrapperSource from './wrapper.js?raw'
 
 export { RESOLVED_RUNTIME_ID, RUNTIME_MODULE_ID, WRAPPER_MODULE_ID } from './ids.js'
@@ -26,3 +28,10 @@ export const wrapperCode: string = wrapperSource
 
 /** The devtools runtime (`./client.js`), installed once as `window.__SVELTE_DEVTOOLS__`. */
 export const runtimeCode: string = runtimeSource
+
+/**
+ * The floating prompt toolbar (`./prompt-toolbar.js`), served from a dev-server
+ * middleware and loaded by the app's own HTML in dev. It is a plain ES module
+ * with no imports: the app page evaluates it as-is, without a bundler.
+ */
+export const promptToolbarCode: string = promptToolbarSource

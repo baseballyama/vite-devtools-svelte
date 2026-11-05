@@ -32,6 +32,12 @@ export default defineConfig({
   const optionsCode = `svelteDevtools({
   // Enable component lifecycle tracking (default: true)
   componentTracking: true,
+  // Floating prompt toolbar in your app's pages (default: false)
+  promptToolbar: false,
+})`
+
+  const toolbarCode = `svelteDevtools({
+  promptToolbar: true,
 })`
 
   const steps = [
@@ -39,7 +45,8 @@ export default defineConfig({
     { num: '02', title: 'Configure Vite', anchor: 'configure' },
     { num: '03', title: 'Run the dev server', anchor: 'run' },
     { num: '04', title: 'Vite DevTools dock (optional)', anchor: 'dock' },
-    { num: '05', title: 'Options', anchor: 'options' },
+    { num: '05', title: 'Prompt toolbar (optional)', anchor: 'toolbar' },
+    { num: '06', title: 'Options', anchor: 'options' },
   ]
 </script>
 
@@ -179,9 +186,30 @@ export default defineConfig({
         </p>
       </section>
 
-      <section id="options" class="step">
+      <section id="toolbar" class="step">
         <header class="step-head">
           <span class="step-num mono">05</span>
+          <h2>Prompt toolbar (optional)</h2>
+        </header>
+        <p>
+          Opt in to get a floating button in your own pages. Click <strong>Inspect</strong> (drag
+          the button anywhere; it remembers where you put it), pick one or more elements, add the
+          instructions you would type in chat, and <strong>Copy prompt</strong> puts a markdown document
+          on the clipboard.
+        </p>
+        <CodeBlock code={toolbarCode} lang="ts" filename="vite.config.ts" />
+        <p>
+          Each selection carries its element location (<code>file:line:column</code>), the DOM path
+          and markup, the Svelte template frames it sits in, the component instance chain with props
+          and live <code>$state</code>/<code>$derived</code> values, and a numbered source window around
+          the selected line. Everything else — no global keyboard shortcut, nothing injected into a production
+          build.
+        </p>
+      </section>
+
+      <section id="options" class="step">
+        <header class="step-head">
+          <span class="step-num mono">06</span>
           <h2>Options</h2>
         </header>
         <CodeBlock code={optionsCode} lang="ts" />
