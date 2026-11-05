@@ -247,8 +247,10 @@ into context a coding agent can act on:
    values, and a numbered source window around the selected line.
 
 An element is identified by its tag, id and authored classes (Svelte's
-`svelte-xxxx` hashes are dropped) together with its location and markup: the
-copy the app renders inside it is not copied into the prompt.
+`svelte-xxxx` hashes are dropped everywhere, including the DOM path) together
+with its location and the shape of its markup: the tags and attributes of the
+element and its first levels of children, without the copy the app renders
+inside it.
 
 What it reports comes from two places: Svelte's own dev metadata
 (`__svelte_meta.loc` / `.parent`, via `add_locations` and `add_svelte_meta`) and
@@ -393,23 +395,6 @@ pnpm -C packages/vite-devtools-svelte test:watch
 pnpm lint
 pnpm format
 ```
-
-### Using a local checkout in another app
-
-The plugin is consumed through its `dist/`, so a checkout can drive a real app
-without publishing. Build once, then point the app's installed package at it
-(re-run `pnpm build:plugin` after every source change):
-
-```bash
-pnpm -C packages/vite-devtools-svelte build:plugin
-
-# in the app repository, repo-local and undone by the next `pnpm install`
-ln -sfn ../path/to/vite-devtools-svelte/packages/vite-devtools-svelte \
-  node_modules/vite-devtools-svelte
-```
-
-Restart the app's dev server afterwards: the plugin (and the injected prompt
-toolbar script) is loaded once at startup.
 
 ### Reproducible environment with Nix (optional)
 

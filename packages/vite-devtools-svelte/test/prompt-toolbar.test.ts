@@ -23,7 +23,13 @@ const {
   fenceLanguage: (file: string) => string
   matchSourceLine: (
     text: string,
-    element: { tag: string; id?: string; classes?: string[]; attrs?: Record<string, string> },
+    element: {
+      tag?: string
+      tagName?: string
+      id?: string
+      classes?: string[]
+      attrs?: Record<string, string>
+    },
     hintLine?: number | null,
   ) => { line: number; basis: string } | null
   resolveElementSource: (
@@ -65,7 +71,7 @@ interface Payload {
     id: string
     classes: string[]
     attrs: Record<string, string>
-    outerHTML: string
+    markup: string
     size: string
     selector: string
   }
@@ -100,7 +106,7 @@ const payload: Payload = {
     id: 'save',
     classes: ['primary'],
     attrs: { id: 'save', class: 'primary', type: 'submit' },
-    outerHTML: '<button id="save" class="primary" type="submit">Save</button>',
+    markup: '<button id="save" class="primary" type="submit"></button>',
     size: '96×32',
     selector: 'main > form > button#save.primary',
   },
@@ -227,6 +233,21 @@ describe('matchSourceLine / resolveElementSource', () => {
       line: 55,
       basis: 'class="button button-quiet"',
     })
+  })
+
+  it('matches camelCase SVG tags and does not confuse a tag prefix', () => {
+    const svg = [
+      '<svg class="icon">',
+      '  <foreignObject class="box"></foreignObject>',
+      '</svg>',
+      '<aside class="side"></aside>',
+    ].join('\n')
+    expect(matchSourceLine(svg, { tagName: 'foreignObject', classes: ['box'] })).toEqual({
+      line: 2,
+      basis: 'class="box"',
+    })
+    // `<a` must not match `<aside`
+    expect(matchSourceLine(svg, { tag: 'a', attrs: { class: 'side' } })).toBeNull()
   })
 
   it('honours the tag and the closest occurrence', () => {
@@ -363,7 +384,7 @@ describe('formatSelection', () => {
     expect(text).toContain('- markup: `src/lib/components/Form.svelte:12:2`')
     expect(text).toContain('- DOM path: `main > form > button#save.primary`')
     expect(text).toContain('- attributes: id="save" type="submit"')
-    expect(text).toContain('<button id="save" class="primary" type="submit">Save</button>')
+    expect(text).toContain('<button id="save" class="primary" type="submit"></button>')
     expect(text).toContain('- <Form /> at `src/routes/settings/+page.svelte:8:2`')
     expect(text).toContain('- {#if} at `src/routes/settings/+page.svelte:6:0`')
     expect(text).toContain('1. Form — `src/lib/components/Form.svelte`')

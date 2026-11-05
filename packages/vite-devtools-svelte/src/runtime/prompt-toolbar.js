@@ -53,11 +53,16 @@ export function relPath(file, root) {
   if (!file) return ''
   let path = String(file).replaceAll('\\', '/')
   if (!root) return path
-  const base = String(root).replaceAll('\\', '/').replace(/\/?$/, '/')
+  const base = withTrailingSlash(String(root).replaceAll('\\', '/'))
   // `/@fs/root/...` style and plain paths both start with the root here.
   if (path.startsWith(base)) path = path.slice(base.length)
   else if (path === base.slice(0, -1)) path = ''
   return path
+}
+
+/** `path/` for a directory-ish path, without a regex. */
+function withTrailingSlash(path) {
+  return path.endsWith('/') ? path : path + '/'
 }
 
 /** `file:line:column`, root-relative. */
@@ -116,6 +121,24 @@ function inlineCode(value) {
 /** Attribute names good enough to find an element in its source text. */
 const MATCH_ATTRS = ['href', 'type', 'name', 'aria-label', 'title', 'placeholder', 'value', 'src']
 
+/**
+ * Does `line` open `<tag`? Case-insensitive so SVG's camelCase names
+ * (`foreignObject`) match their lowercase rendering, and with a boundary check
+ * so `<a` does not match `<aside`. No regex: the tag comes from the page.
+ */
+function opensTag(line, tag) {
+  if (!tag) return false
+  const needle = '<' + tag.toLowerCase()
+  const lower = line.toLowerCase()
+  let from = lower.indexOf(needle)
+  while (from !== -1) {
+    const next = lower.charAt(from + needle.length)
+    if (next === '' || next === ' ' || next === '\t' || next === '>' || next === '/') return true
+    from = lower.indexOf(needle, from + 1)
+  }
+  return false
+}
+
 /** `class="a b"` for the authored classes (Svelte's `svelte-xxxx` hashes are runtime-only). */
 function classNeedle(classes) {
   const authored = (classes ?? []).filter(name => !name.startsWith('svelte-'))
@@ -131,10 +154,9 @@ function classNeedle(classes) {
  * Returns `{ line, basis }` (`basis` is the attribute used) or `null`.
  */
 export function matchSourceLine(text, element, hintLine) {
-  if (!text || !element?.tag) return null
+  const tag = element?.tagName ?? element?.tag
+  if (!text || !tag) return null
   const lines = String(text).split(/\r?\n/)
-  const tag = String(element.tag).toLowerCase()
-  const tagPattern = new RegExp('<' + tag + '(?=[\\s/>])')
   const needles = []
   const classes = classNeedle(element.classes)
   if (classes) needles.push(classes)
@@ -148,7 +170,7 @@ export function matchSourceLine(text, element, hintLine) {
   for (const needle of needles) {
     const hits = []
     lines.forEach((line, index) => {
-      if (tagPattern.test(line) && line.includes(needle)) hits.push(index + 1)
+      if (opensTag(line, tag) && line.includes(needle)) hits.push(index + 1)
     })
     if (hits.length > 0) {
       // Several identical elements: the one closest to the compiler's hint.
@@ -163,9 +185,8 @@ export function matchSourceLine(text, element, hintLine) {
 
 /** Whether a source line plausibly opens this element (tag + one of its classes). */
 function isElementLine(line, element) {
-  if (!line || !element?.tag) return false
-  const tagPattern = new RegExp('<' + String(element.tag).toLowerCase() + '(?=[\\s/>])')
-  if (!tagPattern.test(line)) return false
+  if (!line) return false
+  if (!opensTag(line, element?.tagName ?? element?.tag)) return false
   const authored = (element.classes ?? []).filter(name => !name.startsWith('svelte-'))
   if (authored.length === 0) return true
   return authored.some(name => line.includes(name))
@@ -228,7 +249,17 @@ const INLINE_STRING = 40
 
 /** `key: value`, with the quotes JSON would need only where they matter. */
 function inlineKey(name) {
-  return /^[A-Za-z_$][\w$]*$/.test(name) ? name : JSON.stringify(name)
+  let plain = name.length > 0
+  for (let i = 0; i < name.length && plain; i++) {
+    const ch = name[i]
+    plain =
+      (ch >= 'a' && ch <= 'z') ||
+      (ch >= 'A' && ch <= 'Z') ||
+      ch === '_' ||
+      ch === '$' ||
+      (i > 0 && ch >= '0' && ch <= '9')
+  }
+  return plain ? name : JSON.stringify(name)
 }
 
 function inlineValue(value, depth) {
@@ -366,7 +397,7 @@ function elementLines(element, located, root) {
     element?.selector ? '- DOM path: ' + inlineCode(element.selector) : '',
     element?.size ? '- size: ' + element.size : '',
     attributeLine,
-    element?.outerHTML ? '```html\n' + element.outerHTML + '\n```' : '',
+    element?.markup ? '```html\n' + element.markup + '\n```' : '',
   ]
   return lines.filter(line => line.length > 0).join('\n')
 }
@@ -470,12 +501,9 @@ export function buildPrompt(selections, options, meta = {}) {
     page?.viewport ? 'Viewport: ' + page.viewport : '',
     meta.plugin ? 'Collected with: ' + meta.plugin : '',
   ]
-  const blocks = selections
-    .slice(0, MAX_SELECTIONS)
-    .map(selection => formatSelection(selection.payload, selection.source, opts, root))
-  if (selections.length > MAX_SELECTIONS) {
-    blocks.push('(' + (selections.length - MAX_SELECTIONS) + ' further selections were dropped)')
-  }
+  const blocks = selections.map(selection =>
+    formatSelection(selection.payload, selection.source, opts, root),
+  )
   const instructions = opts.instructions.trim()
   const text = [
     '# UI context from the running app',
@@ -563,10 +591,14 @@ async function fetchSource(file, root, base) {
     // `/@fs/...` request 404s in Vite's base middleware.
     const response = await fetch(base + '@fs' + absolute + '?raw')
     if (!response.ok) return null
-    const text = await response.text()
-    const match = /export default (".*")\s*;?\s*$/s.exec(text)
-    if (!match) return null
-    return JSON.parse(match[1])
+    // Vite's `?raw` module is `export default "<json string>"`: strip the
+    // wrapper and parse the literal (no regex over file contents).
+    const text = (await response.text()).trim()
+    const prefix = 'export default '
+    if (!text.startsWith(prefix)) return null
+    let literal = text.slice(prefix.length).trim()
+    if (literal.endsWith(';')) literal = literal.slice(0, -1).trimEnd()
+    return JSON.parse(literal)
   } catch {
     return null
   }
@@ -597,7 +629,49 @@ async function copyText(text) {
 }
 
 const STYLES = `
-  :host { all: initial; }
+  :host {
+    all: initial;
+    /* Dark by default; the light palette follows the OS like the rest of the
+       devtools UI. */
+    --border: #1f2a3d;
+    --bg: #0b1220;
+    --surface: #0f172a;
+    --control: #111827;
+    --control-hover: #16233a;
+    --ink: #e5e7eb;
+    --ink-strong: #f3f4f6;
+    --ink-soft: #e2e8f0;
+    --muted: #94a3b8;
+    --link: #7dd3fc;
+    --accent: #2563eb;
+    --accent-strong: #1d4ed8;
+    --ok: #86efac;
+    --error: #fca5a5;
+    --fab: #111827;
+    --fab-ink: #f9fafb;
+    --shadow: rgb(0 0 0 / 45%);
+  }
+  @media (prefers-color-scheme: light) {
+    :host {
+      --border: #d7dce5;
+      --bg: #ffffff;
+      --surface: #f6f7f9;
+      --control: #ffffff;
+      --control-hover: #eef1f6;
+      --ink: #1f2430;
+      --ink-strong: #11141a;
+      --ink-soft: #2b3140;
+      --muted: #5b6472;
+      --link: #1d5fa8;
+      --accent: #2563eb;
+      --accent-strong: #1d4ed8;
+      --ok: #1c7a46;
+      --error: #a3312a;
+      --fab: #1f2430;
+      --fab-ink: #ffffff;
+      --shadow: rgb(15 23 42 / 22%);
+    }
+  }
   * { box-sizing: border-box; font: 13px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
   /* The dock + panel move together: the shell is anchored where the user
      dragged the button, and the panel grows upwards from it. */
@@ -613,68 +687,70 @@ const STYLES = `
   .dock[data-dragging="true"] { cursor: grabbing; }
   .count {
     height: 28px; padding: 0 10px; border-radius: 999px; pointer-events: auto;
-    border: 1px solid #1f2a3d; background: #0b1220; color: #cbd5e1;
+    border: 1px solid var(--border); background: var(--bg); color: var(--ink);
     font-size: 12px; cursor: pointer;
   }
   .count[hidden] { display: none; }
-  .count:hover { color: #f3f4f6; border-color: #334155; }
+  .count:hover { color: var(--ink-strong); border-color: var(--muted); }
   .fab {
     /* the host covers the page with pointer-events: none (inherited) */
     pointer-events: auto;
     display: flex; align-items: center; gap: 6px;
     height: 36px; padding: 0 12px; border: 0; border-radius: 999px;
-    background: #111827; color: #f9fafb; cursor: pointer;
-    box-shadow: 0 6px 24px -8px rgb(0 0 0 / 45%), 0 1px 0 rgb(255 255 255 / 8%) inset;
+    background: var(--fab); color: var(--fab-ink); cursor: pointer;
+    box-shadow: 0 6px 24px -8px var(--shadow), 0 1px 0 rgb(255 255 255 / 8%) inset;
     opacity: 0.92;
   }
   .fab:hover { opacity: 1; }
-  .fab[data-active="true"] { background: #1d4ed8; }
+  .fab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; opacity: 1; }
+  .fab[aria-pressed="true"] { background: var(--accent); }
   .fab .dot { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; }
-  .fab[data-active="true"] .dot { background: #fde047; }
+  .fab[aria-pressed="true"] .dot { background: #fde047; }
   .panel {
     pointer-events: auto;
     width: min(420px, calc(100vw - 36px));
     max-height: min(70vh, 620px); overflow-y: auto; overflow-x: hidden;
-    background: #0b1220; color: #e5e7eb;
-    border: 1px solid #1f2a3d; border-radius: 14px;
-    box-shadow: 0 24px 60px -24px rgb(0 0 0 / 70%);
+    background: var(--bg); color: var(--ink);
+    border: 1px solid var(--border); border-radius: 14px;
+    box-shadow: 0 24px 60px -24px var(--shadow);
   }
   .panel[hidden] { display: none; }
   .head {
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
-    padding: 10px 12px; border-bottom: 1px solid #1f2a3d;
-    font-weight: 600; color: #f3f4f6;
+    padding: 10px 12px; border-bottom: 1px solid var(--border);
+    font-weight: 600; color: var(--ink-strong);
   }
-  .head .hint { font-weight: 400; color: #94a3b8; font-size: 11px; }
+  .head .hint { font-weight: 400; color: var(--muted); font-size: 11px; }
   .body { padding: 12px; display: grid; gap: 10px; }
-  .empty { color: #94a3b8; font-size: 12px; }
+  .empty { color: var(--muted); font-size: 12px; }
   .chip {
     display: flex; align-items: start; gap: 8px;
-    padding: 8px 10px; border: 1px solid #1f2a3d; border-radius: 10px; background: #0f172a;
+    padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
   }
   .chip .text { flex: 1; min-width: 0; }
-  .chip .name { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .chip .where { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #7dd3fc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chip .name { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chip .where { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--link); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   textarea {
     width: 100%; min-height: 84px; resize: vertical; padding: 8px 10px;
-    border: 1px solid #1f2a3d; border-radius: 10px; background: #0f172a; color: #e5e7eb;
+    border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--ink);
     font: 13px/1.5 ui-sans-serif, system-ui, sans-serif;
   }
-  textarea:focus { outline: 2px solid #2563eb; outline-offset: -1px; }
-  .options { display: flex; flex-wrap: wrap; gap: 4px 12px; color: #cbd5e1; font-size: 12px; }
+  textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .options { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--ink); font-size: 12px; }
   .options label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
   .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
   button {
-    height: 30px; padding: 0 12px; border-radius: 8px; border: 1px solid #1f2a3d;
-    background: #111827; color: #e5e7eb; cursor: pointer;
+    height: 30px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--control); color: var(--ink); cursor: pointer;
   }
-  button:hover { background: #16233a; }
-  button.primary { background: #2563eb; border-color: #2563eb; color: white; font-weight: 600; }
-  button.primary:hover { background: #1d4ed8; }
-  button.ghost { border-color: transparent; background: transparent; color: #94a3b8; }
-  button.icon { height: 22px; padding: 0 6px; font-size: 12px; color: #94a3b8; }
-  .status { color: #86efac; font-size: 12px; }
-  .status[data-tone="error"] { color: #fca5a5; }
+  button:hover { background: var(--control-hover); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #ffffff; font-weight: 600; }
+  button.primary:hover { background: var(--accent-strong); }
+  button.ghost { border-color: transparent; background: transparent; color: var(--muted); }
+  button.icon { height: 22px; padding: 0 6px; font-size: 12px; color: var(--muted); }
+  .status { color: var(--ok); font-size: 12px; }
+  .status[data-tone="error"] { color: var(--error); }
   /* A picked element keeps a numbered outline: the prompt lists the same
      numbers, and the page keeps showing what is in it. */
   .mark {
@@ -685,7 +761,7 @@ const STYLES = `
   .mark .badge {
     position: absolute; left: -2px; top: -18px;
     min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
-    background: #16a34a; color: #fff; text-align: center;
+    background: #16a34a; color: #ffffff; text-align: center;
     font: 600 11px/18px ui-sans-serif, system-ui, sans-serif;
     box-shadow: 0 1px 4px rgb(0 0 0 / 30%);
   }
@@ -694,11 +770,11 @@ const STYLES = `
     border: 2px solid #3b82f6; background: rgb(59 130 246 / 14%); border-radius: 3px;
   }
   .tip {
-    position: fixed; z-index: 1; pointer-events: none; display: none;
+    position: fixed; z-index: 2; pointer-events: none; display: none;
     max-width: 340px; padding: 4px 8px; border-radius: 6px;
-    background: #111827; color: #e5e7eb; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: var(--fab); color: var(--fab-ink); font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    box-shadow: 0 8px 20px -10px rgb(0 0 0 / 60%);
+    box-shadow: 0 8px 20px -10px var(--shadow);
   }
   /* The picking cursor is inherited from the host: the toolbar is still
      interactive, so its own controls keep their usual cursors. */
@@ -706,6 +782,41 @@ const STYLES = `
   .panel textarea { cursor: text; }
   .panel button { cursor: pointer; }
 `
+
+/**
+ * The element's box clipped by every scrollable ancestor, so an outline never
+ * spills over unrelated content when the element is scrolled out of view.
+ */
+function visibleRect(element) {
+  const box = element.getBoundingClientRect()
+  let left = box.left
+  let top = box.top
+  let right = box.right
+  let bottom = box.bottom
+  for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+    const style = getComputedStyle(parent)
+    const overflow = style.overflow + ' ' + style.overflowX + ' ' + style.overflowY
+    const scrolls =
+      overflow.includes('auto') ||
+      overflow.includes('scroll') ||
+      overflow.includes('hidden') ||
+      overflow.includes('clip')
+    if (!scrolls) continue
+    const frame = parent.getBoundingClientRect()
+    left = Math.max(left, frame.left)
+    top = Math.max(top, frame.top)
+    right = Math.min(right, frame.right)
+    bottom = Math.min(bottom, frame.bottom)
+  }
+  return {
+    left,
+    top,
+    right,
+    bottom,
+    width: Math.max(0, right - left),
+    height: Math.max(0, bottom - top),
+  }
+}
 
 class PromptToolbar {
   constructor(host, config) {
@@ -719,6 +830,10 @@ class PromptToolbar {
     }
     this.selections = []
     this.marks = new Map()
+    // Where the shell is on screen; `position` holds the user's drag (null =
+    // default corner). `rect` is filled by applyPosition().
+    this.rect = { x: 0, y: 0, width: 0, height: 0 }
+    this.suppressClick = false
     this.picking = false
     this.panelOpen = false
     this.tipFrame = null
@@ -757,9 +872,21 @@ class PromptToolbar {
     fab.className = 'fab'
     fab.type = 'button'
     fab.title = 'Inspect an element and build a prompt — drag to move, double-click to reset'
+    fab.setAttribute('aria-label', 'Inspect an element')
+    fab.setAttribute('aria-pressed', 'false')
     fab.innerHTML = '<span class="dot"></span><span>Inspect</span>'
     // Drag anywhere on the dock; a press that does not move is a click.
     dock.addEventListener('pointerdown', event => this.startDrag(event))
+    fab.addEventListener('click', event => {
+      event.stopPropagation()
+      if (this.suppressClick) {
+        // The press was a drag: the pointer moved the button, it did not ask
+        // for picking.
+        this.suppressClick = false
+        return
+      }
+      this.togglePicking()
+    })
     fab.addEventListener('dblclick', event => {
       event.stopPropagation()
       this.position = { x: null, y: null }
@@ -774,10 +901,13 @@ class PromptToolbar {
       event.stopPropagation()
       this.setPanelOpen(!this.panelOpen)
     })
+    count.setAttribute('aria-expanded', 'false')
     dock.append(fab, count)
     const panel = document.createElement('section')
     panel.className = 'panel'
     panel.hidden = true
+    panel.setAttribute('role', 'dialog')
+    panel.setAttribute('aria-label', 'Build a prompt')
     const shell = document.createElement('div')
     shell.className = 'shell'
     // Panel first: the dock stays at the anchored spot, the panel above it.
@@ -814,6 +944,7 @@ class PromptToolbar {
     close.type = 'button'
     close.textContent = '✕'
     close.title = 'Close'
+    close.setAttribute('aria-label', 'Close the prompt panel')
     close.addEventListener('click', () => this.setPanelOpen(false))
     head.append(close)
 
@@ -859,6 +990,8 @@ class PromptToolbar {
     clear.addEventListener('click', () => this.clearSelections())
     const status = document.createElement('span')
     status.className = 'status'
+    status.setAttribute('role', 'status')
+    status.setAttribute('aria-live', 'polite')
     this.status = status
     actions.append(copy, clear, status)
     body.append(actions)
@@ -887,8 +1020,10 @@ class PromptToolbar {
     name.textContent = index + 1 + '. ' + elementTitle(selection.payload?.element)
     const where = document.createElement('div')
     where.className = 'where'
-    where.textContent = selection.payload?.source
-      ? relLocation(selection.payload.source, this.config.root)
+    // Same resolution as the prompt (and the same `~` for a line Svelte only
+    // recorded for an enclosing element), so the two never disagree.
+    where.textContent = selection.location?.file
+      ? (selection.location.matched ? '~' : '') + relLocation(selection.location, this.config.root)
       : '(no Svelte source location)'
     text.append(name, where)
     const remove = document.createElement('button')
@@ -896,6 +1031,7 @@ class PromptToolbar {
     remove.type = 'button'
     remove.textContent = '✕'
     remove.title = 'Remove'
+    remove.setAttribute('aria-label', 'Remove this selection')
     remove.addEventListener('click', event => {
       event.stopPropagation()
       this.selections.splice(index, 1)
@@ -935,6 +1071,7 @@ class PromptToolbar {
   setPanelOpen(open) {
     this.panelOpen = open
     this.panel.hidden = !open
+    if (this.count) this.count.setAttribute('aria-expanded', String(open))
     if (open) {
       this.renderPanel()
       this.fitPanel()
@@ -978,10 +1115,13 @@ class PromptToolbar {
       const badge = mark.firstElementChild
       if (badge) badge.textContent = String(index + 1)
       const element = selection.element
-      const rect = element?.isConnected ? element.getBoundingClientRect() : null
+      // Clipped by the viewport *and* by every scrollable ancestor: an element
+      // scrolled out of an `overflow` container is not where it looks.
+      const rect = element?.isConnected ? visibleRect(element) : null
       const onScreen =
         rect !== null &&
-        (rect.width > 0 || rect.height > 0) &&
+        rect.width > 0 &&
+        rect.height > 0 &&
         rect.bottom > 0 &&
         rect.top < window.innerHeight &&
         rect.right > 0 &&
@@ -1033,6 +1173,7 @@ class PromptToolbar {
     this.picking = picking
     this.host.dataset.picking = String(picking)
     this.fab.dataset.active = String(picking)
+    this.fab.setAttribute('aria-pressed', String(picking))
     this.setPickingCursor(picking)
     const capture = true
     if (picking) {
@@ -1043,12 +1184,20 @@ class PromptToolbar {
       // not stop it.
       document.addEventListener('click', this.onClick, capture)
       document.addEventListener('auxclick', this.onClick, capture)
+      document.addEventListener('mousedown', this.onSwallowedEvent, capture)
+      document.addEventListener('mouseup', this.onSwallowedEvent, capture)
+      document.addEventListener('pointerup', this.onSwallowedEvent, capture)
+      document.addEventListener('dblclick', this.onSwallowedEvent, capture)
       document.addEventListener('keydown', this.onKeyDown, capture)
     } else {
       document.removeEventListener('pointermove', this.onPointerMove, capture)
       document.removeEventListener('pointerdown', this.onPointerDown, capture)
       document.removeEventListener('click', this.onClick, capture)
       document.removeEventListener('auxclick', this.onClick, capture)
+      document.removeEventListener('mousedown', this.onSwallowedEvent, capture)
+      document.removeEventListener('mouseup', this.onSwallowedEvent, capture)
+      document.removeEventListener('pointerup', this.onSwallowedEvent, capture)
+      document.removeEventListener('dblclick', this.onSwallowedEvent, capture)
       document.removeEventListener('keydown', this.onKeyDown, capture)
       this.hideHighlight()
     }
@@ -1064,8 +1213,13 @@ class PromptToolbar {
     }
   }
 
-  /** Picks must never reach the app: no click, no focus, no navigation. */
+  /**
+   * A primary-button pick must not reach the app: no click, no focus, no
+   * navigation. Other buttons are left alone (a right click still opens the
+   * app's context menu).
+   */
   onPointerDown = event => {
+    if (event.button !== 0) return
     if (this.isOwnEvent(event)) return
     event.preventDefault()
     event.stopPropagation()
@@ -1075,6 +1229,16 @@ class PromptToolbar {
   }
 
   onClick = event => {
+    if (event.button !== undefined && event.button !== 0) return
+    if (this.isOwnEvent(event)) return
+    event.preventDefault()
+    event.stopPropagation()
+    event.stopImmediatePropagation()
+  }
+
+  /** The rest of a primary-button press: nothing about it belongs to the page. */
+  onSwallowedEvent = event => {
+    if (event.button !== undefined && event.button !== 0) return
     if (this.isOwnEvent(event)) return
     event.preventDefault()
     event.stopPropagation()
@@ -1093,7 +1257,11 @@ class PromptToolbar {
     })
   }
 
-  /** Place the shell where the user dragged the button, clamped to the viewport. */
+  /**
+   * Place the shell where the user dragged the button, clamped to the viewport.
+   * `position` keeps the user's choice (null = the default corner), so the
+   * default follows a resized window instead of freezing at its first value.
+   */
   applyPosition() {
     if (!this.shell) return
     const margin = 8
@@ -1102,9 +1270,10 @@ class PromptToolbar {
     const height = rect.height || 36
     const maxX = Math.max(margin, window.innerWidth - width - margin)
     const maxY = Math.max(margin, window.innerHeight - height - margin)
-    const x = Math.min(Math.max(this.position.x ?? window.innerWidth - width - 18, margin), maxX)
-    const y = Math.min(Math.max(this.position.y ?? window.innerHeight - height - 18, margin), maxY)
-    this.position = { x, y }
+    const x = this.clamp(this.position.x ?? window.innerWidth - width - 18, margin, maxX)
+    const y = this.clamp(this.position.y ?? window.innerHeight - height - 18, margin, maxY)
+    // What is on screen right now; `position` below is what the user chose.
+    this.rect = { x, y, width, height }
     // The panel opens where there is room: above the button in the lower half
     // of the viewport, below it in the upper half.
     const placement = y + height / 2 > window.innerHeight / 2 ? 'above' : 'below'
@@ -1138,14 +1307,18 @@ class PromptToolbar {
     if (!this.panel.hidden) this.fitPanel()
   }
 
+  clamp(value, min, max) {
+    return Math.min(Math.max(value, min), max)
+  }
+
   /** Keep the panel inside the viewport, on the side of the button with room. */
   fitPanel() {
-    const height = this.dock.getBoundingClientRect().height || 36
+    const height = this.rect.height
     const gap = 8
     const room =
       this.placement === 'above'
-        ? this.position.y - gap - 8
-        : window.innerHeight - this.position.y - height - gap - 8
+        ? this.rect.y - gap - 8
+        : window.innerHeight - this.rect.y - height - gap - 8
     this.panel.style.maxHeight = Math.max(140, Math.min(window.innerHeight * 0.7, room)) + 'px'
   }
 
@@ -1158,12 +1331,13 @@ class PromptToolbar {
     if (event.button !== 0) return
     event.preventDefault()
     event.stopPropagation()
+    // `preventDefault()` above keeps the press from doing anything else, which
+    // also means no focus: take it explicitly so the button stays
+    // keyboard-operable (Enter/Space arrive as a click).
+    if (event.composedPath?.().includes(this.fab)) this.fab.focus({ preventScroll: true })
     const startX = event.clientX
     const startY = event.clientY
-    const from = { x: this.position.x, y: this.position.y }
-    // Only the Inspect button toggles picking on a press without movement;
-    // the count chip has its own click handler (open/close the panel).
-    const onButton = event.composedPath?.().includes(this.fab) ?? false
+    const from = { x: this.rect.x, y: this.rect.y }
     let moved = false
     const onMove = moveEvent => {
       const dx = moveEvent.clientX - startX
@@ -1182,12 +1356,11 @@ class PromptToolbar {
       window.removeEventListener('pointerup', onUp, true)
       window.removeEventListener('pointercancel', onUp, true)
       this.dock.dataset.dragging = 'false'
-      if (moved) {
-        this.savePosition()
-        return
-      }
-      // Picking only: the panel would cover the page the user is about to pick.
-      if (onButton) this.togglePicking()
+      if (!moved) return
+      // The press moved the button: swallow the click it will produce, so
+      // dragging never toggles picking (the keyboard uses that same click).
+      this.suppressClick = true
+      this.savePosition()
     }
     window.addEventListener('pointermove', onMove, true)
     window.addEventListener('pointerup', onUp, true)
@@ -1263,10 +1436,22 @@ class PromptToolbar {
       this.showStatus('Removed ' + (payload.element?.tag ?? 'element'))
       return
     }
+    if (this.selections.length >= MAX_SELECTIONS) {
+      this.setPanelOpen(true)
+      this.showStatus('At most ' + MAX_SELECTIONS + ' elements per prompt.', 'error')
+      return
+    }
     const source = this.options.source ? await this.loadSource(payload) : null
-    this.selections.push({ payload, source, element })
+    const location = resolveElementSource(payload, source, this.config.root)
+    this.selections.push({ payload, source, element, location })
     this.setPanelOpen(true)
     this.renderPanel()
+    if (payload.components.length === 0) {
+      // The runtime is there but nothing is tracked: the wrapper was served
+      // without component tracking, so there is no chain or state to report.
+      this.showStatus('Component tracking is off: no component or state in the prompt.', 'error')
+      return
+    }
     this.showStatus('Added ' + (payload.element?.tag ?? 'element'))
   }
 

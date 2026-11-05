@@ -17,7 +17,7 @@ interface Inspected {
     id: string
     classes: string[]
     attrs: Record<string, string>
-    outerHTML: string
+    markup: string
     size: string
     selector: string
   }
@@ -78,9 +78,14 @@ describe('inspectElement', () => {
 
     expect(payload.error).toBeUndefined()
     expect(payload.element.tag).toBe('li')
-    // The element is identified by markup, not by the copy it renders.
-    expect(payload.element.outerHTML).toContain('B false')
+    // The element is identified by its own markup: no rendered copy, and no
+    // Svelte scoping hashes.
+    expect(payload.element.markup).toContain('</li>')
+    expect(payload.element.markup).not.toContain('B false')
+    expect(payload.element.markup).not.toContain('svelte-')
+    expect(payload.element.classes.every(name => !name.startsWith('svelte-'))).toBe(true)
     expect(payload.element).not.toHaveProperty('text')
+    expect(payload.element).not.toHaveProperty('outerHTML')
     expect(payload.element.selector).toBe('div > li:nth-of-type(2)')
 
     // The element is declared in the child component's markup, and Svelte

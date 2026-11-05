@@ -227,17 +227,6 @@ function __templateStack(parent) {
 
 function __elementInfo(element) {
   if (!element) return null
-  let outerHTML = ''
-  try {
-    outerHTML = element.outerHTML ?? ''
-  } catch {
-    outerHTML = ''
-  }
-  // Truncate at a tag boundary: half an attribute tells an agent nothing.
-  if (outerHTML.length > 600) {
-    const cut = outerHTML.lastIndexOf('>', 600)
-    outerHTML = (cut > 0 ? outerHTML.slice(0, cut + 1) : outerHTML.slice(0, 600)) + ' …'
-  }
   const attrs = {}
   try {
     const list = element.attributes ?? []
@@ -252,14 +241,84 @@ function __elementInfo(element) {
     ? element.getBoundingClientRect()
     : { width: 0, height: 0 }
   return {
+    // Display form (lowercase) and the raw tag, which matters for SVG's
+    // camelCase names (`foreignObject`).
     tag: (element.tagName ?? '').toLowerCase(),
+    tagName: element.tagName ?? '',
     id: element.id ?? '',
-    classes: Array.from(element.classList ?? []),
+    classes: __authoredClasses(element.classList),
     attrs,
-    outerHTML,
+    markup: __markupSkeleton(element),
     size: Math.round(rect.width) + '×' + Math.round(rect.height),
     selector: __elementPath(element),
   }
+}
+
+// Svelte adds a scoping hash to every element's class list at runtime
+// (`svelte-abc123`). It is meaningless outside the compiled CSS, so it never
+// goes into an identification or a markup snippet.
+function __authoredClasses(list) {
+  const out = []
+  const classes = list ?? []
+  for (let i = 0; i < classes.length; i++) {
+    const name = classes[i]
+    if (!name.startsWith('svelte-')) out.push(name)
+  }
+  return out
+}
+
+// The element's own markup without anything it renders: tags, attributes and
+// the shape of its children. Text is dropped by construction (it is page copy,
+// not identity) along with the scoping hashes, and the result is bounded.
+const __MARKUP_MAX = 600
+const __MARKUP_DEPTH = 3
+const __MARKUP_CHILDREN = 6
+
+function __markupSkeleton(element) {
+  const budget = { chars: __MARKUP_MAX }
+  const markup = __markupOf(element, 0, budget)
+  if (budget.chars > 0) return markup
+  const cut = markup.lastIndexOf('>', __MARKUP_MAX)
+  return (cut > 0 ? markup.slice(0, cut + 1) : markup.slice(0, __MARKUP_MAX)) + ' …'
+}
+
+function __markupOf(node, depth, budget) {
+  if (!node || budget.chars <= 0) return ''
+  const tag = (node.tagName ?? '').toLowerCase()
+  if (!tag) return ''
+  let open = '<' + tag
+  try {
+    const list = node.attributes ?? []
+    for (let i = 0; i < list.length && i < 12; i++) {
+      const name = list[i].name
+      if (name === 'class') {
+        const classes = __authoredClasses(node.classList)
+        if (classes.length > 0) open += ' class="' + classes.join(' ') + '"'
+        continue
+      }
+      const value = list[i].value ?? ''
+      open += ' ' + name + '="' + (value.length > 60 ? value.slice(0, 60) + '…' : value) + '"'
+    }
+  } catch {
+    /* exotic element */
+  }
+  open += '>'
+  budget.chars -= open.length
+  let inner = ''
+  if (depth < __MARKUP_DEPTH) {
+    let children = 0
+    for (let child = node.firstElementChild; child; child = child.nextElementSibling) {
+      if (children >= __MARKUP_CHILDREN || budget.chars <= 0) {
+        inner += '…'
+        break
+      }
+      children++
+      inner += __markupOf(child, depth + 1, budget)
+    }
+  }
+  const close = '</' + tag + '>'
+  budget.chars -= close.length
+  return open + inner + close
 }
 
 // A stable, readable CSS-ish path for the element (`main > ul > li:nth-of-type(2)`).
@@ -283,7 +342,8 @@ function __elementPath(element) {
       }
       if (sameTag > 1) part += ':nth-of-type(' + position + ')'
     }
-    if (el.classList && el.classList.length > 0) part += '.' + Array.from(el.classList).join('.')
+    const classes = __authoredClasses(el.classList)
+    if (classes.length > 0) part += '.' + classes.join('.')
     parts.unshift(part)
   }
   return parts.join(' > ')
