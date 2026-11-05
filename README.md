@@ -84,6 +84,19 @@ After the app page reloads, a selected component id may belong to another instan
 </details>
 
 <details>
+<summary>Prompt toolbar</summary>
+
+Dark:
+
+![Prompt toolbar, dark](docs/images/prompt-toolbar-dark.png)
+
+Light (`prefers-color-scheme: light`):
+
+![Prompt toolbar, light](docs/images/prompt-toolbar-light.png)
+
+</details>
+
+<details>
 <summary>Frame rate</summary>
 
 ![Frame rate](docs/images/ui-fps.png)

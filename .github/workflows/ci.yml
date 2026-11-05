@@ -420,6 +420,51 @@ jobs:
         if: always()
         run: git diff --exit-code -- pnpm-lock.yaml examples/ playground/ packages/
 
+  # Screenshots of the prompt toolbar (scripts/screenshots/prompt-toolbar.mjs):
+  # the example app with the toolbar enabled through the environment, dark and
+  # light. The same script is the base for the browser-level toolbar cases.
+  prompt-toolbar-shots:
+    name: Prompt toolbar screenshots
+    needs: [test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build plugin and client UI
+        run: pnpm build
+
+      - name: Install Chromium (workspace playwright-core)
+        run: |
+          pnpm exec playwright-core install chromium
+          if ! node -e "require('playwright-core').chromium.launch().then(b => b.close())"; then
+            pnpm exec playwright-core install-deps chromium
+          fi
+
+      - name: Capture
+        run: node scripts/screenshots/prompt-toolbar.mjs --out=prompt-toolbar-shots
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: prompt-toolbar-shots
+          path: prompt-toolbar-shots/
+          retention-days: 7
+
+      - name: Repo unchanged
+        if: always()
+        run: git diff --exit-code -- pnpm-lock.yaml examples/ playground/ packages/
+
   # What the Release workflow would version and pack, without publishing:
   # read-only token, no id-token, no npm credentials, no publish command.
   release-dry-run:
