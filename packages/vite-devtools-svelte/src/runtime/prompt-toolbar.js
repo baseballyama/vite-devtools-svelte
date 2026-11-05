@@ -1238,8 +1238,10 @@ class PromptToolbar {
     return text ? { file, text } : null
   }
 
+  /** Clear resets the whole form: picked elements and the instructions. */
   clearSelections() {
     this.selections = []
+    this.options.instructions = ''
     this.renderPanel()
     this.hideHighlight()
     this.showStatus('Cleared')
