@@ -1,11 +1,6 @@
 import * as __svelte_original from 'svelte/internal/client'
 export * from 'svelte/internal/client'
 
-// Hooks that `wrapper-toolbar.js` fills in (the plugin appends that file only
-// when the prompt toolbar is enabled). Empty otherwise: no stamps, no retained
-// props, no cost.
-const __toolbarHooks = { instanceContext: null }
-
 function __dt() {
   return typeof window === 'undefined' ? null : window.__SVELTE_DEVTOOLS__
 }
@@ -83,13 +78,6 @@ export function push() {
       const id = dt.register(file)
       __idStack.push(id)
       dt.startInit(id)
-      // The prompt toolbar records what the compiler knows about this instance
-      // but the runtime cannot see (the props object, the `<Child />` frame it
-      // was created from). Appended only when the toolbar is enabled; without
-      // it this is one null check.
-      try {
-        __toolbarHooks.instanceContext?.(dt, id, arguments[0])
-      } catch {}
       try {
         __svelte_original.user_effect(() => {
           try {
@@ -382,7 +370,6 @@ export const each = __withArgs(__svelte_original.each, __wrapBlock)
 export const key = __withArgs(__svelte_original.key, __wrapBlock)
 export const component = __withArgs(__svelte_original.component, __wrapBlock)
 export const boundary = __withArgs(__svelte_original.boundary, __wrapBlock)
-
 // 'if' and 'await' are reserved words: exported via aliases.
 const __if_block = __withArgs(__svelte_original.if, __wrapBlock)
 const __await_block = __withArgs(__svelte_original.await, __wrapBlock)

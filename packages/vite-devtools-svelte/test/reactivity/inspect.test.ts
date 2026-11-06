@@ -1,43 +1,21 @@
-import { flushSync } from 'svelte'
+import { flushSync, hydrate, unmount } from 'svelte'
 import { describe, it, expect, afterEach } from 'vitest'
 
-import BigState from './fixtures/BigState.svelte'
 import Child from './fixtures/Child.svelte'
 import Todos from './fixtures/Todos.svelte'
 import TwoRoots from './fixtures/TwoRoots.svelte'
 import { dt, render } from './harness.js'
 
-// Element inspection is what the prompt toolbar copies: a clicked DOM node
-// resolved to Svelte source locations, the component instance chain (with
-// props and $state), and the template frames the element sits in.
+// Element inspection behind the prompt toolbar: a picked DOM node resolved to
+// where it is written, the instances that rendered it, and the template frames
+// around it. This project runs the wrapper with `promptToolbar: true`.
 interface Inspected {
-  page: { url: string; path: string; title: string; viewport: string }
-  element: {
-    tag: string
-    id: string
-    classes: string[]
-    attrs: Record<string, string>
-    markup: string
-    size: string
-    selector: string
-  }
-  source: { file: string; line: number; column: number } | null
-  template: Array<{
-    type: string
-    file: string | null
-    line: number | null
-    column: number | null
-    componentTag: string | null
-  }>
-  components: Array<{
-    id: number
-    name: string
-    file: string
-    usage: { file: string; line: number; column: number; componentTag: string | null } | null
-    props: string | null
-    state: Array<{ name: string; type: string; value: string }>
-    renders: number
-  }>
+  epoch: string
+  page: { url: string; title: string; viewport: string }
+  element: { tag: string; id: string; classes: string[] } | null
+  source: { file: string; line: number; column: number; enclosing: boolean } | null
+  template: Array<{ type: string; file: string | null; componentTag: string | null }>
+  components: Array<{ id: number; name: string; file: string }>
   error?: string
 }
 
@@ -55,130 +33,138 @@ function mountIt(C: any, props?: any) {
   return r
 }
 
-const element = (r: { target: unknown }, selector: string): unknown => {
-  const node = (r.target as { querySelector(s: string): unknown }).querySelector(selector)
+// The DOM surface the tests touch (the package type-checks against Node's lib).
+interface TestNode {
+  nodeType: number
+  firstChild: TestNode | null
+  innerHTML: string
+  querySelector(selector: string): TestNode | null
+  querySelectorAll(selector: string): TestNode[]
+}
+
+const element = (root: unknown, selector: string): TestNode => {
+  const node = (root as TestNode).querySelector(selector)
   if (!node) throw new Error(`no ${selector}`)
   return node
 }
 
-const stateOf = (payload: Inspected, componentIndex: number) =>
-  Object.fromEntries(payload.components[componentIndex]!.state.map(n => [n.name, n.value]))
+const names = (payload: Inspected) => payload.components.map(c => c.name)
 
 describe('inspectElement', () => {
-  it('resolves a DOM node to its element location, instance chain and state', () => {
+  it('resolves a node to its location, its instance chain and the live-state handle', () => {
     const r = mountIt(Todos)
-    // Two rows, so the pick is not trivially the first sibling.
+    // Two rows, so the pick is not trivially the first one.
     ;(r.app as any).api.add()
     flushSync()
-    const items = (
-      r.target as unknown as { querySelectorAll(s: string): unknown[] }
-    ).querySelectorAll('li')
+    const items = (r.target as unknown as TestNode).querySelectorAll('li')
     expect(items).toHaveLength(2)
     const payload = inspect(items[1])
 
     expect(payload.error).toBeUndefined()
-    expect(payload.element.tag).toBe('li')
-    // The element is identified by its own markup: no rendered copy, and no
-    // Svelte scoping hashes.
-    expect(payload.element.markup).toContain('</li>')
-    expect(payload.element.markup).not.toContain('B false')
-    expect(payload.element.markup).not.toContain('svelte-')
-    expect(payload.element.classes.every(name => !name.startsWith('svelte-'))).toBe(true)
-    expect(payload.element).not.toHaveProperty('text')
-    expect(payload.element).not.toHaveProperty('outerHTML')
-    expect(payload.element.selector).toBe('div > li:nth-of-type(2)')
-
-    // The element is declared in the child component's markup, and Svelte
-    // recorded the element itself (not an ancestor).
-    expect(payload.source?.file.endsWith('/TodoItem.svelte')).toBe(true)
-    expect(payload.source?.line).toBe(7)
-    expect(payload.source?.column).toBe(0)
-    expect((payload.source as { enclosing?: boolean } | null)?.enclosing).toBe(false)
-
-    // Component chain, innermost first: the row, then the page component.
-    expect(payload.components.map(c => c.name)).toEqual(['TodoItem', 'Todos'])
-    const [row, page] = payload.components
-    expect(row!.file.endsWith('/TodoItem.svelte')).toBe(true)
-    expect(row!.usage?.file.endsWith('/Todos.svelte')).toBe(true)
-    expect(row!.usage?.componentTag).toBe('TodoItem')
-    expect(row!.usage?.line).toBe(14)
-    expect(page!.usage).toBeNull()
-
-    // Props (what the compiler passed) and live $state / $derived values.
-    expect(JSON.parse(row!.props!)).toEqual({ todo: { text: 'b', done: false } })
-    expect(stateOf(payload, 0)).toMatchObject({
-      local: '{"editing":false}',
-      label: '"B"',
+    expect(payload.element).toEqual({ tag: 'li', id: '', classes: [] })
+    expect(payload.source).toMatchObject({ line: 7, column: 0, enclosing: false })
+    expect(payload.source!.file.endsWith('/TodoItem.svelte')).toBe(true)
+    // Innermost first: the row, then the component that renders the rows.
+    expect(names(payload)).toEqual(['TodoItem', 'Todos'])
+    // Each row is its own instance: the id the MCP tools take.
+    expect(inspect(items[0]).components[0]!.id).not.toBe(payload.components[0]!.id)
+    expect(payload.epoch).toBe(dt()._epoch)
+    expect(payload.template[0]).toMatchObject({ type: 'component', componentTag: 'TodoItem' })
+    // No values are copied: the prompt points at the MCP tools instead.
+    expect(payload.components[0]).toEqual({
+      id: expect.any(Number),
+      name: 'TodoItem',
+      file: expect.stringMatching(/\/TodoItem\.svelte$/),
     })
-    const pageState = stateOf(payload, 1)
-    expect(JSON.parse(pageState.todos!)).toEqual([
-      { text: 'a', done: false },
-      { text: 'b', done: false },
-    ])
-    expect(pageState.open).toBe('2')
+  })
 
-    // Each row is rendered inside the {#each} of the page component.
-    expect(payload.template[0]?.type).toBe('component')
-    expect(payload.template[0]?.componentTag).toBe('TodoItem')
+  it('walks up from a text node to its element', () => {
+    const r = mountIt(Todos)
+    const text = element(r.target, 'li').firstChild!
+    expect(text.nodeType).toBe(3)
+    const payload = inspect(text)
+    expect(payload.element?.tag).toBe('li')
+    expect(names(payload)).toEqual(['TodoItem', 'Todos'])
+  })
+
+  it('attributes every root of a multi-root template, a child component in between', () => {
+    const r = mountIt(TwoRoots)
+    for (const [selector, line] of [
+      ['.first', 7],
+      ['p.third', 9],
+    ] as const) {
+      const payload = inspect(element(r.target, selector))
+      expect(names(payload)).toEqual(['TwoRoots'])
+      expect(payload.source!.file.endsWith('/TwoRoots.svelte')).toBe(true)
+      expect(payload.source!.line).toBe(line)
+    }
+    const child = inspect(element(r.target, 'span'))
+    expect(names(child)).toEqual(['Child', 'TwoRoots'])
+    expect(child.source!.file.endsWith('/Child.svelte')).toBe(true)
+  })
+
+  it('repairs the locations hydration leaves behind a child component', () => {
+    // The server markup of TwoRoots. Svelte locates hydrated elements by
+    // position and the child's markup is not delimited, so on its own the
+    // `<p>` after `<Child />` is left without its location.
+    const document = (globalThis as any).document
+    const target = document.createElement('div')
+    target.innerHTML =
+      '<!--[--><div class="first">1</div> <span>second-root0</span> <!----><!----> <p class="third">tail</p><!--]-->'
+    document.body.append(target)
+    const third = element(target, 'p.third')
+    const app = hydrate(TwoRoots, { target })
+    flushSync()
+    cleanups.push(() => {
+      void unmount(app)
+      target.remove()
+    })
+    // Hydrated, not re-rendered: the server's node is the one in the page.
+    expect(element(target, 'p.third')).toBe(third)
+
+    const payload = inspect(third)
+    expect(payload.source).toMatchObject({ line: 9, column: 0, enclosing: false })
+    expect(payload.source!.file.endsWith('/TwoRoots.svelte')).toBe(true)
+    expect(names(payload)).toEqual(['TwoRoots'])
+
+    const span = inspect(element(target, 'span'))
+    expect(span.source).toMatchObject({ line: 6, column: 0, enclosing: false })
+    expect(span.source!.file.endsWith('/Child.svelte')).toBe(true)
+    expect(names(span)).toEqual(['Child', 'TwoRoots'])
+
+    const first = inspect(element(target, '.first'))
+    expect(first.source).toMatchObject({ line: 7, column: 0 })
+    expect(names(first)).toEqual(['TwoRoots'])
   })
 
   it('reports the page it was inspected on', () => {
     const r = mountIt(Child)
-    const payload = inspect(element(r, 'span'))
-    expect(payload.page.path).toMatch(/^\//)
+    const payload = inspect(element(r.target, 'span'))
+    expect(payload.page.url).toMatch(/^http/)
     expect(payload.page.viewport).toContain('×')
-    expect(payload.components.map(c => c.name)).toEqual(['Child'])
-  })
-
-  it('walks up from a nested node to the nearest located element', () => {
-    const r = mountIt(Todos)
-    const text = (element(r, 'li') as any).firstChild as {
-      nodeType: number
-      parentElement: unknown
-    }
-    expect(text.nodeType).toBe(3)
-    const payload = inspect(text)
-    expect(payload.source?.file.endsWith('/TodoItem.svelte')).toBe(true)
-    expect(payload.components[0]?.name).toBe('TodoItem')
-  })
-
-  it('stamps every root of a multi-root template, not just the first', () => {
-    // A template with several top-level nodes (a typical `+page.svelte`), with
-    // a component between them: the sibling walk must reach the last root.
-    const r = mountIt(TwoRoots)
-    for (const selector of ['.first', 'p.third']) {
-      const payload = inspect(element(r, selector))
-      expect(payload.components.map(c => c.name)).toEqual(['TwoRoots'])
-      expect(payload.source?.file.endsWith('/TwoRoots.svelte')).toBe(true)
-    }
-    // and the child component keeps its own attribution
-    const child = inspect(element(r, 'span'))
-    expect(child.components.map(c => c.name)).toEqual(['Child', 'TwoRoots'])
-  })
-
-  it('bounds a huge state value with parseable JSON, not a sliced string', () => {
-    const r = mountIt(BigState)
-    const payload = inspect(element(r, 'p.big'))
-    const state = payload.components[0]!.state.find(node => node.name === 'blob')
-    expect(state).toBeDefined()
-    // Valid JSON (the toolbar summarises from it), inside the inspection budget.
-    const parsed = JSON.parse(state!.value) as { text: string; list: unknown[] }
-    expect(parsed.text.length).toBeLessThanOrEqual(321)
-    expect(Array.isArray(parsed.list)).toBe(true)
-    expect(state!.value.length).toBeLessThan(6000)
   })
 
   it('locateElement is the cheap lookup behind the hover tooltip', () => {
     const r = mountIt(Todos)
-    const located = dt().locateElement(element(r, 'li'))
+    const located = dt().locateElement(element(r.target, 'li'))
     expect(located.source.file.endsWith('/TodoItem.svelte')).toBe(true)
     expect(located.component.name).toBe('TodoItem')
+    expect(dt().locateElement(null)).toEqual({ source: null, component: null })
+  })
+
+  it('drops instances that were destroyed', () => {
+    const r = mountIt(Todos)
+    const li = element(r.target, 'li')
+    r.destroy()
+    cleanups = []
+    expect(inspect(li).components).toEqual([])
   })
 
   it('never throws on input that is not an element', () => {
     const payload = inspect(null)
     expect(payload.error).toBeUndefined()
     expect(payload.element).toBeNull()
+    expect(payload.source).toBeNull()
     expect(payload.components).toEqual([])
   })
 })

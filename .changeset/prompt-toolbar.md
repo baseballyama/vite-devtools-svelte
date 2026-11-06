@@ -2,6 +2,4 @@
 'vite-devtools-svelte': minor
 ---
 
-Add an opt-in prompt toolbar: enable it with `svelteDevtools({ promptToolbar: true })` and a draggable button appears in your own pages, where picking elements and writing a request copies one markdown prompt with each element's source location, component chain, props and live `$state`.
-
-Dev only (served by a dev middleware, never in a build); no global keyboard shortcut; details in the README.
+Add an opt-in prompt toolbar, `svelteDevtools({ promptToolbar: true })`: an Inspect button in your app's own pages (dev only) to pick elements and copy one markdown prompt with each element's source location, the components that render it, and the id an agent passes to the MCP tools to read their live state. With the toolbar enabled, element locations Svelte loses while hydrating a server-rendered page are restored.

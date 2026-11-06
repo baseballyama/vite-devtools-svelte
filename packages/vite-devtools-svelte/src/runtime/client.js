@@ -83,102 +83,13 @@ function __clampInt(v, lo, hi, d) {
   return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d
 }
 
-// --- Bounded snapshots for the prompt toolbar ---
+// --- Element inspection (prompt toolbar) ---
 //
-// Values copied out of the running app end up in a model prompt, so they are
-// bounded (an app can hold megabytes of state) and never throw. One inspection
-// shares a single node/character budget across the props and every state node it
-// reports, so a click cannot walk an unbounded slice of the app; whatever is
-// dropped is reported as `…` inside the value instead of vanishing silently,
-// and the JSON always stays parseable (the toolbar summarises it from there).
-const __PROMPT_MAX_DEPTH = 4
-const __PROMPT_MAX_ENTRIES = 25
-const __PROMPT_MAX_STRING = 320
-const __PROMPT_BUDGET = { nodes: 2000, chars: 20000 }
-const __PROMPT_TRUNCATED = '…'
-
-/** A fresh budget for one inspection (props + state of the whole chain). */
-function __promptBudget() {
-  return { nodes: __PROMPT_BUDGET.nodes, chars: __PROMPT_BUDGET.chars }
-}
-
-function __promptSpend(budget, chars) {
-  budget.nodes--
-  budget.chars -= chars
-  return budget.nodes >= 0 && budget.chars >= 0
-}
-
-function __promptClone(value, depth, seen, budget) {
-  if (!__promptSpend(budget, 0)) return __PROMPT_TRUNCATED
-  if (value === null) return null
-  const type = typeof value
-  if (type === 'string') {
-    const text =
-      value.length > __PROMPT_MAX_STRING ? value.slice(0, __PROMPT_MAX_STRING) + '…' : value
-    return __promptSpend(budget, text.length) ? text : __PROMPT_TRUNCATED
-  }
-  if (type === 'number') return Number.isFinite(value) ? value : String(value)
-  if (type === 'boolean' || type === 'undefined') return value
-  if (type === 'bigint') return String(value) + 'n'
-  if (type === 'function') return '() => {…}'
-  if (type === 'symbol') return __describe(value)
-  if (seen.has(value)) return '[circular]'
-  if (depth >= __PROMPT_MAX_DEPTH) return Array.isArray(value) ? '[…]' : '{…}'
-  seen.add(value)
-  try {
-    if (Array.isArray(value)) {
-      const out = []
-      const length = Math.min(value.length, __PROMPT_MAX_ENTRIES)
-      for (let i = 0; i < length; i++) {
-        if (budget.nodes <= 0) {
-          out.push(__PROMPT_TRUNCATED)
-          break
-        }
-        out.push(__promptClone(value[i], depth + 1, seen, budget))
-      }
-      if (value.length > out.length) out.push('… ' + (value.length - out.length) + ' more')
-      return out
-    }
-    if (value instanceof Date) {
-      try {
-        return value.toISOString()
-      } catch {
-        return '(invalid date)'
-      }
-    }
-    const out = {}
-    const keys = Object.keys(value)
-    const length = Math.min(keys.length, __PROMPT_MAX_ENTRIES)
-    for (let i = 0; i < length; i++) {
-      if (budget.nodes <= 0) {
-        out['…'] = keys.length - i + ' more keys'
-        break
-      }
-      const key = keys[i]
-      try {
-        out[key] = __promptClone(value[key], depth + 1, seen, budget)
-      } catch {
-        out[key] = '(unreadable)'
-      }
-    }
-    if (keys.length > length && budget.nodes > 0) out['…'] = keys.length - length + ' more keys'
-    return out
-  } finally {
-    seen.delete(value)
-  }
-}
-
-// JSON text for one value, bounded and printable (never throws, always valid
-// JSON so the toolbar can summarise it structurally).
-function __promptValue(value, budget) {
-  let text
-  try {
-    text = JSON.stringify(__promptClone(value, 0, new Set(), budget))
-  } catch {
-    text = null
-  }
-  return text ?? '(unserializable)'
-}
+// A clicked node resolved to what the compiler and the runtime know about it:
+// where the element is written (Svelte's `__svelte_meta`), the component
+// instance that rendered it (`_elementOwners`, filled by the toolbar's wrapper
+// additions) and Svelte's dev stack of template frames around it. No values
+// are read: live state stays with the MCP tools, keyed by instance id + epoch.
 
 // The element a click landed on: text nodes and comments resolve upwards.
 function __closestElement(node) {
@@ -190,27 +101,29 @@ function __closestElement(node) {
   return el
 }
 
-// Deepest Svelte source location above `element`, and the nearest component
-// instance the wrapper stamped on it (`__svelte_meta.dtComponentId`).
-function __locateComponent(element) {
-  let meta = null
-  let metaElement = null
-  let componentId = null
-  for (let el = element; el; el = el.parentElement) {
-    const m = el.__svelte_meta
-    if (!m) continue
-    if (!meta) {
-      meta = m
-      metaElement = el
-    }
-    if (componentId === null && typeof m.dtComponentId === 'number') componentId = m.dtComponentId
-    if (meta && componentId !== null) break
+// Svelte adds a scoping class (`svelte-abc123`) at runtime; it says nothing
+// about the element outside the compiled CSS.
+function __authoredClasses(list) {
+  const out = []
+  const classes = list ?? []
+  for (let i = 0; i < classes.length && out.length < 8; i++) {
+    const name = classes[i]
+    if (!name.startsWith('svelte-')) out.push(name)
   }
-  return { meta, element: metaElement, componentId }
+  return out
 }
 
-// Svelte's own dev stack of enclosing frames (component tags and blocks),
-// innermost first: file/line/column of each `<Tag>` or block opener.
+// Nearest element (itself or an ancestor) carrying a Svelte source location.
+function __locatedAncestor(element) {
+  for (let el = element; el; el = el.parentElement) {
+    const loc = el.__svelte_meta?.loc
+    if (loc) return { element: el, meta: el.__svelte_meta }
+  }
+  return null
+}
+
+// Svelte's dev stack of enclosing frames (component tags and blocks),
+// innermost first.
 function __templateStack(parent) {
   const stack = []
   for (let frame = parent; frame && stack.length < 32; frame = frame.parent) {
@@ -225,143 +138,17 @@ function __templateStack(parent) {
   return stack
 }
 
-function __elementInfo(element) {
-  if (!element) return null
-  const attrs = {}
-  try {
-    const list = element.attributes ?? []
-    for (let i = 0; i < list.length && i < 24; i++) {
-      const value = list[i].value ?? ''
-      attrs[list[i].name] = value.length > 120 ? value.slice(0, 120) + '…' : value
-    }
-  } catch {
-    /* exotic element */
-  }
-  const rect = element.getBoundingClientRect
-    ? element.getBoundingClientRect()
-    : { width: 0, height: 0 }
-  return {
-    // Display form (lowercase) and the raw tag, which matters for SVG's
-    // camelCase names (`foreignObject`).
-    tag: (element.tagName ?? '').toLowerCase(),
-    tagName: element.tagName ?? '',
-    id: element.id ?? '',
-    classes: __authoredClasses(element.classList),
-    attrs,
-    markup: __markupSkeleton(element),
-    size: Math.round(rect.width) + '×' + Math.round(rect.height),
-    selector: __elementPath(element),
-  }
-}
-
-// Svelte adds a scoping hash to every element's class list at runtime
-// (`svelte-abc123`). It is meaningless outside the compiled CSS, so it never
-// goes into an identification or a markup snippet.
-function __authoredClasses(list) {
-  const out = []
-  const classes = list ?? []
-  for (let i = 0; i < classes.length; i++) {
-    const name = classes[i]
-    if (!name.startsWith('svelte-')) out.push(name)
-  }
-  return out
-}
-
-// The element's own markup without anything it renders: tags, attributes and
-// the shape of its children. Text is dropped by construction (it is page copy,
-// not identity) along with the scoping hashes, and the result is bounded.
-const __MARKUP_MAX = 600
-const __MARKUP_DEPTH = 3
-const __MARKUP_CHILDREN = 6
-
-function __markupSkeleton(element) {
-  const budget = { chars: __MARKUP_MAX }
-  const markup = __markupOf(element, 0, budget)
-  if (budget.chars > 0) return markup
-  const cut = markup.lastIndexOf('>', __MARKUP_MAX)
-  return (cut > 0 ? markup.slice(0, cut + 1) : markup.slice(0, __MARKUP_MAX)) + ' …'
-}
-
-function __markupOf(node, depth, budget) {
-  if (!node || budget.chars <= 0) return ''
-  const tag = (node.tagName ?? '').toLowerCase()
-  if (!tag) return ''
-  let open = '<' + tag
-  try {
-    const list = node.attributes ?? []
-    for (let i = 0; i < list.length && i < 12; i++) {
-      const name = list[i].name
-      if (name === 'class') {
-        const classes = __authoredClasses(node.classList)
-        if (classes.length > 0) open += ' class="' + classes.join(' ') + '"'
-        continue
-      }
-      const value = list[i].value ?? ''
-      open += ' ' + name + '="' + (value.length > 60 ? value.slice(0, 60) + '…' : value) + '"'
-    }
-  } catch {
-    /* exotic element */
-  }
-  open += '>'
-  budget.chars -= open.length
-  let inner = ''
-  if (depth < __MARKUP_DEPTH) {
-    let children = 0
-    for (let child = node.firstElementChild; child; child = child.nextElementSibling) {
-      if (children >= __MARKUP_CHILDREN || budget.chars <= 0) {
-        inner += '…'
-        break
-      }
-      children++
-      inner += __markupOf(child, depth + 1, budget)
-    }
-  }
-  const close = '</' + tag + '>'
-  budget.chars -= close.length
-  return open + inner + close
-}
-
-// A stable, readable CSS-ish path for the element (`main > ul > li:nth-of-type(2)`).
-function __elementPath(element) {
-  const parts = []
-  let el = element
-  for (let depth = 0; el && depth < 6; el = el.parentElement, depth++) {
-    const tag = (el.tagName ?? '').toLowerCase()
-    if (!tag || tag === 'html' || tag === 'body') break
-    let part = tag
-    if (el.id) {
-      part += '#' + el.id
-    } else if (el.parentElement) {
-      const siblings = el.parentElement.children ?? []
-      let position = 0
-      let sameTag = 0
-      for (let i = 0; i < siblings.length; i++) {
-        if (siblings[i].tagName !== el.tagName) continue
-        sameTag++
-        if (siblings[i] === el) position = sameTag
-      }
-      if (sameTag > 1) part += ':nth-of-type(' + position + ')'
-    }
-    const classes = __authoredClasses(el.classList)
-    if (classes.length > 0) part += '.' + classes.join('.')
-    parts.unshift(part)
-  }
-  return parts.join(' > ')
-}
-
 function __pageInfo() {
-  const view = typeof window === 'undefined' ? null : window
   let title = ''
   try {
-    title = typeof document === 'undefined' ? '' : (document.title ?? '')
+    title = document.title ?? ''
   } catch {
-    title = ''
+    /* no document title */
   }
   return {
-    url: view?.location ? view.location.href : '',
-    path: view?.location ? view.location.pathname : '',
+    url: window.location.href,
     title,
-    viewport: view ? view.innerWidth + '×' + view.innerHeight : '',
+    viewport: window.innerWidth + '×' + window.innerHeight,
   }
 }
 
@@ -375,12 +162,6 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
   const __SVELTE_DT = {
     _nextId: 0,
     _instances: new Map(),
-    // Component instance context the wrapper records at init: the props object
-    // the compiler passed, and the frame of the tag that created the
-    // instance (file/line/column of `<Child />` in the parent). Read by the
-    // element inspector (prompt toolbar).
-    _instanceUsage: new Map(),
-    _instanceProps: new Map(),
     _stack: [],
     _pendingParent: undefined,
     _pendingFile: null,
@@ -568,8 +349,6 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       this._effectSeq.delete(id)
       this._nameSeq.delete(id)
       this._instances.delete(id)
-      this._instanceUsage.delete(id)
-      this._instanceProps.delete(id)
       this._profiles.delete(id)
       this._initStartTimes.delete(id)
     },
@@ -880,135 +659,84 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
 
     // --- Element inspection (prompt toolbar) ---
 
-    // Recorded by the wrapper's push(): what the compiler knows about a new
-    // instance but the runtime cannot see by itself.
-    setInstanceContext(id, props, usage) {
-      if (usage?.type === 'component') {
-        this._instanceUsage.set(id, {
-          file: usage.file ?? null,
-          line: usage.line ?? null,
-          column: usage.column ?? null,
-          componentTag: usage.componentTag ?? null,
-        })
+    // The component instance that rendered `element` (or its nearest owned
+    // ancestor). Owners are recorded only when the prompt toolbar is enabled.
+    _elementOwner(element) {
+      const owners = this._elementOwners
+      if (!owners) return null
+      for (let el = element; el; el = el.parentElement) {
+        const id = owners.get(el)
+        if (id !== undefined && this._instances.has(id)) return id
       }
-      try {
-        if (props !== null && typeof props === 'object') this._instanceProps.set(id, props)
-      } catch {
-        /* the props object is a best-effort extra */
-      }
+      return null
     },
 
-    // Everything the prompt toolbar reports for one clicked DOM node: where
-    // the element is declared, the component instances that rendered it (with
-    // their props and live $state), and the page it happened on. Never throws.
+    // Where a clicked node is written and which instances rendered it, for the
+    // prompt toolbar. Never throws.
     inspectElement(node) {
       try {
-        return this._inspectElement(node)
+        const element = __closestElement(node)
+        const located = element ? __locatedAncestor(element) : null
+        const loc = located?.meta.loc ?? null
+        const chain = []
+        let id = element ? this._elementOwner(element) : null
+        while (id !== null && id !== undefined && chain.length < 32) {
+          const instance = this._instances.get(id)
+          if (!instance) break
+          chain.push({ id, name: instance.name, file: instance.file })
+          id = instance.parentId
+        }
+        return {
+          epoch: this._epoch,
+          page: __pageInfo(),
+          element: element
+            ? {
+                tag: element.localName ?? '',
+                id: element.id ?? '',
+                classes: __authoredClasses(element.classList),
+              }
+            : null,
+          // `enclosing`: Svelte has no location for the element itself (DOM
+          // from `{@html}`, a library, or `<svelte:element>` content), so the
+          // nearest located ancestor is reported as such.
+          source: loc
+            ? {
+                file: loc.file ?? null,
+                line: loc.line ?? null,
+                column: loc.column ?? null,
+                enclosing: located.element !== element,
+              }
+            : null,
+          template: __templateStack(located?.meta.parent ?? null),
+          components: chain,
+        }
       } catch (error) {
         return { error: __describe(error) }
       }
     },
 
-    _inspectElement(node) {
-      const element = __closestElement(node)
-      const located = element ? __locateComponent(element) : { meta: null }
-      const loc = located?.meta?.loc ?? null
-      // One budget for the whole answer: props and state of every instance.
-      const budget = __promptBudget()
-      return {
-        epoch: this._epoch,
-        page: __pageInfo(),
-        element: __elementInfo(element),
-        // `enclosing` is true when Svelte only recorded a location for an
-        // ancestor: the compiler emits locations for the elements it needs
-        // for error attribution, not for every static element.
-        source: loc
-          ? {
-              file: loc.file ?? null,
-              line: loc.line ?? null,
-              column: loc.column ?? null,
-              enclosing: located?.element !== element,
-            }
-          : null,
-        template: __templateStack(located?.meta?.parent ?? null),
-        components: this._componentChain(located?.componentId ?? null, budget),
-      }
-    },
-
-    // Cheap lookup behind the toolbar's hover tooltip: where the element is
-    // declared and the component instance that rendered it.
+    // Cheap lookup behind the toolbar's hover tooltip.
     locateElement(node) {
       try {
         const element = __closestElement(node)
-        const located = element ? __locateComponent(element) : { meta: null, componentId: null }
-        const loc = located?.meta?.loc ?? null
-        const instance =
-          located?.componentId === null || located?.componentId === undefined
-            ? null
-            : this._instances.get(located.componentId)
+        const located = element ? __locatedAncestor(element) : null
+        const loc = located?.meta.loc ?? null
+        const id = element ? this._elementOwner(element) : null
+        const instance = id === null ? null : this._instances.get(id)
         return {
           source: loc
             ? {
                 file: loc.file ?? null,
                 line: loc.line ?? null,
                 column: loc.column ?? null,
-                enclosing: located?.element !== element,
+                enclosing: located.element !== element,
               }
             : null,
-          component: instance
-            ? { id: instance.id, name: instance.name, file: instance.file }
-            : null,
+          component: instance ? { name: instance.name, file: instance.file } : null,
         }
       } catch {
         return { source: null, component: null }
       }
-    },
-
-    // The selected instance and its ancestors, innermost first.
-    _componentChain(componentId, budget = __promptBudget()) {
-      const chain = []
-      let id = componentId
-      for (let depth = 0; id !== null && depth < 32; depth++) {
-        const instance = this._instances.get(id)
-        if (!instance) break
-        const profile = this._profiles.get(id)
-        chain.push({
-          id,
-          name: instance.name,
-          file: instance.file,
-          usage: this._instanceUsage.get(id) ?? null,
-          props: this._instanceProps.has(id)
-            ? __promptValue(this._instanceProps.get(id), budget)
-            : null,
-          state: this._componentState(id, budget),
-          renders: profile ? profile.renderCount : 0,
-        })
-        id = instance.parentId
-      }
-      return chain
-    },
-
-    // Named $state / $derived of one instance with their current values.
-    // Effects are skipped (they hold no data) and each value is bounded.
-    _componentState(componentId, budget = __promptBudget()) {
-      const nodeIds = this._nodesByComponent.get(componentId)
-      if (!nodeIds) return []
-      const out = []
-      for (const nodeId of nodeIds) {
-        if (out.length >= 40 || budget.nodes <= 0) break
-        const entry = this._reactiveNodes.get(nodeId)
-        if (!entry || entry.meta.type === 'effect' || entry.meta.type === 'effect_pre') continue
-        const signal = entry.signal.deref()
-        if (!signal) continue
-        const value = this._readStateValue(nodeId, signal)
-        if (value === __NO_VALUE) continue
-        out.push({
-          name: entry.meta.name,
-          type: entry.meta.type,
-          value: __promptValue(value, budget),
-        })
-      }
-      return out
     },
 
     // --- Render profiling ---

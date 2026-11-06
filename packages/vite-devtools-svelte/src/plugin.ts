@@ -1,5 +1,4 @@
 import crypto from 'node:crypto'
-import { existsSync } from 'node:fs'
 import path from 'node:path'
 
 import { launchEditor } from 'devframe/utils/launch-editor'
@@ -15,6 +14,9 @@ import { SessionStore } from './mcp/sessions.js'
 import {
   PROMPT_FORMAT_MODULE_ID,
   PROMPT_TOOLBAR_MODULE_ID,
+  promptFormatCode,
+  promptToolbarModule,
+  RESOLVED_PROMPT_FORMAT_ID,
   RESOLVED_PROMPT_TOOLBAR_ID,
   RESOLVED_RUNTIME_ID,
   RUNTIME_MODULE_ID,
@@ -34,11 +36,7 @@ import type { SvelteDevtoolsHost } from './server/devframe.js'
 import { LOAD_RECORDER, profileLoad } from './server/load-profile.js'
 import { mountStandalone, urlHost } from './server/mount.js'
 import { sveltekitTemplateInjector } from './server/template-injector.js'
-import {
-  promptToolbarModule,
-  promptToolbarTagForTemplate,
-  promptToolbarUrl,
-} from './server/toolbar.js'
+import { promptToolbarTagForTemplate, promptToolbarUrl } from './server/toolbar.js'
 import type { LoadProfile } from './types.js'
 
 export interface SvelteDevtoolsOptions {
@@ -62,30 +60,17 @@ export interface SvelteDevtoolsOptions {
    */
   clientAuth?: boolean
   /**
-   * Inject the floating prompt toolbar into the app's own pages in dev: pick
-   * elements, add instructions, copy a markdown prompt with the selected
-   * elements' source locations, component instances, props and $state.
+   * Add a floating "Inspect" button to the app's own pages in dev: pick
+   * elements, write a request, and copy a markdown prompt with each element's
+   * source location, the component instances that render it and the template
+   * frames around it.
    *
-   * The toolbar is served by the dev server and injected into the HTML, so it
-   * never reaches a production build. It is opt-in: a floating button in the
-   * app's own pages is a visible change, and it reads project files through
-   * the dev server.
+   * Dev only (served by the dev server, never in a build). Opt-in because it is
+   * a visible button in your pages and records which component owns each
+   * element while the app runs.
    * @default false
    */
   promptToolbar?: boolean
-}
-
-/**
- * The prompt toolbar's helpers module, which the served toolbar imports: the
- * compiled file next to this module in a published build, or the TypeScript
- * source when the plugin runs from `src/` (tests). Vite transforms either
- * through its own pipeline.
- */
-function promptFormatPath(): string {
-  const compiled = path.join(import.meta.dirname, 'prompt-format.mjs')
-  return existsSync(compiled)
-    ? compiled
-    : path.join(import.meta.dirname, 'runtime/prompt-format.ts')
 }
 
 /** Name of `@vitejs/devtools`' config plugin; its presence means the hub will call our `devtools.setup`. */
@@ -260,9 +245,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       if (id === RUNTIME_MODULE_ID) return RESOLVED_RUNTIME_ID
       if (promptToolbar) {
         if (id === PROMPT_TOOLBAR_MODULE_ID) return RESOLVED_PROMPT_TOOLBAR_ID
-        // The helpers are TypeScript: point Vite at the file so it compiles
-        // and serves it like any other module (shipped compiled in `dist`).
-        if (id === PROMPT_FORMAT_MODULE_ID) return promptFormatPath()
+        if (id === PROMPT_FORMAT_MODULE_ID) return RESOLVED_PROMPT_FORMAT_ID
       }
       if (
         componentTracking &&
@@ -281,8 +264,9 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       if (id === RESOLVED_RUNTIME_ID) return runtimeCode
       if (id === WRAPPER_MODULE_ID) return wrapperModule(promptToolbar)
       if (promptToolbar && id === RESOLVED_PROMPT_TOOLBAR_ID) {
-        return promptToolbarModule(root, config.base)
+        return promptToolbarModule({ root, tracking: componentTracking })
       }
+      if (promptToolbar && id === RESOLVED_PROMPT_FORMAT_ID) return promptFormatCode
       return null
     },
 

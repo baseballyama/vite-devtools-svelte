@@ -1,19 +1,21 @@
 #!/usr/bin/env node
-// Browser-level cases for the prompt toolbar, on the synthetic example app
-// (SvelteKit 2) with the toolbar switched on through the environment.
+// Browser-level cases for the prompt toolbar, on the example app (SvelteKit,
+// server-rendered and hydrated) with the toolbar switched on through the
+// environment.
 //
 //   node e2e/prompt-toolbar.mjs
 //
 // Cases:
-//   1 A pick is swallowed: clicking a link while picking does not navigate, and
-//     the same click does navigate once picking stops.
-//   2 Location honesty on a hydrated page: the line reported for a picked
-//     element is the element's own line (checked against the file on disk), and
-//     when Svelte only recorded an ancestor the report says so (`~`) instead of
-//     inventing a line.
-//   3 Base path: with `paths.base: '/app'` the toolbar loads from the base and
-//     its source window is read through `/app/@fs` (the copied prompt contains
-//     the source), with repository-relative paths and no machine path.
+//   1 A pick is swallowed: while picking, clicking a link neither navigates nor
+//     reaches the app's own listeners; Escape stops picking and the same click
+//     navigates again.
+//   2 Locations and owners on hydrated pages: every element the app renders
+//     reports the line and column where its tag is written (checked against
+//     the file on disk) and the component that rendered it.
+//   3 The copied prompt: root-relative locations, the component chain and the
+//     MCP handle for the picked instance, no machine path.
+//   4 Base path: with `paths.base: '/app'` the toolbar loads under the base
+//     and picks work there.
 //
 // Prerequisites (same as the compat job): `pnpm install --frozen-lockfile`,
 // `pnpm build`, `pnpm exec playwright-core install --with-deps chromium`.
@@ -141,8 +143,8 @@ async function startApp(configFile) {
   for (let i = 0; ; i++) {
     if (child.exitCode !== null) throw new Error(`dev server exited: ${mask(log).slice(-600)}`)
     if (i > 300) throw new Error('dev server not ready in 60 s')
-    const token = log.match(/x-svelte-devtools-token:([0-9a-f-]{36})/)?.[1]
-    if (token) secrets.add(token)
+    const marker = log.indexOf('x-svelte-devtools-token:')
+    if (marker !== -1) secrets.add(log.slice(marker + 24, marker + 60))
     try {
       const response = await fetch(base + '/', { signal: AbortSignal.timeout(5000) })
       if (response.status < 500) break
@@ -181,14 +183,12 @@ const browser = await pw.chromium.launch({ headless: true })
 cleanup.push(() => browser.close())
 
 const TOOLBAR = '#__svelte-devtools-prompt'
-const results = []
 let failed = 0
 
 function check(name, ok, detail) {
-  results.push({ name, ok, detail })
   if (!ok) failed++
   console.log(
-    `${ok ? 'ok  ' : 'FAIL'} ${name}${detail ? ' — ' + mask(String(detail)).slice(0, 200) : ''}`,
+    `${ok ? 'ok  ' : 'FAIL'} ${name}${detail ? ' — ' + mask(String(detail)).slice(0, 300) : ''}`,
   )
 }
 
@@ -201,119 +201,76 @@ async function newPage(origin) {
   const errors = []
   page.on('pageerror', error => errors.push(mask(error.message).slice(0, 200)))
   page.on('console', m => m.type() === 'error' && errors.push(mask(m.text()).slice(0, 200)))
+  page.on('response', r => r.status() >= 400 && errors.push(`${r.status()} ${mask(r.url())}`))
   return { page, errors }
 }
 
-const center = (page, selector, inShadow = false) =>
-  page.evaluate(
-    ({ hostSelector, selector: target, inShadow: shadow }) => {
-      const host = document.querySelector(hostSelector)
-      const scope = shadow ? host?.shadowRoot : document
-      const element = scope?.querySelector(target)
-      if (!element) return null
-      const rect = element.getBoundingClientRect()
-      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
-    },
-    { hostSelector: TOOLBAR, selector, inShadow },
-  )
-
-const click = async (page, selector, inShadow = false) => {
-  const point = await center(page, selector, inShadow)
-  if (!point) throw new Error(`not found: ${selector}`)
-  await page.mouse.click(point.x, point.y)
-  await page.waitForTimeout(300)
-}
-
-const toolbarState = page =>
-  page.evaluate(hostSelector => {
-    const host = document.querySelector(hostSelector)
-    const root = host?.shadowRoot
-    return {
-      picking: host?.dataset.picking === 'true',
-      fab: Boolean(root?.querySelector('.fab')),
-      chips: root ? root.querySelectorAll('.chip').length : 0,
-      chipLocation: root?.querySelector('.chip .where')?.textContent ?? null,
-      chipName: root?.querySelector('.chip .name')?.textContent ?? null,
-    }
-  }, TOOLBAR)
-
-/**
- * The toolbar script and the hydrated app: the runtime tree is only populated
- * once the client has mounted, which is also when Svelte assigns the element
- * metadata the toolbar reads.
- */
-const waitForToolbar = async page => {
+/** The toolbar is mounted and the app hydrated (instances registered). */
+async function ready(page) {
   await page.waitForFunction(
-    hostSelector => {
-      const host = document.querySelector(hostSelector)
-      return Boolean(host?.shadowRoot?.querySelector('.fab'))
-    },
+    selector => Boolean(document.querySelector(selector)?.shadowRoot?.querySelector('.inspect')),
     TOOLBAR,
     { timeout: 30_000 },
   )
   await page.waitForFunction(
     () => (window.__SVELTE_DEVTOOLS__?.getTree?.().length ?? 0) > 0,
     undefined,
-    { timeout: 30_000 },
-  )
-}
-
-const setInstructions = (page, instructions) =>
-  page.evaluate(
-    ({ hostSelector, instructions: text }) => {
-      const root = document.querySelector(hostSelector)?.shadowRoot
-      const area = root?.querySelector('textarea')
-      if (!area) return false
-      area.value = text
-      area.dispatchEvent(new Event('input', { bubbles: true }))
-      return true
+    {
+      timeout: 30_000,
     },
-    { hostSelector: TOOLBAR, instructions },
   )
-
-/** The line number a chip shows (`~src/App.svelte:13[:4]`). */
-function lineOf(chipLocation) {
-  const match = /:(\d+)(?::\d+)?$/.exec(chipLocation ?? '')
-  return match ? Number(match[1]) : 0
 }
 
-/** The element's own line in its file, looked up on disk by a distinctive attribute. */
-function lineInFile(relativePath, needle) {
-  const text = readFileSync(path.join(appDir, relativePath), 'utf8')
-  const lines = text.split(/\r?\n/)
-  const index = lines.findIndex(line => line.includes(needle))
-  return index === -1 ? null : index + 1
+const toolbar = page => page.locator(TOOLBAR)
+const picked = page => toolbar(page).locator('li')
+const picking = async page =>
+  (await toolbar(page).locator('button.inspect').getAttribute('aria-pressed')) === 'true'
+
+/** Text of a line (1-based) of an app file; Svelte names files relative to the root. */
+function sourceLine(file, line) {
+  try {
+    return readFileSync(path.resolve(appDir, file), 'utf8').split('\n')[line - 1] ?? ''
+  } catch {
+    return ''
+  }
 }
 
 // -------------------------------------------------------------------- case 1
-// A pick must not reach the app: no navigation while picking, and the same
-// click navigates once picking stops.
 {
   const app = await startApp('vite.standalone.config.ts')
   const { page, errors } = await newPage(app.base)
   await page.goto(app.base + '/', { waitUntil: 'load', timeout: 30_000 })
-  await waitForToolbar(page)
+  await ready(page)
+  // What the app would see of a pick.
+  await page.evaluate(() => {
+    window.__seen = []
+    for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'])
+      document.addEventListener(type, event => {
+        if (!event.composedPath().some(node => node.id === '__svelte-devtools-prompt'))
+          window.__seen.push(type)
+      })
+  })
 
-  await click(page, '.fab', true)
-  check('picking starts', (await toolbarState(page)).picking)
-  const link = await center(page, '.hero a.cta')
-  await page.mouse.click(link.x, link.y)
-  await page.waitForTimeout(600)
-  const afterPick = await toolbarState(page)
+  await toolbar(page).locator('button.inspect').click()
+  check('picking starts', await picking(page))
+  await page.locator('.hero a.cta').click()
+  await page.waitForTimeout(500)
   check('a pick does not navigate', new URL(page.url()).pathname === '/', page.url())
-  check('the pick is recorded', afterPick.chips === 1, JSON.stringify(afterPick))
   check(
-    'picking keeps running so a second element can be added',
-    afterPick.picking,
-    JSON.stringify(afterPick),
+    'a pick does not reach the app',
+    (await page.evaluate(() => window.__seen)).length === 0,
+    JSON.stringify(await page.evaluate(() => window.__seen)),
   )
+  check('the pick is listed', (await picked(page).count()) === 1)
+  check('picking continues for further picks', await picking(page))
+  await page.locator('.hero h1').click()
+  check('a second pick is listed', (await picked(page).count()) === 2)
+  await page.locator('.hero h1').click()
+  check('picking an element again removes it', (await picked(page).count()) === 1)
 
-  // leave picking: the next click belongs to the app again
-  const fab = await center(page, '.fab', true)
-  await page.mouse.click(fab.x, fab.y)
-  await page.waitForTimeout(200)
-  check('picking stops', !(await toolbarState(page)).picking)
-  await page.mouse.click(link.x, link.y)
+  await page.keyboard.press('Escape')
+  check('Escape stops picking', !(await picking(page)))
+  await page.locator('.hero a.cta').click()
   await page.waitForURL('**/products', { timeout: 15_000 })
   check('the same click navigates once picking stops', new URL(page.url()).pathname === '/products')
   check('no page errors', errors.length === 0, errors.join(' | '))
@@ -321,108 +278,107 @@ function lineInFile(relativePath, needle) {
 }
 
 // -------------------------------------------------------------------- case 2
-// Location honesty: the reported line is the element's own line, verified
-// against the file, whether it came from Svelte's metadata or from the matcher.
 {
   const app = await startApp('vite.standalone.config.ts')
   const { page, errors } = await newPage(app.base)
-  await page.goto(app.base + '/', { waitUntil: 'load', timeout: 30_000 })
-  await waitForToolbar(page)
-  await click(page, '.fab', true)
-  const link = await center(page, '.hero a.cta')
-  await page.mouse.click(link.x, link.y)
-  await page.waitForTimeout(600)
-  const state = await toolbarState(page)
-
-  // What Svelte itself recorded, and what the toolbar decided to report.
-  const inspected = await page.evaluate(selector => {
-    const element = document.querySelector(selector)
-    const payload = window.__SVELTE_DEVTOOLS__?.inspectElement(element)
-    return payload ? { source: payload.source, selector: payload.element?.selector } : null
-  }, '.hero a.cta')
-
-  const expected = lineInFile('src/routes/+page.svelte', 'class="cta"')
-  const reported = lineOf(state.chipLocation)
-  check('the file was found on disk', expected !== null, 'class="cta"')
-  check(
-    'the chip reports the element\u2019s own line',
-    reported === expected,
-    `reported ${state.chipLocation} (expected ${expected})`,
-  )
-  if (inspected?.source?.enclosing) {
+  for (const route of ['/', '/products', '/products/p-001', '/cart', '/dashboard']) {
+    // A full load each time: the page is server-rendered, then hydrated.
+    await page.goto(app.base + route, { waitUntil: 'load', timeout: 30_000 })
+    await ready(page)
+    await page.waitForTimeout(300)
+    const rows = await page.evaluate(() => {
+      const out = []
+      // The app's own markup: everything under SvelteKit's root element.
+      // (SvelteKit's own `<script>` that starts the app sits there too.)
+      for (const element of document.body.firstElementChild.querySelectorAll('*:not(script)')) {
+        const payload = window.__SVELTE_DEVTOOLS__.inspectElement(element)
+        out.push({
+          tag: element.localName,
+          source: payload.source,
+          owner: payload.components[0]?.name ?? null,
+        })
+      }
+      return out
+    })
+    const bad = []
+    for (const row of rows) {
+      const { source } = row
+      if (!source || source.enclosing || !row.owner) {
+        bad.push(`${row.tag}: ${JSON.stringify(source)} owner=${row.owner}`)
+        continue
+      }
+      const file = source.file
+      const text = sourceLine(file, source.line).slice(source.column)
+      if (!text.startsWith('<' + row.tag))
+        bad.push(`${row.tag} at ${file}:${source.line}:${source.column}`)
+    }
     check(
-      'an inherited location is marked with ~',
-      state.chipLocation?.startsWith('~') === true,
-      state.chipLocation ?? 'no location',
-    )
-    check(
-      'the inherited line is corrected by the matcher, not used as is',
-      reported === expected,
-      `reported ${reported}, compiler said ${inspected.source.line}`,
-    )
-  } else {
-    check(
-      'Svelte recorded the element itself, so no ~ is shown',
-      state.chipLocation?.startsWith('~') !== true,
-      state.chipLocation ?? 'no location',
+      `${route}: all ${rows.length} elements located at their own tag, with an owner`,
+      rows.length > 10 && bad.length === 0,
+      bad.slice(0, 4).join(' | '),
     )
   }
-  check('no page errors', errors.length === 0, errors.join(' | '))
-
-  // The fallback path: drop the element's metadata (what hydration can lose),
-  // then pick it again — the line must come from the file itself and be marked.
-  const clear = await center(page, 'button.ghost', true)
-  await page.mouse.click(clear.x, clear.y)
-  await page.waitForTimeout(300)
-  check('clear empties the form', (await toolbarState(page)).chips === 0)
-  await page.evaluate(selector => {
-    const element = document.querySelector(selector)
-    if (element) delete element.__svelte_meta
-  }, '.hero a.cta')
-  await page.mouse.click(link.x, link.y)
-  await page.waitForTimeout(600)
-  const fallback = await toolbarState(page)
-  const fallbackLine = lineOf(fallback.chipLocation)
-  check(
-    'without its own metadata the file still yields the element line',
-    fallbackLine === expected,
-    `${fallback.chipLocation} (expected ${expected})`,
-  )
-  check(
-    "a line that is not the compiler's is marked with ~",
-    fallback.chipLocation?.startsWith('~') === true,
-    fallback.chipLocation ?? 'no location',
-  )
   check('no page errors', errors.length === 0, errors.join(' | '))
   await app.stop()
 }
 
 // -------------------------------------------------------------------- case 3
-// Base path: the toolbar is served under the base and its source window is read
-// through `/app/@fs`, which a bare `/@fs` request would 404.
+{
+  const app = await startApp('vite.standalone.config.ts')
+  const { page, errors } = await newPage(app.base)
+  await page.goto(app.base + '/', { waitUntil: 'load', timeout: 30_000 })
+  await ready(page)
+  await toolbar(page).locator('button.inspect').click()
+  await page.locator('canvas').click()
+  await page.keyboard.press('Escape')
+  await toolbar(page).locator('textarea').fill('Make the particles slower.')
+  await toolbar(page).locator('button.primary').click()
+  await page.waitForTimeout(300)
+  const prompt = await page.evaluate(() => navigator.clipboard.readText())
+  const expected = await page.evaluate(() => {
+    const payload = window.__SVELTE_DEVTOOLS__.inspectElement(document.querySelector('canvas'))
+    return { id: payload.components[0].id, epoch: payload.epoch, line: payload.source.line }
+  })
+  check('the request is in the prompt', prompt.includes('## Request\n\nMake the particles slower.'))
+  check(
+    'the location is root-relative',
+    prompt.includes('- location: `src/lib/components/FpsCanvas.svelte:' + expected.line + ':'),
+    prompt,
+  )
+  check(
+    'the component chain is named',
+    prompt.includes('`FpsCanvas` (`src/lib/components/FpsCanvas.svelte`) › `+page`'),
+  )
+  check(
+    'the live-state handle names the picked instance',
+    prompt.includes(JSON.stringify({ componentId: expected.id, epoch: expected.epoch })),
+  )
+  check('no machine path', !prompt.includes(repoRoot))
+  check('no page errors', errors.length === 0, errors.join(' | '))
+  await app.stop()
+}
+
+// -------------------------------------------------------------------- case 4
 {
   const app = await startApp('vite.base-path.config.ts')
   const origin = new URL(app.base).origin
   const { page, errors } = await newPage(origin)
   await page.goto(app.base + '/app/', { waitUntil: 'load', timeout: 30_000 })
-  await waitForToolbar(page)
-  check('the toolbar loads under the base', (await toolbarState(page)).fab)
-
-  await click(page, '.fab', true)
-  const link = await center(page, '.hero a.cta')
-  await page.mouse.click(link.x, link.y)
-  await page.waitForTimeout(700)
-  check('a pick works under the base', (await toolbarState(page)).chips === 1)
-
-  await setInstructions(page, 'Base path check.')
-  await click(page, 'button.primary', true)
-  await page.waitForTimeout(900)
-  const prompt = await page.evaluate(() => navigator.clipboard.readText())
-  check('the prompt carries a source window', prompt.includes('Source of'), prompt.slice(0, 120))
+  await ready(page)
+  check('the toolbar loads under the base', true)
+  await toolbar(page).locator('button.inspect').click()
+  await page.locator('.hero a.cta').click()
+  await page.waitForTimeout(300)
+  check('a pick works under the base', (await picked(page).count()) === 1)
   check(
-    'paths are repository-relative',
-    prompt.includes('src/routes/+page.svelte:') && !prompt.includes(appDir),
-    prompt.split('\n').find(line => line.startsWith('- markup:')) ?? 'no markup line',
+    'it does not navigate',
+    new URL(page.url()).pathname === '/app/' || new URL(page.url()).pathname === '/app',
+  )
+  const where = await picked(page).first().locator('.where').textContent()
+  check(
+    'the location is root-relative',
+    where?.startsWith('src/routes/+page.svelte:') === true,
+    where,
   )
   check('no page errors', errors.length === 0, errors.join(' | '))
   await app.stop()

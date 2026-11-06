@@ -421,11 +421,10 @@ jobs:
         run: git diff --exit-code -- pnpm-lock.yaml examples/ playground/ packages/
 
   # The prompt toolbar in a real browser (e2e/prompt-toolbar.mjs): pick
-  # swallowing, location honesty on a hydrated page and the base-path profile.
-  # Then the screenshots (scripts/screenshots/prompt-toolbar.mjs), dark and
-  # light, from the same app with the toolbar enabled through the environment.
+  # swallowing, locations and owners on hydrated pages checked against the
+  # source files, the copied prompt, and the base-path profile.
   prompt-toolbar:
-    name: Prompt toolbar e2e + screenshots
+    name: Prompt toolbar e2e
     needs: [test]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -454,16 +453,6 @@ jobs:
 
       - name: Browser cases
         run: node e2e/prompt-toolbar.mjs
-
-      - name: Capture
-        run: node scripts/screenshots/prompt-toolbar.mjs --out=prompt-toolbar-shots
-
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always()
-        with:
-          name: prompt-toolbar-shots
-          path: prompt-toolbar-shots/
-          retention-days: 7
 
       - name: Repo unchanged
         if: always()

@@ -1,6 +1,5 @@
 // Base-path profile for e2e/prompt-toolbar.mjs: the same app served under
-// `/app/`, so the toolbar's `/@fs` source reads have to respect the base (a
-// bare `/@fs/...` request 404s in Vite's base middleware).
+// `/app/`, so the toolbar has to load from the base.
 import { sveltekit } from '@sveltejs/kit/vite'
 import { defineConfig } from 'vite'
 import { svelteDevtools } from 'vite-devtools-svelte'

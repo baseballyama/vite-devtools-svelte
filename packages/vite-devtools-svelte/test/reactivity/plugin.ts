@@ -21,15 +21,17 @@ const wrapperCode = fs.readFileSync(
   new URL('../../src/runtime/wrapper.js', import.meta.url),
   'utf8',
 )
-// Mirrors `wrapperModule(true)` in the plugin: the reactivity fixtures exercise
-// the prompt toolbar's element instrumentation.
 const wrapperToolbarCode = fs.readFileSync(
   new URL('../../src/runtime/wrapper-toolbar.js', import.meta.url),
   'utf8',
 )
-const wrapperModule = `${wrapperCode}\n${wrapperToolbarCode}`
 
-export function reactivityHarnessPlugin(): Plugin[] {
+/**
+ * `promptToolbar` mirrors the plugin option: on, the wrapper gets the toolbar's
+ * element instrumentation appended (`wrapperModule(true)`), as served in dev.
+ */
+export function reactivityHarnessPlugin({ promptToolbar = false } = {}): Plugin[] {
+  const wrapperModule = promptToolbar ? `${wrapperCode}\n${wrapperToolbarCode}` : wrapperCode
   return [
     {
       name: 'reactivity-harness:modules',

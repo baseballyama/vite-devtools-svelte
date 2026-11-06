@@ -192,19 +192,15 @@ export default defineConfig({
           <h2>Prompt toolbar (optional)</h2>
         </header>
         <p>
-          Opt in to get a floating button in your own pages. Click <strong>Inspect</strong> (drag
-          the button anywhere; it remembers where you put it), pick one or more elements — each
-          keeps a numbered outline that follows the page — add the instructions you would type in
-          chat, and
-          <strong>Copy prompt</strong> puts a markdown document on the clipboard.
+          Opt in to get an <strong>Inspect</strong> button in your own pages during dev. Click it,
+          click the elements you mean (the app does not receive those clicks), write what should
+          change, and <strong>Copy prompt</strong> puts a markdown document on the clipboard.
         </p>
         <CodeBlock code={toolbarCode} lang="ts" filename="vite.config.ts" />
         <p>
-          Each selection carries its element location (<code>file:line:column</code>), the DOM path
-          and markup, the Svelte template frames it sits in, the component instance chain with props
-          and live <code>$state</code>/<code>$derived</code> values, and a numbered source window around
-          the selected line. Everything else — no global keyboard shortcut, nothing injected into a production
-          build.
+          For each element the prompt names where it is written (<code>file:line:column</code>), the
+          components that render it, and the id an agent passes to the MCP tool
+          <code>get_reactive_scope</code> to read their live state. Nothing of it reaches a build.
         </p>
       </section>
 

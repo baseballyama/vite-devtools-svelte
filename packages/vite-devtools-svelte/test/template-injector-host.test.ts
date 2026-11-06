@@ -15,7 +15,9 @@ import type { Plugin, PluginOption, ViteDevServer } from 'vite'
 import { describe, it, expect, afterAll } from 'vitest'
 
 import { svelteDevtools } from '../src/plugin.js'
+import { PROMPT_FORMAT_MODULE_ID } from '../src/runtime/ids.js'
 import { sveltekitTemplateInjector } from '../src/server/template-injector.js'
+import { promptToolbarTagForTemplate, promptToolbarUrl } from '../src/server/toolbar.js'
 
 const INJECT_URL = '/__devtools/embedded.js'
 /** Removed from `@vitejs/devtools` 0.7.6; requesting it 500s (review H-INJ). */
@@ -108,22 +110,20 @@ describe('SvelteKit template injection follows the host', () => {
 
   it('serves the prompt toolbar and injects it into the app template', async () => {
     const code = await transformedInternal([svelteDevtools({ promptToolbar: true })])
-    const src =
-      /<script type=\\"module\\" src=\\"([^"\\]*prompt-toolbar[^"\\]*)\\"><\/script><\/body>/.exec(
-        code,
-      )?.[1]
-    expect(src).toBeDefined()
-    // the browser fetches it from the URL the tag carries
+    const src = promptToolbarUrl('/')
+    expect(code).toContain(`${promptToolbarTagForTemplate(src)}</body>`)
+    // the browser fetches it, and its helpers, from the URL the tag carries
     const res = await fetch(`${lastOrigin}${src}`)
     expect(res.status).toBe(200)
-    expect(res.headers.get('content-type')).toMatch(/javascript/)
+    expect(res.headers.get('content-type')).toContain('javascript')
     const body = await res.text()
-    expect(body).toContain('mountToolbar')
-    // The root and the base are written into the script, not the page: the
-    // markup is the same on every machine and no absolute path leaks into it.
-    expect(src).not.toContain('?')
-    expect(body).toContain('__SVELTE_DEVTOOLS_PROMPT_CONFIG__')
-    expect(body).toContain(`"root":${JSON.stringify(root)}`)
+    // The root is written into the script, not the page: the markup is the
+    // same on every machine and no absolute path leaks into it.
+    expect(body).toContain(`"root":${JSON.stringify(fs.realpathSync(root))}`)
+    const helpers = await fetch(`${lastOrigin}/@id/__x00__${PROMPT_FORMAT_MODULE_ID}`)
+    expect(helpers.status).toBe(200)
+    expect(body).toContain(PROMPT_FORMAT_MODULE_ID)
+    expect(await helpers.text()).toContain('export function buildPrompt')
   }, 20_000)
 
   it('the prompt toolbar is opt-in: off by default', async () => {

@@ -23,10 +23,12 @@ export default defineConfig({
         // Svelte components through the wrapper).
         'src/runtime/client.js',
         'src/runtime/wrapper.js',
-        // The DOM layer of the prompt toolbar (shadow UI, pointer handling,
-        // drag, marks); the pure helpers it imports live in
-        // `prompt-format.ts`, which is TypeScript and covered by
-        // test/prompt-toolbar.test.ts.
+        // The prompt toolbar's wrapper additions (covered by
+        // test/reactivity/inspect.test.ts) and its DOM layer (covered by
+        // e2e/prompt-toolbar.mjs in a real browser). Its markdown helpers,
+        // `prompt-format.js`, are imported directly by the unit tests and
+        // stay in the report.
+        'src/runtime/wrapper-toolbar.js',
         'src/runtime/prompt-toolbar.js',
       ],
       reporter: ['text', 'json-summary'],
@@ -75,6 +77,22 @@ export default defineConfig({
         test: {
           name: 'reactivity',
           include: ['test/reactivity/**/*.test.ts'],
+          exclude: ['test/reactivity/inspect.test.ts'],
+          environment: 'happy-dom',
+        },
+      },
+      {
+        // The same, with `promptToolbar: true`: the wrapper also records which
+        // instance rendered each element. A project of its own so the tests
+        // above keep running the wrapper users get by default.
+        plugins: [
+          reactivityHarnessPlugin({ promptToolbar: true }),
+          svelte({ compilerOptions: { dev: true }, configFile: false }),
+        ],
+        resolve: { conditions: ['browser'] },
+        test: {
+          name: 'inspect',
+          include: ['test/reactivity/inspect.test.ts'],
           environment: 'happy-dom',
         },
       },

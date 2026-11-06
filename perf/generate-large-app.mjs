@@ -210,7 +210,7 @@ import { defineConfig } from 'vite'
 
 const withDevtools = process.env.PERF_DEVTOOLS !== '0'
 // The prompt toolbar is opt-in; PERF_PROMPT_TOOLBAR=1 measures its
-// instrumentation (element stamps, per-instance props) on top of tracking.
+// instrumentation (element ownership, hydration location repair) on top of tracking.
 const promptToolbar = process.env.PERF_PROMPT_TOOLBAR === '1'
 
 export default defineConfig({

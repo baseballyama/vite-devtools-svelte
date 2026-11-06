@@ -11,6 +11,7 @@
         "src/types.ts",
         "src/runtime/client.js",
         "src/runtime/prompt-toolbar.js",
+        "src/runtime/wrapper-toolbar.js",
         "src/runtime/wrapper.js",
         "test/**/*.ts"
       ],

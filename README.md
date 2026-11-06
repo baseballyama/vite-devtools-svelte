@@ -21,7 +21,7 @@ Svelte DevTools for Vite, built on [Devframe](https://devfra.me/). Provides 15 s
 - **FPS Monitor** — Real-time frame rate monitoring with historical data
 - **Asset Browser** — Browse and preview static assets with metadata
 - **Overview** — Project summary with versions and dependency info
-- **Prompt toolbar** — Pick elements in the app itself and copy a markdown prompt (source locations, component chain, props, `$state`, source window) for your coding agent
+- **Prompt toolbar** (opt-in) — Pick elements in the app itself and copy a markdown prompt for your coding agent: where each element is written, which components render it, and how to read their live state over MCP
 
 ### Screenshots
 
@@ -80,19 +80,6 @@ $state signals by sampled changes in the timeline buffer:
 After the app page reloads, a selected component id may belong to another instance, and the panel says so:
 
 ![Reactivity after a page reload](docs/images/reactivity-epoch.png)
-
-</details>
-
-<details>
-<summary>Prompt toolbar</summary>
-
-Dark:
-
-![Prompt toolbar, dark](docs/images/prompt-toolbar-dark.png)
-
-Light (`prefers-color-scheme: light`):
-
-![Prompt toolbar, light](docs/images/prompt-toolbar-light.png)
 
 </details>
 
@@ -239,49 +226,52 @@ svelteDevtools({
 
 ### Prompt toolbar
 
-Opt-in with `svelteDevtools({ promptToolbar: true })`. The dev server then
-injects a small floating toolbar into your app's own HTML (dev only — it is
-served by a dev middleware and never reaches a build). It turns a UI selection
-into context a coding agent can act on:
+Opt in with `svelteDevtools({ promptToolbar: true })`. In dev, an **Inspect**
+button then appears in the corner of your app's own pages (it is served as a
+Vite module by the dev server, so a build never contains it). It turns "this
+thing here" into context a coding agent can act on:
 
-1. Click **Inspect** and pick one or more elements; a click is swallowed, so
-   the app does not navigate or submit. Picked elements keep a numbered
-   outline (the same number as their entry in the panel) and it follows the
-   page as it scrolls or re-renders; clicking a picked element again un-picks
-   it. The button can be dragged anywhere (double-click it to return to its
-   corner) and remembers where you put it; the panel opens on whichever side of
-   the button has room. No global keyboard shortcut is registered, so browser
-   shortcuts keep working.
-2. Add the instructions you would type in chat.
-3. **Copy prompt** puts one markdown document on the clipboard: the page and
-   viewport, your instructions, then per selection the element location
-   (`file:line:column`), DOM path and markup, the Svelte template frames it sits
-   in, the component instance chain with props and live `$state`/`$derived`
-   values, and a numbered source window around the selected line.
+1. Click **Inspect** and click elements in the page. While picking, a click is
+   only a pick: the app does not receive it, so links do not navigate and
+   buttons do not submit. Clicking a picked element again removes it, and
+   <kbd>Esc</kbd> stops picking.
+2. Write what should change in the panel.
+3. **Copy prompt** puts one markdown document on the clipboard:
 
-An element is identified by its tag, id and authored classes (Svelte's
-`svelte-xxxx` hashes are dropped everywhere, including the DOM path) together
-with its location and the shape of its markup: the tags and attributes of the
-element and its first levels of children, without the copy the app renders
-inside it.
+```md
+# UI context from the running app
 
-What it reports comes from two places: Svelte's own dev metadata
-(`__svelte_meta.loc` / `.parent`, via `add_locations` and `add_svelte_meta`) and
-the runtime's component tree, so each element resolves to the instance that
-rendered it. Two practical details:
+Page: `http://localhost:5173/` (devtools-shop)
+Viewport: 1280×800
 
-- Svelte records a location only for the elements it needs for error
-  attribution, so a static `<p>` deep in a big markup block often has none and
-  the nearest recorded element is an ancestor. The toolbar matches the element
-  against its file (tag plus its authored classes/attributes) and reports that
-  line, with a note naming the match and the line Svelte recorded. The hover
-  tooltip prefixes `~` for such inherited locations.
-- Props and `$state` values are summarised when large (`{id, name}`, `[12 items]`)
-  instead of dumping page `data` blobs; frames from `node_modules` (SvelteKit
-  internals) are filtered out, and every value is bounded before it reaches the
-  clipboard: objects keep their scalar values inline while they fit a budget
-  (`{status: "ok", latencyMs: 12}`), and only oversized ones fall back to
-  `{id, name}` / `[12 items]`.
+## Request
+
+Make the particles slower.
+
+## Selected elements
+
+### 1. `canvas`
+
+- location: `src/lib/components/FpsCanvas.svelte:67:2`
+- components (innermost first): `FpsCanvas` (`src/lib/components/FpsCanvas.svelte`) › `+page` (`src/routes/+page.svelte`) › `+layout` (`src/routes/+layout.svelte`)
+- live state: MCP tool `get_reactive_scope` of vite-devtools-svelte with `{"componentId":12,"epoch":"…"}` (valid while this page stays loaded)
+- template (innermost first): `<FpsCanvas />` at `src/routes/+page.svelte:59:2`
+```
+
+Values are not copied into the prompt: an agent connected to the
+[MCP server](#ai-access-mcp) reads the component's current `$state` / `$derived`
+with the id in the prompt. Paths are relative to the project root, and files in
+`node_modules` or SvelteKit's generated root are left out.
+
+Locations are Svelte's own dev metadata (`__svelte_meta`). On a server-rendered
+page Svelte 5.57 assigns them by position during hydration, which leaves the
+elements after a child component without theirs; with the toolbar enabled the
+plugin fills them in from the compiled template once the children have hydrated.
+Markup with no location of its own (`{@html}`, DOM created by a library) is
+reported as "inside" the nearest element that has one.
+
+The component chain needs `componentTracking` (the default); without it the
+prompt carries locations only.
 
 ## How It Works
 
