@@ -23,9 +23,9 @@ export default defineConfig({
         // Svelte components through the wrapper).
         'src/runtime/client.js',
         'src/runtime/wrapper.js',
-        // Same shape, plus a DOM layer and a drag/swallow-click picker that
-        // only make sense in a real browser page: the formatting and source
-        // matching helpers it exports are unit-tested in
+        // The DOM layer of the prompt toolbar (shadow UI, pointer handling,
+        // drag, marks); the pure helpers it imports live in
+        // `prompt-format.ts`, which is TypeScript and covered by
         // test/prompt-toolbar.test.ts.
         'src/runtime/prompt-toolbar.js',
       ],

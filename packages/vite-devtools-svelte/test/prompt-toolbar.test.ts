@@ -1,9 +1,8 @@
 import { describe, it, expect } from 'vitest'
 
-// The toolbar is a plain browser module served verbatim by the dev server, so
-// it ships no declarations: only the pure formatting helpers are used here.
-// @ts-expect-error -- plain JS browser module without type declarations
-import * as toolbar from '../src/runtime/prompt-toolbar.js'
+// The pure helpers live in `prompt-format.ts` (the served toolbar only keeps the
+// DOM layer), so they are imported and covered like any other module.
+import * as toolbar from '../src/runtime/prompt-format.js'
 
 const {
   relPath,
@@ -373,6 +372,101 @@ describe('summarizeValue / summarizeProps', () => {
     expect(summarizeProps(props)).toBe(
       'title="Welcome back.", compact=true, children="() => {…}", data={locale: "pt", user: {id: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…"}}',
     )
+  })
+})
+
+describe('branch coverage of the formatter', () => {
+  it('relPath handles a root given without its trailing slash', () => {
+    expect(relPath('/home/me/project', '/home/me/project')).toBe('')
+  })
+
+  it('fenceLanguage knows css', () => {
+    expect(fenceLanguage('a.css')).toBe('css')
+  })
+
+  it('matchSourceLine returns null without text or tag', () => {
+    expect(matchSourceLine('', { tag: 'a' })).toBeNull()
+    expect(matchSourceLine('<a></a>', { tag: '' })).toBeNull()
+    expect(matchSourceLine('<a></a>', { tag: 'a' })).toBeNull()
+  })
+
+  it('resolveElementSource keeps the compiler line when the element has no classes and the line is missing', () => {
+    const file = `${ROOT}/src/App.svelte`
+    const text = '<div></div>\n<p>hi</p>'
+    // hint line 9 is past the end: no line to inspect, no attribute needle
+    const resolved = resolveElementSource(
+      { source: { file, line: 9, column: 0 }, element: { tag: 'p' }, components: [] },
+      { file, text },
+      ROOT,
+    )
+    expect(resolved).toMatchObject({ line: 9, matched: null })
+  })
+
+  it('summarises null, empty objects and non-JSON values', () => {
+    expect(summarizeValue('null')).toBe('null')
+    expect(summarizeValue(null as unknown as string)).toBe('')
+    expect(summarizeValue('{}')).toBe('{}')
+    expect(summarizeValue('not json')).toBe('not json')
+    expect(summarizeValue('x'.repeat(200))).toBe('x'.repeat(120) + '…')
+    expect(summarizeProps('')).toBe('')
+    expect(summarizeProps('not json')).toBe('not json')
+    expect(summarizeProps('42')).toBe('42')
+  })
+
+  it('inlines at most six entries and seven keys', () => {
+    const wide = JSON.stringify(
+      Object.fromEntries(Array.from({ length: 9 }, (_, i) => ['k' + i, i])),
+    )
+    const out = summarizeValue(wide)
+    expect(out).toContain('…3 more')
+  })
+
+  it('labels @render frames and skips frames without a file', () => {
+    const withFrames = {
+      ...payload,
+      template: [
+        { type: 'render', file: `${ROOT}/src/App.svelte`, line: 4, column: 2, componentTag: null },
+        { type: 'if', file: null, line: null, column: null, componentTag: null },
+      ],
+    }
+    const text = formatSelection(withFrames, null, {}, ROOT)
+    expect(text).toContain('- {@render} at `src/App.svelte:4:2`')
+    expect(text.match(/^- \{/gm)?.length).toBe(1)
+  })
+
+  it('has no component section when every instance is from node_modules', () => {
+    const vendored = {
+      ...payload,
+      components: [
+        {
+          id: 1,
+          name: 'root',
+          file: `${ROOT}/node_modules/.pnpm/kit/node_modules/@sveltejs/kit/src/runtime/components/root.svelte`,
+          usage: null,
+          props: null,
+          state: [],
+          renders: 1,
+        },
+      ],
+    }
+    expect(formatSelection(vendored, null, {}, ROOT)).not.toContain('Component chain')
+  })
+
+  it('omits the source window when the file text is empty', () => {
+    const text = formatSelection(
+      payload,
+      { file: `${ROOT}/src/lib/components/Form.svelte`, text: '' },
+      {},
+      ROOT,
+    )
+    expect(text).not.toContain('Source of')
+  })
+
+  it('truncates a prompt that grows past the cap', () => {
+    const huge = { ...payload, element: { ...payload.element, markup: 'x'.repeat(70_000) } }
+    const text = buildPrompt([{ payload: huge, source: null }], {}, { root: ROOT })
+    expect(text).toContain('(prompt truncated')
+    expect(text.length).toBeLessThan(70_000)
   })
 })
 

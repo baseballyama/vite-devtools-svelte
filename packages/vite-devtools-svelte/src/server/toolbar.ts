@@ -1,20 +1,21 @@
-import type { ViteDevServer } from 'vite'
-
+import { PROMPT_TOOLBAR_MODULE_ID } from '../runtime/ids.js'
 import { promptToolbarCode } from '../runtime/index.js'
 
 /**
- * The floating prompt toolbar is a plain ES module served by a dev-server
- * middleware, not a virtual module: SvelteKit serves its HTML without Vite's
- * `transformIndexHtml`, so the app template can only reference a real URL, and
- * a static file needs no import rewrites (the toolbar imports nothing).
+ * The floating prompt toolbar is a Vite module, not a static file: its DOM
+ * layer imports the typed helpers from `prompt-format.ts`, and that module has
+ * to go through Vite's pipeline (TypeScript transform, import rewriting) like
+ * any other. SvelteKit serves its HTML without `transformIndexHtml`, so the
+ * injected tag carries the module URL directly (`/@id/__x00__…` is how Vite
+ * addresses a virtual module from the browser).
  *
- * What it needs from the project — the root, for repository-relative paths, and
- * the Vite base, for `/@fs` source reads — is written into the *served script*,
- * not the URL: the page markup stays the same on every machine.
+ * What the toolbar needs from the project — the root, for repository-relative
+ * paths, and the Vite base, for `/@fs` source reads — is written into the
+ * *served module*, not the URL: the page markup stays the same on every machine.
  */
-export const PROMPT_TOOLBAR_PATH = '__svelte-devtools/prompt-toolbar.js'
+export const PROMPT_TOOLBAR_PATH = `@id/__x00__${PROMPT_TOOLBAR_MODULE_ID}`
 
-/** URL of the toolbar script, absolute to the served page (respects `base`). */
+/** URL of the toolbar module, absolute to the served page (respects `base`). */
 export function promptToolbarUrl(base: string): string {
   return `${base}${PROMPT_TOOLBAR_PATH}`
 }
@@ -34,25 +35,11 @@ export function promptToolbarTagForTemplate(url: string): string {
 }
 
 /**
- * The served script: the toolbar source plus one line of configuration. The
+ * The served module: the toolbar source plus one line of configuration. The
  * root never reaches the page's HTML (where it would be visible to anything
  * reading the markup), and `JSON.stringify` keeps the values safe to inline.
  */
 export function promptToolbarModule(root: string, base: string): string {
-  return `globalThis.__SVELTE_DEVTOOLS_PROMPT_CONFIG__ = ${JSON.stringify({ root, base })}\n${promptToolbarCode}`
-}
-
-/**
- * Serve the toolbar script. Registered on the dev server's own middleware
- * stack before SvelteKit's catch-all handler, so the URL never reaches the
- * app router.
- */
-export function servePromptToolbar(server: ViteDevServer, base: string, root: string): void {
-  server.middlewares.use(`${base}${PROMPT_TOOLBAR_PATH}`, (_request, response) => {
-    response.statusCode = 200
-    response.setHeader('Content-Type', 'text/javascript; charset=utf-8')
-    response.setHeader('Cache-Control', 'no-store')
-    response.setHeader('X-Content-Type-Options', 'nosniff')
-    response.end(promptToolbarModule(root, base))
-  })
+  const config = JSON.stringify({ root, base })
+  return `globalThis.__SVELTE_DEVTOOLS_PROMPT_CONFIG__ = ${config}\n${promptToolbarCode}`
 }

@@ -15,9 +15,14 @@ export default defineConfig({
     sourcemap: true,
     target: 'node18',
     lib: {
-      entry: 'src/index.ts',
+      // `prompt-format` is a separate module because the served toolbar imports
+      // it: the helpers are TypeScript, unit-tested and shipped compiled.
+      entry: {
+        index: 'src/index.ts',
+        'prompt-format': 'src/runtime/prompt-format.ts',
+      },
       formats: ['es'],
-      fileName: () => 'index.mjs',
+      fileName: (_format, name) => `${name}.mjs`,
     },
     rolldownOptions: {
       external: [

@@ -10,7 +10,14 @@ import wrapperToolbarSource from './wrapper-toolbar.js?raw'
 // oxlint-disable-next-line import/default -- `?raw` modules are resolved by Vite
 import wrapperSource from './wrapper.js?raw'
 
-export { RESOLVED_RUNTIME_ID, RUNTIME_MODULE_ID, WRAPPER_MODULE_ID } from './ids.js'
+export {
+  PROMPT_FORMAT_MODULE_ID,
+  PROMPT_TOOLBAR_MODULE_ID,
+  RESOLVED_PROMPT_TOOLBAR_ID,
+  RESOLVED_RUNTIME_ID,
+  RUNTIME_MODULE_ID,
+  WRAPPER_MODULE_ID,
+} from './ids.js'
 
 /**
  * Wrapper code for svelte/internal/client (`./wrapper.js`).
@@ -29,7 +36,7 @@ export { RESOLVED_RUNTIME_ID, RUNTIME_MODULE_ID, WRAPPER_MODULE_ID } from './ids
 export const wrapperCode: string = wrapperSource
 
 /** Element instrumentation for the prompt toolbar (`./wrapper-toolbar.js`). */
-export const wrapperToolbarCode: string = wrapperToolbarSource
+const wrapperToolbarCode: string = wrapperToolbarSource
 
 /**
  * The `svelte/internal/client` module the plugin serves. Tracking is always
@@ -45,8 +52,8 @@ export function wrapperModule(promptToolbar: boolean): string {
 export const runtimeCode: string = runtimeSource
 
 /**
- * The floating prompt toolbar (`./prompt-toolbar.js`), served from a dev-server
- * middleware and loaded by the app's own HTML in dev. It is a plain ES module
- * with no imports: the app page evaluates it as-is, without a bundler.
+ * The floating prompt toolbar (`./prompt-toolbar.js`): the browser layer,
+ * served as a Vite module (so it can import the typed helpers from
+ * `prompt-format.ts`) and loaded by the app's own HTML in dev.
  */
 export const promptToolbarCode: string = promptToolbarSource

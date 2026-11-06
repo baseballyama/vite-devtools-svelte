@@ -5,8 +5,11 @@ import { describe, it, expect, vi } from 'vitest'
 
 import { svelteDevtools } from '../src/plugin.js'
 import {
-  RUNTIME_MODULE_ID,
+  PROMPT_FORMAT_MODULE_ID,
+  PROMPT_TOOLBAR_MODULE_ID,
+  RESOLVED_PROMPT_TOOLBAR_ID,
   RESOLVED_RUNTIME_ID,
+  RUNTIME_MODULE_ID,
   runtimeCode,
   WRAPPER_MODULE_ID,
   wrapperCode,
@@ -82,6 +85,29 @@ describe('mainPlugin virtual module resolution', () => {
 
   it('defers unknown ids to other loaders', () => {
     expect(callHook(getMainPlugin().load, '/test/src/App.svelte')).toBeNull()
+  })
+
+  it('resolves and serves the prompt toolbar modules only when it is on', () => {
+    const enabled = svelteDevtools({ promptToolbar: true }).find(
+      p => p.name === 'vite-devtools-svelte',
+    )!
+    resolvePlugins([enabled])
+    const toolbarId = callHook(enabled.resolveId, PROMPT_TOOLBAR_MODULE_ID)
+    expect(toolbarId).toBe(RESOLVED_PROMPT_TOOLBAR_ID)
+    expect(callHook(enabled.load, RESOLVED_PROMPT_TOOLBAR_ID)).toContain(
+      '__SVELTE_DEVTOOLS_PROMPT_CONFIG__',
+    )
+    // The helpers resolve to a real file Vite compiles (compiled in dist,
+    // TypeScript source when running from src).
+    const formatPath = callHook(enabled.resolveId, PROMPT_FORMAT_MODULE_ID)
+    expect(typeof formatPath).toBe('string')
+    expect(formatPath).toMatch(/prompt-format\.(mjs|ts)$/)
+
+    // Off: neither module exists on the server.
+    const off = getMainPlugin()
+    expect(callHook(off.resolveId, PROMPT_TOOLBAR_MODULE_ID)).toBeNull()
+    expect(callHook(off.resolveId, PROMPT_FORMAT_MODULE_ID)).toBeNull()
+    expect(callHook(off.load, RESOLVED_PROMPT_TOOLBAR_ID)).toBeNull()
   })
 
   it('serves the element instrumentation only when the prompt toolbar is on', () => {
@@ -182,9 +208,9 @@ describe('mainPlugin transformIndexHtml', () => {
     const hook = plugin.transformIndexHtml as { handler: () => any }
     const result = hook.handler()
     expect(result).toHaveLength(2)
-    // served as a static dev-only module, not through Vite's module graph
+    // a Vite module (so it can import the typed helpers), addressed by id
     expect(result[1].tag).toBe('script')
-    expect(result[1].attrs.src).toContain('prompt-toolbar.js')
+    expect(result[1].attrs.src).toContain('__x00__virtual:vite-devtools-svelte-prompt-toolbar')
     expect(result[1].injectTo).toBe('body')
   })
 })

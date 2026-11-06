@@ -1,4 +1,5 @@
 import crypto from 'node:crypto'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 
 import { launchEditor } from 'devframe/utils/launch-editor'
@@ -12,8 +13,11 @@ import { createMcpMiddleware, MCP_PATH } from './mcp/http.js'
 import { buildMcpServer } from './mcp/server.js'
 import { SessionStore } from './mcp/sessions.js'
 import {
-  RUNTIME_MODULE_ID,
+  PROMPT_FORMAT_MODULE_ID,
+  PROMPT_TOOLBAR_MODULE_ID,
+  RESOLVED_PROMPT_TOOLBAR_ID,
   RESOLVED_RUNTIME_ID,
+  RUNTIME_MODULE_ID,
   runtimeCode,
   WRAPPER_MODULE_ID,
   wrapperModule,
@@ -31,9 +35,9 @@ import { LOAD_RECORDER, profileLoad } from './server/load-profile.js'
 import { mountStandalone, urlHost } from './server/mount.js'
 import { sveltekitTemplateInjector } from './server/template-injector.js'
 import {
+  promptToolbarModule,
   promptToolbarTagForTemplate,
   promptToolbarUrl,
-  servePromptToolbar,
 } from './server/toolbar.js'
 import type { LoadProfile } from './types.js'
 
@@ -69,6 +73,19 @@ export interface SvelteDevtoolsOptions {
    * @default false
    */
   promptToolbar?: boolean
+}
+
+/**
+ * The prompt toolbar's helpers module, which the served toolbar imports: the
+ * compiled file next to this module in a published build, or the TypeScript
+ * source when the plugin runs from `src/` (tests). Vite transforms either
+ * through its own pipeline.
+ */
+function promptFormatPath(): string {
+  const compiled = path.join(import.meta.dirname, 'prompt-format.mjs')
+  return existsSync(compiled)
+    ? compiled
+    : path.join(import.meta.dirname, 'runtime/prompt-format.ts')
 }
 
 /** Name of `@vitejs/devtools`' config plugin; its presence means the hub will call our `devtools.setup`. */
@@ -220,11 +237,6 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
             }),
         }),
       )
-
-      // Last, so the standalone mount and the MCP endpoint keep their
-      // positions in the middleware stack (and this route cannot shadow
-      // either of them).
-      if (promptToolbar) servePromptToolbar(devServer, config.base, root)
     },
 
     // Middleware-mode mounts have no `httpServer` close event; dispose them
@@ -246,6 +258,12 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     resolveId(id, importer) {
       if (!serving()) return null
       if (id === RUNTIME_MODULE_ID) return RESOLVED_RUNTIME_ID
+      if (promptToolbar) {
+        if (id === PROMPT_TOOLBAR_MODULE_ID) return RESOLVED_PROMPT_TOOLBAR_ID
+        // The helpers are TypeScript: point Vite at the file so it compiles
+        // and serves it like any other module (shipped compiled in `dist`).
+        if (id === PROMPT_FORMAT_MODULE_ID) return promptFormatPath()
+      }
       if (
         componentTracking &&
         id === 'svelte/internal/client' &&
@@ -262,6 +280,9 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       if (!serving()) return null
       if (id === RESOLVED_RUNTIME_ID) return runtimeCode
       if (id === WRAPPER_MODULE_ID) return wrapperModule(promptToolbar)
+      if (promptToolbar && id === RESOLVED_PROMPT_TOOLBAR_ID) {
+        return promptToolbarModule(root, config.base)
+      }
       return null
     },
 

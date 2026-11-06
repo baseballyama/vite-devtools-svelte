@@ -1,6 +1,6 @@
 {
   "app": "examples/sample-app (SvelteKit 2, vite.standalone.config.ts, promptToolbar: true) — synthetic demo app, real runtime",
-  "commit": "50a0ee1150f09a24ef010c9c214d0b392ca53898",
+  "commit": "5a609c6d8185bf5839e25ed17b54e7f2ea7bf0af",
   "runner": "linux x64, Node v26.11.1",
   "viewport": "1440x900 @2x",
   "picks": [
