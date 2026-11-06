@@ -209,9 +209,15 @@ import { svelteDevtools } from 'vite-devtools-svelte'
 import { defineConfig } from 'vite'
 
 const withDevtools = process.env.PERF_DEVTOOLS !== '0'
+// The prompt toolbar is opt-in; PERF_PROMPT_TOOLBAR=1 measures its
+// instrumentation (element stamps, per-instance props) on top of tracking.
+const promptToolbar = process.env.PERF_PROMPT_TOOLBAR === '1'
 
 export default defineConfig({
-  plugins: [...(withDevtools ? [svelteDevtools()] : []), sveltekit()],
+  plugins: [
+    ...(withDevtools ? [svelteDevtools({ promptToolbar })] : []),
+    sveltekit(),
+  ],
   // forwardConsole off on both sides: Vite >= 8.1 enables it when it detects
   // an AI-agent environment, which would add one HMR frame per page warning.
   server: { strictPort: true, forwardConsole: false },
