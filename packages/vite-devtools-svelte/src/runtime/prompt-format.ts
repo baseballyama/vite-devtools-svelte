@@ -89,7 +89,10 @@ export interface ResolvedLocation {
   line: number | null
   column: number | null
   compiledLine: number | null
+  /** The attribute the reported line was matched by, when the compiler's line was not the element's. */
   matched: string | null
+  /** True when the reported line is the ancestor Svelte recorded, not the element itself. */
+  enclosing: boolean
 }
 
 export const MAX_SOURCE_LINES = 24
@@ -230,7 +233,11 @@ export function matchSourceLine(
       needles.push(name + '="' + value + '"')
     }
   }
+  const authored = classNeedle(element?.classes) !== null
   for (const needle of needles) {
+    // A bare attribute is not identity for an element that also has classes:
+    // several links can share `href`, one class list cannot.
+    if (authored && !needle.startsWith('class="')) continue
     const hits: number[] = []
     lines.forEach((line, index) => {
       if (opensTag(line, tag) && line.includes(needle)) hits.push(index + 1)
@@ -275,18 +282,28 @@ export function resolveElementSource(
     column: loc?.column ?? null,
     compiledLine: loc?.line ?? null,
     matched: null,
+    // A recorded line starts out as "possibly the ancestor": only a line that
+    // is verified against the element's own markup counts as the element's.
+    enclosing: Boolean(loc?.line),
   }
   const text = file && relPath(file.file, root) === relPath(filePath, root) ? file.text : null
   const element = payload?.element ?? null
   if (!text || !element) return resolved
   const lines = text.split(/\r?\n/)
   const hint = resolved.line
-  if (hint && isElementLine(lines[hint - 1] ?? '', element)) return resolved
+  if (hint && isElementLine(lines[hint - 1] ?? '', element)) {
+    resolved.enclosing = false
+    return resolved
+  }
   const match = matchSourceLine(text, element, hint)
   if (match) {
     resolved.line = match.line
     resolved.column = null
     resolved.matched = match.basis
+    resolved.enclosing = false
+  } else if (resolved.enclosing) {
+    // The column belongs to the ancestor, not to the element.
+    resolved.column = null
   }
   return resolved
 }
@@ -431,6 +448,36 @@ function renderState(component: ComponentInfo, options: ToolbarOptions): string[
   return lines
 }
 
+/**
+ * The honest footnote under `- markup:`: either the line was matched in the
+ * file (and Svelte only recorded an ancestor), or nothing in the file matched
+ * and the reported line *is* the ancestor.
+ */
+function locationNote(located: ResolvedLocation | null, root: string): string {
+  if (!located) return ''
+  const reported = relLocation({ file: located.file, line: located.line, column: null }, root)
+  const compilerLine =
+    located.compiledLine && located.compiledLine !== located.line
+      ? relLocation({ file: located.file, line: located.compiledLine, column: null }, root)
+      : null
+  if (located.matched && compilerLine) {
+    return (
+      '- location note: line matched by ' +
+      inlineCode(located.matched) +
+      '; Svelte recorded the enclosing element at ' +
+      inlineCode(compilerLine)
+    )
+  }
+  if (located.enclosing) {
+    return (
+      '- location note: ' +
+      inlineCode(reported) +
+      " is the enclosing element Svelte recorded; the element's own line was not found"
+    )
+  }
+  return ''
+}
+
 /** Where the element is declared, how it is reachable in the DOM, its markup. */
 function elementLines(
   element: ElementInfo | null,
@@ -447,15 +494,7 @@ function elementLines(
           .slice(0, 12)
           .map(([name, value]) => (value === '' ? name : name + '="' + value + '"'))
           .join(' ')
-  const compilerNote =
-    located?.matched && located.compiledLine && located.compiledLine !== located.line
-      ? '- location note: line matched by ' +
-        inlineCode(located.matched) +
-        '; Svelte recorded the enclosing element at ' +
-        inlineCode(
-          relLocation({ file: located.file, line: located.compiledLine, column: null }, root),
-        )
-      : ''
+  const compilerNote = locationNote(located, root)
   const lines = [
     located?.file ? '- markup: ' + inlineCode(relLocation(located, root)) : '',
     compilerNote,

@@ -420,11 +420,12 @@ jobs:
         if: always()
         run: git diff --exit-code -- pnpm-lock.yaml examples/ playground/ packages/
 
-  # Screenshots of the prompt toolbar (scripts/screenshots/prompt-toolbar.mjs):
-  # the example app with the toolbar enabled through the environment, dark and
-  # light. The same script is the base for the browser-level toolbar cases.
-  prompt-toolbar-shots:
-    name: Prompt toolbar screenshots
+  # The prompt toolbar in a real browser (e2e/prompt-toolbar.mjs): pick
+  # swallowing, location honesty on a hydrated page and the base-path profile.
+  # Then the screenshots (scripts/screenshots/prompt-toolbar.mjs), dark and
+  # light, from the same app with the toolbar enabled through the environment.
+  prompt-toolbar:
+    name: Prompt toolbar e2e + screenshots
     needs: [test]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -450,6 +451,9 @@ jobs:
           if ! node -e "require('playwright-core').chromium.launch().then(b => b.close())"; then
             pnpm exec playwright-core install-deps chromium
           fi
+
+      - name: Browser cases
+        run: node e2e/prompt-toolbar.mjs
 
       - name: Capture
         run: node scripts/screenshots/prompt-toolbar.mjs --out=prompt-toolbar-shots

@@ -26,7 +26,7 @@
       "ignoreDependencies": ["@vitejs/devtools"]
     },
     "examples/sample-app": {
-      "entry": ["vite.standalone.config.ts"]
+      "entry": ["vite.standalone.config.ts", "vite.base-path.config.ts"]
     }
   },
   "ignoreBinaries": ["top", "svelte-check", "svelte-kit"]

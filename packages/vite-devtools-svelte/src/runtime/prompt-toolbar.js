@@ -556,7 +556,8 @@ class PromptToolbar {
     // Same resolution as the prompt (and the same `~` for a line Svelte only
     // recorded for an enclosing element), so the two never disagree.
     where.textContent = selection.location?.file
-      ? (selection.location.matched ? '~' : '') + relLocation(selection.location, this.config.root)
+      ? (selection.location.matched || selection.location.enclosing ? '~' : '') +
+        relLocation(selection.location, this.config.root)
       : '(no Svelte source location)'
     text.append(name, where)
     const remove = document.createElement('button')

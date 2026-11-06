@@ -156,10 +156,16 @@ const payload: Payload = {
   ],
 }
 
+// Real enough to verify: the element's own markup sits on line 12, so the
+// compiler's line is accepted without falling back to the enclosing note.
 const source = {
   file: `${ROOT}/src/lib/components/Form.svelte`,
   line: 12,
-  text: Array.from({ length: 20 }, (_, i) => `line ${i + 1}`).join('\n'),
+  text: Array.from({ length: 20 }, (_, index) =>
+    index === 11
+      ? '  <button id="save" class="primary" type="submit"></button>'
+      : `line ${index + 1}`,
+  ).join('\n'),
 }
 
 describe('relPath / relLocation', () => {
@@ -249,6 +255,18 @@ describe('matchSourceLine / resolveElementSource', () => {
     expect(matchSourceLine(svg, { tag: 'a', attrs: { class: 'side' } })).toBeNull()
   })
 
+  it('does not trust a bare attribute when the element has classes', () => {
+    // `href="/files"` alone could be any link; the class list is the identity.
+    const link = { tag: 'a', classes: ['cta'], attrs: { href: '/files' } }
+    const withoutClass = '  <a href="/files">one</a>'
+    expect(matchSourceLine(withoutClass, link, 1)).toBeNull()
+    // without authored classes the attribute is all there is
+    expect(matchSourceLine(withoutClass, { tag: 'a', attrs: { href: '/files' } }, 1)).toEqual({
+      line: 1,
+      basis: 'href="/files"',
+    })
+  })
+
   it('honours the tag and the closest occurrence', () => {
     // Same class on a different tag is not a match.
     expect(matchSourceLine(text, { tag: 'button', classes: ['button-quiet'] }, 43)).toBeNull()
@@ -273,7 +291,26 @@ describe('matchSourceLine / resolveElementSource', () => {
       column: null,
       compiledLine: 43,
       matched: 'class="button button-quiet"',
+      enclosing: false,
     })
+  })
+
+  it('says so when only the enclosing element could be reported', () => {
+    const input = {
+      source: { file, line: 43, column: 0, enclosing: true },
+      element: { tag: 'a', classes: ['nowhere-in-this-file'], attrs: {} },
+      components: [{ id: 1, name: 'Page', file, usage: null, props: null, state: [], renders: 0 }],
+    }
+    expect(resolveElementSource(input, { file, text }, ROOT)).toMatchObject({
+      line: 43,
+      matched: null,
+      enclosing: true,
+    })
+    const out = formatSelection(input as unknown as Payload, { file, text }, {}, ROOT)
+    expect(out).toContain('- markup: `src/routes/dashboard/+page.svelte:43`')
+    expect(out).toContain(
+      "is the enclosing element Svelte recorded; the element's own line was not found",
+    )
   })
 
   it('keeps a location that already points at the element', () => {
@@ -286,6 +323,7 @@ describe('matchSourceLine / resolveElementSource', () => {
       line: 55,
       column: 8,
       matched: null,
+      enclosing: false,
     })
   })
 
@@ -295,6 +333,7 @@ describe('matchSourceLine / resolveElementSource', () => {
       file,
       line: 55,
       matched: 'class="button button-quiet"',
+      enclosing: false,
     })
   })
 
