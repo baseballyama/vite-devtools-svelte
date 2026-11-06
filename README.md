@@ -21,6 +21,7 @@ Svelte DevTools for Vite, built on [Devframe](https://devfra.me/). Provides 15 s
 - **FPS Monitor** — Real-time frame rate monitoring with historical data
 - **Asset Browser** — Browse and preview static assets with metadata
 - **Overview** — Project summary with versions and dependency info
+- **Prompt toolbar** (opt-in) — Pick elements in the app itself and copy a markdown prompt for your coding agent: where each element is written, which components render it, and how to read their live state over MCP
 
 ### Screenshots
 
@@ -218,8 +219,59 @@ svelteDevtools({
   // Require the one-time code for the standalone DevTools (default: true).
   // In the Vite DevTools dock use DevTools({ clientAuth: false }) instead.
   clientAuth: true,
+  // Inject the floating prompt toolbar into the app's own pages (default: false)
+  promptToolbar: false,
 })
 ```
+
+### Prompt toolbar
+
+Opt in with `svelteDevtools({ promptToolbar: true })`. In dev, an **Inspect**
+button then appears in the corner of your app's own pages (it is served as a
+Vite module by the dev server, so a build never contains it). It turns "this
+thing here" into context a coding agent can act on:
+
+1. Click **Inspect** and click elements in the page. While picking, a click is
+   only a pick: the app does not receive it, so links do not navigate and
+   buttons do not submit. Clicking a picked element again removes it, and
+   <kbd>Esc</kbd> stops picking.
+2. Write what should change in the panel.
+3. **Copy prompt** puts one markdown document on the clipboard:
+
+```md
+# UI context from the running app
+
+Page: `http://localhost:5173/` (devtools-shop)
+Viewport: 1280×800
+
+## Request
+
+Make the particles slower.
+
+## Selected elements
+
+### 1. `canvas`
+
+- location: `src/lib/components/FpsCanvas.svelte:67:2`
+- components (innermost first): `FpsCanvas` (`src/lib/components/FpsCanvas.svelte`) › `+page` (`src/routes/+page.svelte`) › `+layout` (`src/routes/+layout.svelte`)
+- live state: MCP tool `get_reactive_scope` of vite-devtools-svelte with `{"componentId":12,"epoch":"…"}` (valid while this page stays loaded)
+- template (innermost first): `<FpsCanvas />` at `src/routes/+page.svelte:59:2`
+```
+
+Values are not copied into the prompt: an agent connected to the
+[MCP server](#ai-access-mcp) reads the component's current `$state` / `$derived`
+with the id in the prompt. Paths are relative to the project root, and files in
+`node_modules` or SvelteKit's generated root are left out.
+
+Locations are Svelte's own dev metadata (`__svelte_meta`). On a server-rendered
+page Svelte 5.57 assigns them by position during hydration, which leaves the
+elements after a child component without theirs; with the toolbar enabled the
+plugin fills them in from the compiled template once the children have hydrated.
+Markup with no location of its own (`{@html}`, DOM created by a library) is
+reported as "inside" the nearest element that has one.
+
+The component chain needs `componentTracking` (the default); without it the
+prompt carries locations only.
 
 ## How It Works
 

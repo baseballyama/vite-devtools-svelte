@@ -32,6 +32,12 @@ export default defineConfig({
   const optionsCode = `svelteDevtools({
   // Enable component lifecycle tracking (default: true)
   componentTracking: true,
+  // Floating prompt toolbar in your app's pages (default: false)
+  promptToolbar: false,
+})`
+
+  const toolbarCode = `svelteDevtools({
+  promptToolbar: true,
 })`
 
   const steps = [
@@ -39,7 +45,8 @@ export default defineConfig({
     { num: '02', title: 'Configure Vite', anchor: 'configure' },
     { num: '03', title: 'Run the dev server', anchor: 'run' },
     { num: '04', title: 'Vite DevTools dock (optional)', anchor: 'dock' },
-    { num: '05', title: 'Options', anchor: 'options' },
+    { num: '05', title: 'Prompt toolbar (optional)', anchor: 'toolbar' },
+    { num: '06', title: 'Options', anchor: 'options' },
   ]
 </script>
 
@@ -179,9 +186,27 @@ export default defineConfig({
         </p>
       </section>
 
-      <section id="options" class="step">
+      <section id="toolbar" class="step">
         <header class="step-head">
           <span class="step-num mono">05</span>
+          <h2>Prompt toolbar (optional)</h2>
+        </header>
+        <p>
+          Opt in to get an <strong>Inspect</strong> button in your own pages during dev. Click it,
+          click the elements you mean (the app does not receive those clicks), write what should
+          change, and <strong>Copy prompt</strong> puts a markdown document on the clipboard.
+        </p>
+        <CodeBlock code={toolbarCode} lang="ts" filename="vite.config.ts" />
+        <p>
+          For each element the prompt names where it is written (<code>file:line:column</code>), the
+          components that render it, and the id an agent passes to the MCP tool
+          <code>get_reactive_scope</code> to read their live state. Nothing of it reaches a build.
+        </p>
+      </section>
+
+      <section id="options" class="step">
+        <header class="step-head">
+          <span class="step-num mono">06</span>
           <h2>Options</h2>
         </header>
         <CodeBlock code={optionsCode} lang="ts" />

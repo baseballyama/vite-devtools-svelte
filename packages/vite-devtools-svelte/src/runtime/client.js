@@ -83,6 +83,75 @@ function __clampInt(v, lo, hi, d) {
   return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d
 }
 
+// --- Element inspection (prompt toolbar) ---
+//
+// A clicked node resolved to what the compiler and the runtime know about it:
+// where the element is written (Svelte's `__svelte_meta`), the component
+// instance that rendered it (`_elementOwners`, filled by the toolbar's wrapper
+// additions) and Svelte's dev stack of template frames around it. No values
+// are read: live state stays with the MCP tools, keyed by instance id + epoch.
+
+// The element a click landed on: text nodes and comments resolve upwards.
+function __closestElement(node) {
+  let el = node
+  while (el?.nodeType !== 1) {
+    if (!el) return null
+    el = el.parentElement ?? el.parentNode
+  }
+  return el
+}
+
+// Svelte adds a scoping class (`svelte-abc123`) at runtime; it says nothing
+// about the element outside the compiled CSS.
+function __authoredClasses(list) {
+  const out = []
+  const classes = list ?? []
+  for (let i = 0; i < classes.length && out.length < 8; i++) {
+    const name = classes[i]
+    if (!name.startsWith('svelte-')) out.push(name)
+  }
+  return out
+}
+
+// Nearest element (itself or an ancestor) carrying a Svelte source location.
+function __locatedAncestor(element) {
+  for (let el = element; el; el = el.parentElement) {
+    const loc = el.__svelte_meta?.loc
+    if (loc) return { element: el, meta: el.__svelte_meta }
+  }
+  return null
+}
+
+// Svelte's dev stack of enclosing frames (component tags and blocks),
+// innermost first.
+function __templateStack(parent) {
+  const stack = []
+  for (let frame = parent; frame && stack.length < 32; frame = frame.parent) {
+    stack.push({
+      type: String(frame.type ?? ''),
+      file: frame.file ?? null,
+      line: frame.line ?? null,
+      column: frame.column ?? null,
+      componentTag: frame.componentTag ?? null,
+    })
+  }
+  return stack
+}
+
+function __pageInfo() {
+  let title = ''
+  try {
+    title = document.title ?? ''
+  } catch {
+    /* no document title */
+  }
+  return {
+    url: window.location.href,
+    title,
+    viewport: window.innerWidth + '×' + window.innerHeight,
+  }
+}
+
 if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
   const __NO_VALUE = Symbol('no value')
   // State timeline ring: every read sees at most 500 entries and
@@ -586,6 +655,88 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
 
     getTree() {
       return Array.from(this._instances.values(), __componentEntry)
+    },
+
+    // --- Element inspection (prompt toolbar) ---
+
+    // The component instance that rendered `element` (or its nearest owned
+    // ancestor). Owners are recorded only when the prompt toolbar is enabled.
+    _elementOwner(element) {
+      const owners = this._elementOwners
+      if (!owners) return null
+      for (let el = element; el; el = el.parentElement) {
+        const id = owners.get(el)
+        if (id !== undefined && this._instances.has(id)) return id
+      }
+      return null
+    },
+
+    // Where a clicked node is written and which instances rendered it, for the
+    // prompt toolbar. Never throws.
+    inspectElement(node) {
+      try {
+        const element = __closestElement(node)
+        const located = element ? __locatedAncestor(element) : null
+        const loc = located?.meta.loc ?? null
+        const chain = []
+        let id = element ? this._elementOwner(element) : null
+        while (id !== null && id !== undefined && chain.length < 32) {
+          const instance = this._instances.get(id)
+          if (!instance) break
+          chain.push({ id, name: instance.name, file: instance.file })
+          id = instance.parentId
+        }
+        return {
+          epoch: this._epoch,
+          page: __pageInfo(),
+          element: element
+            ? {
+                tag: element.localName ?? '',
+                id: element.id ?? '',
+                classes: __authoredClasses(element.classList),
+              }
+            : null,
+          // `enclosing`: Svelte has no location for the element itself (DOM
+          // from `{@html}`, a library, or `<svelte:element>` content), so the
+          // nearest located ancestor is reported as such.
+          source: loc
+            ? {
+                file: loc.file ?? null,
+                line: loc.line ?? null,
+                column: loc.column ?? null,
+                enclosing: located.element !== element,
+              }
+            : null,
+          template: __templateStack(located?.meta.parent ?? null),
+          components: chain,
+        }
+      } catch (error) {
+        return { error: __describe(error) }
+      }
+    },
+
+    // Cheap lookup behind the toolbar's hover tooltip.
+    locateElement(node) {
+      try {
+        const element = __closestElement(node)
+        const located = element ? __locatedAncestor(element) : null
+        const loc = located?.meta.loc ?? null
+        const id = element ? this._elementOwner(element) : null
+        const instance = id === null ? null : this._instances.get(id)
+        return {
+          source: loc
+            ? {
+                file: loc.file ?? null,
+                line: loc.line ?? null,
+                column: loc.column ?? null,
+                enclosing: located.element !== element,
+              }
+            : null,
+          component: instance ? { name: instance.name, file: instance.file } : null,
+        }
+      } catch {
+        return { source: null, component: null }
+      }
     },
 
     // --- Render profiling ---

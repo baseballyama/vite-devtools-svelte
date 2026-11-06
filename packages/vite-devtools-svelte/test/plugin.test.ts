@@ -5,11 +5,18 @@ import { describe, it, expect, vi } from 'vitest'
 
 import { svelteDevtools } from '../src/plugin.js'
 import {
-  RUNTIME_MODULE_ID,
+  PROMPT_FORMAT_MODULE_ID,
+  PROMPT_TOOLBAR_MODULE_ID,
+  promptFormatCode,
+  promptToolbarModule,
+  RESOLVED_PROMPT_FORMAT_ID,
+  RESOLVED_PROMPT_TOOLBAR_ID,
   RESOLVED_RUNTIME_ID,
+  RUNTIME_MODULE_ID,
   runtimeCode,
   WRAPPER_MODULE_ID,
   wrapperCode,
+  wrapperModule,
 } from '../src/runtime/index.js'
 import { callHook, resolvePlugins } from './helpers.js'
 
@@ -83,6 +90,38 @@ describe('mainPlugin virtual module resolution', () => {
     expect(callHook(getMainPlugin().load, '/test/src/App.svelte')).toBeNull()
   })
 
+  it('resolves and serves the prompt toolbar modules only when it is on', () => {
+    const enabled = svelteDevtools({ promptToolbar: true }).find(
+      p => p.name === 'vite-devtools-svelte',
+    )!
+    resolvePlugins([enabled])
+    expect(callHook(enabled.resolveId, PROMPT_TOOLBAR_MODULE_ID)).toBe(RESOLVED_PROMPT_TOOLBAR_ID)
+    expect(callHook(enabled.resolveId, PROMPT_FORMAT_MODULE_ID)).toBe(RESOLVED_PROMPT_FORMAT_ID)
+    expect(callHook(enabled.load, RESOLVED_PROMPT_TOOLBAR_ID)).toBe(
+      promptToolbarModule({ root: '/test', tracking: true }),
+    )
+    expect(callHook(enabled.load, RESOLVED_PROMPT_FORMAT_ID)).toBe(promptFormatCode)
+    expect(callHook(enabled.load, WRAPPER_MODULE_ID)).toBe(wrapperModule(true))
+
+    // Off (the default): neither module exists, and the wrapper is unchanged.
+    const off = getMainPlugin()
+    expect(callHook(off.resolveId, PROMPT_TOOLBAR_MODULE_ID)).toBeNull()
+    expect(callHook(off.resolveId, PROMPT_FORMAT_MODULE_ID)).toBeNull()
+    expect(callHook(off.load, RESOLVED_PROMPT_TOOLBAR_ID)).toBeNull()
+    expect(callHook(off.load, RESOLVED_PROMPT_FORMAT_ID)).toBeNull()
+    expect(callHook(off.load, WRAPPER_MODULE_ID)).toBe(wrapperCode)
+  })
+
+  it('tells the toolbar when component tracking is off', () => {
+    const plugin = svelteDevtools({ promptToolbar: true, componentTracking: false }).find(
+      p => p.name === 'vite-devtools-svelte',
+    )!
+    resolvePlugins([plugin])
+    expect(callHook(plugin.load, RESOLVED_PROMPT_TOOLBAR_ID)).toBe(
+      promptToolbarModule({ root: '/test', tracking: false }),
+    )
+  })
+
   it('does not redirect svelte/internal/client when componentTracking is disabled', () => {
     const plugins = svelteDevtools({ componentTracking: false })
     const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
@@ -151,11 +190,27 @@ describe('mainPlugin transformIndexHtml', () => {
     expect(hook.order).toBe('pre')
     const result = hook.handler()
     expect(Array.isArray(result)).toBe(true)
+    // The prompt toolbar is opt-in: the runtime is the only injected script.
     expect(result.length).toBe(1)
     expect(result[0].tag).toBe('script')
     expect(result[0].attrs.type).toBe('module')
     expect(result[0].children).toContain(RUNTIME_MODULE_ID)
     expect(result[0].injectTo).toBe('head-prepend')
+  })
+
+  it('adds the prompt toolbar when it is enabled', () => {
+    const plugin = svelteDevtools({ promptToolbar: true }).find(
+      p => p.name === 'vite-devtools-svelte',
+    )!
+    resolvePlugins([plugin])
+    const hook = plugin.transformIndexHtml as { handler: () => any }
+    const result = hook.handler()
+    expect(result).toHaveLength(2)
+    expect(result[1]).toEqual({
+      tag: 'script',
+      attrs: { type: 'module', src: `/@id/__x00__${PROMPT_TOOLBAR_MODULE_ID}` },
+      injectTo: 'body',
+    })
   })
 })
 

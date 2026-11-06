@@ -7,7 +7,14 @@
       "ignoreDependencies": ["axe-core"]
     },
     "packages/vite-devtools-svelte": {
-      "entry": ["src/types.ts", "src/runtime/client.js", "src/runtime/wrapper.js", "test/**/*.ts"],
+      "entry": [
+        "src/types.ts",
+        "src/runtime/client.js",
+        "src/runtime/prompt-toolbar.js",
+        "src/runtime/wrapper-toolbar.js",
+        "src/runtime/wrapper.js",
+        "test/**/*.ts"
+      ],
       "project": ["src/**/*.{ts,js}", "test/**/*.{ts,svelte}"],
       "ignore": ["test/fixtures/**"]
     },
@@ -20,7 +27,7 @@
       "ignoreDependencies": ["@vitejs/devtools"]
     },
     "examples/sample-app": {
-      "entry": ["vite.standalone.config.ts"]
+      "entry": ["vite.standalone.config.ts", "vite.base-path.config.ts"]
     }
   },
   "ignoreBinaries": ["top", "svelte-check", "svelte-kit"]

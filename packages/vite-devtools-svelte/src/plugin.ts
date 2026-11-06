@@ -2,7 +2,7 @@ import crypto from 'node:crypto'
 import path from 'node:path'
 
 import { launchEditor } from 'devframe/utils/launch-editor'
-import type { Plugin, ResolvedConfig, ViteDevServer } from 'vite'
+import type { HtmlTagDescriptor, Plugin, ResolvedConfig, ViteDevServer } from 'vite'
 
 import { analyzeComponents } from './analyzers/components.js'
 import type { GraphModuleLike } from './analyzers/module-graph.js'
@@ -12,11 +12,17 @@ import { createMcpMiddleware, MCP_PATH } from './mcp/http.js'
 import { buildMcpServer } from './mcp/server.js'
 import { SessionStore } from './mcp/sessions.js'
 import {
-  RUNTIME_MODULE_ID,
+  PROMPT_FORMAT_MODULE_ID,
+  PROMPT_TOOLBAR_MODULE_ID,
+  promptFormatCode,
+  promptToolbarModule,
+  RESOLVED_PROMPT_FORMAT_ID,
+  RESOLVED_PROMPT_TOOLBAR_ID,
   RESOLVED_RUNTIME_ID,
+  RUNTIME_MODULE_ID,
   runtimeCode,
   WRAPPER_MODULE_ID,
-  wrapperCode,
+  wrapperModule,
 } from './runtime/index.js'
 import {
   injectComponentTracking,
@@ -30,6 +36,7 @@ import type { SvelteDevtoolsHost } from './server/devframe.js'
 import { LOAD_RECORDER, profileLoad } from './server/load-profile.js'
 import { mountStandalone, urlHost } from './server/mount.js'
 import { sveltekitTemplateInjector } from './server/template-injector.js'
+import { promptToolbarTagForTemplate, promptToolbarUrl } from './server/toolbar.js'
 import type { LoadProfile } from './types.js'
 
 export interface SvelteDevtoolsOptions {
@@ -52,6 +59,18 @@ export interface SvelteDevtoolsOptions {
    * @default true
    */
   clientAuth?: boolean
+  /**
+   * Add a floating "Inspect" button to the app's own pages in dev: pick
+   * elements, write a request, and copy a markdown prompt with each element's
+   * source location, the component instances that render it and the template
+   * frames around it.
+   *
+   * Dev only (served by the dev server, never in a build). Opt-in because it is
+   * a visible button in your pages and records which component owns each
+   * element while the app runs.
+   * @default false
+   */
+  promptToolbar?: boolean
 }
 
 /** Name of `@vitejs/devtools`' config plugin; its presence means the hub will call our `devtools.setup`. */
@@ -78,7 +97,7 @@ function collectModules(server: ViteDevServer): GraphModuleLike[] {
 }
 
 export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
-  const { componentTracking = true, clientAuth = true } = options
+  const { componentTracking = true, clientAuth = true, promptToolbar = false } = options
 
   let config: ResolvedConfig
   let server: ViteDevServer | undefined
@@ -224,6 +243,10 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     resolveId(id, importer) {
       if (!serving()) return null
       if (id === RUNTIME_MODULE_ID) return RESOLVED_RUNTIME_ID
+      if (promptToolbar) {
+        if (id === PROMPT_TOOLBAR_MODULE_ID) return RESOLVED_PROMPT_TOOLBAR_ID
+        if (id === PROMPT_FORMAT_MODULE_ID) return RESOLVED_PROMPT_FORMAT_ID
+      }
       if (
         componentTracking &&
         id === 'svelte/internal/client' &&
@@ -239,7 +262,11 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     load(id) {
       if (!serving()) return null
       if (id === RESOLVED_RUNTIME_ID) return runtimeCode
-      if (id === WRAPPER_MODULE_ID) return wrapperCode
+      if (id === WRAPPER_MODULE_ID) return wrapperModule(promptToolbar)
+      if (promptToolbar && id === RESOLVED_PROMPT_TOOLBAR_ID) {
+        return promptToolbarModule({ root, tracking: componentTracking })
+      }
+      if (promptToolbar && id === RESOLVED_PROMPT_FORMAT_ID) return promptFormatCode
       return null
     },
 
@@ -252,7 +279,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       order: 'pre',
       handler() {
         if (!serving()) return []
-        return [
+        const tags: HtmlTagDescriptor[] = [
           {
             tag: 'script',
             attrs: { type: 'module' },
@@ -260,6 +287,14 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
             injectTo: 'head-prepend',
           },
         ]
+        if (promptToolbar) {
+          tags.push({
+            tag: 'script',
+            attrs: { type: 'module', src: promptToolbarUrl(config.base) },
+            injectTo: 'body',
+          })
+        }
+        return tags
       },
     },
 
@@ -349,6 +384,9 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     trackingPlugin,
     loadProfilePlugin,
     warningCapturePlugin,
-    sveltekitTemplateInjector(() => hostedByViteDevtools),
+    sveltekitTemplateInjector(
+      () => hostedByViteDevtools,
+      () => (promptToolbar ? [promptToolbarTagForTemplate(promptToolbarUrl(config.base))] : []),
+    ),
   ]
 }
