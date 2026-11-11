@@ -49,7 +49,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
-    "@vitejs/devtools-kit": "^0.8.0",
+    "@vitejs/devtools-kit": "^0.8.2",
     "devframe": "^1.3.2",
     "zod": "^4.6.7"
   },
@@ -61,13 +61,13 @@
     "happy-dom": "^21.0.4",
     "svelte": "^5.57.3",
     "typescript": "^6.0.3",
-    "vite": "^8.3.5",
+    "vite": "^8.3.8",
     "vite-plugin-dts": "^5.1.2",
     "vitest": "^5.1.0"
   },
   "peerDependencies": {
     "@sveltejs/kit": "^2.0.0 || ^3.0.0",
-    "vite": "^8.3.5"
+    "vite": "^8.3.8"
   },
   "peerDependenciesMeta": {
     "@sveltejs/kit": {
