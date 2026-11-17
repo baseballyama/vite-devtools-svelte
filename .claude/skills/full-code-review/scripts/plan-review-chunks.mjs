@@ -1,230 +1,172 @@
 #!/usr/bin/env node
+// Splits the changes under review into chunks small enough for one reviewer
+// to read closely. Scope = everything that differs from the merge base with
+// the base branch: commits, uncommitted edits and untracked files.
+//
+// Usage: node plan-review-chunks.mjs [base] [--format=md]
+//   base defaults to $BASE_BRANCH, then origin/main.
+
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 
 const args = process.argv.slice(2);
-const explicitBaseBranch = args.find(a => !a.startsWith('--')) ?? process.env.BASE_BRANCH ?? null;
+const base = args.find(a => !a.startsWith('--')) ?? process.env['BASE_BRANCH'] ?? 'origin/main';
 const format = args.includes('--format=md') ? 'md' : 'json';
 
-const MAX_LINES_PER_CHUNK = 500;
-const MAX_FILES_PER_CHUNK = 10;
-const SOFT_BREAK_MIN_LINES = 200;
-const SOFT_BREAK_MIN_FILES = 5;
+const MAX_LINES = 500;
+const MAX_FILES = 10;
+// A directory change closes the chunk once it has this much in it.
+const SOFT_LINES = 200;
+const SOFT_FILES = 5;
 
-// argv/環境変数経由で来るブランチ名にシェルメタ文字が混じる可能性があるため、
-// shell 経由の execSync ではなく execFileSync (引数配列) でコマンドインジェクションを防ぐ。
-function tryGit(gitArgs) {
+// execFileSync, not a shell: `base` comes from argv/env.
+const git = gitArgs => execFileSync('git', gitArgs, { encoding: 'utf8' });
+
+const mergeBase = git(['merge-base', base, 'HEAD']).trim();
+
+const files = new Map();
+// Without `..HEAD` the diff runs against the working tree, so uncommitted
+// edits are included.
+// Binary files report `-` instead of a line count.
+const count = n => (n === '-' ? 0 : Number(n));
+// `--no-renames`: a rename is reviewed as a delete plus an add, and every
+// `-z` record stays `adds<TAB>dels<TAB>path`.
+for (const line of git(['diff', '--numstat', '--no-renames', '-z', mergeBase]).split('\0')) {
+  if (!line) continue;
+  const [adds = '0', dels = '0', ...rest] = line.split('\t');
+  const path = rest.join('\t');
+  if (path) files.set(path, count(adds) + count(dels));
+}
+for (const path of git(['ls-files', '--others', '--exclude-standard', '-z']).split('\0')) {
+  if (!path || files.has(path)) continue;
+  let lines = 0;
   try {
-    return execFileSync('git', gitArgs, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const buf = readFileSync(path);
+    // Same heuristic as git: a NUL byte means binary, which has no lines.
+    if (!buf.includes(0)) lines = buf.toString('utf8').split('\n').length;
   } catch {
-    return null;
+    // Unreadable (e.g. a directory symlink): list it without a size.
   }
+  files.set(path, lines);
 }
 
-function branchExists(ref) {
-  return tryGit(['rev-parse', '--verify', '--quiet', ref]) !== null;
-}
+const PKG = 'packages/vite-devtools-svelte/';
 
-function selectBaseBranch() {
-  if (branchExists('origin/main')) return 'origin/main';
-  if (branchExists('origin/master')) return 'origin/master';
-  throw new Error(
-    'Neither origin/main nor origin/master exists. Run `git fetch origin` or pass a base branch explicitly.',
-  );
-}
+/** Ordered by review priority: browser-injected code first, lockfile last. */
+const CATEGORIES = [
+  'runtime', // injected into the user's page
+  'plugin', // Vite plugin, dev-server collector, RPC, MCP, analyzers
+  'client', // DevTools UI, shipped in the plugin's dist/client
+  'inspector',
+  'skills', // agent skills shipped in the npm package
+  'tests',
+  'changeset',
+  'config',
+  'tooling', // CI, e2e, perf, scripts, repo agent config
+  'apps', // playground, site, examples
+  'docs',
+  'lockfile',
+  'other',
+];
 
-const baseBranch = explicitBaseBranch ?? selectBaseBranch();
-
-// `...` (symmetric difference) は commit 同士でしか動かない。
-// リポジトリ全体をレビュー対象にする際の empty-tree 指定 (4b825dc6...) のために、
-// base が「commit でない (= tree やオブジェクト hash)」場合は `..` (two-dot) を使う。
-const isCommit = tryGit(['rev-parse', '--verify', `${baseBranch}^{commit}`]) !== null;
-const diffRange = isCommit ? `${baseBranch}...HEAD` : `${baseBranch}..HEAD`;
-
-const raw = execFileSync('git', ['diff', '--numstat', diffRange], {
-  encoding: 'utf8',
-});
-
-const files = raw
-  .trim()
-  .split('\n')
-  .filter(Boolean)
-  .map(line => {
-    const parts = line.split('\t');
-    const adds = parts[0] === '-' ? 0 : Number(parts[0]);
-    const dels = parts[1] === '-' ? 0 : Number(parts[1]);
-    const path = parts.slice(2).join('\t');
-    return { path, lines: adds + dels };
-  })
-  .filter(f => f.path && f.lines >= 0);
-
-// vite-devtools-svelte 固有のカテゴリ分類:
-// - runtime: src/runtime/ は browser-injected コードで独立してレビューしたいため別カテゴリ
-// - plugin: src/ 配下の他のファイル (plugin.ts / server / analyzers / mcp / types.ts)
-// - tests:  test/ 配下と client のテスト
-// - client: packages/client/ 配下 (DevTools UI)
-// - playground / site: デモアプリ
-// - config: ルート直下の package.json / tsconfig / *.config.*
-// - docs:   README / ROADMAP / docs/
-// - other:  その他
-const PKG_PREFIX = 'packages/vite-devtools-svelte/';
 function categoryOf(path) {
-  if (path.startsWith(`${PKG_PREFIX}src/runtime/`)) return 'runtime';
-  if (path.startsWith(`${PKG_PREFIX}test/`) || /^packages\/client\/.*\.test\.ts$/.test(path))
-    return 'tests';
-  if (path.startsWith(`${PKG_PREFIX}src/`)) return 'plugin';
+  const isTest =
+    ['.test.ts', '.test.js'].some(ext => path.endsWith(ext)) || path.includes('/test/');
+  if (path === 'pnpm-lock.yaml') return 'lockfile';
+  if (path.startsWith('.changeset/')) return path.endsWith('.md') ? 'changeset' : 'config';
+  if (isTest && path.startsWith('packages/')) return 'tests';
+  if (path.startsWith(`${PKG}src/runtime/`)) return 'runtime';
+  if (path.startsWith(`${PKG}src/`)) return 'plugin';
+  if (path.startsWith(`${PKG}skills/`)) return 'skills';
   if (path.startsWith('packages/client/')) return 'client';
-  if (path.startsWith('playground/')) return 'playground';
-  if (path.startsWith('site/')) return 'site';
-  if (path.startsWith('docs/') || path === 'README.md' || path === 'ROADMAP.md') return 'docs';
-  // ルート直下の設定ファイル
-  if (
-    !path.includes('/') &&
-    (/\.(json|ya?ml|toml|js|mjs|cjs|ts|mts|cts)$/.test(path) || path === 'package.json')
-  ) {
+  if (path.startsWith('packages/inspector/')) return 'inspector';
+  for (const dir of ['.github/', '.claude/', 'e2e/', 'perf/', 'scripts/']) {
+    if (path.startsWith(dir)) return 'tooling';
+  }
+  for (const dir of ['playground/', 'site/', 'examples/']) {
+    if (path.startsWith(dir)) return 'apps';
+  }
+  if (path.endsWith('.md') || path.startsWith('docs/')) return 'docs';
+  if (!path.includes('/') || path.endsWith('package.json') || path.includes('tsconfig')) {
     return 'config';
   }
   return 'other';
 }
 
-function dirKey(path) {
-  const segs = path.split('/');
-  return segs.slice(0, Math.min(segs.length - 1, 6)).join('/');
-}
+const dirOf = path => path.slice(0, Math.max(0, path.lastIndexOf('/')));
 
-function commonDir(paths) {
-  if (paths.length === 0) return '';
+function commonPrefix(paths) {
   if (paths.length === 1) return paths[0];
-  const splits = paths.map(p => p.split('/'));
-  const minLen = Math.min(...splits.map(s => s.length));
+  const split = paths.map(p => p.split('/'));
   const out = [];
-  for (let i = 0; i < minLen - 1; i++) {
-    const seg = splits[0][i];
-    if (splits.every(s => s[i] === seg)) out.push(seg);
-    else break;
+  for (let i = 0; i < split[0].length - 1; i++) {
+    if (!split.every(s => s[i] === split[0][i])) break;
+    out.push(split[0][i]);
   }
-  return out.length > 0 ? out.join('/') + '/' : '<mixed>';
+  return out.length > 0 ? `${out.join('/')}/` : '(repo root)';
 }
 
-function chunkFiles(category, list) {
-  if (list.length === 0) return [];
+function chunk(category, list) {
   list.sort((a, b) => a.path.localeCompare(b.path));
-
-  const chunks = [];
-  let current = { files: [], lines: 0, dir: null };
-
+  const groups = [];
+  let cur = null;
   for (const f of list) {
-    const fileDir = dirKey(f.path);
-    const dirChanged = current.dir !== null && current.dir !== fileDir;
-    const wouldExceedLines = current.lines + f.lines > MAX_LINES_PER_CHUNK;
-    const wouldExceedFiles = current.files.length + 1 > MAX_FILES_PER_CHUNK;
-    const reachedSoftBreak =
-      current.lines >= SOFT_BREAK_MIN_LINES || current.files.length >= SOFT_BREAK_MIN_FILES;
-
-    const shouldFinalize =
-      current.files.length > 0 &&
-      (wouldExceedLines || wouldExceedFiles || (dirChanged && reachedSoftBreak));
-
-    if (shouldFinalize) {
-      chunks.push(current);
-      current = { files: [], lines: 0, dir: null };
+    const close =
+      cur !== null &&
+      (cur.lines + f.lines > MAX_LINES ||
+        cur.files.length >= MAX_FILES ||
+        (cur.dir !== dirOf(f.path) && (cur.lines >= SOFT_LINES || cur.files.length >= SOFT_FILES)));
+    if (cur === null || close) {
+      cur = { files: [], lines: 0, dir: '' };
+      groups.push(cur);
     }
-
-    current.files.push(f);
-    current.lines += f.lines;
-    current.dir = fileDir;
+    cur.files.push(f.path);
+    cur.lines += f.lines;
+    cur.dir = dirOf(f.path);
   }
-  if (current.files.length > 0) chunks.push(current);
-
-  return chunks.map((c, i) => ({
-    categoryIndex: i + 1,
-    categoryTotal: chunks.length,
+  // Fold a small leftover into the previous chunk rather than review it alone.
+  for (let i = groups.length - 1; i > 0; i--) {
+    const [prev, g] = [groups[i - 1], groups[i]];
+    const small = g.lines < SOFT_LINES / 2 && g.files.length <= 2;
+    if (
+      small &&
+      prev.lines + g.lines <= MAX_LINES &&
+      prev.files.length + g.files.length <= MAX_FILES
+    ) {
+      prev.files.push(...g.files);
+      prev.lines += g.lines;
+      groups.splice(i, 1);
+    }
+  }
+  return groups.map((g, i) => ({
     category,
-    name:
-      chunks.length > 1
-        ? `${category} ${i + 1}/${chunks.length}: ${commonDir(c.files.map(x => x.path))}`
-        : `${category}: ${commonDir(c.files.map(x => x.path))}`,
-    files: c.files.map(x => x.path),
-    totalLines: c.lines,
-    fileCount: c.files.length,
+    name: `${category}${groups.length > 1 ? ` ${i + 1}/${groups.length}` : ''}: ${commonPrefix(g.files)}`,
+    files: g.files,
+    lines: g.lines,
   }));
 }
 
-const buckets = {
-  plugin: [],
-  runtime: [],
-  client: [],
-  tests: [],
-  playground: [],
-  site: [],
-  config: [],
-  docs: [],
-  other: [],
-};
-for (const f of files) {
-  const cat = categoryOf(f.path);
-  buckets[cat].push(f);
-}
+const buckets = new Map(CATEGORIES.map(c => [c, []]));
+for (const [path, lines] of files) buckets.get(categoryOf(path)).push({ path, lines });
 
-// レビュー優先順位の高い順に並べる: plugin (RPC / analyzer / 型) → runtime (browser injected)
-// → client (UI) → tests → 周辺 (playground/site/config/docs/other)
-const merged = [
-  ...chunkFiles('plugin', buckets.plugin),
-  ...chunkFiles('runtime', buckets.runtime),
-  ...chunkFiles('client', buckets.client),
-  ...chunkFiles('tests', buckets.tests),
-  ...chunkFiles('playground', buckets.playground),
-  ...chunkFiles('site', buckets.site),
-  ...chunkFiles('config', buckets.config),
-  ...chunkFiles('docs', buckets.docs),
-  ...chunkFiles('other', buckets.other),
-];
+const chunks = CATEGORIES.flatMap(c => chunk(c, buckets.get(c)));
+for (const [i, c] of chunks.entries()) c.index = i + 1;
 
-const totalChunks = merged.length;
-const chunks = merged.map((c, i) => ({
-  index: i + 1,
-  total: totalChunks,
-  categoryIndex: c.categoryIndex,
-  categoryTotal: c.categoryTotal,
-  category: c.category,
-  name: c.name,
-  files: c.files,
-  totalLines: c.totalLines,
-  fileCount: c.fileCount,
-}));
-
-const result = {
-  baseBranch,
-  thresholds: {
-    maxLinesPerChunk: MAX_LINES_PER_CHUNK,
-    maxFilesPerChunk: MAX_FILES_PER_CHUNK,
-  },
-  totalChunks,
-  chunks,
-};
-
-if (format === 'md') {
-  const lines = [
-    `# Phase 3 Review Chunks`,
-    ``,
-    `Base branch: \`${baseBranch}\``,
-    `Total chunks: **${totalChunks}**`,
-    ``,
-    `| # | Category | Chunk | Files | Lines |`,
-    `|---|----------|-------|-------|-------|`,
-    ...chunks.map(
-      (c, i) => `| ${i + 1} | ${c.category} | ${c.name} | ${c.fileCount} | ${c.totalLines} |`,
-    ),
-    ``,
-    `## Files per chunk`,
-    ``,
-    ...chunks.flatMap((c, i) =>
-      [`### ${i + 1}. ${c.name} (${c.fileCount} files, ${c.totalLines} lines)`, ``].concat(
-        c.files.map(f => `- \`${f}\``),
-        [``],
-      ),
-    ),
-  ];
-  console.log(lines.join('\n'));
+if (format === 'json') {
+  console.log(JSON.stringify({ base, mergeBase, chunks }, null, 2));
 } else {
-  console.log(JSON.stringify(result, null, 2));
+  const out = [
+    `Base: \`${base}\` (merge base \`${mergeBase.slice(0, 10)}\`), ${files.size} files, ${chunks.length} chunks`,
+    '',
+    '| # | Chunk | Files | Lines |',
+    '|---|-------|-------|-------|',
+    ...chunks.map(c => `| ${c.index} | ${c.name} | ${c.files.length} | ${c.lines} |`),
+    '',
+  ];
+  for (const c of chunks) {
+    out.push(`**${c.index}. ${c.name}**`);
+    for (const file of c.files) out.push(`- \`${String(file)}\``);
+    out.push('');
+  }
+  console.log(out.join('\n'));
 }
