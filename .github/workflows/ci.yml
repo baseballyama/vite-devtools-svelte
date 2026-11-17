@@ -80,7 +80,7 @@ jobs:
         if: ${{ !cancelled() }}
         run: pnpm exec tsc -p packages/client/tsconfig.node.json
 
-      - name: Client UI (rsvelte-check)
+      - name: Client UI (svelte-check)
         if: ${{ !cancelled() }}
         run: pnpm -C packages/client run check
 
@@ -91,7 +91,7 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           node node_modules/@typescript/native/bin/tsc -v
-          pnpm -C examples/sample-app exec svelte-check --tsgo --workspace ../../packages/client --tsconfig ./tsconfig.app.json
+          pnpm -C packages/client exec svelte-check --tsgo --tsconfig ./tsconfig.app.json
 
       - name: Plugin + tests (tsc, TypeScript 7, additive)
         if: ${{ !cancelled() }}
