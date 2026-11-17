@@ -84,6 +84,10 @@ jobs:
         if: ${{ !cancelled() }}
         run: pnpm -C packages/client run check
 
+      - name: Inspector (tsc + svelte-check)
+        if: ${{ !cancelled() }}
+        run: pnpm -C packages/inspector run check
+
       # Additive TypeScript 7 check (plugin + client only). The packages keep
       # typescript ^6.0.3 for peers and API consumers; the TS 7 native compiler
       # is the root @typescript/native alias, which svelte-check finds via --tsgo.

@@ -20,7 +20,7 @@
     "changeset": "changeset",
     "version": "changeset version",
     "release": "pnpm build && changeset publish",
-    "typecheck": "tsc -p packages/vite-devtools-svelte/tsconfig.json && tsc -p packages/client/tsconfig.node.json && pnpm -C packages/client run check",
+    "typecheck": "tsc -p packages/vite-devtools-svelte/tsconfig.json && tsc -p packages/client/tsconfig.node.json && pnpm -C packages/client run check && pnpm -C packages/inspector run check",
     "knip": "knip",
     "sherif": "sherif",
     "publint": "pnpm -C packages/vite-devtools-svelte exec publint --strict && pnpm -C packages/vite-devtools-svelte exec attw --pack . --profile esm-only",

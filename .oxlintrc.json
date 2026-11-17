@@ -124,8 +124,6 @@
     "**/.svelte-kit/**",
     "**/coverage/**",
     "**/*.svelte",
-    "e2e/compat/kit3/**",
-    // Verbatim copy of vite-plugin-svelte's inspector: keep it diffable against upstream.
-    "packages/inspector/src/**"
+    "e2e/compat/kit3/**"
   ]
 }
