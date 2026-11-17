@@ -1,47 +1,47 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte'
+  import { onDestroy } from 'svelte';
 
-  let items = $state<{ id: number; value: number; color: string }[]>([])
-  let nextId = $state(1)
+  let items = $state<{ id: number; value: number; color: string }[]>([]);
+  let nextId = $state(1);
   // boolean, not `false`: bind:checked writes it (invisible to the type checker)
-  let autoAdd = $state<boolean>(false)
-  let intervalId: ReturnType<typeof setInterval> | null = null
+  let autoAdd = $state<boolean>(false);
+  let intervalId: ReturnType<typeof setInterval> | null = null;
 
-  let total = $derived(items.reduce((sum, item) => sum + item.value, 0))
-  let average = $derived(items.length > 0 ? total / items.length : 0)
-  let max = $derived(items.length > 0 ? Math.max(...items.map(i => i.value)) : 0)
+  let total = $derived(items.reduce((sum, item) => sum + item.value, 0));
+  let average = $derived(items.length > 0 ? total / items.length : 0);
+  let max = $derived(items.length > 0 ? Math.max(...items.map(i => i.value)) : 0);
 
-  const colors = ['#ff3e00', '#4fc08d', '#42b883', '#61afef', '#c678dd', '#e5c07b']
+  const colors = ['#ff3e00', '#4fc08d', '#42b883', '#61afef', '#c678dd', '#e5c07b'];
 
   function addItem() {
-    const value = Math.floor(Math.random() * 100) + 1
-    const color = colors[items.length % colors.length]
-    items = [...items, { id: nextId++, value, color }]
+    const value = Math.floor(Math.random() * 100) + 1;
+    const color = colors[items.length % colors.length];
+    items = [...items, { id: nextId++, value, color }];
   }
 
   function removeItem(id: number) {
-    items = items.filter(i => i.id !== id)
+    items = items.filter(i => i.id !== id);
   }
 
   function clearAll() {
-    items = []
+    items = [];
   }
 
   $effect(() => {
     if (autoAdd) {
-      intervalId = setInterval(addItem, 800)
+      intervalId = setInterval(addItem, 800);
     } else if (intervalId) {
-      clearInterval(intervalId)
-      intervalId = null
+      clearInterval(intervalId);
+      intervalId = null;
     }
     return () => {
-      if (intervalId) clearInterval(intervalId)
-    }
-  })
+      if (intervalId) clearInterval(intervalId);
+    };
+  });
 
   onDestroy(() => {
-    if (intervalId) clearInterval(intervalId)
-  })
+    if (intervalId) clearInterval(intervalId);
+  });
 </script>
 
 <div class="dynamic-list">

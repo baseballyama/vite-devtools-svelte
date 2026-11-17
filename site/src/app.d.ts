@@ -1,7 +1,7 @@
 // A global script (no import/export): every declaration here is ambient.
 
 /** Injected by Vite `define` (see vite.config.ts). */
-declare const __PKG_VERSION__: string
+declare const __PKG_VERSION__: string;
 
 declare namespace App {
   // interface Error {}
@@ -12,6 +12,6 @@ declare namespace App {
 }
 
 declare module '*.md?raw' {
-  const content: string
-  export default content
+  const content: string;
+  export default content;
 }

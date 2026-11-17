@@ -13,68 +13,68 @@
  * for the toggle UI to call.
  */
 
-const STORAGE_KEY = 'svelte-devtools-theme'
-const MQ = '(prefers-color-scheme: dark)'
+const STORAGE_KEY = 'svelte-devtools-theme';
+const MQ = '(prefers-color-scheme: dark)';
 
-export type ThemeMode = 'system' | 'light' | 'dark'
-export type ResolvedTheme = 'light' | 'dark'
+export type ThemeMode = 'system' | 'light' | 'dark';
+export type ResolvedTheme = 'light' | 'dark';
 
 function readStored(): 'light' | 'dark' | null {
   try {
-    const v = localStorage.getItem(STORAGE_KEY)
-    return v === 'light' || v === 'dark' ? v : null
+    const v = localStorage.getItem(STORAGE_KEY);
+    return v === 'light' || v === 'dark' ? v : null;
   } catch {
-    return null
+    return null;
   }
 }
 
 function systemTheme(): ResolvedTheme {
-  return window.matchMedia(MQ).matches ? 'dark' : 'light'
+  return window.matchMedia(MQ).matches ? 'dark' : 'light';
 }
 
 /** A reactive store of the current theme state. Use `theme.mode` and
  * `theme.resolved` from Svelte components; both are tracked. */
 export function createThemeStore() {
-  const stored = readStored()
-  let mode = $state<ThemeMode>(stored ?? 'system')
-  let resolved = $state<ResolvedTheme>(stored ?? systemTheme())
+  const stored = readStored();
+  let mode = $state<ThemeMode>(stored ?? 'system');
+  let resolved = $state<ResolvedTheme>(stored ?? systemTheme());
 
   // Keep `data-theme` attribute in sync so CSS variables apply.
   function apply(next: ResolvedTheme) {
-    document.documentElement.dataset.theme = next
-    resolved = next
+    document.documentElement.dataset.theme = next;
+    resolved = next;
   }
 
   // Listen for OS preference changes — only relevant in 'system' mode, but
   // attach unconditionally so toggling back to 'system' takes immediate effect.
   if (typeof window !== 'undefined') {
     window.matchMedia(MQ).addEventListener('change', e => {
-      if (mode === 'system') apply(e.matches ? 'dark' : 'light')
-    })
+      if (mode === 'system') apply(e.matches ? 'dark' : 'light');
+    });
   }
 
   function set(next: ThemeMode) {
-    mode = next
+    mode = next;
     if (next === 'system') {
       try {
-        localStorage.removeItem(STORAGE_KEY)
+        localStorage.removeItem(STORAGE_KEY);
       } catch {}
-      apply(systemTheme())
+      apply(systemTheme());
     } else {
       try {
-        localStorage.setItem(STORAGE_KEY, next)
+        localStorage.setItem(STORAGE_KEY, next);
       } catch {}
-      apply(next)
+      apply(next);
     }
   }
 
   return {
     get mode() {
-      return mode
+      return mode;
     },
     get resolved() {
-      return resolved
+      return resolved;
     },
     set,
-  }
+  };
 }

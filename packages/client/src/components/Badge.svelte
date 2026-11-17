@@ -1,13 +1,13 @@
 <script lang="ts">
-  import type { Snippet } from 'svelte'
+  import type { Snippet } from 'svelte';
 
-  import type { Tone } from './types.js'
+  import type { Tone } from './types.js';
 
   let {
     tone = 'neutral',
     title,
     children,
-  }: { tone?: Tone; title?: string; children: Snippet } = $props()
+  }: { tone?: Tone; title?: string; children: Snippet } = $props();
 </script>
 
 <span class="badge {tone}" {title}>{@render children()}</span>

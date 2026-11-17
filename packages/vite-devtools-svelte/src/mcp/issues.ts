@@ -1,39 +1,39 @@
-import type { RenderProfile, ReactiveGraph, LoadProfile, FpsSample } from '../types.js'
-import { avgRenderTime, min, round } from './stats.js'
+import type { RenderProfile, ReactiveGraph, LoadProfile, FpsSample } from '../types.js';
+import { avgRenderTime, min, round } from './stats.js';
 
 type IssueKind =
   | 'slow-component-render'
   | 'over-rendered-component'
   | 'slow-load'
   | 'fps-drop'
-  | 'effect-overconnected'
+  | 'effect-overconnected';
 
 export interface PerformanceIssue {
-  id: string
-  kind: IssueKind
-  severity: 'low' | 'medium' | 'high'
-  summary: string
-  file?: string
-  line?: number
-  metric: Record<string, number>
+  id: string;
+  kind: IssueKind;
+  severity: 'low' | 'medium' | 'high';
+  summary: string;
+  file?: string;
+  line?: number;
+  metric: Record<string, number>;
   /** Tool that returns more detail for this issue. */
-  suggestedTool: string
+  suggestedTool: string;
 }
 
 export interface IssueThresholds {
   /** Per-render time (ms) at or above which a component render is considered slow. */
-  avgRenderTimeMs?: number
+  avgRenderTimeMs?: number;
   /** Render count at or above which a component is considered over-rendered. */
-  renderCount?: number
+  renderCount?: number;
   /** Load duration (ms) at or above which a SvelteKit load is slow. */
-  loadDurationMs?: number
+  loadDurationMs?: number;
   /** FPS strictly below which we record a drop. */
-  fpsDropThreshold?: number
+  fpsDropThreshold?: number;
   /**
    * Dependency count (incoming edges: what the effect reads) at or above
    * which an effect is over-connected.
    */
-  effectMaxDeps?: number
+  effectMaxDeps?: number;
 }
 
 const DEFAULTS: Required<IssueThresholds> = {
@@ -42,7 +42,7 @@ const DEFAULTS: Required<IssueThresholds> = {
   loadDurationMs: 200,
   fpsDropThreshold: 40,
   effectMaxDeps: 8,
-}
+};
 
 /**
  * Thresholds over the defaults. An `undefined` value keeps the default: a
@@ -51,19 +51,19 @@ const DEFAULTS: Required<IssueThresholds> = {
  * is always false.
  */
 function withDefaults(thresholds: IssueThresholds): Required<IssueThresholds> {
-  const t = { ...DEFAULTS }
+  const t = { ...DEFAULTS };
   for (const key of Object.keys(DEFAULTS) as Array<keyof IssueThresholds>) {
-    const value = thresholds[key]
-    if (value !== undefined) t[key] = value
+    const value = thresholds[key];
+    if (value !== undefined) t[key] = value;
   }
-  return t
+  return t;
 }
 
 export interface IssueInputs {
-  renderProfiles: RenderProfile[]
-  reactiveGraph: ReactiveGraph
-  loadProfiles: LoadProfile[]
-  fpsSamples: FpsSample[]
+  renderProfiles: RenderProfile[];
+  reactiveGraph: ReactiveGraph;
+  loadProfiles: LoadProfile[];
+  fpsSamples: FpsSample[];
 }
 
 /** `high` from `threshold * high`, `medium` from `threshold * medium`, else `low`. */
@@ -73,19 +73,19 @@ function severity(
   medium: number,
   high: number,
 ): PerformanceIssue['severity'] {
-  if (value >= threshold * high) return 'high'
-  return value >= threshold * medium ? 'medium' : 'low'
+  if (value >= threshold * high) return 'high';
+  return value >= threshold * medium ? 'medium' : 'low';
 }
 
 export function listPerformanceIssues(
   inputs: IssueInputs,
   thresholds: IssueThresholds = {},
 ): PerformanceIssue[] {
-  const t = withDefaults(thresholds)
-  const out: PerformanceIssue[] = []
+  const t = withDefaults(thresholds);
+  const out: PerformanceIssue[] = [];
 
   for (const p of inputs.renderProfiles) {
-    const avg = avgRenderTime(p)
+    const avg = avgRenderTime(p);
     if (avg >= t.avgRenderTimeMs) {
       out.push({
         id: `slow-render:${p.file}:${p.componentId}`,
@@ -99,7 +99,7 @@ export function listPerformanceIssues(
           totalRenderTimeMs: round(p.totalRenderTime),
         },
         suggestedTool: 'get_render_profile',
-      })
+      });
     }
     if (p.renderCount >= t.renderCount) {
       out.push({
@@ -110,7 +110,7 @@ export function listPerformanceIssues(
         file: p.file,
         metric: { renderCount: p.renderCount, avgRenderTimeMs: round(avg) },
         suggestedTool: 'get_component_hotspots',
-      })
+      });
     }
   }
 
@@ -124,16 +124,16 @@ export function listPerformanceIssues(
         file: l.file,
         metric: { durationMs: round(l.duration), dataSizeBytes: l.dataSize },
         suggestedTool: 'get_load_waterfall',
-      })
+      });
     }
   }
 
-  const fpsDrops = inputs.fpsSamples.filter(s => s.fps < t.fpsDropThreshold)
+  const fpsDrops = inputs.fpsSamples.filter(s => s.fps < t.fpsDropThreshold);
   if (fpsDrops.length > 0) {
     const minFps = min(
       fpsDrops.map(s => s.fps),
       0,
-    )
+    );
     out.push({
       id: `fps-drops:${inputs.fpsSamples[0]?.timestamp ?? 0}`,
       kind: 'fps-drop',
@@ -141,7 +141,7 @@ export function listPerformanceIssues(
       summary: `${fpsDrops.length} FPS samples below ${t.fpsDropThreshold} (min ${minFps})`,
       metric: { dropCount: fpsDrops.length, minFps, threshold: t.fpsDropThreshold },
       suggestedTool: 'get_fps_drops',
-    })
+    });
   }
 
   for (const effect of overconnectedEffects(inputs.reactiveGraph, t.effectMaxDeps)) {
@@ -153,84 +153,84 @@ export function listPerformanceIssues(
       file: effect.file,
       metric: { depCount: effect.depCount },
       suggestedTool: 'get_reactive_graph_problems',
-    })
+    });
   }
 
-  return out.toSorted(compareSeverity)
+  return out.toSorted(compareSeverity);
 }
 
-const SEV_RANK: Record<PerformanceIssue['severity'], number> = { high: 0, medium: 1, low: 2 }
+const SEV_RANK: Record<PerformanceIssue['severity'], number> = { high: 0, medium: 1, low: 2 };
 
 function compareSeverity(a: PerformanceIssue, b: PerformanceIssue): number {
-  return SEV_RANK[a.severity] - SEV_RANK[b.severity]
+  return SEV_RANK[a.severity] - SEV_RANK[b.severity];
 }
 
 /** In / out degree per node over distinct edges (a repeated edge is one dependency). */
 function degrees(graph: ReactiveGraph): {
-  inDegree: Map<string, number>
-  outDegree: Map<string, number>
+  inDegree: Map<string, number>;
+  outDegree: Map<string, number>;
 } {
-  const inDegree = new Map<string, number>()
-  const outDegree = new Map<string, number>()
-  const seen = new Set<string>()
+  const inDegree = new Map<string, number>();
+  const outDegree = new Map<string, number>();
+  const seen = new Set<string>();
   for (const e of graph.edges) {
-    const key = JSON.stringify([e.from, e.to])
-    if (seen.has(key)) continue
-    seen.add(key)
-    inDegree.set(e.to, (inDegree.get(e.to) ?? 0) + 1)
-    outDegree.set(e.from, (outDegree.get(e.from) ?? 0) + 1)
+    const key = JSON.stringify([e.from, e.to]);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    inDegree.set(e.to, (inDegree.get(e.to) ?? 0) + 1);
+    outDegree.set(e.from, (outDegree.get(e.from) ?? 0) + 1);
   }
-  return { inDegree, outDegree }
+  return { inDegree, outDegree };
 }
 
 /** Effects with at least `maxDeps` distinct dependencies (incoming edges), in node order. */
 function overconnectedEffects(graph: ReactiveGraph, maxDeps: number): ReactiveProblems['effects'] {
-  const { inDegree } = degrees(graph)
-  const effects: ReactiveProblems['effects'] = []
+  const { inDegree } = degrees(graph);
+  const effects: ReactiveProblems['effects'] = [];
   for (const node of graph.nodes) {
-    const depCount = inDegree.get(node.id) ?? 0
+    const depCount = inDegree.get(node.id) ?? 0;
     if (node.type === 'effect' && depCount >= maxDeps) {
-      effects.push({ id: node.id, name: node.name, file: node.componentFile, depCount })
+      effects.push({ id: node.id, name: node.name, file: node.componentFile, depCount });
     }
   }
-  return effects
+  return effects;
 }
 
 export interface ReactiveProblems {
-  effects: Array<{ id: string; name: string; file: string; depCount: number }>
+  effects: Array<{ id: string; name: string; file: string; depCount: number }>;
   /**
    * `$derived` values nothing has read so far (never evaluated). A derived
    * read only imperatively (event handler, plain function) is evaluated and
    * is not listed: having no effect/markup reader is not "unused".
    */
-  orphanDeriveds: Array<{ id: string; name: string; file: string }>
+  orphanDeriveds: Array<{ id: string; name: string; file: string }>;
   /**
    * Nodes without any dependency or tracked reader (markup reads included).
    * A node depending only on untracked signals (`untrackedDeps`) is not listed.
    */
-  isolatedNodes: Array<{ id: string; name: string; type: string; file: string }>
+  isolatedNodes: Array<{ id: string; name: string; type: string; file: string }>;
 }
 
 export function summarizeReactiveProblems(
   graph: ReactiveGraph,
   t: IssueThresholds = {},
 ): ReactiveProblems {
-  const { inDegree, outDegree } = degrees(graph)
-  const orphanDeriveds: ReactiveProblems['orphanDeriveds'] = []
-  const isolatedNodes: ReactiveProblems['isolatedNodes'] = []
+  const { inDegree, outDegree } = degrees(graph);
+  const orphanDeriveds: ReactiveProblems['orphanDeriveds'] = [];
+  const isolatedNodes: ReactiveProblems['isolatedNodes'] = [];
   for (const node of graph.nodes) {
-    if (node.type === 'template') continue
+    if (node.type === 'template') continue;
     if (node.type === 'derived' && node.unevaluated) {
-      orphanDeriveds.push({ id: node.id, name: node.name, file: node.componentFile })
+      orphanDeriveds.push({ id: node.id, name: node.name, file: node.componentFile });
     } else if (!inDegree.has(node.id) && !outDegree.has(node.id) && !node.untrackedDeps) {
       isolatedNodes.push({
         id: node.id,
         name: node.name,
         type: node.type,
         file: node.componentFile,
-      })
+      });
     }
   }
-  const effects = overconnectedEffects(graph, withDefaults(t).effectMaxDeps)
-  return { effects, orphanDeriveds, isolatedNodes }
+  const effects = overconnectedEffects(graph, withDefaults(t).effectMaxDeps);
+  return { effects, orphanDeriveds, isolatedNodes };
 }

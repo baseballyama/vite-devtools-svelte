@@ -1,8 +1,8 @@
-import adapter from '@sveltejs/adapter-auto'
-import { sveltekit } from '@sveltejs/kit/vite'
-import { svelteDevtools } from '@sveltejs/vite-devtools-svelte'
-import { DevTools } from '@vitejs/devtools'
-import { defineConfig } from 'vite'
+import adapter from '@sveltejs/adapter-auto';
+import { sveltekit } from '@sveltejs/kit/vite';
+import { svelteDevtools } from '@sveltejs/vite-devtools-svelte';
+import { DevTools } from '@vitejs/devtools';
+import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [
@@ -12,4 +12,4 @@ export default defineConfig({
     DevTools(),
     sveltekit({ adapter: adapter() }),
   ],
-})
+});

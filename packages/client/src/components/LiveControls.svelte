@@ -1,17 +1,17 @@
 <script lang="ts">
-  import { formatAgo } from '../lib/format.js'
-  import type { Resource } from '../lib/resource.svelte.js'
-  import Button from './Button.svelte'
-  import RefreshButton from './RefreshButton.svelte'
+  import { formatAgo } from '../lib/format.js';
+  import type { Resource } from '../lib/resource.svelte.js';
+  import Button from './Button.svelte';
+  import RefreshButton from './RefreshButton.svelte';
 
   /** Live/paused toggle + manual refresh for polling resources. */
-  let { res, onclear }: { res: Resource<unknown>; onclear?: () => void } = $props()
+  let { res, onclear }: { res: Resource<unknown>; onclear?: () => void } = $props();
 
-  let now = $state(Date.now())
+  let now = $state(Date.now());
   $effect(() => {
-    const id = setInterval(() => (now = Date.now()), 5000)
-    return () => clearInterval(id)
-  })
+    const id = setInterval(() => (now = Date.now()), 5000);
+    return () => clearInterval(id);
+  });
 </script>
 
 <button

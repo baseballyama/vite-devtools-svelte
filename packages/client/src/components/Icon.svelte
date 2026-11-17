@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { icons, type IconName } from '../lib/icons.js'
+  import { icons, type IconName } from '../lib/icons.js';
 
   let {
     name,
     size = 16,
     class: cls = '',
-  }: { name: IconName; size?: number; class?: string } = $props()
+  }: { name: IconName; size?: number; class?: string } = $props();
 </script>
 
 <svg

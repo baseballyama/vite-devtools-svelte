@@ -1,17 +1,17 @@
 <script lang="ts">
-  import type { Snippet } from 'svelte'
-  import type { HTMLButtonAttributes } from 'svelte/elements'
+  import type { Snippet } from 'svelte';
+  import type { HTMLButtonAttributes } from 'svelte/elements';
 
-  import type { IconName } from '../lib/icons.js'
-  import Icon from './Icon.svelte'
+  import type { IconName } from '../lib/icons.js';
+  import Icon from './Icon.svelte';
 
   interface Props extends Omit<HTMLButtonAttributes, 'children'> {
-    icon?: IconName
+    icon?: IconName;
     /** Accessible name; also the tooltip for icon-only buttons. */
-    label?: string
-    variant?: 'default' | 'ghost' | 'primary' | 'danger'
-    pressed?: boolean
-    children?: Snippet
+    label?: string;
+    variant?: 'default' | 'ghost' | 'primary' | 'danger';
+    pressed?: boolean;
+    children?: Snippet;
   }
 
   let {
@@ -23,7 +23,7 @@
     type = 'button',
     title,
     ...rest
-  }: Props = $props()
+  }: Props = $props();
 </script>
 
 <button

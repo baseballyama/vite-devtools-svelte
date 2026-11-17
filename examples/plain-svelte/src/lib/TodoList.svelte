@@ -1,24 +1,24 @@
 <script lang="ts">
   interface Todo {
-    id: number
-    text: string
-    done: boolean
+    id: number;
+    text: string;
+    done: boolean;
   }
 
   let {
     todos,
     onadd,
     ontoggle,
-  }: { todos: Todo[]; onadd: (text: string) => void; ontoggle: (id: number) => void } = $props()
+  }: { todos: Todo[]; onadd: (text: string) => void; ontoggle: (id: number) => void } = $props();
 
-  let draft = $state('')
+  let draft = $state('');
 </script>
 
 <form
   onsubmit={e => {
-    e.preventDefault()
-    if (draft.trim()) onadd(draft.trim())
-    draft = ''
+    e.preventDefault();
+    if (draft.trim()) onadd(draft.trim());
+    draft = '';
   }}
 >
   <input data-testid="draft" bind:value={draft} placeholder="New todo" aria-label="New todo" />

@@ -1,13 +1,13 @@
 <script lang="ts">
-  import DataTable from '../../components/DataTable.svelte'
-  import EmptyState from '../../components/EmptyState.svelte'
-  import type { Column, SortState, TableRowState } from '../../components/types.js'
-  import { componentName, formatClock, formatValue } from '../../lib/format.js'
-  import { reactiveScope } from '../../lib/reactive-selection.svelte.js'
-  import type { HotState } from '../../lib/reactive.js'
-  import type { Resource } from '../../lib/resource.svelte.js'
-  import { getLiveComponentsMeta } from '../../lib/rpc.js'
-  import type { StateTimelineEntry } from '../../lib/types.js'
+  import DataTable from '../../components/DataTable.svelte';
+  import EmptyState from '../../components/EmptyState.svelte';
+  import type { Column, SortState, TableRowState } from '../../components/types.js';
+  import { componentName, formatClock, formatValue } from '../../lib/format.js';
+  import { reactiveScope } from '../../lib/reactive-selection.svelte.js';
+  import type { HotState } from '../../lib/reactive.js';
+  import type { Resource } from '../../lib/resource.svelte.js';
+  import { getLiveComponentsMeta } from '../../lib/rpc.js';
+  import type { StateTimelineEntry } from '../../lib/types.js';
 
   /**
    * Hot states: the server's timeline buffer grouped by signal. It is the
@@ -19,16 +19,16 @@
     states,
     baseline,
   }: {
-    timeline: Resource<StateTimelineEntry[]>
-    states: HotState[]
+    timeline: Resource<StateTimelineEntry[]>;
+    states: HotState[];
     /** Baseline disclosure of the timeline capture, if any. */
-    baseline: string | null
-  } = $props()
+    baseline: string | null;
+  } = $props();
 
-  let sort = $state<SortState | null>({ id: 'changes', desc: true })
-  let selected = $state<string | null>(null)
+  let sort = $state<SortState | null>({ id: 'changes', desc: true });
+  let selected = $state<string | null>(null);
 
-  const bufferSince = $derived(timeline.data.length ? timeline.data[0]!.timestamp : null)
+  const bufferSince = $derived(timeline.data.length ? timeline.data[0]!.timestamp : null);
 
   const columns: Column<HotState>[] = [
     {
@@ -61,15 +61,15 @@
       descFirst: true,
       sort: (a, b) => a.last.seq - b.last.seq,
     },
-  ]
+  ];
 
   // Timeline entries carry no page-load id, so the selection takes the served
   // epoch at the moment of the click; the server refuses the scoped request if
   // it no longer matches (staleReason 'epoch-changed').
   async function open(h: HotState) {
-    if (h.componentId === null) return
-    const epoch = (await getLiveComponentsMeta().catch(() => null))?.epoch
-    if (epoch) reactiveScope.scopeTo(h.componentId, h.file, epoch)
+    if (h.componentId === null) return;
+    const epoch = (await getLiveComponentsMeta().catch(() => null))?.epoch;
+    if (epoch) reactiveScope.scopeTo(h.componentId, h.file, epoch);
   }
 </script>
 

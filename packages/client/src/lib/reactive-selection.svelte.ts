@@ -1,4 +1,4 @@
-import { componentName } from './format.js'
+import { componentName } from './format.js';
 
 /**
  * The component instance Reactivity is scoped to (§6.7 A). Set from the
@@ -7,24 +7,24 @@ import { componentName } from './format.js'
  * scope always carries it.
  */
 export interface ReactiveScope {
-  componentId: number
-  epoch: string
+  componentId: number;
+  epoch: string;
   /** Display name, e.g. `<Row>`. */
-  label: string
-  file: string
+  label: string;
+  file: string;
 }
 
-let current = $state<ReactiveScope | null>(null)
+let current = $state<ReactiveScope | null>(null);
 
 export const reactiveScope = {
   get current() {
-    return current
+    return current;
   },
   set(scope: ReactiveScope | null) {
-    current = scope
+    current = scope;
   },
   /** Scope to instance `componentId` of `file`, labelled `<Name>`. */
   scopeTo(componentId: number, file: string, epoch: string) {
-    current = { componentId, epoch, label: `<${componentName(file)}>`, file }
+    current = { componentId, epoch, label: `<${componentName(file)}>`, file };
   },
-}
+};

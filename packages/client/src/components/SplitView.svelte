@@ -1,7 +1,7 @@
 <script lang="ts">
-  import type { Snippet } from 'svelte'
+  import type { Snippet } from 'svelte';
 
-  import { persisted } from '../lib/persisted.svelte.js'
+  import { persisted } from '../lib/persisted.svelte.js';
 
   /**
    * Main content + resizable side pane. Side-by-side when wide; stacks the
@@ -9,17 +9,17 @@
    * is often a short, wide strip or a tall, thin column).
    */
   interface Props {
-    id: string
+    id: string;
     /** Whether the side pane is shown. */
-    open?: boolean
-    initial?: number
-    min?: number
+    open?: boolean;
+    initial?: number;
+    min?: number;
     /** Container width below which the layout stacks vertically. */
-    stackBelow?: number
+    stackBelow?: number;
     /** Put the side pane on the left (navigation lists) instead of the right. */
-    side?: 'start' | 'end'
-    children: Snippet
-    aside: Snippet
+    side?: 'start' | 'end';
+    children: Snippet;
+    aside: Snippet;
   }
 
   let {
@@ -31,50 +31,50 @@
     side = 'end',
     children,
     aside,
-  }: Props = $props()
+  }: Props = $props();
 
   // svelte-ignore state_referenced_locally
-  const size = persisted(`split:${id}`, initial)
-  let width = $state(0)
-  let height = $state(0)
-  let dragging = $state(false)
+  const size = persisted(`split:${id}`, initial);
+  let width = $state(0);
+  let height = $state(0);
+  let dragging = $state(false);
 
-  const stacked = $derived(width > 0 && width < stackBelow)
-  const limit = $derived(stacked ? height : width)
-  const clamped = $derived(Math.max(min, Math.min(size.value, Math.max(min, limit - min))))
+  const stacked = $derived(width > 0 && width < stackBelow);
+  const limit = $derived(stacked ? height : width);
+  const clamped = $derived(Math.max(min, Math.min(size.value, Math.max(min, limit - min))));
 
   function startDrag(e: PointerEvent) {
-    const el = e.currentTarget as HTMLElement
-    el.setPointerCapture(e.pointerId)
-    dragging = true
-    const origin = stacked ? e.clientY : e.clientX
-    const startSize = clamped
-    const dir = stacked || side === 'end' ? -1 : 1
+    const el = e.currentTarget as HTMLElement;
+    el.setPointerCapture(e.pointerId);
+    dragging = true;
+    const origin = stacked ? e.clientY : e.clientX;
+    const startSize = clamped;
+    const dir = stacked || side === 'end' ? -1 : 1;
     const move = (ev: PointerEvent) => {
-      const delta = (stacked ? ev.clientY : ev.clientX) - origin
-      size.value = Math.round(startSize + dir * delta)
-    }
+      const delta = (stacked ? ev.clientY : ev.clientX) - origin;
+      size.value = Math.round(startSize + dir * delta);
+    };
     const up = () => {
-      dragging = false
-      el.removeEventListener('pointermove', move)
-      el.removeEventListener('pointerup', up)
-      el.removeEventListener('pointercancel', up)
-      size.value = clamped
-    }
-    el.addEventListener('pointermove', move)
-    el.addEventListener('pointerup', up)
-    el.addEventListener('pointercancel', up)
+      dragging = false;
+      el.removeEventListener('pointermove', move);
+      el.removeEventListener('pointerup', up);
+      el.removeEventListener('pointercancel', up);
+      size.value = clamped;
+    };
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
   }
 
   function onkeydown(e: KeyboardEvent) {
-    const step = e.shiftKey ? 64 : 16
-    const grow = side === 'end' || stacked ? ['ArrowLeft', 'ArrowUp'] : ['ArrowRight', 'ArrowDown']
+    const step = e.shiftKey ? 64 : 16;
+    const grow = side === 'end' || stacked ? ['ArrowLeft', 'ArrowUp'] : ['ArrowRight', 'ArrowDown'];
     const shrink =
-      side === 'end' || stacked ? ['ArrowRight', 'ArrowDown'] : ['ArrowLeft', 'ArrowUp']
-    if (grow.includes(e.key)) size.value = clamped + step
-    else if (shrink.includes(e.key)) size.value = clamped - step
-    else return
-    e.preventDefault()
+      side === 'end' || stacked ? ['ArrowRight', 'ArrowDown'] : ['ArrowLeft', 'ArrowUp'];
+    if (grow.includes(e.key)) size.value = clamped + step;
+    else if (shrink.includes(e.key)) size.value = clamped - step;
+    else return;
+    e.preventDefault();
   }
 </script>
 

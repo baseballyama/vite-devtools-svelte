@@ -1,14 +1,14 @@
 <script lang="ts">
   interface Product {
-    id: number
-    name: string
-    price: number
+    id: number;
+    name: string;
+    price: number;
   }
 
-  let { products }: { products: Product[] } = $props()
+  let { products }: { products: Product[] } = $props();
 
-  let selected = $state<number | null>(null)
-  const current = $derived(products.find(p => p.id === selected) ?? null)
+  let selected = $state<number | null>(null);
+  const current = $derived(products.find(p => p.id === selected) ?? null);
 </script>
 
 <ul data-testid="products">

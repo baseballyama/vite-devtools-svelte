@@ -1,5 +1,5 @@
 /** Longest an outbound devtools request (API playground, OG preview) may take, body included. */
-export const OUTBOUND_TIMEOUT_MS = 30_000
+export const OUTBOUND_TIMEOUT_MS = 30_000;
 
 /**
  * `fetch` that never follows redirects and gives up after `timeoutMs`, body
@@ -13,24 +13,24 @@ export async function fetchWithTimeout<T>(
   read: (res: Response) => Promise<T>,
   timeoutMs = OUTBOUND_TIMEOUT_MS,
 ): Promise<T> {
-  const controller = new AbortController()
-  let timer: ReturnType<typeof setTimeout> | undefined
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
-      const error = new Error(`Timed out after ${timeoutMs}ms`)
-      controller.abort(error)
-      reject(error)
-    }, timeoutMs)
-  })
+      const error = new Error(`Timed out after ${timeoutMs}ms`);
+      controller.abort(error);
+      reject(error);
+    }, timeoutMs);
+  });
   const work = (async () => {
-    const res = await fetch(url, { ...init, redirect: 'manual', signal: controller.signal })
-    return read(res)
-  })()
+    const res = await fetch(url, { ...init, redirect: 'manual', signal: controller.signal });
+    return read(res);
+  })();
   // A late failure of the abandoned transfer must not surface as unhandled.
-  work.catch(() => {})
+  work.catch(() => {});
   try {
-    return await Promise.race([work, timeout])
+    return await Promise.race([work, timeout]);
   } finally {
-    clearTimeout(timer)
+    clearTimeout(timer);
   }
 }

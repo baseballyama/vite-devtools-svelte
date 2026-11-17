@@ -1,61 +1,61 @@
 <script lang="ts">
-  import { tick } from 'svelte'
+  import { tick } from 'svelte';
 
-  import { matcher } from '../lib/match.js'
-  import Highlight from './Highlight.svelte'
-  import Icon from './Icon.svelte'
-  import type { Command } from './types.js'
+  import { matcher } from '../lib/match.js';
+  import Highlight from './Highlight.svelte';
+  import Icon from './Icon.svelte';
+  import type { Command } from './types.js';
 
-  let { open = $bindable(false), commands }: { open?: boolean; commands: Command[] } = $props()
+  let { open = $bindable(false), commands }: { open?: boolean; commands: Command[] } = $props();
 
-  let query = $state('')
-  let index = $state(0)
-  let input = $state<HTMLInputElement | null>(null)
-  let listEl = $state<HTMLElement | null>(null)
-  let returnFocus: HTMLElement | null = null
+  let query = $state('');
+  let index = $state(0);
+  let input = $state<HTMLInputElement | null>(null);
+  let listEl = $state<HTMLElement | null>(null);
+  let returnFocus: HTMLElement | null = null;
 
   const results = $derived.by(() => {
-    const m = matcher(query)
-    return m ? commands.filter(c => m(c.label, c.hint, c.group, c.keywords)) : commands
-  })
+    const m = matcher(query);
+    return m ? commands.filter(c => m(c.label, c.hint, c.group, c.keywords)) : commands;
+  });
 
   $effect(() => {
     if (open) {
-      returnFocus = document.activeElement as HTMLElement | null
-      query = ''
-      index = 0
-      void tick().then(() => input?.focus())
+      returnFocus = document.activeElement as HTMLElement | null;
+      query = '';
+      index = 0;
+      void tick().then(() => input?.focus());
     }
-  })
+  });
 
   function close() {
-    open = false
-    returnFocus?.focus()
+    open = false;
+    returnFocus?.focus();
   }
 
   function run(c: Command | undefined) {
-    if (!c) return
-    open = false
-    c.run()
+    if (!c) return;
+    open = false;
+    c.run();
   }
 
   function move(delta: number) {
-    if (!results.length) return
-    index = (index + delta + results.length) % results.length
+    if (!results.length) return;
+    index = (index + delta + results.length) % results.length;
     void tick().then(() =>
       listEl?.querySelector(`[data-i="${index}"]`)?.scrollIntoView({ block: 'nearest' }),
-    )
+    );
   }
 
   function onkeydown(e: KeyboardEvent) {
-    if (e.key === 'ArrowDown') move(1)
-    else if (e.key === 'ArrowUp') move(-1)
-    else if (e.key === 'Enter') run(results[index])
-    else if (e.key === 'Escape') close()
+    if (e.key === 'ArrowDown') move(1);
+    else if (e.key === 'ArrowUp') move(-1);
+    else if (e.key === 'Enter') run(results[index]);
+    else if (e.key === 'Escape') close();
     else if (e.key === 'Tab') {
       // Focus trap: the input is the only tab stop inside the dialog.
-    } else return
-    e.preventDefault()
+    } else return;
+    e.preventDefault();
   }
 </script>
 

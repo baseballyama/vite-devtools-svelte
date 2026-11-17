@@ -1,43 +1,43 @@
 <script lang="ts">
-  import { untrack } from 'svelte'
+  import { untrack } from 'svelte';
 
-  import Badge from '../components/Badge.svelte'
-  import Button from '../components/Button.svelte'
-  import CaptureNotice from '../components/CaptureNotice.svelte'
-  import DataTable from '../components/DataTable.svelte'
-  import EmptyState from '../components/EmptyState.svelte'
-  import Highlight from '../components/Highlight.svelte'
-  import Inspector from '../components/Inspector.svelte'
-  import LiveControls from '../components/LiveControls.svelte'
-  import Panel from '../components/Panel.svelte'
-  import RefreshButton from '../components/RefreshButton.svelte'
-  import SearchField from '../components/SearchField.svelte'
-  import Segmented from '../components/Segmented.svelte'
-  import SplitView from '../components/SplitView.svelte'
-  import TreeView from '../components/TreeView.svelte'
-  import type { Column, SortState, TableRowState, TreeViewApi } from '../components/types.js'
-  import type { CaptureInfo } from '../lib/capture.svelte.js'
-  import { countBy, groupBy } from '../lib/collections.js'
-  import { componentName, shortPath } from '../lib/format.js'
-  import { buildLiveTree, type LiveNode } from '../lib/live-tree.js'
-  import { matcher } from '../lib/match.js'
-  import { persisted } from '../lib/persisted.svelte.js'
-  import { reactiveScope } from '../lib/reactive-selection.svelte.js'
-  import { resource } from '../lib/resource.svelte.js'
-  import { router } from '../lib/router.svelte.js'
+  import Badge from '../components/Badge.svelte';
+  import Button from '../components/Button.svelte';
+  import CaptureNotice from '../components/CaptureNotice.svelte';
+  import DataTable from '../components/DataTable.svelte';
+  import EmptyState from '../components/EmptyState.svelte';
+  import Highlight from '../components/Highlight.svelte';
+  import Inspector from '../components/Inspector.svelte';
+  import LiveControls from '../components/LiveControls.svelte';
+  import Panel from '../components/Panel.svelte';
+  import RefreshButton from '../components/RefreshButton.svelte';
+  import SearchField from '../components/SearchField.svelte';
+  import Segmented from '../components/Segmented.svelte';
+  import SplitView from '../components/SplitView.svelte';
+  import TreeView from '../components/TreeView.svelte';
+  import type { Column, SortState, TableRowState, TreeViewApi } from '../components/types.js';
+  import type { CaptureInfo } from '../lib/capture.svelte.js';
+  import { countBy, groupBy } from '../lib/collections.js';
+  import { componentName, shortPath } from '../lib/format.js';
+  import { buildLiveTree, type LiveNode } from '../lib/live-tree.js';
+  import { matcher } from '../lib/match.js';
+  import { persisted } from '../lib/persisted.svelte.js';
+  import { reactiveScope } from '../lib/reactive-selection.svelte.js';
+  import { resource } from '../lib/resource.svelte.js';
+  import { router } from '../lib/router.svelte.js';
   import {
     getComponentRelations,
     getLiveComponents,
     getLiveComponentsMeta,
     openInEditor,
-  } from '../lib/rpc.js'
-  import { branchKeys, defaultExpansion, remapAcross, type TreeRow } from '../lib/tree.js'
-  import type { ComponentInstance, ComponentRelation, LiveComponentsMeta } from '../lib/types.js'
-  import { datasetVersion } from '../lib/versions.js'
+  } from '../lib/rpc.js';
+  import { branchKeys, defaultExpansion, remapAcross, type TreeRow } from '../lib/tree.js';
+  import type { ComponentInstance, ComponentRelation, LiveComponentsMeta } from '../lib/types.js';
+  import { datasetVersion } from '../lib/versions.js';
 
-  type Mode = 'tree' | 'files'
-  const mode = persisted<Mode>('components:mode', 'tree')
-  let query = $state('')
+  type Mode = 'tree' | 'files';
+  const mode = persisted<Mode>('components:mode', 'tree');
+  let query = $state('');
 
   // ---- Live instance tree -------------------------------------------------
   // Polled in both modes: Files mode shows per-file mounted counts too.
@@ -47,116 +47,116 @@
   // if the served epoch flipped in between (two app tabs), the epoch is
   // `null` = unknown, and ids of that snapshot are never compared.
   interface LiveSnapshot {
-    list: ComponentInstance[]
-    meta: LiveComponentsMeta | null
-    epoch: string | null
+    list: ComponentInstance[];
+    meta: LiveComponentsMeta | null;
+    epoch: string | null;
   }
   const live = resource<LiveSnapshot>(
     async () => {
-      const before = await getLiveComponentsMeta()
-      const list = await getLiveComponents()
-      const meta = await getLiveComponentsMeta()
-      return { list, meta, epoch: before.epoch === meta.epoch ? (meta.epoch ?? '') : null }
+      const before = await getLiveComponentsMeta();
+      const list = await getLiveComponents();
+      const meta = await getLiveComponentsMeta();
+      return { list, meta, epoch: before.epoch === meta.epoch ? (meta.epoch ?? '') : null };
     },
     {
       initial: { list: [], meta: null, epoch: '' },
       interval: 2000,
       version: datasetVersion('components'),
     },
-  )
-  const liveList = $derived(live.data.list)
+  );
+  const liveList = $derived(live.data.list);
 
   // Tree state is *anchored* by instance id: on every snapshot the
   // selection and expanded set are carried over with `remapKeys` — a live id
   // wins (so removing an earlier same-name sibling, which shifts ordinals,
   // never moves the selection to a neighbour) and the path is used only for
   // fresh ids, i.e. HMR remounts (review U4b).
-  const tree = $derived(buildLiveTree(liveList, live.data.epoch))
+  const tree = $derived(buildLiveTree(liveList, live.data.epoch));
 
   const capture = $derived.by<CaptureInfo | null>(() => {
-    const m = live.data.meta
+    const m = live.data.meta;
     return m
       ? { captured: m.kept, total: m.total, truncated: m.truncated, policy: 'parents first' }
-      : null
-  })
+      : null;
+  });
 
-  const instancesPerFile = $derived(countBy(liveList, c => c.file))
+  const instancesPerFile = $derived(countBy(liveList, c => c.file));
 
-  let expanded = $state(new Set<string>())
-  let treeSelected = $state<string | null>(null)
-  let treeView = $state<TreeViewApi | null>(null)
+  let expanded = $state(new Set<string>());
+  let treeSelected = $state<string | null>(null);
+  let treeView = $state<TreeViewApi | null>(null);
   /** Page load the default expansion was applied to (`undefined` = not yet). */
-  let seededEpoch: string | undefined = undefined
+  let seededEpoch: string | undefined = undefined;
 
   // Carry selection / expansion across snapshots (see `tree` above);
   // across an epoch change only paths are used (`remapAcross`).
-  let prevTree: typeof tree | null = null
-  const idOf = (n: LiveNode) => n.c.id
-  const keyOf = (n: LiveNode) => n.key
+  let prevTree: typeof tree | null = null;
+  const idOf = (n: LiveNode) => n.c.id;
+  const keyOf = (n: LiveNode) => n.key;
   $effect.pre(() => {
-    const next = tree
+    const next = tree;
     untrack(() => {
-      const prev = prevTree
-      prevTree = next
-      if (!prev || prev === next) return
+      const prev = prevTree;
+      prevTree = next;
+      if (!prev || prev === next) return;
       if (expanded.size) {
-        const keys = remapAcross(expanded, prev, next, idOf, keyOf)
+        const keys = remapAcross(expanded, prev, next, idOf, keyOf);
         // Skip the reassignment when nothing moved, so TreeView does not
         // re-flatten on every poll.
         if (keys.length !== expanded.size || keys.some(k => !expanded.has(k)))
-          expanded = new Set(keys)
+          expanded = new Set(keys);
       }
       if (treeSelected != null)
-        treeSelected = remapAcross([treeSelected], prev, next, idOf, keyOf)[0] ?? null
-    })
-  })
+        treeSelected = remapAcross([treeSelected], prev, next, idOf, keyOf)[0] ?? null;
+    });
+  });
 
   // Open the first three levels once per app page load, as soon as the tree
   // has children (after a reload the first snapshot may hold only the root).
   // Expansion carried over by path (`remapAcross`) is kept.
   $effect(() => {
     // `null` = the epoch flipped during the read: wait for a settled snapshot.
-    if (tree.epoch === null || seededEpoch === tree.epoch) return
-    const keys = defaultExpansion(tree.roots, n => n.children, keyOf)
-    if (keys.length === 0) return
-    seededEpoch = tree.epoch
-    untrack(() => (expanded = new Set([...expanded, ...keys])))
-  })
+    if (tree.epoch === null || seededEpoch === tree.epoch) return;
+    const keys = defaultExpansion(tree.roots, n => n.children, keyOf);
+    if (keys.length === 0) return;
+    seededEpoch = tree.epoch;
+    untrack(() => (expanded = new Set([...expanded, ...keys])));
+  });
 
-  const match = $derived(matcher(query))
-  const treeFilter = $derived(match && ((n: LiveNode) => match(n.c.name, n.c.file)))
-  const treeMatches = $derived(match && liveList.filter(c => match(c.name, c.file)).length)
+  const match = $derived(matcher(query));
+  const treeFilter = $derived(match && ((n: LiveNode) => match(n.c.name, n.c.file)));
+  const treeMatches = $derived(match && liveList.filter(c => match(c.name, c.file)).length);
 
   const selectedNode = $derived(
     treeSelected != null ? (tree.byKey.get(treeSelected) ?? null) : null,
-  )
+  );
 
   function ancestorsOf(id: number): LiveNode[] {
-    const out: LiveNode[] = []
-    let cur = tree.byId.get(id)
+    const out: LiveNode[] = [];
+    let cur = tree.byId.get(id);
     while (cur && cur.c.parentId != null) {
-      const p = tree.byId.get(cur.c.parentId)
-      if (!p) break
-      out.unshift(p)
-      cur = p
+      const p = tree.byId.get(cur.c.parentId);
+      if (!p) break;
+      out.unshift(p);
+      cur = p;
     }
-    return out
+    return out;
   }
 
   function revealInstance(id: number) {
-    const node = tree.byId.get(id)
-    if (!node) return
+    const node = tree.byId.get(id);
+    if (!node) return;
     treeView?.reveal(
       node.key,
       ancestorsOf(id).map(a => a.key),
-    )
+    );
   }
 
   // ---- Static file relations ---------------------------------------------
   const relations = resource<ComponentRelation[]>(getComponentRelations, {
     initial: [],
     when: () => mode.value === 'files' || treeSelected != null,
-  })
+  });
 
   /** Relations importing each file, in relation order. */
   const importers = $derived(
@@ -165,17 +165,17 @@
       e => e.imp,
       e => e.r,
     ),
-  )
+  );
 
-  const relationByFile = $derived(new Map(relations.data.map(r => [r.file, r])))
+  const relationByFile = $derived(new Map(relations.data.map(r => [r.file, r])));
 
   const fileRows = $derived(
     match ? relations.data.filter(r => match(r.name, r.file)) : relations.data,
-  )
+  );
 
-  let fileSort = $state<SortState | null>({ id: 'name', desc: false })
-  let fileSelected = $state<string | null>(null)
-  const selectedFile = $derived(fileSelected ? (relationByFile.get(fileSelected) ?? null) : null)
+  let fileSort = $state<SortState | null>({ id: 'name', desc: false });
+  let fileSelected = $state<string | null>(null);
+  const selectedFile = $derived(fileSelected ? (relationByFile.get(fileSelected) ?? null) : null);
 
   const columns: Column<ComponentRelation>[] = [
     {
@@ -209,40 +209,40 @@
       minWidth: 520,
       sort: (a, b) => (instancesPerFile.get(a.file) ?? 0) - (instancesPerFile.get(b.file) ?? 0),
     },
-  ]
+  ];
 
   /**
    * The page load this snapshot's ids belong to: set only when the meta read
    * before and after the list agree (`live.data.epoch`). `null` means the
    * served page load changed in between; the snapshot is refetched.
    */
-  const liveEpoch = $derived(live.data.epoch || null)
+  const liveEpoch = $derived(live.data.epoch || null);
   $effect(() => {
-    if (live.data.epoch === null) untrack(() => void live.refresh())
-  })
+    if (live.data.epoch === null) untrack(() => void live.refresh());
+  });
 
   /** Scope Reactivity to this instance (§6.7 A) with the validated page load its id belongs to. */
   function showReactivity(c: ComponentInstance) {
-    if (!liveEpoch) return
-    reactiveScope.set({ componentId: c.id, epoch: liveEpoch, label: `<${c.name}>`, file: c.file })
-    router.go('reactive')
+    if (!liveEpoch) return;
+    reactiveScope.set({ componentId: c.id, epoch: liveEpoch, label: `<${c.name}>`, file: c.file });
+    router.go('reactive');
   }
 
   function open(file: string) {
-    openInEditor(file).catch(() => {})
+    openInEditor(file).catch(() => {});
   }
 
   function showFile(file: string) {
-    mode.value = 'files'
-    query = ''
-    fileSelected = file
+    mode.value = 'files';
+    query = '';
+    fileSelected = file;
   }
 
   function showInstancesOf(file: string) {
-    const first = liveList.find(c => c.file === file)
-    mode.value = 'tree'
-    query = ''
-    if (first) queueMicrotask(() => revealInstance(first.id))
+    const first = liveList.find(c => c.file === file);
+    mode.value = 'tree';
+    query = '';
+    if (first) queueMicrotask(() => revealInstance(first.id));
   }
 </script>
 

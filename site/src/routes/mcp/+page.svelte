@@ -1,16 +1,16 @@
 <script lang="ts">
-  import { resolve } from '$app/paths'
+  import { resolve } from '$app/paths';
 
-  import CodeBlock from '#lib/CodeBlock.svelte'
-  import { MCP_EXAMPLES, MCP_EXAMPLES_SOURCE, type McpExample } from '#lib/mcp-examples.ts'
-  import { MCP_TOOL_COUNT, MCP_TOOL_GROUPS } from '#lib/mcp-tools.ts'
-  import { image } from '#lib/paths.ts'
+  import CodeBlock from '#lib/CodeBlock.svelte';
+  import { MCP_EXAMPLES, MCP_EXAMPLES_SOURCE, type McpExample } from '#lib/mcp-examples.ts';
+  import { MCP_TOOL_COUNT, MCP_TOOL_GROUPS } from '#lib/mcp-tools.ts';
+  import { image } from '#lib/paths.ts';
 
   const printedCode = `  svelte-devtools MCP ready — register with Claude Code:
-    claude mcp add --transport http svelte http://localhost:5173/__svelte-devtools/mcp --header x-svelte-devtools-token:<token>`
+    claude mcp add --transport http svelte http://localhost:5173/__svelte-devtools/mcp --header x-svelte-devtools-token:<token>`;
 
   const reRegisterCode = `claude mcp remove svelte
-claude mcp add --transport http svelte http://localhost:5173/__svelte-devtools/mcp --header x-svelte-devtools-token:<new token>`
+claude mcp add --transport http svelte http://localhost:5173/__svelte-devtools/mcp --header x-svelte-devtools-token:<new token>`;
 
   const mcpJsonCode = `{
   "mcpServers": {
@@ -20,21 +20,21 @@ claude mcp add --transport http svelte http://localhost:5173/__svelte-devtools/m
       "headers": { "x-svelte-devtools-token": "\${SVELTE_DEVTOOLS_TOKEN}" }
     }
   }
-}`
+}`;
 
   const envCode = `export SVELTE_DEVTOOLS_TOKEN=<token from the printed line>
-claude`
+claude`;
 
   const curlCode = `curl -s http://localhost:5173/__svelte-devtools/mcp \\
   -H 'content-type: application/json' \\
   -H 'accept: application/json, text/event-stream' \\
   -H 'x-svelte-devtools-token: <token>' \\
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'`
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'`;
 
   const promptCode = `The cart total on /cart looks wrong after I change the tax rate.
 Use the svelte MCP server: find the busiest components, look at the
 ReactivePriceChart instance, and tell me which state can affect grandTotal
-and what changed when I edited the tax rate.`
+and what changed when I edited the tax rate.`;
 
   const sections = [
     { num: '01', title: 'What it is', anchor: 'what' },
@@ -48,16 +48,16 @@ and what changed when I edited the tax rate.`
     { num: '09', title: 'Troubleshooting', anchor: 'troubleshooting' },
     { num: '10', title: 'Security', anchor: 'security' },
     { num: '11', title: 'Versions', anchor: 'versions' },
-  ]
+  ];
 
   const ex = (id: string): McpExample => {
-    const e = MCP_EXAMPLES.find(x => x.id === id)
-    if (!e) throw new Error(`missing MCP example ${id}`)
-    return e
-  }
+    const e = MCP_EXAMPLES.find(x => x.id === id);
+    if (!e) throw new Error(`missing MCP example ${id}`);
+    return e;
+  };
   const request = (e: McpExample) =>
-    JSON.stringify({ name: e.tool, arguments: e.arguments }, null, 2)
-  const response = (e: McpExample) => JSON.stringify(e.response, null, 2)
+    JSON.stringify({ name: e.tool, arguments: e.arguments }, null, 2);
+  const response = (e: McpExample) => JSON.stringify(e.response, null, 2);
 
   const walkthrough = [
     {
@@ -95,7 +95,7 @@ and what changed when I edited the tax rate.`
       title: 'After a reload, ids are refused, not guessed',
       text: 'After reloading the app page, the same componentId with the old epoch returns an empty graph with staleReason "epoch-changed" instead of another instance.',
     },
-  ]
+  ];
 
   const shots = [
     {
@@ -118,7 +118,7 @@ and what changed when I edited the tax rate.`
       alt: 'After a reload the panel says the app page reloaded and asks to pick the component again',
       caption: 'After a reload: the epoch-changed answer, in the panel.',
     },
-  ]
+  ];
 </script>
 
 <svelte:head>

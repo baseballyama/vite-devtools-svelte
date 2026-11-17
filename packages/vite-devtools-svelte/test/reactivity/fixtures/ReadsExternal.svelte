@@ -1,7 +1,7 @@
 <script>
-  import { external } from './external.js'
-  let seen = 0
+  import { external } from './external.js';
+  let seen = 0;
   $effect(() => {
-    seen = external.value
-  })
+    seen = external.value;
+  });
 </script>

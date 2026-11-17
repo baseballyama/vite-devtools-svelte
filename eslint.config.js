@@ -1,9 +1,9 @@
-import svelte from 'eslint-plugin-svelte'
+import svelte from 'eslint-plugin-svelte';
 // ESLint covers only `.svelte` components (markup, runes, accessibility):
 // oxlint lints every other file and does not parse Svelte templates.
-import { defineConfig } from 'eslint/config'
-import globals from 'globals'
-import ts from 'typescript-eslint'
+import { defineConfig } from 'eslint/config';
+import globals from 'globals';
+import ts from 'typescript-eslint';
 
 export default defineConfig(
   {
@@ -64,4 +64,4 @@ export default defineConfig(
       'svelte/no-unnecessary-state-wrap': 'error',
     },
   },
-)
+);

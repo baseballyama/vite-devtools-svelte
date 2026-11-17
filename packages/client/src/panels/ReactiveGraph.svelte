@@ -1,24 +1,24 @@
 <script lang="ts">
-  import { untrack } from 'svelte'
+  import { untrack } from 'svelte';
 
-  import Button from '../components/Button.svelte'
-  import CaptureNotice from '../components/CaptureNotice.svelte'
-  import DataTable from '../components/DataTable.svelte'
-  import EmptyState from '../components/EmptyState.svelte'
-  import GraphView from '../components/GraphView.svelte'
-  import Highlight from '../components/Highlight.svelte'
-  import LiveControls from '../components/LiveControls.svelte'
-  import Panel from '../components/Panel.svelte'
-  import SearchField from '../components/SearchField.svelte'
-  import Segmented from '../components/Segmented.svelte'
-  import SplitView from '../components/SplitView.svelte'
-  import type { Column, SortState, TableRowState } from '../components/types.js'
-  import { captureInfo } from '../lib/capture.svelte.js'
-  import { groupBy } from '../lib/collections.js'
-  import { componentName, formatClock } from '../lib/format.js'
-  import { haystack, haystackMatcher } from '../lib/match.js'
-  import { persisted } from '../lib/persisted.svelte.js'
-  import { reactiveScope } from '../lib/reactive-selection.svelte.js'
+  import Button from '../components/Button.svelte';
+  import CaptureNotice from '../components/CaptureNotice.svelte';
+  import DataTable from '../components/DataTable.svelte';
+  import EmptyState from '../components/EmptyState.svelte';
+  import GraphView from '../components/GraphView.svelte';
+  import Highlight from '../components/Highlight.svelte';
+  import LiveControls from '../components/LiveControls.svelte';
+  import Panel from '../components/Panel.svelte';
+  import SearchField from '../components/SearchField.svelte';
+  import Segmented from '../components/Segmented.svelte';
+  import SplitView from '../components/SplitView.svelte';
+  import type { Column, SortState, TableRowState } from '../components/types.js';
+  import { captureInfo } from '../lib/capture.svelte.js';
+  import { groupBy } from '../lib/collections.js';
+  import { componentName, formatClock } from '../lib/format.js';
+  import { haystack, haystackMatcher } from '../lib/match.js';
+  import { persisted } from '../lib/persisted.svelte.js';
+  import { reactiveScope } from '../lib/reactive-selection.svelte.js';
   import {
     EMPTY_GRAPH,
     baselineNotice,
@@ -32,21 +32,21 @@
     sameValue,
     staleLabel,
     totalLabel,
-  } from '../lib/reactive.js'
-  import { resource } from '../lib/resource.svelte.js'
-  import { router } from '../lib/router.svelte.js'
-  import { getStateTimelineDelta, openReactiveInEditor } from '../lib/rpc.js'
+  } from '../lib/reactive.js';
+  import { resource } from '../lib/resource.svelte.js';
+  import { router } from '../lib/router.svelte.js';
+  import { getStateTimelineDelta, openReactiveInEditor } from '../lib/rpc.js';
   import type {
     ReactiveGraphResult,
     ReactiveNode,
     ReactiveSummary,
     StateTimelineEntry,
-  } from '../lib/types.js'
-  import { datasetVersion } from '../lib/versions.js'
-  import ComponentsOverview from './reactive/ComponentsOverview.svelte'
-  import HotStates from './reactive/HotStates.svelte'
-  import KindBadge from './reactive/KindBadge.svelte'
-  import SignalInspector from './reactive/SignalInspector.svelte'
+  } from '../lib/types.js';
+  import { datasetVersion } from '../lib/versions.js';
+  import ComponentsOverview from './reactive/ComponentsOverview.svelte';
+  import HotStates from './reactive/HotStates.svelte';
+  import KindBadge from './reactive/KindBadge.svelte';
+  import SignalInspector from './reactive/SignalInspector.svelte';
 
   /*
    * Information design (docs/ui-status.md "UI information design v2",
@@ -60,35 +60,35 @@
    */
 
   /** SVG graph layout stays readable (and fast) up to roughly this size. */
-  const GRAPH_LIMIT = 400
+  const GRAPH_LIMIT = 400;
   /** Every graph poll makes the app walk the requested scope: slow, visible-only. */
-  const POLL_MS = 5000
+  const POLL_MS = 5000;
   /** The full graph stops auto-refreshing above this many nodes; refresh / resume still work. */
-  const AUTO_PAUSE_ABOVE = 2000
-  const SUMMARY = { topK: 50, windowMs: 10000 } as const
-  const SUMMARY_POLL_MS = 2000
+  const AUTO_PAUSE_ABOVE = 2000;
+  const SUMMARY = { topK: 50, windowMs: 10000 } as const;
+  const SUMMARY_POLL_MS = 2000;
 
-  type Tab = 'overview' | 'local' | 'full'
-  let tab = $state<Tab>(reactiveScope.current ? 'local' : 'overview')
-  const scope = $derived(reactiveScope.current)
+  type Tab = 'overview' | 'local' | 'full';
+  let tab = $state<Tab>(reactiveScope.current ? 'local' : 'overview');
+  const scope = $derived(reactiveScope.current);
 
   // A scope set from the Components inspector (or the overview) opens the component view.
   $effect(() => {
-    if (reactiveScope.current) untrack(() => (tab = 'local'))
-  })
+    if (reactiveScope.current) untrack(() => (tab = 'local'));
+  });
 
   // --- Overview ----------------------------------------------------------
 
   /** Overview of components (runtime summary) or of states (timeline buffer); each works without the other. */
-  let overviewOf = $state<'components' | 'states'>('components')
+  let overviewOf = $state<'components' | 'states'>('components');
 
   const summary = resource<ReactiveSummary | null>(() => fetchSummary(SUMMARY), {
     initial: null,
     interval: SUMMARY_POLL_MS,
     when: () => tab === 'overview' && overviewOf === 'components',
-  })
+  });
 
-  let group = $state<'file' | 'instance'>('file')
+  let group = $state<'file' | 'instance'>('file');
 
   // Hot states: the server's timeline buffer grouped by signal (read from the
   // server buffer only; the app is not asked).
@@ -100,46 +100,46 @@
       version: datasetVersion('stateTimeline'),
       when: () => tab === 'overview' && overviewOf === 'states',
     },
-  )
+  );
 
-  const states = $derived(hotStates(timeline.data))
+  const states = $derived(hotStates(timeline.data));
   // Baseline disclosure for the States view (capture info of the timeline).
   const statesCapture = captureInfo(
     SUMMARY_POLL_MS,
     () => tab === 'overview' && overviewOf === 'states',
-  )
-  const statesBaseline = $derived(baselineNotice(statesCapture.data.stateTimeline?.baseline))
+  );
+  const statesBaseline = $derived(baselineNotice(statesCapture.data.stateTimeline?.baseline));
 
   // --- Graph (component / full) ------------------------------------------
 
-  let changed = $state.raw(new Set<string>())
-  let lastValues = new Map<string, unknown>()
+  let changed = $state.raw(new Set<string>());
+  let lastValues = new Map<string, unknown>();
   /** When the app built the latest reply; `null` = unknown. Kept apart so `sameGraph` can ignore it. */
-  let builtAt = $state<number | null>(null)
+  let builtAt = $state<number | null>(null);
 
   /** Which graph the current tab asks for: an instance id, `null` = whole app, `undefined` = none. */
   const request = $derived<number | null | undefined>(
     tab === 'full' ? null : tab === 'local' && scope ? scope.componentId : undefined,
-  )
+  );
 
   const graph = resource<ReactiveGraphResult>(
     async () => {
       // A component request implies a scope (see `request`).
-      const want = untrack(() => request)
-      if (want === undefined) return EMPTY_GRAPH
+      const want = untrack(() => request);
+      if (want === undefined) return EMPTY_GRAPH;
       const g = await fetchGraph(
         want === null ? null : { componentId: want, epoch: untrack(() => scope!.epoch) },
-      )
-      const valued = g.nodes.filter(n => n.value !== undefined)
+      );
+      const valued = g.nodes.filter(n => n.value !== undefined);
       const diff = new Set(
         valued
           .filter(n => lastValues.has(n.id) && !sameValue(lastValues.get(n.id), n.value))
           .map(n => n.id),
-      )
-      lastValues = new Map(valued.map(n => [n.id, n.value]))
-      if (diff.size || changed.size) changed = diff
-      builtAt = g.computedAt
-      return g
+      );
+      lastValues = new Map(valued.map(n => [n.id, n.value]));
+      if (diff.size || changed.size) changed = diff;
+      builtAt = g.computedAt;
+      return g;
     },
     {
       initial: EMPTY_GRAPH,
@@ -147,61 +147,61 @@
       equals: sameGraph,
       when: () => request !== undefined,
     },
-  )
+  );
 
   // A different scope is a different dataset: drop flashes and the selection.
-  let lastRequest: number | null | undefined
+  let lastRequest: number | null | undefined;
   $effect(() => {
-    const r = request
+    const r = request;
     untrack(() => {
-      if (r === lastRequest) return
-      lastRequest = r
-      lastValues = new Map()
-      changed = new Set()
-      selected = null
-      builtAt = null
-      if (r !== undefined) void graph.refresh()
-    })
-  })
+      if (r === lastRequest) return;
+      lastRequest = r;
+      lastValues = new Map();
+      changed = new Set();
+      selected = null;
+      builtAt = null;
+      if (r !== undefined) void graph.refresh();
+    });
+  });
 
   // The full graph pauses once it grows past the threshold; if the user
   // resumes, respect that for the rest of the session.
-  let autoPaused = $state(false)
-  let userResumed = false
+  let autoPaused = $state(false);
+  let userResumed = false;
   $effect(() => {
-    if (autoPaused && graph.live) userResumed = true
-  })
+    if (autoPaused && graph.live) userResumed = true;
+  });
   $effect(() => {
     if (tab !== 'full' || userResumed || autoPaused || graph.data.nodes.length <= AUTO_PAUSE_ABOVE)
-      return
+      return;
     untrack(() => {
-      graph.live = false
-      autoPaused = true
-    })
-  })
+      graph.live = false;
+      autoPaused = true;
+    });
+  });
 
   /** Ids restart per page load: a scope from another epoch would point at a different instance. */
   const epochMismatch = $derived(
     tab === 'local' &&
       !!scope &&
       (isEpochChanged(graph.data) || (!!graph.data.epoch && graph.data.epoch !== scope.epoch)),
-  )
+  );
   /** A reply for another request (still loading after a switch) is not shown. */
   const data = $derived(
     epochMismatch || request === undefined || graph.data.scope !== (request ?? null)
       ? EMPTY_GRAPH
       : graph.data,
-  )
+  );
 
-  const view = persisted<'auto' | 'graph' | 'list'>('reactive:view', 'auto')
-  let query = $state('')
-  let type = $state<'all' | ReactiveNode['type']>('all')
-  let sort = $state<SortState | null>({ id: 'component', desc: false })
-  let selected = $state<string | null>(null)
+  const view = persisted<'auto' | 'graph' | 'list'>('reactive:view', 'auto');
+  let query = $state('');
+  let type = $state<'all' | ReactiveNode['type']>('all');
+  let sort = $state<SortState | null>({ id: 'component', desc: false });
+  let selected = $state<string | null>(null);
   /** Full graph only: narrow the loaded nodes to one file (client-side filter). */
-  let fileFilter = $state('')
+  let fileFilter = $state('');
 
-  const byId = $derived(new Map(data.nodes.map(n => [n.id, n])))
+  const byId = $derived(new Map(data.nodes.map(n => [n.id, n])));
   const links = $derived({
     deps: groupBy(
       data.edges,
@@ -213,13 +213,13 @@
       e => e.from,
       e => e.to,
     ),
-  })
+  });
 
-  const files = $derived([...new Set(data.nodes.map(n => n.componentFile))].sort())
+  const files = $derived([...new Set(data.nodes.map(n => n.componentFile))].sort());
 
   const inFile = $derived(
     tab !== 'full' || !fileFilter ? null : fileNeighbourhood(data.nodes, data.edges, fileFilter),
-  )
+  );
 
   // One lowercase haystack per node per graph update, so a keystroke is an
   // `includes` per node instead of formatting every value again.
@@ -230,31 +230,31 @@
         haystack(n.name, n.componentFile, n.value === undefined ? '' : nodeValueText(n.value)),
       ]),
     ),
-  )
+  );
 
   const nodes = $derived.by(() => {
-    const m = haystackMatcher(query)
-    const s = inFile
+    const m = haystackMatcher(query);
+    const s = inFile;
     return data.nodes.filter(
       n =>
         (!s || s.has(n.id)) &&
         (type === 'all' || n.type === type) &&
         (!m || m(hay.get(n.id) ?? '')),
-    )
-  })
+    );
+  });
 
-  const nodeIds = $derived(new Set(nodes.map(n => n.id)))
-  const edges = $derived(data.edges.filter(e => nodeIds.has(e.from) && nodeIds.has(e.to)))
+  const nodeIds = $derived(new Set(nodes.map(n => n.id)));
+  const edges = $derived(data.edges.filter(e => nodeIds.has(e.from) && nodeIds.has(e.to)));
   const mode = $derived(
     view.value === 'auto' ? (nodes.length <= 150 ? 'graph' : 'list') : view.value,
-  )
-  const current = $derived(selected ? (byId.get(selected) ?? null) : null)
+  );
+  const current = $derived(selected ? (byId.get(selected) ?? null) : null);
 
   const counts = $derived.by(() => {
-    const c = { state: 0, derived: 0, effect: 0, template: 0 }
-    for (const n of data.nodes) c[n.type]++
-    return c
-  })
+    const c = { state: 0, derived: 0, effect: 0, template: 0 };
+    for (const n of data.nodes) c[n.type]++;
+    return c;
+  });
 
   const columns: Column<ReactiveNode>[] = [
     { id: 'type', label: 'Kind', width: '68px', sort: (a, b) => a.type.localeCompare(b.type) },
@@ -286,7 +286,7 @@
         (links.deps.get(b.id)?.length ?? 0) -
         (links.dependents.get(b.id)?.length ?? 0),
     },
-  ]
+  ];
 
   /** Capabilities come with the summary; without one nothing beyond the graph is available. */
   const capabilities = $derived(
@@ -295,19 +295,19 @@
       signalHistory: false,
       writeCause: false,
     },
-  )
+  );
 
   function open(n: ReactiveNode) {
-    openReactiveInEditor(n.componentFile, n.name, n.type).catch(() => {})
+    openReactiveInEditor(n.componentFile, n.name, n.type).catch(() => {});
   }
 
   function scopeTo(n: ReactiveNode) {
-    if (data.epoch) reactiveScope.scopeTo(n.componentId, n.componentFile, data.epoch)
+    if (data.epoch) reactiveScope.scopeTo(n.componentId, n.componentFile, data.epoch);
   }
 
   function clearScope() {
-    reactiveScope.set(null)
-    tab = 'overview'
+    reactiveScope.set(null);
+    tab = 'overview';
   }
 </script>
 
