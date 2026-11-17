@@ -22,6 +22,8 @@ export interface ApiResponse {
   statusText: string
   headers: Record<string, string>
   body: string
+  /** Body bytes received (as sent, before decoding). */
+  size: number
   /** Milliseconds until the body was read (or reading stopped). */
   duration: number
   /** The URL that answered: differs from the request after a redirect. */
@@ -98,18 +100,20 @@ export async function sendRequest(
       statusText: res.statusText,
       headers,
       body: '',
+      size: 0,
       duration: duration(),
       url: res.url || req.url,
       redirected: res.redirected,
       truncated: null,
     }
     onProgress?.(head)
-    const { text, cut } = await readCapped(res, maxBytes, body => {
-      onProgress?.({ ...head, body, duration: duration() })
+    const { text, bytes, cut } = await readCapped(res, maxBytes, (body, size) => {
+      onProgress?.({ ...head, body, size, duration: duration() })
     })
     return {
       ...head,
       body: text,
+      size: bytes,
       duration: duration(),
       truncated: cut === 'error' && controller.signal.aborted ? 'stopped' : cut,
     }
@@ -126,9 +130,9 @@ export async function sendRequest(
 async function readCapped(
   res: Response,
   maxBytes: number,
-  onText: (text: string) => void,
-): Promise<{ text: string; cut: Truncation | null }> {
-  if (!res.body) return { text: '', cut: null }
+  onText: (text: string, bytes: number) => void,
+): Promise<{ text: string; bytes: number; cut: Truncation | null }> {
+  if (!res.body) return { text: '', bytes: 0, cut: null }
   const reader = res.body.getReader()
   const decoder = new TextDecoder()
   let text = ''
@@ -141,19 +145,20 @@ async function readCapped(
       if (done) break
       if (bytes + value.byteLength > maxBytes) {
         text += decoder.decode(value.subarray(0, maxBytes - bytes))
+        bytes = maxBytes
         cut = 'size'
         break
       }
       bytes += value.byteLength
       text += decoder.decode(value, { stream: true })
-      onText(text)
+      onText(text, bytes)
     }
   } catch {
     cut = 'error'
   }
   // Stop the rest of the transfer; a source that fails to cancel changes nothing here.
   if (cut === 'size') await reader.cancel().then(undefined, ignore)
-  return { text: text + decoder.decode(), cut }
+  return { text: text + decoder.decode(), bytes, cut }
 }
 
 function ignore(): void {}
@@ -180,6 +185,7 @@ function failure(url: string, statusText: string, duration: number): ApiResponse
     statusText,
     headers: {},
     body: '',
+    size: 0,
     duration,
     url,
     redirected: false,

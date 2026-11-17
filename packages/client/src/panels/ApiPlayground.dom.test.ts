@@ -45,6 +45,7 @@ function ok(over: Partial<ApiResponse> = {}): ApiResponse {
     statusText: 'OK',
     headers: { 'content-type': 'application/json' },
     body: '{"a":1}',
+    size: 7,
     duration: 12,
     url: 'http://x/',
     redirected: false,
@@ -312,6 +313,48 @@ describe('ApiPlayground', () => {
       within(response()).getByText('Stopped while streaming; showing what arrived'),
     ).toBeTruthy()
     expect(sendButton().disabled).toBe(false)
+  })
+
+  it('shows one repaint per frame with the latest progress, and the byte size', async () => {
+    vi.mocked(http.sendRequest).mockImplementation((_req, opts) => {
+      // two chunks in the same frame: only the second is painted
+      opts!.onProgress!(ok({ body: 'first', size: 5 }))
+      opts!.onProgress!(ok({ body: 'first second', size: 2048 }))
+      return new Promise(() => {})
+    })
+    const raf = vi.spyOn(window, 'requestAnimationFrame')
+    const { user } = await setup()
+    await user.type(urlInput(), 'http://x/')
+    await user.click(sendButton())
+    await settle()
+    expect(raf).toHaveBeenCalledOnce()
+    expect(response().querySelector('pre')!.textContent).toBe('first second')
+    expect(within(response()).getByText('2.0 KB')).toBeTruthy()
+  })
+
+  it('aborts the request in flight when the panel goes away', async () => {
+    vi.mocked(http.sendRequest).mockReturnValue(new Promise(() => {}))
+    const user = userEvent.setup()
+    const { unmount } = render(ApiPlayground)
+    await settle()
+    await user.type(urlInput(), 'http://x/')
+    await user.click(sendButton())
+    const { signal } = vi.mocked(http.sendRequest).mock.calls[0]![1]!
+    expect(signal!.aborted).toBe(false)
+    unmount()
+    expect(signal!.aborted).toBe(true)
+  })
+
+  it('names the headers the browser will drop', async () => {
+    const { user } = await setup()
+    await user.click(screen.getByRole('tab', { name: /Headers/ }))
+    const headers = screen.getByRole('textbox', { name: 'Request headers as JSON' })
+    await user.clear(headers)
+    await user.type(headers, '{{"Cookie":"a=1","x-ok":"1","Sec-Fetch-Mode":"x","Proxy-Auth":"y"}')
+    expect(screen.getByText('Cookie, Sec-Fetch-Mode, Proxy-Auth')).toBeTruthy()
+    await user.clear(headers)
+    await user.type(headers, '{{"x-ok":"1"}')
+    expect(screen.queryByText(/drops them here/)).toBeNull()
   })
 
   it('validates headers JSON and blocks sending', async () => {

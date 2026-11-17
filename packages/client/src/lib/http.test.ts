@@ -149,6 +149,7 @@ describe('sendRequest', () => {
       ),
     )
     const progress: string[] = []
+    const sizes: number[] = []
     const stop = new AbortController()
     const removed = vi.spyOn(stop.signal, 'removeEventListener')
     const pending = sendRequest(req(), {
@@ -156,6 +157,7 @@ describe('sendRequest', () => {
       signal: stop.signal,
       onProgress: r => {
         progress.push(r.body)
+        sizes.push(r.size)
       },
     })
     await vi.advanceTimersByTimeAsync(0)
@@ -166,6 +168,7 @@ describe('sendRequest', () => {
     push('data: 2\n\n')
     await vi.advanceTimersByTimeAsync(0)
     expect(progress).toEqual(['', 'data: 1\n\n', 'data: 1\n\ndata: 2\n\n'])
+    expect(sizes).toEqual([0, 9, 18])
     stop.abort()
     expect(await pending).toMatchObject({
       status: 200,
@@ -194,6 +197,7 @@ describe('sendRequest', () => {
     fetchMock.mockResolvedValue(new Response(endless(['ab', 'cdef'], controller.signal)))
     expect(await sendRequest(req(), { maxBytes: 4 })).toMatchObject({
       body: 'abcd',
+      size: 4,
       truncated: 'size',
     })
     // A source that throws on cancel does not fail the request.
