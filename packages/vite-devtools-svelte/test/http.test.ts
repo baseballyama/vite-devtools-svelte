@@ -82,6 +82,21 @@ const server = http.createServer((req, res) => {
   } else if (req.url === '/deflate-bomb') {
     res.writeHead(200, { 'content-encoding': 'deflate' });
     res.end(deflateBomb);
+  } else if (req.url === '/redirect-deflate') {
+    // headers out, body never: nobody reads a redirect's body
+    res.writeHead(302, { location: '/elsewhere', 'content-encoding': 'deflate' });
+    res.flushHeaders();
+  } else if (req.url === '/deflate-twice-partial') {
+    res.writeHead(302, { location: '/elsewhere', 'content-encoding': 'deflate, deflate' });
+    res.write(zlib.deflateSync(zlib.deflateSync('<title>twice</title>')).subarray(0, 4));
+  } else if (req.url === '/deflate-cut') {
+    res.writeHead(200, { 'content-encoding': 'deflate' });
+    res.write(deflateBomb.subarray(0, 1024), () => {
+      res.socket?.destroy();
+    });
+  } else if (req.url === '/gzip-identity') {
+    res.writeHead(200, { 'content-encoding': 'gzip, identity' });
+    res.end(zlib.gzipSync('<title>plain enough</title>'));
   } else if (req.url === '/no-trailer') {
     const zipped = zlib.gzipSync('<title>cut</title>');
     res.writeHead(200, { 'content-encoding': 'gzip' });
@@ -175,6 +190,7 @@ describe('transport.get', () => {
     ['empty gzip', '/empty-gzip', ''],
     ['empty deflate', '/empty-deflate', ''],
     ['304 that claims gzip', '/not-modified', ''],
+    ['gzip with identity', '/gzip-identity', '<title>plain enough</title>'],
   ])('decompresses a %s body', async (_label, p, body) => {
     expect(await text(await transport.get(local(p)))).toBe(body);
   });
@@ -192,6 +208,24 @@ describe('transport.get', () => {
     await vi.waitFor(() => {
       expect(res.body.destroyed).toBe(true);
     });
+  });
+
+  it('fails the read of a deflated body cut off midway', async () => {
+    const res = await transport.get(local('/deflate-cut'));
+    await expect(readCapped(res.body, 64 * 1024 * 1024)).rejects.toThrow();
+  });
+
+  it.each([
+    ['a deflated redirect whose body never came', '/redirect-deflate'],
+    ['a twice-deflated redirect cut short', '/deflate-twice-partial'],
+  ])('leaves %s unread without crashing', async (_label, p) => {
+    // the preview aborts the unread body; a stream erroring with no listener
+    // would be an uncaught exception (vitest fails the run on one)
+    const allowedOrigins = [origin()];
+    expect((await getOGPreview(`${origin()}${p}`, { allowedOrigins })).issues).toEqual([
+      'Redirects to /elsewhere (not followed)',
+    ]);
+    await new Promise(resolve => setTimeout(resolve, 50));
   });
 
   it('refuses a coding it cannot undo instead of reading garbled bytes', async () => {

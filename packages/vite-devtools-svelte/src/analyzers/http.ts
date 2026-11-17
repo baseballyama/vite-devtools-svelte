@@ -62,7 +62,8 @@ const inflate: Decoder = source => {
         });
       }
       // Takes the next chunk once this one is inflated, which waits while
-      // the reader is behind: a small body may inflate to a huge one.
+      // the reader is behind: the still compressed body stays in the socket
+      // instead of piling up here.
       inner.write(chunk, callback);
     },
     final(callback) {
@@ -162,7 +163,13 @@ export const transport = {
         if (body instanceof Error) {
           res.destroy();
           reject(body);
-        } else resolve({ status: res.statusCode ?? 0, headers: res.headers, body });
+          return;
+        }
+        // A body nobody reads (a redirect's) fails once the request is
+        // aborted, and with no listener that failure is an uncaught
+        // exception. A reader still gets it from the iteration.
+        body.on('error', ignore);
+        resolve({ status: res.statusCode ?? 0, headers: res.headers, body });
       });
       // 101 Switching Protocols never becomes a response: without this the
       // request would wait for the timeout.
