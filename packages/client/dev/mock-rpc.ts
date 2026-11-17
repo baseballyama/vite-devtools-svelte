@@ -362,6 +362,7 @@ export function createMockBackend(scale = 5000) {
     path: '/api/stream',
     url: `${MOCK_API_BASE}/api/stream`,
     methods: ['GET', 'HEAD'],
+    complete: true,
     file: 'src/routes/api/stream/+server.ts',
   })
 
