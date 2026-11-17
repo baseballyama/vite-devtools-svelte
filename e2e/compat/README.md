@@ -50,8 +50,8 @@ modes switches with `SVELTE_DEVTOOLS_DOCK=1`.
     `get_routes` (SvelteKit: at least one route; plain Svelte: no routes),
     and `get_capture_info`;
   - a production build contains no devtools code;
-  - dock mode: the injected `/__devtools/embedded.js` is served (a
-    prerequisite only; it does not prove the dock UI works).
+  - dock mode: `/__devtools/embedded.js` is served (a prerequisite only; it
+    does not prove the dock UI works).
 - **With one headless Chromium:**
   - first view: the app page is open, MCP `get_live_components` > 0, and
     `get_reactive_summary` has rows and is not stale;

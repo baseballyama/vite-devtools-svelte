@@ -149,7 +149,7 @@ After the app page reloads, a selected component id may belong to another instan
 
 - **Vite** >= 8.3.2
 - **Svelte** 5 (runes mode)
-- **SvelteKit** 3 (recommended, but not required for basic features; SvelteKit 2 is not supported)
+- **SvelteKit** >= 3.3.0 (recommended, otherwise you'll have to [add the DevTools dock manually](https://devtools.vite.dev/guide/#projects-without-an-html-entry))
 - **[@vitejs/devtools](https://devtools.vite.dev/)** >= 0.8.0 — optional; only for the in-page dock
 
 ## Installation

@@ -35,12 +35,6 @@ export default defineConfig({
         'src/plugin.ts': { statements: 98, branches: 95, functions: 91, lines: 98 },
         'src/server/collector.ts': { statements: 98, branches: 94, functions: 100, lines: 99 },
         'src/server/mount.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
-        'src/server/template-injector.ts': {
-          statements: 96,
-          branches: 95,
-          functions: 100,
-          lines: 100,
-        },
         'src/runtime/{ids,index,transform}.ts': {
           statements: 100,
           branches: 100,

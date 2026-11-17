@@ -29,7 +29,6 @@ import { createSvelteDevframe, DEVFRAME_BASE } from './server/devframe.js';
 import type { SvelteDevtoolsHost } from './server/devframe.js';
 import { LOAD_RECORDER, profileLoad } from './server/load-profile.js';
 import { mountStandalone, urlHost } from './server/mount.js';
-import { sveltekitTemplateInjector } from './server/template-injector.js';
 import type { LoadProfile } from './types.js';
 
 export interface SvelteDevtoolsOptions {
@@ -344,11 +343,5 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     },
   };
 
-  return [
-    mainPlugin,
-    trackingPlugin,
-    loadProfilePlugin,
-    warningCapturePlugin,
-    sveltekitTemplateInjector(() => hostedByViteDevtools),
-  ];
+  return [mainPlugin, trackingPlugin, loadProfilePlugin, warningCapturePlugin];
 }

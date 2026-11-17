@@ -32,7 +32,6 @@ describe('svelteDevtools factory', () => {
       { name: 'vite-devtools-svelte:tracking', enforce: 'post', apply: 'serve' },
       { name: 'vite-devtools-svelte:load-profile', enforce: 'post', apply: 'serve' },
       { name: 'vite-devtools-svelte:warning-capture', enforce: 'post', apply: 'serve' },
-      { name: 'vite-devtools-svelte:sveltekit-template-injector', enforce: 'post', apply: 'fn' },
     ]);
   });
 });
