@@ -476,4 +476,4 @@ jobs:
       - name: Package contents (pnpm pack, not published)
         run: |
           pnpm -C packages/vite-devtools-svelte pack --pack-destination "$RUNNER_TEMP"
-          tar -tzf "$RUNNER_TEMP"/vite-devtools-svelte-*.tgz | sort
+          tar -tzf "$RUNNER_TEMP"/sveltejs-vite-devtools-svelte-*.tgz | sort
