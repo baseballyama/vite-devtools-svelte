@@ -1,112 +1,112 @@
 <script lang="ts">
-  import Badge from '../components/Badge.svelte'
-  import Button from '../components/Button.svelte'
-  import EmptyState from '../components/EmptyState.svelte'
-  import Highlight from '../components/Highlight.svelte'
-  import Panel from '../components/Panel.svelte'
-  import RefreshButton from '../components/RefreshButton.svelte'
-  import ResourceEmpty from '../components/ResourceEmpty.svelte'
-  import SearchField from '../components/SearchField.svelte'
-  import SplitView from '../components/SplitView.svelte'
-  import type { Tone } from '../components/types.js'
-  import VirtualList from '../components/VirtualList.svelte'
-  import { errorMessage, formatBytes, formatMs } from '../lib/format.js'
-  import { matcher } from '../lib/match.js'
-  import { resource } from '../lib/resource.svelte.js'
-  import { getApiEndpoints, sendApiRequest, openInEditor } from '../lib/rpc.js'
-  import type { ApiEndpoint, ApiResponse } from '../lib/types.js'
+  import Badge from '../components/Badge.svelte';
+  import Button from '../components/Button.svelte';
+  import EmptyState from '../components/EmptyState.svelte';
+  import Highlight from '../components/Highlight.svelte';
+  import Panel from '../components/Panel.svelte';
+  import RefreshButton from '../components/RefreshButton.svelte';
+  import ResourceEmpty from '../components/ResourceEmpty.svelte';
+  import SearchField from '../components/SearchField.svelte';
+  import SplitView from '../components/SplitView.svelte';
+  import type { Tone } from '../components/types.js';
+  import VirtualList from '../components/VirtualList.svelte';
+  import { errorMessage, formatBytes, formatMs } from '../lib/format.js';
+  import { matcher } from '../lib/match.js';
+  import { resource } from '../lib/resource.svelte.js';
+  import { getApiEndpoints, sendApiRequest, openInEditor } from '../lib/rpc.js';
+  import type { ApiEndpoint, ApiResponse } from '../lib/types.js';
 
-  const endpoints = resource<ApiEndpoint[]>(getApiEndpoints, { initial: [] })
+  const endpoints = resource<ApiEndpoint[]>(getApiEndpoints, { initial: [] });
 
-  const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
+  const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
   const METHOD_TONES: Partial<Record<string, Tone>> = {
     GET: 'blue',
     POST: 'green',
     DELETE: 'red',
     HEAD: 'neutral',
     OPTIONS: 'neutral',
-  }
-  const methodTone = (m: string): Tone => METHOD_TONES[m] ?? 'yellow'
+  };
+  const methodTone = (m: string): Tone => METHOD_TONES[m] ?? 'yellow';
 
-  let query = $state('')
-  let selected = $state<string | null>(null)
-  let method = $state('GET')
-  let url = $state('')
-  let headers = $state('{\n  \n}')
-  let body = $state('')
-  let tab = $state<'body' | 'headers'>('body')
-  let sending = $state(false)
-  let response = $state<ApiResponse | null>(null)
-  let requestError = $state<string | null>(null)
+  let query = $state('');
+  let selected = $state<string | null>(null);
+  let method = $state('GET');
+  let url = $state('');
+  let headers = $state('{\n  \n}');
+  let body = $state('');
+  let tab = $state<'body' | 'headers'>('body');
+  let sending = $state(false);
+  let response = $state<ApiResponse | null>(null);
+  let requestError = $state<string | null>(null);
 
   const rows = $derived.by(() => {
-    const m = matcher(query)
-    return m ? endpoints.data.filter(e => m(e.path, e.route, e.methods.join(' '))) : endpoints.data
-  })
+    const m = matcher(query);
+    return m ? endpoints.data.filter(e => m(e.path, e.route, e.methods.join(' '))) : endpoints.data;
+  });
   const current = $derived(
     selected ? (endpoints.data.find(e => e.route === selected) ?? null) : null,
-  )
+  );
 
   const headersError = $derived.by(() => {
-    if (!headers.trim()) return null
+    if (!headers.trim()) return null;
     try {
-      const v: unknown = JSON.parse(headers)
+      const v: unknown = JSON.parse(headers);
       return v && typeof v === 'object' && !Array.isArray(v)
         ? null
-        : 'Headers must be a JSON object'
+        : 'Headers must be a JSON object';
     } catch (e) {
-      return errorMessage(e)
+      return errorMessage(e);
     }
-  })
+  });
 
-  const hasBody = $derived(method !== 'GET' && method !== 'HEAD')
+  const hasBody = $derived(method !== 'GET' && method !== 'HEAD');
 
   const pretty = $derived.by(() => {
-    if (!response?.body) return ''
+    if (!response?.body) return '';
     const ct =
-      Object.entries(response.headers).find(([k]) => k.toLowerCase() === 'content-type')?.[1] ?? ''
-    const first = response.body.trimStart()[0]
+      Object.entries(response.headers).find(([k]) => k.toLowerCase() === 'content-type')?.[1] ?? '';
+    const first = response.body.trimStart()[0];
     if (ct.includes('json') || first === '[' || first === '{') {
       try {
-        return JSON.stringify(JSON.parse(response.body), null, 2)
+        return JSON.stringify(JSON.parse(response.body), null, 2);
       } catch {}
     }
-    return response.body
-  })
+    return response.body;
+  });
 
   function pick(e: ApiEndpoint) {
-    selected = e.route
-    method = e.methods[0] ?? 'GET'
-    url = new URL(e.path, location.origin).href
-    response = null
-    requestError = null
+    selected = e.route;
+    method = e.methods[0] ?? 'GET';
+    url = new URL(e.path, location.origin).href;
+    response = null;
+    requestError = null;
   }
 
   async function send() {
-    if (!url || headersError || sending) return
-    sending = true
-    requestError = null
+    if (!url || headersError || sending) return;
+    sending = true;
+    requestError = null;
     try {
-      response = await sendApiRequest(url, method, headers.trim() || '{}', hasBody ? body : '')
+      response = await sendApiRequest(url, method, headers.trim() || '{}', hasBody ? body : '');
     } catch (e) {
-      response = null
-      requestError = errorMessage(e)
+      response = null;
+      requestError = errorMessage(e);
     } finally {
-      sending = false
+      sending = false;
     }
   }
 
   function onkeydown(e: KeyboardEvent) {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-      e.preventDefault()
-      void send()
+      e.preventDefault();
+      void send();
     }
   }
 
   function statusTone(s: number): Tone {
-    if (s >= 400) return 'red'
-    if (s >= 300) return 'yellow'
-    return s >= 200 ? 'green' : 'neutral'
+    if (s >= 400) return 'red';
+    if (s >= 300) return 'yellow';
+    return s >= 200 ? 'green' : 'neutral';
   }
 </script>
 
@@ -124,8 +124,8 @@
       <form
         class="bar"
         onsubmit={e => {
-          e.preventDefault()
-          void send()
+          e.preventDefault();
+          void send();
         }}
       >
         <select class="select method" bind:value={method} aria-label="HTTP method">

@@ -1,18 +1,18 @@
 <script lang="ts">
   type Props = {
-    code: string
-    lang?: string
-    filename?: string
-  }
+    code: string;
+    lang?: string;
+    filename?: string;
+  };
 
-  let { code, lang = 'ts', filename }: Props = $props()
-  let copied = $state(false)
+  let { code, lang = 'ts', filename }: Props = $props();
+  let copied = $state(false);
 
   async function copy() {
     try {
-      await navigator.clipboard.writeText(code)
-      copied = true
-      setTimeout(() => (copied = false), 1500)
+      await navigator.clipboard.writeText(code);
+      copied = true;
+      setTimeout(() => (copied = false), 1500);
     } catch {}
   }
 </script>

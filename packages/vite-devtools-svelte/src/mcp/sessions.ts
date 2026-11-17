@@ -1,95 +1,95 @@
-import crypto from 'node:crypto'
-import fs from 'node:fs'
-import path from 'node:path'
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 
-import type { RenderProfile, LoadProfile, FpsSample } from '../types.js'
-import { avg, min } from './stats.js'
+import type { RenderProfile, LoadProfile, FpsSample } from '../types.js';
+import { avg, min } from './stats.js';
 
 interface SessionSnapshot {
   /** componentId -> { renderCount, totalRenderTime } at snapshot moment */
   renderProfiles: Array<{
-    componentId: number
-    file: string
-    name: string
-    renderCount: number
-    totalRenderTime: number
-  }>
-  loadProfilesCount: number
-  fpsCount: number
-  takenAt: number
+    componentId: number;
+    file: string;
+    name: string;
+    renderCount: number;
+    totalRenderTime: number;
+  }>;
+  loadProfilesCount: number;
+  fpsCount: number;
+  takenAt: number;
 }
 
 export interface SessionRecord {
-  id: string
-  label: string
-  startedAt: number
-  endedAt?: number
-  persist: boolean
-  startSnapshot: SessionSnapshot
-  endSnapshot?: SessionSnapshot
+  id: string;
+  label: string;
+  startedAt: number;
+  endedAt?: number;
+  persist: boolean;
+  startSnapshot: SessionSnapshot;
+  endSnapshot?: SessionSnapshot;
   /** load profiles that arrived strictly between startedAt..endedAt */
-  loadProfiles: LoadProfile[]
+  loadProfiles: LoadProfile[];
   /** fps samples that arrived strictly between startedAt..endedAt */
-  fpsSamples: FpsSample[]
+  fpsSamples: FpsSample[];
 }
 
 export interface SessionDelta {
-  durationMs: number
+  durationMs: number;
   components: Array<{
-    componentId: number
-    file: string
-    name: string
-    renderCountDelta: number
-    totalRenderTimeDelta: number
-    avgRenderTimeDelta: number
-  }>
+    componentId: number;
+    file: string;
+    name: string;
+    renderCountDelta: number;
+    totalRenderTimeDelta: number;
+    avgRenderTimeDelta: number;
+  }>;
   loadProfiles: {
-    count: number
-    avgDuration: number
-    p95Duration: number
-  }
+    count: number;
+    avgDuration: number;
+    p95Duration: number;
+  };
   fps: {
-    samples: number
-    avg: number
-    min: number
-    drops: number
-  }
+    samples: number;
+    avg: number;
+    min: number;
+    drops: number;
+  };
 }
 
-type Verdict = 'improved' | 'regressed' | 'unchanged'
+type Verdict = 'improved' | 'regressed' | 'unchanged';
 
 export interface SessionDiff {
-  a: { id: string; label: string }
-  b: { id: string; label: string }
+  a: { id: string; label: string };
+  b: { id: string; label: string };
   render: {
-    totalRenderTimeDeltaA: number
-    totalRenderTimeDeltaB: number
-    diff: number
-    verdict: Verdict
-  }
-  load: { avgA: number; avgB: number; diff: number; verdict: Verdict }
-  fps: { avgA: number; avgB: number; diff: number; verdict: Verdict }
+    totalRenderTimeDeltaA: number;
+    totalRenderTimeDeltaB: number;
+    diff: number;
+    verdict: Verdict;
+  };
+  load: { avgA: number; avgB: number; diff: number; verdict: Verdict };
+  fps: { avgA: number; avgB: number; diff: number; verdict: Verdict };
 }
 
 interface SessionSummary {
-  id: string
-  label: string
-  startedAt: number
-  endedAt?: number
-  persisted: boolean
-  active: boolean
+  id: string;
+  label: string;
+  startedAt: number;
+  endedAt?: number;
+  persisted: boolean;
+  active: boolean;
 }
 
 export interface MetricGetters {
-  getRenderProfiles: () => RenderProfile[]
-  getLoadProfiles: () => LoadProfile[]
-  getFpsSamples: () => FpsSample[]
+  getRenderProfiles: () => RenderProfile[];
+  getLoadProfiles: () => LoadProfile[];
+  getFpsSamples: () => FpsSample[];
 }
 
-const UNCHANGED_RENDER_THRESHOLD_MS = 1
-const UNCHANGED_LOAD_THRESHOLD_MS = 5
-const UNCHANGED_FPS_THRESHOLD = 1
-const FPS_DROP_THRESHOLD = 30
+const UNCHANGED_RENDER_THRESHOLD_MS = 1;
+const UNCHANGED_LOAD_THRESHOLD_MS = 5;
+const UNCHANGED_FPS_THRESHOLD = 1;
+const FPS_DROP_THRESHOLD = 30;
 
 function takeSnapshot(getters: MetricGetters): SessionSnapshot {
   const renderProfiles = getters.getRenderProfiles().map(p => ({
@@ -98,26 +98,26 @@ function takeSnapshot(getters: MetricGetters): SessionSnapshot {
     name: p.name,
     renderCount: p.renderCount,
     totalRenderTime: p.totalRenderTime,
-  }))
+  }));
   return {
     renderProfiles,
     loadProfilesCount: getters.getLoadProfiles().length,
     fpsCount: getters.getFpsSamples().length,
     takenAt: Date.now(),
-  }
+  };
 }
 
 /** How `b` compares to `a` given `diff = b - a`. */
 function classify(diff: number, threshold: number, lowerIsBetter: boolean): Verdict {
-  if (Math.abs(diff) < threshold) return 'unchanged'
-  return diff < 0 === lowerIsBetter ? 'improved' : 'regressed'
+  if (Math.abs(diff) < threshold) return 'unchanged';
+  return diff < 0 === lowerIsBetter ? 'improved' : 'regressed';
 }
 
-const BASE36 = '0123456789abcdefghijklmnopqrstuvwxyz'
-const HEX = '0123456789abcdef'
+const BASE36 = '0123456789abcdefghijklmnopqrstuvwxyz';
+const HEX = '0123456789abcdef';
 function consistsOf(s: string, chars: string): boolean {
-  for (const c of s) if (!chars.includes(c)) return false
-  return true
+  for (const c of s) if (!chars.includes(c)) return false;
+  return true;
 }
 
 /**
@@ -127,42 +127,42 @@ function consistsOf(s: string, chars: string): boolean {
  * touching disk (review C-7).
  */
 export function isSessionId(id: unknown): id is string {
-  if (typeof id !== 'string') return false
-  const parts = id.split('_')
-  if (parts.length !== 3 || parts[0] !== 's') return false
-  const [, time = '', random = ''] = parts
+  if (typeof id !== 'string') return false;
+  const parts = id.split('_');
+  if (parts.length !== 3 || parts[0] !== 's') return false;
+  const [, time = '', random = ''] = parts;
   return (
     time.length > 0 &&
     time.length <= 16 &&
     consistsOf(time, BASE36) &&
     random.length === 6 &&
     consistsOf(random, HEX)
-  )
+  );
 }
 
 export interface SessionStoreOptions {
-  persistDir: string
-  getters: MetricGetters
+  persistDir: string;
+  getters: MetricGetters;
 }
 
 export class SessionStore {
-  private sessions = new Map<string, SessionRecord>()
-  private active: string | null = null
-  private readonly persistDir: string
-  private readonly getters: MetricGetters
+  private sessions = new Map<string, SessionRecord>();
+  private active: string | null = null;
+  private readonly persistDir: string;
+  private readonly getters: MetricGetters;
 
   constructor(opts: SessionStoreOptions) {
-    this.persistDir = path.resolve(opts.persistDir)
-    this.getters = opts.getters
+    this.persistDir = path.resolve(opts.persistDir);
+    this.getters = opts.getters;
   }
 
   start(label: string, persist: boolean): SessionRecord {
     if (this.active) {
       throw new Error(
         `A session is already active: ${this.active}. Call end_session before starting a new one.`,
-      )
+      );
     }
-    const id = `s_${Date.now().toString(36)}_${crypto.randomBytes(3).toString('hex')}`
+    const id = `s_${Date.now().toString(36)}_${crypto.randomBytes(3).toString('hex')}`;
     const record: SessionRecord = {
       id,
       label,
@@ -171,45 +171,45 @@ export class SessionStore {
       startSnapshot: takeSnapshot(this.getters),
       loadProfiles: [],
       fpsSamples: [],
-    }
-    this.sessions.set(id, record)
-    this.active = id
-    return record
+    };
+    this.sessions.set(id, record);
+    this.active = id;
+    return record;
   }
 
   private get activeRecord(): SessionRecord | undefined {
-    return this.active === null ? undefined : this.sessions.get(this.active)
+    return this.active === null ? undefined : this.sessions.get(this.active);
   }
 
   /** Called by the plugin whenever a new load profile arrives. */
   recordLoadProfile(p: LoadProfile): void {
-    this.activeRecord?.loadProfiles.push(p)
+    this.activeRecord?.loadProfiles.push(p);
   }
 
   /** Called by the plugin whenever a new fps sample arrives. */
   recordFpsSample(s: FpsSample): void {
-    this.activeRecord?.fpsSamples.push(s)
+    this.activeRecord?.fpsSamples.push(s);
   }
 
   end(keep: 'memory' | 'disk' | 'discard'): SessionRecord {
-    if (!this.active) throw new Error('No active session')
-    const rec = this.activeRecord
-    if (!rec) throw new Error('Active session missing from store')
-    rec.endedAt = Date.now()
-    rec.endSnapshot = takeSnapshot(this.getters)
-    this.active = null
+    if (!this.active) throw new Error('No active session');
+    const rec = this.activeRecord;
+    if (!rec) throw new Error('Active session missing from store');
+    rec.endedAt = Date.now();
+    rec.endSnapshot = takeSnapshot(this.getters);
+    this.active = null;
 
     if (keep === 'discard') {
-      this.sessions.delete(rec.id)
+      this.sessions.delete(rec.id);
     } else if (keep === 'disk' || rec.persist) {
-      this.persistToDisk(rec)
+      this.persistToDisk(rec);
     }
-    return rec
+    return rec;
   }
 
   get(id: string): SessionRecord | undefined {
-    if (!isSessionId(id)) return undefined
-    return this.sessions.get(id) ?? this.loadFromDisk(id)
+    if (!isSessionId(id)) return undefined;
+    return this.sessions.get(id) ?? this.loadFromDisk(id);
   }
 
   list(): SessionSummary[] {
@@ -220,37 +220,37 @@ export class SessionStore {
       endedAt: rec.endedAt,
       persisted,
       active: this.active === rec.id,
-    })
+    });
     const out = [...this.sessions.values()].map(rec =>
       summary(rec, fs.existsSync(this.pathFor(rec.id))),
-    )
+    );
     try {
       for (const name of fs.readdirSync(this.persistDir)) {
-        if (!name.endsWith('.json')) continue
-        const id = name.slice(0, -'.json'.length)
-        if (!isSessionId(id) || this.sessions.has(id)) continue
+        if (!name.endsWith('.json')) continue;
+        const id = name.slice(0, -'.json'.length);
+        if (!isSessionId(id) || this.sessions.has(id)) continue;
         // Unreadable files, and files whose content claims another id, are skipped.
-        const rec = this.loadFromDisk(id)
-        if (rec) out.push(summary(rec, true))
+        const rec = this.loadFromDisk(id);
+        if (rec) out.push(summary(rec, true));
       }
     } catch {
       /* persist dir missing or not accessible */
     }
-    return out.toSorted((a, b) => b.startedAt - a.startedAt)
+    return out.toSorted((a, b) => b.startedAt - a.startedAt);
   }
 
   delete(id: string): boolean {
-    if (!isSessionId(id)) return false
-    const had = this.sessions.delete(id)
-    let onDisk = false
+    if (!isSessionId(id)) return false;
+    const had = this.sessions.delete(id);
+    let onDisk = false;
     try {
-      fs.unlinkSync(this.pathFor(id))
-      onDisk = true
+      fs.unlinkSync(this.pathFor(id));
+      onDisk = true;
     } catch {
       /* not on disk */
     }
-    if (this.active === id) this.active = null
-    return had || onDisk
+    if (this.active === id) this.active = null;
+    return had || onDisk;
   }
 
   /**
@@ -260,14 +260,14 @@ export class SessionStore {
    */
   deltaOf(rec: SessionRecord): SessionDelta {
     if (!rec.endSnapshot || rec.endedAt === undefined) {
-      throw new Error(`Session ${rec.id} has not been ended yet`)
+      throw new Error(`Session ${rec.id} has not been ended yet`);
     }
-    const startMap = new Map(rec.startSnapshot.renderProfiles.map(p => [p.componentId, p]))
+    const startMap = new Map(rec.startSnapshot.renderProfiles.map(p => [p.componentId, p]));
     const components = rec.endSnapshot.renderProfiles
       .map(end => {
-        const start = startMap.get(end.componentId)
-        const renderCountDelta = end.renderCount - (start?.renderCount ?? 0)
-        const totalRenderTimeDelta = end.totalRenderTime - (start?.totalRenderTime ?? 0)
+        const start = startMap.get(end.componentId);
+        const renderCountDelta = end.renderCount - (start?.renderCount ?? 0);
+        const totalRenderTimeDelta = end.totalRenderTime - (start?.totalRenderTime ?? 0);
         return {
           componentId: end.componentId,
           file: end.file,
@@ -275,13 +275,13 @@ export class SessionStore {
           renderCountDelta,
           totalRenderTimeDelta,
           avgRenderTimeDelta: renderCountDelta > 0 ? totalRenderTimeDelta / renderCountDelta : 0,
-        }
+        };
       })
       .filter(c => c.renderCountDelta > 0)
-      .toSorted((a, b) => b.totalRenderTimeDelta - a.totalRenderTimeDelta)
+      .toSorted((a, b) => b.totalRenderTimeDelta - a.totalRenderTimeDelta);
 
-    const loadDurations = rec.loadProfiles.map(l => l.duration)
-    const fpsValues = rec.fpsSamples.map(s => s.fps)
+    const loadDurations = rec.loadProfiles.map(l => l.duration);
+    const fpsValues = rec.fpsSamples.map(s => s.fps);
     return {
       durationMs: rec.endedAt - rec.startedAt,
       components,
@@ -296,29 +296,29 @@ export class SessionStore {
         min: min(fpsValues, 0),
         drops: fpsValues.filter(f => f < FPS_DROP_THRESHOLD).length,
       },
-    }
+    };
   }
 
   delta(id: string): SessionDelta {
-    return this.deltaOf(this.found(id))
+    return this.deltaOf(this.found(id));
   }
 
   private found(id: string): SessionRecord {
-    const rec = this.get(id)
-    if (!rec) throw new Error(`Session not found: ${id}`)
-    return rec
+    const rec = this.get(id);
+    if (!rec) throw new Error(`Session not found: ${id}`);
+    return rec;
   }
 
   compare(idA: string, idB: string): SessionDiff {
-    const recA = this.found(idA)
-    const recB = this.found(idB)
-    const a = this.deltaOf(recA)
-    const b = this.deltaOf(recB)
-    const totalA = a.components.reduce((s, c) => s + c.totalRenderTimeDelta, 0)
-    const totalB = b.components.reduce((s, c) => s + c.totalRenderTimeDelta, 0)
-    const renderDiff = totalB - totalA
-    const loadDiff = b.loadProfiles.avgDuration - a.loadProfiles.avgDuration
-    const fpsDiff = b.fps.avg - a.fps.avg
+    const recA = this.found(idA);
+    const recB = this.found(idB);
+    const a = this.deltaOf(recA);
+    const b = this.deltaOf(recB);
+    const totalA = a.components.reduce((s, c) => s + c.totalRenderTimeDelta, 0);
+    const totalB = b.components.reduce((s, c) => s + c.totalRenderTimeDelta, 0);
+    const renderDiff = totalB - totalA;
+    const loadDiff = b.loadProfiles.avgDuration - a.loadProfiles.avgDuration;
+    const fpsDiff = b.fps.avg - a.fps.avg;
     return {
       a: { id: recA.id, label: recA.label },
       b: { id: recB.id, label: recB.label },
@@ -340,21 +340,21 @@ export class SessionStore {
         diff: fpsDiff,
         verdict: classify(fpsDiff, UNCHANGED_FPS_THRESHOLD, false),
       },
-    }
+    };
   }
 
   /** The session's file, guaranteed to be a direct child of `persistDir`. */
   private pathFor(id: string): string {
-    if (!isSessionId(id)) throw new Error('Invalid session id')
-    const file = path.resolve(this.persistDir, `${id}.json`)
-    if (path.dirname(file) !== this.persistDir) throw new Error('Invalid session id')
-    return file
+    if (!isSessionId(id)) throw new Error('Invalid session id');
+    const file = path.resolve(this.persistDir, `${id}.json`);
+    if (path.dirname(file) !== this.persistDir) throw new Error('Invalid session id');
+    return file;
   }
 
   private persistToDisk(rec: SessionRecord): void {
     try {
-      fs.mkdirSync(this.persistDir, { recursive: true })
-      fs.writeFileSync(this.pathFor(rec.id), JSON.stringify(rec, null, 2), { mode: 0o600 })
+      fs.mkdirSync(this.persistDir, { recursive: true });
+      fs.writeFileSync(this.pathFor(rec.id), JSON.stringify(rec, null, 2), { mode: 0o600 });
     } catch {
       /* persist failure is non-fatal; the in-memory record stays available */
     }
@@ -362,14 +362,14 @@ export class SessionStore {
 
   private loadFromDisk(id: string): SessionRecord | undefined {
     try {
-      const raw = fs.readFileSync(this.pathFor(id), 'utf-8')
-      const rec: unknown = JSON.parse(raw)
+      const raw = fs.readFileSync(this.pathFor(id), 'utf-8');
+      const rec: unknown = JSON.parse(raw);
       // A file whose content claims another id is not served under this one;
       // one missing fields deltaOf()/list() read is not served at all (it used
       // to crash them with a TypeError).
-      return isRecordShape(rec) && rec.id === id ? rec : undefined
+      return isRecordShape(rec) && rec.id === id ? rec : undefined;
     } catch {
-      return undefined
+      return undefined;
     }
   }
 }
@@ -380,14 +380,14 @@ export class SessionStore {
  * high: the p95 of 20 values was the maximum.)
  */
 function percentile(xs: number[], p: number): number {
-  if (xs.length === 0) return 0
-  const sorted = xs.toSorted((a, b) => a - b)
-  const rank = Math.max(1, Math.ceil((p / 100) * sorted.length))
-  return sorted[rank - 1]!
+  if (xs.length === 0) return 0;
+  const sorted = xs.toSorted((a, b) => a - b);
+  const rank = Math.max(1, Math.ceil((p / 100) * sorted.length));
+  return sorted[rank - 1]!;
 }
 
-const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null
-const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
+const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
 function isSnapshot(v: unknown): v is SessionSnapshot {
   return (
@@ -402,7 +402,7 @@ function isSnapshot(v: unknown): v is SessionSnapshot {
         isNum(p.renderCount) &&
         isNum(p.totalRenderTime),
     )
-  )
+  );
 }
 
 /** The fields a persisted session must carry to be listed, loaded and diffed. */
@@ -419,5 +419,5 @@ function isRecordShape(v: unknown): v is SessionRecord {
     v.loadProfiles.every(l => isObject(l) && isNum(l.duration)) &&
     Array.isArray(v.fpsSamples) &&
     v.fpsSamples.every(s => isObject(s) && isNum(s.fps))
-  )
+  );
 }

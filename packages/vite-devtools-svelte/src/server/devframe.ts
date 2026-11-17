@@ -1,21 +1,21 @@
-import fs from 'node:fs'
-import { createRequire } from 'node:module'
-import path from 'node:path'
+import fs from 'node:fs';
+import { createRequire } from 'node:module';
+import path from 'node:path';
 
-import { defineDevframe, defineRpcFunction } from 'devframe'
-import type { DevframeDefinition } from 'devframe'
-import { z } from 'zod'
+import { defineDevframe, defineRpcFunction } from 'devframe';
+import type { DevframeDefinition } from 'devframe';
+import { z } from 'zod';
 
-import { analyzeApiEndpoints, sendApiRequest } from '../analyzers/api.js'
-import { analyzeAssets } from '../analyzers/assets.js'
-import { analyzeBuild } from '../analyzers/build.js'
-import { analyzeComponents } from '../analyzers/components.js'
-import { buildModuleGraph } from '../analyzers/module-graph.js'
-import type { GraphModuleLike } from '../analyzers/module-graph.js'
-import { getOGPreview } from '../analyzers/og.js'
-import { analyzeProject } from '../analyzers/project.js'
-import { analyzeRoutes } from '../analyzers/routes.js'
-import { findReactiveLine } from '../analyzers/source.js'
+import { analyzeApiEndpoints, sendApiRequest } from '../analyzers/api.js';
+import { analyzeAssets } from '../analyzers/assets.js';
+import { analyzeBuild } from '../analyzers/build.js';
+import { analyzeComponents } from '../analyzers/components.js';
+import { buildModuleGraph } from '../analyzers/module-graph.js';
+import type { GraphModuleLike } from '../analyzers/module-graph.js';
+import { getOGPreview } from '../analyzers/og.js';
+import { analyzeProject } from '../analyzers/project.js';
+import { analyzeRoutes } from '../analyzers/routes.js';
+import { findReactiveLine } from '../analyzers/source.js';
 import type {
   ApiResponse,
   CaptureInfoMap,
@@ -25,25 +25,25 @@ import type {
   ReactiveSummary,
   StateTimelineDelta,
   LiveComponentsMeta,
-} from '../types.js'
-import type { Collector } from './collector.js'
-import { resolveWithinRoot } from './security.js'
+} from '../types.js';
+import type { Collector } from './collector.js';
+import { resolveWithinRoot } from './security.js';
 
-export const DEVFRAME_ID = 'svelte-devtools'
+export const DEVFRAME_ID = 'svelte-devtools';
 /** Mount base for both hosts (standalone and Vite DevTools), so the SPA URL never changes. */
-export const DEVFRAME_BASE = '/.svelte-devtools/'
+export const DEVFRAME_BASE = '/.svelte-devtools/';
 
 // Self-reference by name: resolves to this package's root both from the
 // bundle (dist/index.mjs) and from the sources (tests run src/ directly).
-const require = createRequire(import.meta.url)
-const pkgJsonPath = require.resolve('@sveltejs/vite-devtools-svelte/package.json')
+const require = createRequire(import.meta.url);
+const pkgJsonPath = require.resolve('@sveltejs/vite-devtools-svelte/package.json');
 const pkg = require(pkgJsonPath) as {
-  name: string
-  version: string
-  description: string
-  homepage: string
-}
-const clientAssets = path.join(path.dirname(pkgJsonPath), 'dist/client')
+  name: string;
+  version: string;
+  description: string;
+  homepage: string;
+};
+const clientAssets = path.join(path.dirname(pkgJsonPath), 'dist/client');
 
 /**
  * Everything the portable devframe needs from whatever hosts it. The Vite
@@ -51,37 +51,37 @@ const clientAssets = path.join(path.dirname(pkgJsonPath), 'dist/client')
  * Getters are lazy because the host resolves config after construction.
  */
 export interface SvelteDevtoolsHost {
-  collector: Collector
+  collector: Collector;
   /** Absolute project root. */
-  root: () => string
+  root: () => string;
   /** Public base the dev server serves the app (and static files) under. */
-  publicBase: () => string
+  publicBase: () => string;
   /** Every module the dev server currently knows about, across environments. */
-  modules: () => GraphModuleLike[]
+  modules: () => GraphModuleLike[];
   /** Compile a project file through the dev server's pipeline (absent without a server). */
   transformRequest?: (file: string) => Promise<{
-    code: string
-    map?: { mappings?: string; sources?: string[] } | string | null
-  } | null>
+    code: string;
+    map?: { mappings?: string; sources?: string[] } | string | null;
+  } | null>;
   /** Origins the dev server itself is reachable at (API playground / OG preview may call them). */
-  serverOrigins: () => string[]
+  serverOrigins: () => string[];
   /** Open `file[:line]` in the user's editor. */
-  openInEditor: (target: string) => void
+  openInEditor: (target: string) => void;
 }
 
-const filePath = z.string().min(1).max(4096)
+const filePath = z.string().min(1).max(4096);
 
 /** A JSON-serializable RPC function without arguments. */
 function plain<N extends string, R>(type: 'query' | 'action', name: N, handler: () => R) {
-  return defineRpcFunction({ name, type, jsonSerializable: true, handler })
+  return defineRpcFunction({ name, type, jsonSerializable: true, handler });
 }
-const query = <N extends string, R>(name: N, handler: () => R) => plain('query', name, handler)
-const action = <N extends string, R>(name: N, handler: () => R) => plain('action', name, handler)
+const query = <N extends string, R>(name: N, handler: () => R) => plain('query', name, handler);
+const action = <N extends string, R>(name: N, handler: () => R) => plain('action', name, handler);
 
 export function createRpcFunctions(host: SvelteDevtoolsHost) {
-  const { collector } = host
-  const project = () => analyzeProject(host.root())
-  const routes = () => analyzeRoutes(project().routesDir)
+  const { collector } = host;
+  const project = () => analyzeProject(host.root());
+  const routes = () => analyzeRoutes(project().routesDir);
 
   return [
     query('get-project', project),
@@ -105,8 +105,8 @@ export function createRpcFunctions(host: SvelteDevtoolsHost) {
       args: [z.object({ client: z.string().min(1).max(64), active: z.boolean() })],
       returns: z.void(),
       handler: ({ client, active }) => {
-        if (active) collector.lease(`ui:${client}`)
-        else collector.release(`ui:${client}`)
+        if (active) collector.lease(`ui:${client}`);
+        else collector.release(`ui:${client}`);
       },
     }),
     defineRpcFunction({
@@ -116,8 +116,8 @@ export function createRpcFunctions(host: SvelteDevtoolsHost) {
       args: [z.object({ file: filePath, line: z.number().int().nonnegative().optional() })],
       returns: z.void(),
       handler: ({ file, line }) => {
-        const resolved = resolveWithinRoot(host.root(), file)
-        host.openInEditor(line ? `${resolved}:${line}` : resolved)
+        const resolved = resolveWithinRoot(host.root(), file);
+        host.openInEditor(line ? `${resolved}:${line}` : resolved);
       },
     }),
     defineRpcFunction({
@@ -127,14 +127,14 @@ export function createRpcFunctions(host: SvelteDevtoolsHost) {
       args: [z.object({ file: filePath, name: z.string().max(256), type: z.string().max(32) })],
       returns: z.void(),
       handler: ({ file, name, type }) => {
-        const resolved = resolveWithinRoot(host.root(), file)
-        let line = 0
+        const resolved = resolveWithinRoot(host.root(), file);
+        let line = 0;
         try {
-          line = findReactiveLine(fs.readFileSync(resolved, 'utf-8'), name, type)
+          line = findReactiveLine(fs.readFileSync(resolved, 'utf-8'), name, type);
         } catch {
           /* file not readable */
         }
-        host.openInEditor(line > 0 ? `${resolved}:${line}` : resolved)
+        host.openInEditor(line > 0 ? `${resolved}:${line}` : resolved);
       },
     }),
     query('get-render-profiles', () => collector.renderProfiles),
@@ -227,32 +227,32 @@ export function createRpcFunctions(host: SvelteDevtoolsHost) {
     query('get-build-analysis', () => analyzeBuild(host.root())),
     query('get-fps', () => collector.fpsSamples),
     action('clear-fps', () => collector.clearFps()),
-  ] as const
+  ] as const;
 }
 
 /** A project file's source and its compiled output (with source map) from the dev server. */
 async function inspectFile(host: SvelteDevtoolsHost, file: string): Promise<InspectResult> {
-  let resolved: string
-  let source: string
+  let resolved: string;
+  let source: string;
   try {
-    resolved = resolveWithinRoot(host.root(), file)
-    source = fs.readFileSync(resolved, 'utf-8')
+    resolved = resolveWithinRoot(host.root(), file);
+    source = fs.readFileSync(resolved, 'utf-8');
   } catch {
-    return { source: '', compiled: '', file }
+    return { source: '', compiled: '', file };
   }
-  if (!host.transformRequest) return { source, compiled: '', file }
+  if (!host.transformRequest) return { source, compiled: '', file };
   try {
-    const result = await host.transformRequest(resolved)
-    const map = parseSourceMap(result?.map)
+    const result = await host.transformRequest(resolved);
+    const map = parseSourceMap(result?.map);
     return {
       source,
       compiled: result?.code ?? '',
       file,
       mappings: map?.mappings,
       sources: map?.sources,
-    }
+    };
   } catch {
-    return { source, compiled: '// Transform failed', file }
+    return { source, compiled: '// Transform failed', file };
   }
 }
 
@@ -278,23 +278,23 @@ export function createSvelteDevframe(host: SvelteDevtoolsHost): DevframeDefiniti
     dock: { category: 'framework' },
     clientAssets,
     setup(ctx) {
-      const scoped = ctx.scope(DEVFRAME_ID)
-      for (const fn of createRpcFunctions(host)) scoped.rpc.register(fn)
+      const scoped = ctx.scope(DEVFRAME_ID);
+      for (const fn of createRpcFunctions(host)) scoped.rpc.register(fn);
     },
-  })
+  });
 }
 
 /** The `mappings` / `sources` of a transform's source map (object or JSON string). */
 function parseSourceMap(
   map: { mappings?: string; sources?: string[] } | string | null | undefined,
 ): { mappings?: string; sources?: string[] } | undefined {
-  if (typeof map !== 'string') return map ?? undefined
-  const parsed: unknown = JSON.parse(map)
-  if (typeof parsed !== 'object' || parsed === null) return undefined
-  const { mappings, sources } = parsed as { mappings?: unknown; sources?: unknown }
+  if (typeof map !== 'string') return map ?? undefined;
+  const parsed: unknown = JSON.parse(map);
+  if (typeof parsed !== 'object' || parsed === null) return undefined;
+  const { mappings, sources } = parsed as { mappings?: unknown; sources?: unknown };
   return {
     mappings: typeof mappings === 'string' ? mappings : undefined,
     sources:
       Array.isArray(sources) && sources.every(s => typeof s === 'string') ? sources : undefined,
-  }
+  };
 }

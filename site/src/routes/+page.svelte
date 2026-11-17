@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { asset, resolve } from '$app/paths'
+  import { asset, resolve } from '$app/paths';
 
-  import InstallTabs from '#lib/InstallTabs.svelte'
-  import { MCP_TOOL_COUNT } from '#lib/mcp-tools.ts'
-  import { panels, taglineParts } from '#lib/panels.ts'
-  import { image } from '#lib/paths.ts'
+  import InstallTabs from '#lib/InstallTabs.svelte';
+  import { MCP_TOOL_COUNT } from '#lib/mcp-tools.ts';
+  import { panels, taglineParts } from '#lib/panels.ts';
+  import { image } from '#lib/paths.ts';
 
-  const repo = 'https://github.com/sveltejs/vite-devtools-svelte'
+  const repo = 'https://github.com/sveltejs/vite-devtools-svelte';
 
   const features = [
     {
@@ -39,7 +39,7 @@
       title: 'Render',
       body: 'Which components render most and take the longest, per instance.',
     },
-  ]
+  ];
 
   const showcase = [
     {
@@ -54,7 +54,7 @@
       title: 'Read what the compiler wrote.',
       body: 'Your component next to its compiled JavaScript, linked line by line through the source map.',
     },
-  ]
+  ];
 </script>
 
 <svelte:head>

@@ -1,20 +1,20 @@
 <script lang="ts">
-  import { goto } from '$app/navigation'
-  import { resolve } from '$app/paths'
+  import { goto } from '$app/navigation';
+  import { resolve } from '$app/paths';
 
-  import ProductCard from '#lib/components/ProductCard.svelte'
+  import ProductCard from '#lib/components/ProductCard.svelte';
 
-  import type { PageProps } from './$types'
+  import type { PageProps } from './$types';
 
-  let { data }: PageProps = $props()
+  let { data }: PageProps = $props();
 
   function changeCategory(e: Event) {
-    const target = e.target as HTMLSelectElement
+    const target = e.target as HTMLSelectElement;
     const href =
       target.value === 'all'
         ? resolve('/products')
-        : resolve(`/products?${new URLSearchParams({ category: target.value })}`)
-    void goto(href, { reset: false })
+        : resolve(`/products?${new URLSearchParams({ category: target.value })}`);
+    void goto(href, { reset: false });
   }
 </script>
 

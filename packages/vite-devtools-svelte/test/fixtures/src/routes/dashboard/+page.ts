@@ -1,3 +1,3 @@
 export const load = () => {
-  return { stats: [1, 2, 3] }
-}
+  return { stats: [1, 2, 3] };
+};

@@ -1,5 +1,5 @@
-import * as fc from 'fast-check'
-import { describe, expect, it } from 'vitest'
+import * as fc from 'fast-check';
+import { describe, expect, it } from 'vitest';
 
 import {
   errorMessage,
@@ -13,18 +13,18 @@ import {
   prettyValue,
   shortPath,
   toText,
-} from './format.js'
+} from './format.js';
 
 /** Index of the unit of a formatted size in B < KB < MB < GB < TB. */
 const unitRank = (formatted: string) =>
-  ['B', 'KB', 'MB', 'GB', 'TB'].indexOf(formatted.split(' ')[1]!)
+  ['B', 'KB', 'MB', 'GB', 'TB'].indexOf(formatted.split(' ')[1]!);
 
 /** Local timestamp (formatClock shows local time). */
-const at = (h: number, m: number, s: number, ms = 0) => new Date(2024, 0, 2, h, m, s, ms).getTime()
+const at = (h: number, m: number, s: number, ms = 0) => new Date(2024, 0, 2, h, m, s, ms).getTime();
 
 /** Reference truncation: at most `max` characters, the last one an ellipsis when cut. */
 function truncated(full: string, max: number): string {
-  return full.length <= max ? full : full.slice(0, max - 1) + '…'
+  return full.length <= max ? full : full.slice(0, max - 1) + '…';
 }
 
 describe('shortPath', () => {
@@ -39,29 +39,29 @@ describe('shortPath', () => {
     ['/abs/x.svelte', 2, 'abs/x.svelte'],
     ['', 2, ''],
   ])('shortPath(%j, %i) → %j', (path, depth, expected) => {
-    expect(shortPath(path, depth)).toBe(expected)
-  })
+    expect(shortPath(path, depth)).toBe(expected);
+  });
 
   it('defaults to two segments', () => {
-    expect(shortPath('a/b/c/d')).toBe('c/d')
-  })
+    expect(shortPath('a/b/c/d')).toBe('c/d');
+  });
 
   it('never shows more segments than asked, always ends with the basename', () => {
-    const seg = fc.stringMatching(/^[a-z.]{1,6}$/)
+    const seg = fc.stringMatching(/^[a-z.]{1,6}$/);
     fc.assert(
       fc.property(
         fc.array(seg, { minLength: 1, maxLength: 8 }),
         fc.integer({ min: 1, max: 10 }),
         (segs, depth) => {
-          const out = shortPath(segs.join('/'), depth)
-          expect(out.split('/')).toHaveLength(Math.min(depth, segs.length))
-          expect(out.endsWith(segs.at(-1)!)).toBe(true)
-          expect(shortPath(segs.join('\\'), depth)).toBe(out)
+          const out = shortPath(segs.join('/'), depth);
+          expect(out.split('/')).toHaveLength(Math.min(depth, segs.length));
+          expect(out.endsWith(segs.at(-1)!)).toBe(true);
+          expect(shortPath(segs.join('\\'), depth)).toBe(out);
         },
       ),
-    )
-  })
-})
+    );
+  });
+});
 
 describe('basename', () => {
   it.each([
@@ -72,9 +72,9 @@ describe('basename', () => {
     ['src/lib/', ''],
     ['', ''],
   ])('basename(%j) → %j', (path, expected) => {
-    expect(basename(path)).toBe(expected)
-  })
-})
+    expect(basename(path)).toBe(expected);
+  });
+});
 
 describe('componentName', () => {
   it.each([
@@ -91,15 +91,15 @@ describe('componentName', () => {
     ['src/.svelte', undefined, 'Unknown'],
     ['src/lib/', '?', '?'],
   ])('componentName(%j, %j) → %j', (file, fallback, expected) => {
-    expect(componentName(file, fallback)).toBe(expected)
-  })
-})
+    expect(componentName(file, fallback)).toBe(expected);
+  });
+});
 
 describe('formatBytes', () => {
-  const KB = 1024
-  const MB = KB * 1024
-  const GB = MB * 1024
-  const TB = GB * 1024
+  const KB = 1024;
+  const MB = KB * 1024;
+  const GB = MB * 1024;
+  const TB = GB * 1024;
   it.each([
     [0, '0 B'],
     [1, '1 B'],
@@ -124,8 +124,8 @@ describe('formatBytes', () => {
     [undefined, '—'],
     [null, '—'],
   ])('formatBytes(%s) → %j', (n, expected) => {
-    expect(formatBytes(n)).toBe(expected)
-  })
+    expect(formatBytes(n)).toBe(expected);
+  });
 
   it('is monotonic in the shown unit order (B < KB < MB < GB < TB)', () => {
     fc.assert(
@@ -135,12 +135,12 @@ describe('formatBytes', () => {
         (a, b) => {
           expect(unitRank(formatBytes(Math.min(a, b)))).toBeLessThanOrEqual(
             unitRank(formatBytes(Math.max(a, b))),
-          )
+          );
         },
       ),
-    )
-  })
-})
+    );
+  });
+});
 
 describe('formatMs', () => {
   it.each([
@@ -160,21 +160,21 @@ describe('formatMs', () => {
     [undefined, '—'],
     [null, '—'],
   ])('formatMs(%s) → %j', (n, expected) => {
-    expect(formatMs(n)).toBe(expected)
-  })
-})
+    expect(formatMs(n)).toBe(expected);
+  });
+});
 
 describe('formatClock', () => {
   it('is a 24-hour HH:MM:SS clock', () => {
-    expect(formatClock(at(13, 5, 9))).toMatch(/^13\D05\D09$/)
-    expect(formatClock(at(0, 0, 0))).toMatch(/^00\D00\D00$/)
-    expect(formatClock(at(23, 59, 59))).toMatch(/^23\D59\D59$/)
-  })
+    expect(formatClock(at(13, 5, 9))).toMatch(/^13\D05\D09$/);
+    expect(formatClock(at(0, 0, 0))).toMatch(/^00\D00\D00$/);
+    expect(formatClock(at(23, 59, 59))).toMatch(/^23\D59\D59$/);
+  });
 
   it('adds milliseconds on request', () => {
-    expect(formatClock(at(13, 5, 9, 7), true)).toMatch(/^13\D05\D09\D007$/)
-  })
-})
+    expect(formatClock(at(13, 5, 9, 7), true)).toMatch(/^13\D05\D09\D007$/);
+  });
+});
 
 describe('toText', () => {
   it.each([
@@ -185,21 +185,21 @@ describe('toText', () => {
     [{ toString: () => 'custom' }, 'custom'],
     [{}, '[object Object]'],
   ])('toText(%s) → %j', (v, expected) => {
-    expect(toText(v)).toBe(expected)
-  })
-})
+    expect(toText(v)).toBe(expected);
+  });
+});
 
 describe('errorMessage', () => {
   it('is the message of an Error, and the string form of anything else thrown', () => {
-    expect(errorMessage(new TypeError('boom'))).toBe('boom')
-    expect(errorMessage('plain')).toBe('plain')
-    expect(errorMessage(42)).toBe('42')
-  })
-})
+    expect(errorMessage(new TypeError('boom'))).toBe('boom');
+    expect(errorMessage('plain')).toBe('plain');
+    expect(errorMessage(42)).toBe('42');
+  });
+});
 
 describe('formatValue', () => {
-  const cyclic: Record<string, unknown> = { a: 1 }
-  cyclic['self'] = cyclic
+  const cyclic: Record<string, unknown> = { a: 1 };
+  cyclic['self'] = cyclic;
 
   it.each([
     [undefined, 'undefined'],
@@ -219,34 +219,34 @@ describe('formatValue', () => {
     [Symbol('k'), 'Symbol(k)'],
     [cyclic, '[object Object]'],
   ])('formatValue(%s) → %j', (v, expected) => {
-    expect(formatValue(v)).toBe(expected)
-  })
+    expect(formatValue(v)).toBe(expected);
+  });
 
   it('renders functions as their source', () => {
-    expect(formatValue(function f() {})).toBe('function f() {}')
-  })
+    expect(formatValue(function f() {})).toBe('function f() {}');
+  });
 
   it('truncates to exactly `max` characters with an ellipsis', () => {
-    expect(formatValue('x'.repeat(10), 5)).toBe('"xxx…')
-    expect(formatValue('abc', 5)).toBe('"abc"')
-    expect(formatValue('abcd', 5)).toBe('"abc…')
-    expect(formatValue('x'.repeat(200))).toHaveLength(80)
-  })
+    expect(formatValue('x'.repeat(10), 5)).toBe('"xxx…');
+    expect(formatValue('abc', 5)).toBe('"abc"');
+    expect(formatValue('abcd', 5)).toBe('"abc…');
+    expect(formatValue('x'.repeat(200))).toHaveLength(80);
+  });
 
   it('never exceeds max and keeps short values intact', () => {
     fc.assert(
       fc.property(fc.jsonValue(), fc.integer({ min: 1, max: 120 }), (v, max) => {
-        const out = formatValue(v, max)
-        expect(out.length).toBeLessThanOrEqual(max)
-        expect(out).toBe(truncated(JSON.stringify(v), max))
+        const out = formatValue(v, max);
+        expect(out.length).toBeLessThanOrEqual(max);
+        expect(out).toBe(truncated(JSON.stringify(v), max));
       }),
-    )
-  })
-})
+    );
+  });
+});
 
 describe('prettyValue', () => {
-  const cyclic: unknown[] = []
-  cyclic.push(cyclic)
+  const cyclic: unknown[] = [];
+  cyclic.push(cyclic);
 
   it.each([
     [undefined, 'undefined'],
@@ -259,12 +259,12 @@ describe('prettyValue', () => {
     [Symbol('p'), 'Symbol(p)'],
     [cyclic, ''],
   ])('prettyValue(%s) → %j', (v, expected) => {
-    expect(prettyValue(v)).toBe(expected)
-  })
-})
+    expect(prettyValue(v)).toBe(expected);
+  });
+});
 
 describe('formatAgo', () => {
-  const now = 1_000_000_000
+  const now = 1_000_000_000;
   it.each([
     [null, 'never'],
     [now, 'just now'],
@@ -278,10 +278,10 @@ describe('formatAgo', () => {
     // A timestamp from the future (clock skew) is not "-5s ago".
     [now + 5000, 'just now'],
   ])('formatAgo(%s) → %j', (ts, expected) => {
-    expect(formatAgo(ts, now)).toBe(expected)
-  })
+    expect(formatAgo(ts, now)).toBe(expected);
+  });
 
   it('defaults `now` to the current time', () => {
-    expect(formatAgo(Date.now())).toBe('just now')
-  })
-})
+    expect(formatAgo(Date.now())).toBe('just now');
+  });
+});

@@ -1,33 +1,33 @@
 <script lang="ts">
-  import Badge from '../components/Badge.svelte'
-  import Button from '../components/Button.svelte'
-  import DataTable from '../components/DataTable.svelte'
-  import Highlight from '../components/Highlight.svelte'
-  import Icon from '../components/Icon.svelte'
-  import Inspector from '../components/Inspector.svelte'
-  import Panel from '../components/Panel.svelte'
-  import RefreshButton from '../components/RefreshButton.svelte'
-  import ResourceEmpty from '../components/ResourceEmpty.svelte'
-  import SearchField from '../components/SearchField.svelte'
-  import Segmented from '../components/Segmented.svelte'
-  import SplitView from '../components/SplitView.svelte'
-  import type { Column, SortState, TableRowState } from '../components/types.js'
-  import { countBy } from '../lib/collections.js'
-  import { formatBytes } from '../lib/format.js'
-  import type { IconName } from '../lib/icons.js'
-  import { kindOptions } from '../lib/kind-options.js'
-  import { matcher } from '../lib/match.js'
-  import { resource } from '../lib/resource.svelte.js'
-  import { getAssets, openInEditor } from '../lib/rpc.js'
-  import type { AssetInfo } from '../lib/types.js'
+  import Badge from '../components/Badge.svelte';
+  import Button from '../components/Button.svelte';
+  import DataTable from '../components/DataTable.svelte';
+  import Highlight from '../components/Highlight.svelte';
+  import Icon from '../components/Icon.svelte';
+  import Inspector from '../components/Inspector.svelte';
+  import Panel from '../components/Panel.svelte';
+  import RefreshButton from '../components/RefreshButton.svelte';
+  import ResourceEmpty from '../components/ResourceEmpty.svelte';
+  import SearchField from '../components/SearchField.svelte';
+  import Segmented from '../components/Segmented.svelte';
+  import SplitView from '../components/SplitView.svelte';
+  import type { Column, SortState, TableRowState } from '../components/types.js';
+  import { countBy } from '../lib/collections.js';
+  import { formatBytes } from '../lib/format.js';
+  import type { IconName } from '../lib/icons.js';
+  import { kindOptions } from '../lib/kind-options.js';
+  import { matcher } from '../lib/match.js';
+  import { resource } from '../lib/resource.svelte.js';
+  import { getAssets, openInEditor } from '../lib/rpc.js';
+  import type { AssetInfo } from '../lib/types.js';
 
-  const assets = resource<AssetInfo[]>(getAssets, { initial: [] })
+  const assets = resource<AssetInfo[]>(getAssets, { initial: [] });
 
-  const CATEGORIES = ['image', 'font', 'video', 'audio', 'text', 'other'] as const
-  type Category = (typeof CATEGORIES)[number]
+  const CATEGORIES = ['image', 'font', 'video', 'audio', 'text', 'other'] as const;
+  type Category = (typeof CATEGORIES)[number];
   function category(mime: string): Category {
-    const head = mime.split('/')[0]
-    return CATEGORIES.find(c => c === head) ?? 'other'
+    const head = mime.split('/')[0];
+    return CATEGORIES.find(c => c === head) ?? 'other';
   }
   const catIcon: Record<Category, IconName> = {
     image: 'assets',
@@ -36,12 +36,12 @@
     audio: 'play',
     text: 'file',
     other: 'file',
-  }
+  };
 
-  let query = $state('')
-  let cat = $state<'all' | Category>('all')
-  let sort = $state<SortState | null>({ id: 'size', desc: true })
-  let selected = $state<string | null>(null)
+  let query = $state('');
+  let cat = $state<'all' | Category>('all');
+  let sort = $state<SortState | null>({ id: 'size', desc: true });
+  let selected = $state<string | null>(null);
 
   const catOptions = $derived(
     kindOptions(
@@ -50,18 +50,18 @@
       cat,
       c => c.charAt(0).toUpperCase() + c.slice(1),
     ),
-  )
+  );
 
   const rows = $derived.by(() => {
-    const m = matcher(query)
+    const m = matcher(query);
     return assets.data.filter(
       a => (cat === 'all' || category(a.type) === cat) && (!m || m(a.relativePath, a.type)),
-    )
-  })
+    );
+  });
 
-  const rowsBytes = $derived(rows.reduce((s, a) => s + a.size, 0))
-  const maxSize = $derived(assets.data.reduce((m, a) => Math.max(m, a.size), 1))
-  const current = $derived(selected ? (assets.data.find(a => a.path === selected) ?? null) : null)
+  const rowsBytes = $derived(rows.reduce((s, a) => s + a.size, 0));
+  const maxSize = $derived(assets.data.reduce((m, a) => Math.max(m, a.size), 1));
+  const current = $derived(selected ? (assets.data.find(a => a.path === selected) ?? null) : null);
 
   const columns: Column<AssetInfo>[] = [
     {
@@ -94,12 +94,12 @@
       descFirst: true,
       sort: (a, b) => a.size - b.size,
     },
-  ]
+  ];
 
   // Public dev-server URL (docs/devframe-migration.md §6.1: `AssetInfo.url`).
   // Static files are served from the root, so fall back to that.
   function assetUrl(a: AssetInfo) {
-    return a.url || '/' + a.relativePath
+    return a.url || '/' + a.relativePath;
   }
 </script>
 

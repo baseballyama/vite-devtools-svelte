@@ -4,40 +4,40 @@
 // reactivity scaling tests. Patching the prototypes permanently disables V8
 // fast paths (protectors) for the worker, so callers live in their own files.
 export function countVisits(fn: () => void): number {
-  let visits = 0
-  const restores: Array<() => void> = []
+  let visits = 0;
+  const restores: Array<() => void> = [];
   const patchIter = (proto: any, key: PropertyKey) => {
-    const orig = proto[key]
+    const orig = proto[key];
     proto[key] = function (this: any, ...args: any[]) {
-      const it = orig.apply(this, args)
-      const next = it.next.bind(it)
+      const it = orig.apply(this, args);
+      const next = it.next.bind(it);
       return {
         next() {
-          visits++
-          return next()
+          visits++;
+          return next();
         },
         [Symbol.iterator]() {
-          return this
+          return this;
         },
-      }
-    }
+      };
+    };
     restores.push(() => {
-      proto[key] = orig
-    })
-  }
+      proto[key] = orig;
+    });
+  };
   const patchLinear = (proto: any, key: string) => {
-    const orig = proto[key]
+    const orig = proto[key];
     proto[key] = function (this: any, ...args: any[]) {
-      visits += this.length ?? this.size ?? 0
-      return orig.apply(this, args)
-    }
+      visits += this.length ?? this.size ?? 0;
+      return orig.apply(this, args);
+    };
     restores.push(() => {
-      proto[key] = orig
-    })
-  }
+      proto[key] = orig;
+    });
+  };
   for (const proto of [Map.prototype, Set.prototype]) {
-    for (const key of ['entries', 'keys', 'values', Symbol.iterator]) patchIter(proto, key)
-    patchLinear(proto, 'forEach')
+    for (const key of ['entries', 'keys', 'values', Symbol.iterator]) patchIter(proto, key);
+    patchLinear(proto, 'forEach');
   }
   for (const key of [
     'filter',
@@ -50,12 +50,12 @@ export function countVisits(fn: () => void): number {
     'find',
     'findIndex',
   ]) {
-    patchLinear(Array.prototype, key)
+    patchLinear(Array.prototype, key);
   }
   try {
-    fn()
+    fn();
   } finally {
-    for (const r of restores.toReversed()) r()
+    for (const r of restores.toReversed()) r();
   }
-  return visits
+  return visits;
 }

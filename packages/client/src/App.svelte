@@ -1,16 +1,16 @@
 <script lang="ts">
-  import type { Component } from 'svelte'
+  import type { Component } from 'svelte';
 
-  import './lib/design-system.css'
-  import Button from './components/Button.svelte'
-  import CommandPalette from './components/CommandPalette.svelte'
-  import ConnectionGate from './components/ConnectionGate.svelte'
-  import EmptyState from './components/EmptyState.svelte'
-  import Icon from './components/Icon.svelte'
-  import PanelHost from './components/PanelHost.svelte'
-  import type { Command } from './components/types.js'
-  import { connection, connectionSupported } from './lib/connection.svelte.js'
-  import { errorMessage } from './lib/format.js'
+  import './lib/design-system.css';
+  import Button from './components/Button.svelte';
+  import CommandPalette from './components/CommandPalette.svelte';
+  import ConnectionGate from './components/ConnectionGate.svelte';
+  import EmptyState from './components/EmptyState.svelte';
+  import Icon from './components/Icon.svelte';
+  import PanelHost from './components/PanelHost.svelte';
+  import type { Command } from './components/types.js';
+  import { connection, connectionSupported } from './lib/connection.svelte.js';
+  import { errorMessage } from './lib/format.js';
   import {
     panels,
     groupLabels,
@@ -18,39 +18,39 @@
     type PanelDef,
     type PanelGroup,
     type PanelId,
-  } from './lib/panels.js'
-  import { persisted } from './lib/persisted.svelte.js'
-  import { router } from './lib/router.svelte.js'
-  import { createThemeStore, type ThemeMode } from './lib/theme.svelte.js'
+  } from './lib/panels.js';
+  import { persisted } from './lib/persisted.svelte.js';
+  import { router } from './lib/router.svelte.js';
+  import { createThemeStore, type ThemeMode } from './lib/theme.svelte.js';
 
-  const theme = createThemeStore()
-  const navPref = persisted<'expanded' | 'collapsed' | null>('nav', null)
+  const theme = createThemeStore();
+  const navPref = persisted<'expanded' | 'collapsed' | null>('nav', null);
 
-  let viewportWidth = $state(window.innerWidth)
-  const collapsed = $derived(navPref.value ? navPref.value === 'collapsed' : viewportWidth < 900)
+  let viewportWidth = $state(window.innerWidth);
+  const collapsed = $derived(navPref.value ? navPref.value === 'collapsed' : viewportWidth < 900);
 
-  let paletteOpen = $state(false)
+  let paletteOpen = $state(false);
 
   // Lazy panels: a panel module is fetched on first visit, then kept mounted
   // (hidden) so its filters, selection and scroll survive tab switches.
-  let loaded = $state<Partial<Record<PanelId, Component>>>({})
-  let loadError = $state<Partial<Record<PanelId, string>>>({})
-  let visited = $state<PanelId[]>([])
+  let loaded = $state<Partial<Record<PanelId, Component>>>({});
+  let loadError = $state<Partial<Record<PanelId, string>>>({});
+  let visited = $state<PanelId[]>([]);
 
   $effect(() => {
-    const id = router.current
-    if (!visited.includes(id)) visited.push(id)
+    const id = router.current;
+    if (!visited.includes(id)) visited.push(id);
     // `load` records failures in `loadError`, so it never rejects.
-    if (!loaded[id] && !loadError[id]) void load(id)
-    document.title = `${panelById(id).label} · Svelte DevTools`
-  })
+    if (!loaded[id] && !loadError[id]) void load(id);
+    document.title = `${panelById(id).label} · Svelte DevTools`;
+  });
 
   async function load(id: PanelId) {
     try {
-      const mod = await panelById(id).load()
-      loaded[id] = mod.default
+      const mod = await panelById(id).load();
+      loaded[id] = mod.default;
     } catch (e) {
-      loadError[id] = errorMessage(e)
+      loadError[id] = errorMessage(e);
     }
   }
 
@@ -58,19 +58,19 @@
     id: g,
     label: groupLabels[g],
     items: panels.filter(p => p.group === g),
-  }))
+  }));
 
-  const themeOrder: ThemeMode[] = ['system', 'light', 'dark']
+  const themeOrder: ThemeMode[] = ['system', 'light', 'dark'];
   const themeIcon = $derived(
     theme.mode === 'system' ? 'monitor' : theme.mode === 'light' ? 'sun' : 'moon',
-  )
+  );
 
   function cycleTheme() {
-    theme.set(themeOrder[(themeOrder.indexOf(theme.mode) + 1) % themeOrder.length]!)
+    theme.set(themeOrder[(themeOrder.indexOf(theme.mode) + 1) % themeOrder.length]!);
   }
 
   function toggleNav() {
-    navPref.value = collapsed ? 'expanded' : 'collapsed'
+    navPref.value = collapsed ? 'expanded' : 'collapsed';
   }
 
   const commands = $derived<Command[]>([
@@ -111,34 +111,34 @@
       icon: 'sidebar',
       run: toggleNav,
     },
-  ])
+  ]);
 
   function isTyping(t: EventTarget | null) {
-    const el = t as HTMLElement | null
-    return !!el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))
+    const el = t as HTMLElement | null;
+    return !!el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName));
   }
 
   function onkeydown(e: KeyboardEvent) {
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-      e.preventDefault()
-      paletteOpen = !paletteOpen
-      return
+      e.preventDefault();
+      paletteOpen = !paletteOpen;
+      return;
     }
-    if (paletteOpen || isTyping(e.target)) return
+    if (paletteOpen || isTyping(e.target)) return;
     if (e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey) {
-      const host = document.querySelector('.host:not([hidden])')
-      const search = host?.querySelector<HTMLInputElement>('[data-panel-search]')
+      const host = document.querySelector('.host:not([hidden])');
+      const search = host?.querySelector<HTMLInputElement>('[data-panel-search]');
       if (search) {
-        e.preventDefault()
-        search.focus()
-        search.select()
+        e.preventDefault();
+        search.focus();
+        search.select();
       }
     } else if (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
       // Alt+↑/↓ steps through panels without touching the mouse.
-      e.preventDefault()
-      const i = panels.findIndex(p => p.id === router.current)
-      const next = panels[(i + (e.key === 'ArrowDown' ? 1 : -1) + panels.length) % panels.length]!
-      router.go(next.id)
+      e.preventDefault();
+      const i = panels.findIndex(p => p.id === router.current);
+      const next = panels[(i + (e.key === 'ArrowDown' ? 1 : -1) + panels.length) % panels.length]!;
+      router.go(next.id);
     }
   }
 </script>

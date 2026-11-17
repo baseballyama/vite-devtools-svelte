@@ -1,9 +1,9 @@
 <script lang="ts">
   interface User {
-    id: number
-    name: string
-    email: string
-    role: 'admin' | 'editor' | 'viewer'
+    id: number;
+    name: string;
+    email: string;
+    role: 'admin' | 'editor' | 'viewer';
   }
 
   const allUsers: User[] = [
@@ -13,35 +13,35 @@
     { id: 4, name: 'Diana', email: 'diana@example.com', role: 'editor' },
     { id: 5, name: 'Eve', email: 'eve@example.com', role: 'admin' },
     { id: 6, name: 'Frank', email: 'frank@example.com', role: 'viewer' },
-  ]
+  ];
 
-  let query = $state('')
-  let roleFilter = $state<string>('all')
-  let selectedUser = $state<User | null>(null)
+  let query = $state('');
+  let roleFilter = $state<string>('all');
+  let selectedUser = $state<User | null>(null);
 
   let filtered = $derived.by(() => {
-    let result = allUsers
+    let result = allUsers;
     if (roleFilter !== 'all') {
-      result = result.filter(u => u.role === roleFilter)
+      result = result.filter(u => u.role === roleFilter);
     }
     if (query.trim()) {
-      const q = query.toLowerCase()
+      const q = query.toLowerCase();
       result = result.filter(
         u => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q),
-      )
+      );
     }
-    return result
-  })
+    return result;
+  });
 
-  let resultCount = $derived(filtered.length)
-  let hasSelection = $derived(selectedUser !== null)
+  let resultCount = $derived(filtered.length);
+  let hasSelection = $derived(selectedUser !== null);
 
   $effect(() => {
     // Clear selection when filtered results change and selected user is no longer in list
     if (selectedUser && !filtered.some(u => u.id === selectedUser!.id)) {
-      selectedUser = null
+      selectedUser = null;
     }
-  })
+  });
 </script>
 
 <div class="search">

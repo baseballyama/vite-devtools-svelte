@@ -166,16 +166,16 @@ Register the plugin in your `vite.config.ts`. `svelteDevtools()` **must come bef
 
 ```ts
 // vite.config.ts
-import { sveltekit } from '@sveltejs/kit/vite'
-import { svelteDevtools } from '@sveltejs/vite-devtools-svelte'
-import { defineConfig } from 'vite'
+import { sveltekit } from '@sveltejs/kit/vite';
+import { svelteDevtools } from '@sveltejs/vite-devtools-svelte';
+import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [
     svelteDevtools(), // must come before sveltekit()
     sveltekit(),
   ],
-})
+});
 ```
 
 Start your dev server as usual (`npm run dev`) and open the URL it prints:
@@ -189,8 +189,8 @@ The first time a browser opens the DevTools it asks for a one-time code: request
 On a single-user machine where the dev server only listens on `localhost`, you can turn the code off:
 
 ```ts
-svelteDevtools({ clientAuth: false }) // standalone /.svelte-devtools/
-DevTools({ clientAuth: false }) // inside the Vite DevTools dock (@vitejs/devtools)
+svelteDevtools({ clientAuth: false }); // standalone /.svelte-devtools/
+DevTools({ clientAuth: false }); // inside the Vite DevTools dock (@vitejs/devtools)
 ```
 
 Without it, any page in your browser that can reach the dev server, and any device on the network when you use `--host`, can read files in your project through the DevTools. Keep it on if you are unsure. The MCP endpoint keeps its own token either way.
@@ -200,11 +200,11 @@ Without it, any page in your browser that can reach the dev server, and any devi
 With `@vitejs/devtools` installed, add its plugin as well. The Svelte tool then mounts as a dock entry instead of standalone (never both), and authentication is handled once by Vite DevTools:
 
 ```ts
-import { DevTools } from '@vitejs/devtools'
+import { DevTools } from '@vitejs/devtools';
 
 export default defineConfig({
   plugins: [svelteDevtools(), DevTools(), sveltekit()],
-})
+});
 ```
 
 Open your app, click the floating Vite DevTools handle and switch to the **Svelte** tab. The panels are also reachable directly at `/.svelte-devtools/`.
@@ -218,7 +218,7 @@ svelteDevtools({
   // Require the one-time code for the standalone DevTools (default: true).
   // In the Vite DevTools dock use DevTools({ clientAuth: false }) instead.
   clientAuth: true,
-})
+});
 ```
 
 ## How It Works

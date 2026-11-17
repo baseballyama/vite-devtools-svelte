@@ -1,22 +1,22 @@
 <script lang="ts">
-  import { resolve } from '$app/paths'
-  import { page } from '$app/state'
+  import { resolve } from '$app/paths';
+  import { page } from '$app/state';
 
-  import SvelteMark from './SvelteMark.svelte'
-  import ThemeToggle from './ThemeToggle.svelte'
-  import { pkgVersion } from './version'
+  import SvelteMark from './SvelteMark.svelte';
+  import ThemeToggle from './ThemeToggle.svelte';
+  import { pkgVersion } from './version';
 
   // `route` is the route ID used for the active state (null: in-page anchor).
   const links = [
     { route: '/getting-started', href: resolve('/getting-started'), label: 'Get started' },
     { route: '/mcp', href: resolve('/mcp'), label: 'MCP' },
     { route: null, href: resolve('/#panels'), label: 'Panels' },
-  ]
+  ];
 
   function isActive(route: string | null): boolean {
-    if (!route) return false
-    const id = page.route.id ?? ''
-    return id === route || id.startsWith(route + '/')
+    if (!route) return false;
+    const id = page.route.id ?? '';
+    return id === route || id.startsWith(route + '/');
   }
 </script>
 

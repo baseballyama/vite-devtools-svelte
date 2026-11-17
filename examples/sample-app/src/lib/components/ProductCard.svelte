@@ -1,23 +1,23 @@
 <script lang="ts">
-  import { resolve } from '$app/paths'
+  import { resolve } from '$app/paths';
 
-  import { cart } from '#lib/stores/cart.svelte.ts'
+  import { cart } from '#lib/stores/cart.svelte.ts';
 
   interface Props {
-    id: string
-    name: string
-    price: number
-    category: string
-    stock: number
+    id: string;
+    name: string;
+    price: number;
+    category: string;
+    stock: number;
   }
 
-  let { id, name, price, category, stock }: Props = $props()
+  let { id, name, price, category, stock }: Props = $props();
 
-  const isLow = $derived(stock > 0 && stock <= 8)
-  const isOut = $derived(stock <= 0)
+  const isLow = $derived(stock > 0 && stock <= 8);
+  const isOut = $derived(stock <= 0);
 
   function add() {
-    cart.add({ id, name, price })
+    cart.add({ id, name, price });
   }
 </script>
 

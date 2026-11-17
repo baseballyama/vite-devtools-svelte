@@ -1,15 +1,15 @@
 <script lang="ts">
-  import { formatValue } from '../lib/format.js'
-  import { layoutGraph, NODE_H, NODE_W, propagate, shortFile } from '../lib/graph-layout.js'
-  import type { ReactiveNode, ReactiveEdge } from '../lib/types.js'
+  import { formatValue } from '../lib/format.js';
+  import { layoutGraph, NODE_H, NODE_W, propagate, shortFile } from '../lib/graph-layout.js';
+  import type { ReactiveNode, ReactiveEdge } from '../lib/types.js';
 
   interface Props {
-    nodes: ReactiveNode[]
-    edges: ReactiveEdge[]
-    onSelectNode?: (node: ReactiveNode | null) => void
-    changedNodeIds?: Set<string>
+    nodes: ReactiveNode[];
+    edges: ReactiveEdge[];
+    onSelectNode?: (node: ReactiveNode | null) => void;
+    changedNodeIds?: Set<string>;
     /** Selected node id, bindable so lists and the graph stay in sync. */
-    selectedNodeId?: string | null
+    selectedNodeId?: string | null;
   }
 
   let {
@@ -18,79 +18,79 @@
     onSelectNode,
     changedNodeIds = new Set(),
     selectedNodeId = $bindable(null),
-  }: Props = $props()
+  }: Props = $props();
 
   // --- viewBox-based pan & zoom (always sharp, no CSS transform) ---
   // viewBox = (vbX, vbY, vbW, vbH)
   // zoom controls vbW/vbH (smaller = zoomed in), pan controls vbX/vbY
-  let vbX = $state(0)
-  let vbY = $state(0)
-  let vbW = $state(800)
-  let vbH = $state(400)
-  let dragging = $state(false)
-  let dragStartX = 0
-  let dragStartY = 0
-  let vbStartX = 0
-  let vbStartY = 0
-  let containerEl = $state<HTMLDivElement | null>(null)
+  let vbX = $state(0);
+  let vbY = $state(0);
+  let vbW = $state(800);
+  let vbH = $state(400);
+  let dragging = $state(false);
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let vbStartX = 0;
+  let vbStartY = 0;
+  let containerEl = $state<HTMLDivElement | null>(null);
 
-  const ZOOM_FACTOR = 1.2
-  const ZOOM_MIN_VB = 100 // minimum viewBox dimension (max zoom in)
-  const ZOOM_MAX_VB = 8000 // maximum viewBox dimension (max zoom out)
+  const ZOOM_FACTOR = 1.2;
+  const ZOOM_MIN_VB = 100; // minimum viewBox dimension (max zoom in)
+  const ZOOM_MAX_VB = 8000; // maximum viewBox dimension (max zoom out)
 
   // Zoom percentage for display (relative to fit-to-view state)
-  let fitVbW = $state(800)
-  const zoomPercent = $derived(Math.round((fitVbW / vbW) * 100))
+  let fitVbW = $state(800);
+  const zoomPercent = $derived(Math.round((fitVbW / vbW) * 100));
 
-  let hasManuallyZoomed = false
+  let hasManuallyZoomed = false;
 
   function zoomIn() {
-    hasManuallyZoomed = true
-    applyZoom(1 / ZOOM_FACTOR, vbX + vbW / 2, vbY + vbH / 2)
+    hasManuallyZoomed = true;
+    applyZoom(1 / ZOOM_FACTOR, vbX + vbW / 2, vbY + vbH / 2);
   }
   function zoomOut() {
-    hasManuallyZoomed = true
-    applyZoom(ZOOM_FACTOR, vbX + vbW / 2, vbY + vbH / 2)
+    hasManuallyZoomed = true;
+    applyZoom(ZOOM_FACTOR, vbX + vbW / 2, vbY + vbH / 2);
   }
   function zoomReset() {
-    hasManuallyZoomed = false
-    fitToView()
+    hasManuallyZoomed = false;
+    fitToView();
   }
 
   function applyZoom(factor: number, cx: number, cy: number) {
-    const newW = Math.min(ZOOM_MAX_VB, Math.max(ZOOM_MIN_VB, vbW * factor))
-    const newH = Math.min(ZOOM_MAX_VB, Math.max(ZOOM_MIN_VB, vbH * factor))
-    const ratio = newW / vbW
+    const newW = Math.min(ZOOM_MAX_VB, Math.max(ZOOM_MIN_VB, vbW * factor));
+    const newH = Math.min(ZOOM_MAX_VB, Math.max(ZOOM_MIN_VB, vbH * factor));
+    const ratio = newW / vbW;
     // Keep the point (cx, cy) in the same screen position
-    vbX = cx - (cx - vbX) * ratio
-    vbY = cy - (cy - vbY) * ratio
-    vbW = newW
-    vbH = newH
+    vbX = cx - (cx - vbX) * ratio;
+    vbY = cy - (cy - vbY) * ratio;
+    vbW = newW;
+    vbH = newH;
   }
 
   function fitToView() {
-    if (!containerEl || layout.width === 0) return
-    const rect = containerEl.getBoundingClientRect()
+    if (!containerEl || layout.width === 0) return;
+    const rect = containerEl.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) {
       // Container hasn't laid out yet — try again on the next frame.
-      requestAnimationFrame(() => fitToView())
-      return
+      requestAnimationFrame(() => fitToView());
+      return;
     }
-    const aspect = rect.width / rect.height
+    const aspect = rect.width / rect.height;
     // Add breathing room around the graph so nodes don't kiss the edges.
-    const PAD = NODE_W * 0.5
-    const graphW = Math.max(layout.width, 200) + PAD * 2
-    const graphH = Math.max(layout.height, 100) + PAD * 2
-    const graphAspect = graphW / graphH
+    const PAD = NODE_W * 0.5;
+    const graphW = Math.max(layout.width, 200) + PAD * 2;
+    const graphH = Math.max(layout.height, 100) + PAD * 2;
+    const graphAspect = graphW / graphH;
 
-    let targetW: number
-    let targetH: number
+    let targetW: number;
+    let targetH: number;
     if (graphAspect > aspect) {
-      targetW = graphW
-      targetH = graphW / aspect
+      targetW = graphW;
+      targetH = graphW / aspect;
     } else {
-      targetH = graphH
-      targetW = graphH * aspect
+      targetH = graphH;
+      targetW = graphH * aspect;
     }
 
     // Don't zoom out so far that nodes become illegible. Cap the viewBox
@@ -98,99 +98,99 @@
     // box stays at >= ~110px on screen, where the 11px label inside is
     // still readable. If the graph is genuinely larger than that fits,
     // the user gets scroll/pan instead of an unreadable thumbnail.
-    const MIN_NODE_SCREEN_W = 110
-    const maxVbW = (rect.width / MIN_NODE_SCREEN_W) * NODE_W
-    const maxVbH = (rect.height / MIN_NODE_SCREEN_W) * NODE_W
+    const MIN_NODE_SCREEN_W = 110;
+    const maxVbW = (rect.width / MIN_NODE_SCREEN_W) * NODE_W;
+    const maxVbH = (rect.height / MIN_NODE_SCREEN_W) * NODE_W;
     if (targetW > maxVbW) {
-      targetW = maxVbW
-      targetH = maxVbW / aspect
+      targetW = maxVbW;
+      targetH = maxVbW / aspect;
     }
     if (targetH > maxVbH) {
-      targetH = maxVbH
-      targetW = maxVbH * aspect
+      targetH = maxVbH;
+      targetW = maxVbH * aspect;
     }
 
-    vbW = targetW
-    vbH = targetH
+    vbW = targetW;
+    vbH = targetH;
 
     // Center the visible window over the graph.
-    vbX = (layout.width - vbW) / 2
-    vbY = (layout.height - vbH) / 2
-    fitVbW = vbW
+    vbX = (layout.width - vbW) / 2;
+    vbY = (layout.height - vbH) / 2;
+    fitVbW = vbW;
   }
 
   // Auto-fit when node count changes
-  let prevNodeCount = 0
+  let prevNodeCount = 0;
   $effect(() => {
-    const count = nodes.length
+    const count = nodes.length;
     if (count > 0 && count !== prevNodeCount && !hasManuallyZoomed) {
-      requestAnimationFrame(() => fitToView())
+      requestAnimationFrame(() => fitToView());
     }
-    prevNodeCount = count
-  })
+    prevNodeCount = count;
+  });
 
   // Mouse-wheel zoom (centered on cursor)
   function handleWheel(e: WheelEvent) {
-    e.preventDefault()
-    hasManuallyZoomed = true
-    const factor = e.deltaY > 0 ? ZOOM_FACTOR : 1 / ZOOM_FACTOR
-    if (!containerEl) return
-    const rect = containerEl.getBoundingClientRect()
+    e.preventDefault();
+    hasManuallyZoomed = true;
+    const factor = e.deltaY > 0 ? ZOOM_FACTOR : 1 / ZOOM_FACTOR;
+    if (!containerEl) return;
+    const rect = containerEl.getBoundingClientRect();
     // Convert screen coords to SVG coords
-    const mx = vbX + ((e.clientX - rect.left) / rect.width) * vbW
-    const my = vbY + ((e.clientY - rect.top) / rect.height) * vbH
-    applyZoom(factor, mx, my)
+    const mx = vbX + ((e.clientX - rect.left) / rect.width) * vbW;
+    const my = vbY + ((e.clientY - rect.top) / rect.height) * vbH;
+    applyZoom(factor, mx, my);
   }
 
   // Drag to pan
   function handlePointerDown(e: PointerEvent) {
-    const target = e.target as HTMLElement
-    if (target.closest('.node')) return
-    hasManuallyZoomed = true
-    dragging = true
-    dragStartX = e.clientX
-    dragStartY = e.clientY
-    vbStartX = vbX
-    vbStartY = vbY
-    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    const target = e.target as HTMLElement;
+    if (target.closest('.node')) return;
+    hasManuallyZoomed = true;
+    dragging = true;
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+    vbStartX = vbX;
+    vbStartY = vbY;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   }
 
   function handlePointerMove(e: PointerEvent) {
-    if (!dragging || !containerEl) return
-    const rect = containerEl.getBoundingClientRect()
+    if (!dragging || !containerEl) return;
+    const rect = containerEl.getBoundingClientRect();
     // Convert pixel delta to viewBox delta
-    const dx = ((e.clientX - dragStartX) / rect.width) * vbW
-    const dy = ((e.clientY - dragStartY) / rect.height) * vbH
-    vbX = vbStartX - dx
-    vbY = vbStartY - dy
+    const dx = ((e.clientX - dragStartX) / rect.width) * vbW;
+    const dy = ((e.clientY - dragStartY) / rect.height) * vbH;
+    vbX = vbStartX - dx;
+    vbY = vbStartY - dy;
   }
 
   function handlePointerUp() {
-    dragging = false
+    dragging = false;
   }
 
   /** Fits a node label: at most `max` characters. */
-  const clip = (s: string, max = 14) => (s.length > max ? s.slice(0, max - 1) + '…' : s)
+  const clip = (s: string, max = 14) => (s.length > max ? s.slice(0, max - 1) + '…' : s);
   /** Node value label: strings as they are, anything else as compact JSON. */
-  const valueLabel = (v: unknown) => clip(typeof v === 'string' ? v : formatValue(v))
+  const valueLabel = (v: unknown) => clip(typeof v === 'string' ? v : formatValue(v));
 
-  const layout = $derived(layoutGraph(nodes, edges))
+  const layout = $derived(layoutGraph(nodes, edges));
 
   // Animation timing constants
-  const NODE_GLOW_MS = 300
-  const EDGE_TRAVEL_MS = 400
+  const NODE_GLOW_MS = 300;
+  const EDGE_TRAVEL_MS = 400;
 
-  const propagation = $derived(propagate(nodes, edges, changedNodeIds))
+  const propagation = $derived(propagate(nodes, edges, changedNodeIds));
 
   // Node glow starts at: depth * (NODE_GLOW_MS + EDGE_TRAVEL_MS)
   function nodeDelayMs(nodeId: string): number {
-    return (propagation.depths.get(nodeId) ?? 0) * (NODE_GLOW_MS + EDGE_TRAVEL_MS)
+    return (propagation.depths.get(nodeId) ?? 0) * (NODE_GLOW_MS + EDGE_TRAVEL_MS);
   }
 
   // Edge animation starts after the source node finishes glowing:
   //   sourceNodeDelay + NODE_GLOW_MS
   function edgeDelayMs(fromId: string): number {
-    return nodeDelayMs(fromId) + NODE_GLOW_MS
+    return nodeDelayMs(fromId) + NODE_GLOW_MS;
   }
 
   /** Per kind: theme colour for outlines and edges, and the glow (an SVG filter needs a literal). */
@@ -199,16 +199,16 @@
     derived: { color: 'var(--green)', glow: '#22c55e' },
     effect: { color: 'var(--red)', glow: '#ef4444' },
     template: { color: 'var(--purple)', glow: '#a855f7' },
-  }
+  };
 
   function handleNodeClick(node: ReactiveNode) {
-    selectedNodeId = selectedNodeId === node.id ? null : node.id
-    onSelectNode?.(selectedNodeId ? node : null)
+    selectedNodeId = selectedNodeId === node.id ? null : node.id;
+    onSelectNode?.(selectedNodeId ? node : null);
   }
 
-  const nodeMap = $derived(new Map(nodes.map(n => [n.id, n])))
+  const nodeMap = $derived(new Map(nodes.map(n => [n.id, n])));
 
-  let pulseKey = $state(0)
+  let pulseKey = $state(0);
   $effect(() => {
     // Always re-trigger animation when there are changed nodes,
     // even if the same nodes changed again. This cancels any
@@ -216,10 +216,10 @@
     // starts fresh, so rapid consecutive changes remain visible.
     if (changedNodeIds.size > 0) {
       queueMicrotask(() => {
-        pulseKey++
-      })
+        pulseKey++;
+      });
     }
-  })
+  });
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -334,8 +334,8 @@
             onkeydown={e => {
               // Buttons activate on Space too (not only Enter).
               if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
-                handleNodeClick(node)
+                e.preventDefault();
+                handleNodeClick(node);
               }
             }}
           >

@@ -1,24 +1,24 @@
 <script lang="ts">
-  import type { Snippet } from 'svelte'
+  import type { Snippet } from 'svelte';
 
-  import Button from './Button.svelte'
+  import Button from './Button.svelte';
 
   /** Detail pane shown in a SplitView's aside. Esc closes it. */
   interface Props {
-    title: string
-    subtitle?: string
-    badges?: Snippet
-    actions?: Snippet
-    onclose?: () => void
-    children: Snippet
+    title: string;
+    subtitle?: string;
+    badges?: Snippet;
+    actions?: Snippet;
+    onclose?: () => void;
+    children: Snippet;
   }
 
-  let { title, subtitle, badges, actions, onclose, children }: Props = $props()
+  let { title, subtitle, badges, actions, onclose, children }: Props = $props();
 
   function onkeydown(e: KeyboardEvent) {
     if (e.key === 'Escape' && onclose) {
-      e.stopPropagation()
-      onclose()
+      e.stopPropagation();
+      onclose();
     }
   }
 </script>

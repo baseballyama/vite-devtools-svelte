@@ -1,9 +1,9 @@
 <script lang="ts" generics="T">
-  import type { Snippet } from 'svelte'
+  import type { Snippet } from 'svelte';
 
-  import Icon from './Icon.svelte'
-  import type { Column, RowState, SortState, TableRowState } from './types.js'
-  import VirtualList from './VirtualList.svelte'
+  import Icon from './Icon.svelte';
+  import type { Column, RowState, SortState, TableRowState } from './types.js';
+  import VirtualList from './VirtualList.svelte';
 
   /**
    * Virtualised, sortable table. Rows are rendered by the caller's `row`
@@ -11,17 +11,17 @@
    * cells can be skipped in narrow layouts).
    */
   interface Props {
-    items: readonly T[]
-    columns: Column<T>[]
-    getKey: (item: T) => string
-    label: string
-    row: Snippet<[T, TableRowState]>
-    sort?: SortState | null
-    selected?: string | null
-    rowHeight?: number
-    empty?: Snippet
-    onselect?: (item: T) => void
-    onactivate?: (item: T) => void
+    items: readonly T[];
+    columns: Column<T>[];
+    getKey: (item: T) => string;
+    label: string;
+    row: Snippet<[T, TableRowState]>;
+    sort?: SortState | null;
+    selected?: string | null;
+    rowHeight?: number;
+    empty?: Snippet;
+    onselect?: (item: T) => void;
+    onactivate?: (item: T) => void;
   }
 
   let {
@@ -36,32 +36,32 @@
     empty,
     onselect,
     onactivate,
-  }: Props = $props()
+  }: Props = $props();
 
-  let width = $state(1000)
+  let width = $state(1000);
 
-  const shown = $derived(columns.filter(c => !c.minWidth || width >= c.minWidth))
-  const visible = $derived(new Set(shown.map(c => c.id)))
-  const template = $derived(shown.map(c => c.width).join(' '))
+  const shown = $derived(columns.filter(c => !c.minWidth || width >= c.minWidth));
+  const visible = $derived(new Set(shown.map(c => c.id)));
+  const template = $derived(shown.map(c => c.width).join(' '));
 
   const sorted = $derived.by(() => {
-    const col = sort && columns.find(c => c.id === sort!.id)
-    if (!col?.sort) return items
-    const cmp = col.sort
-    const dir = sort!.desc ? -1 : 1
-    return [...items].sort((a, b) => dir * cmp(a, b))
-  })
+    const col = sort && columns.find(c => c.id === sort!.id);
+    if (!col?.sort) return items;
+    const cmp = col.sort;
+    const dir = sort!.desc ? -1 : 1;
+    return [...items].sort((a, b) => dir * cmp(a, b));
+  });
 
   function toggleSort(col: Column<T>) {
-    if (!col.sort) return
-    if (sort?.id === col.id) sort = { id: col.id, desc: !sort.desc }
-    else sort = { id: col.id, desc: !!col.descFirst }
+    if (!col.sort) return;
+    if (sort?.id === col.id) sort = { id: col.id, desc: !sort.desc };
+    else sort = { id: col.id, desc: !!col.descFirst };
   }
 
   function ariaSort(col: Column<T>) {
-    if (!col.sort) return undefined
-    if (sort?.id !== col.id) return 'none'
-    return sort.desc ? 'descending' : 'ascending'
+    if (!col.sort) return undefined;
+    if (sort?.id !== col.id) return 'none';
+    return sort.desc ? 'descending' : 'ascending';
   }
 </script>
 

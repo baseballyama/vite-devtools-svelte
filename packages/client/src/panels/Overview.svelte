@@ -1,18 +1,18 @@
 <script lang="ts">
-  import Badge from '../components/Badge.svelte'
-  import Button from '../components/Button.svelte'
-  import EmptyState from '../components/EmptyState.svelte'
-  import Highlight from '../components/Highlight.svelte'
-  import Icon from '../components/Icon.svelte'
-  import Panel from '../components/Panel.svelte'
-  import SearchField from '../components/SearchField.svelte'
-  import Segmented from '../components/Segmented.svelte'
-  import { formatBytes } from '../lib/format.js'
-  import type { IconName } from '../lib/icons.js'
-  import { matcher } from '../lib/match.js'
-  import type { PanelId } from '../lib/panels.js'
-  import { resource } from '../lib/resource.svelte.js'
-  import { router } from '../lib/router.svelte.js'
+  import Badge from '../components/Badge.svelte';
+  import Button from '../components/Button.svelte';
+  import EmptyState from '../components/EmptyState.svelte';
+  import Highlight from '../components/Highlight.svelte';
+  import Icon from '../components/Icon.svelte';
+  import Panel from '../components/Panel.svelte';
+  import SearchField from '../components/SearchField.svelte';
+  import Segmented from '../components/Segmented.svelte';
+  import { formatBytes } from '../lib/format.js';
+  import type { IconName } from '../lib/icons.js';
+  import { matcher } from '../lib/match.js';
+  import type { PanelId } from '../lib/panels.js';
+  import { resource } from '../lib/resource.svelte.js';
+  import { router } from '../lib/router.svelte.js';
   import {
     getProject,
     getRoutes,
@@ -21,11 +21,11 @@
     getLiveComponents,
     getCompilerWarnings,
     getRuntimeErrors,
-  } from '../lib/rpc.js'
-  import type { ProjectInfo } from '../lib/types.js'
-  import { datasetVersion } from '../lib/versions.js'
+  } from '../lib/rpc.js';
+  import type { ProjectInfo } from '../lib/types.js';
+  import { datasetVersion } from '../lib/versions.js';
 
-  const project = resource<ProjectInfo | null>(getProject, { initial: null })
+  const project = resource<ProjectInfo | null>(getProject, { initial: null });
 
   // Cheap, in-memory or directory-scan stats only — the overview is the
   // landing page and must not trigger whole-project static analysis.
@@ -37,7 +37,7 @@
         return p.then(
           v => v,
           () => null,
-        )
+        );
       }
       const [routes, assets, modules, warnings, errors] = await Promise.all([
         settle(getRoutes()),
@@ -45,7 +45,7 @@
         settle(getModuleGraph()),
         settle(getCompilerWarnings()),
         settle(getRuntimeErrors()),
-      ])
+      ]);
       return {
         routes: routes?.length ?? null,
         pages: routes?.filter(r => r.hasPage).length ?? null,
@@ -56,54 +56,54 @@
         cycles: modules?.cycles.length ?? null,
         warnings: warnings?.length ?? null,
         errors: errors?.length ?? null,
-      }
+      };
     },
     { initial: null },
-  )
+  );
 
   // Mounted components arrive after the overview's first load: the app's
   // runtime only reports them once this DevTools client has connected. Poll
   // like the Components panel (skipped while the server's counter is unchanged).
   const live = resource(
     async () => {
-      const list = await getLiveComponents()
-      return { count: list.length, files: new Set(list.map(c => c.file)).size }
+      const list = await getLiveComponents();
+      return { count: list.length, files: new Set(list.map(c => c.file)).size };
     },
     { initial: null, interval: 2000, version: datasetVersion('components') },
-  )
+  );
 
-  let depQuery = $state('')
-  let depKind = $state<'all' | 'dependencies' | 'devDependencies'>('all')
+  let depQuery = $state('');
+  let depKind = $state<'all' | 'dependencies' | 'devDependencies'>('all');
 
   const deps = $derived.by(() => {
-    const p = project.data
-    if (!p) return []
-    const out: { name: string; version: string; dev: boolean }[] = []
+    const p = project.data;
+    if (!p) return [];
+    const out: { name: string; version: string; dev: boolean }[] = [];
     if (depKind !== 'devDependencies')
       for (const [name, version] of Object.entries(p.dependencies))
-        out.push({ name, version, dev: false })
+        out.push({ name, version, dev: false });
     if (depKind !== 'dependencies')
       for (const [name, version] of Object.entries(p.devDependencies))
-        out.push({ name, version, dev: true })
-    const m = matcher(depQuery)
+        out.push({ name, version, dev: true });
+    const m = matcher(depQuery);
     return (m ? out.filter(d => m(d.name, d.version)) : out).sort((a, b) =>
       a.name.localeCompare(b.name),
-    )
-  })
+    );
+  });
 
   interface Tile {
-    panel: PanelId
-    icon: IconName
-    label: string
-    value: string
-    sub?: string
-    tone?: 'red' | 'yellow'
+    panel: PanelId;
+    icon: IconName;
+    label: string;
+    value: string;
+    sub?: string;
+    tone?: 'red' | 'yellow';
   }
 
-  const n = (v: number | null | undefined) => (v == null ? '—' : v.toLocaleString())
+  const n = (v: number | null | undefined) => (v == null ? '—' : v.toLocaleString());
 
   const tiles = $derived.by<Tile[]>(() => {
-    const s = stats.data
+    const s = stats.data;
     return [
       {
         panel: 'routes',
@@ -143,8 +143,8 @@
         sub: s ? `${n(s.errors)} errors · ${n(s.warnings)} warnings` : undefined,
         tone: s?.errors ? 'red' : s?.warnings ? 'yellow' : undefined,
       },
-    ]
-  })
+    ];
+  });
 </script>
 
 <Panel title="Overview" scroll>

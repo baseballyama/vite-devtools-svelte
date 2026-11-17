@@ -1,8 +1,8 @@
 /** One option of a kind filter (`Segmented`). */
 export interface KindOption<K extends string> {
-  value: K | 'all'
-  label: string
-  count: number
+  value: K | 'all';
+  label: string;
+  count: number;
 }
 
 /**
@@ -16,12 +16,12 @@ export function kindOptions<K extends string>(
   current: K | 'all',
   label: (kind: K) => string,
 ): KindOption<K>[] {
-  let total = 0
-  for (const n of counts.values()) total += n
+  let total = 0;
+  for (const n of counts.values()) total += n;
   return [
     { value: 'all', label: 'All', count: total },
     ...order
       .filter(k => k === current || (counts.get(k) ?? 0) > 0)
       .map(k => ({ value: k, label: label(k), count: counts.get(k) ?? 0 })),
-  ]
+  ];
 }

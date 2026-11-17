@@ -1,10 +1,10 @@
 // Transforms that hook compiled Svelte modules up to the runtime.
-import { parseSync, Visitor } from 'vite'
-import type { ESTree } from 'vite'
+import { parseSync, Visitor } from 'vite';
+import type { ESTree } from 'vite';
 
-import { RUNTIME_MODULE_ID } from './ids.js'
+import { RUNTIME_MODULE_ID } from './ids.js';
 
-const PUSH_CALL = '$.push($$props'
+const PUSH_CALL = '$.push($$props';
 
 /**
  * Source offset of the component's own `$.push($$props, …)` statement, or -1.
@@ -16,38 +16,38 @@ const PUSH_CALL = '$.push($$props'
  * real call statement wins (-1 when the module does not parse).
  */
 function componentPushOffset(code: string): number {
-  const at = code.indexOf(PUSH_CALL)
-  if (at === -1) return -1
+  const at = code.indexOf(PUSH_CALL);
+  if (at === -1) return -1;
   if (!code.includes(PUSH_CALL, at + PUSH_CALL.length)) {
-    const next = code[at + PUSH_CALL.length]
-    return atLineStart(code, at) && (next === ',' || next === ')') ? at : -1
+    const next = code[at + PUSH_CALL.length];
+    return atLineStart(code, at) && (next === ',' || next === ')') ? at : -1;
   }
-  return parsedPushOffset(code)
+  return parsedPushOffset(code);
 }
 
 // Only spaces / tabs between the previous line break (or the start) and `at`.
 function atLineStart(code: string, at: number): boolean {
-  let i = at - 1
-  while (i >= 0 && (code[i] === ' ' || code[i] === '\t')) i--
-  return i === -1 || code[i] === '\n'
+  let i = at - 1;
+  while (i >= 0 && (code[i] === ' ' || code[i] === '\t')) i--;
+  return i === -1 || code[i] === '\n';
 }
 
 function parsedPushOffset(code: string): number {
-  const { program, errors } = parseSync('component.js', code)
-  if (errors.length > 0) return -1
-  let first = -1
+  const { program, errors } = parseSync('component.js', code);
+  if (errors.length > 0) return -1;
+  let first = -1;
   new Visitor({
     ExpressionStatement(node) {
       if (isComponentPush(node.expression) && (first === -1 || node.start < first)) {
-        first = node.start
+        first = node.start;
       }
     },
-  }).visit(program)
-  return first
+  }).visit(program);
+  return first;
 }
 
 function isIdentifier(node: ESTree.Node | undefined, name: string): boolean {
-  return node?.type === 'Identifier' && node.name === name
+  return node?.type === 'Identifier' && node.name === name;
 }
 
 // `$.push($$props, …)`
@@ -59,7 +59,7 @@ function isComponentPush(call: ESTree.Expression): boolean {
     isIdentifier(call.callee.object, '$') &&
     isIdentifier(call.callee.property, 'push') &&
     isIdentifier(call.arguments[0], '$$props')
-  )
+  );
 }
 
 /**
@@ -72,19 +72,21 @@ function isComponentPush(call: ESTree.Expression): boolean {
  * compiler's sourcemap stay aligned).
  */
 export function injectComponentTracking(code: string, id: string): string | null {
-  const at = componentPushOffset(code)
-  if (at === -1) return null
+  const at = componentPushOffset(code);
+  if (at === -1) return null;
   // Spliced by index, not via `String#replace`: a replacement string would
   // expand `$&`, `$'`, `$1`… sequences that are legal in file paths.
-  const hint = `if (typeof window !== 'undefined' && window.__SVELTE_DEVTOOLS__) { window.__SVELTE_DEVTOOLS__._pendingFile = ${JSON.stringify(id)}; } `
-  return `import '${RUNTIME_MODULE_ID}';` + code.slice(0, at) + hint + code.slice(at)
+  const hint = `if (typeof window !== 'undefined' && window.__SVELTE_DEVTOOLS__) { window.__SVELTE_DEVTOOLS__._pendingFile = ${JSON.stringify(id)}; } `;
+  return `import '${RUNTIME_MODULE_ID}';` + code.slice(0, at) + hint + code.slice(at);
 }
 
-const SVELTE_MODULE_SUFFIXES = ['js', 'ts', 'mjs', 'mts', 'cjs', 'cts'].map(ext => `.svelte.${ext}`)
+const SVELTE_MODULE_SUFFIXES = ['js', 'ts', 'mjs', 'mts', 'cjs', 'cts'].map(
+  ext => `.svelte.${ext}`,
+);
 
 /** A Svelte module (`.svelte.js` / `.svelte.ts`, runes outside components); `file` has no query. */
 export function isSvelteModule(file: string): boolean {
-  return SVELTE_MODULE_SUFFIXES.some(suffix => file.endsWith(suffix))
+  return SVELTE_MODULE_SUFFIXES.some(suffix => file.endsWith(suffix));
 }
 
 /**
@@ -97,12 +99,12 @@ export function isSvelteModule(file: string): boolean {
  * compiled after this transform). `null` for a server-compiled module.
  */
 export function injectModuleTracking(code: string, id: string): string | null {
-  if (code.includes('svelte/internal/server')) return null
-  const safeId = JSON.stringify(id)
-  const dt = `(typeof window !== 'undefined' && window.__SVELTE_DEVTOOLS__)`
+  if (code.includes('svelte/internal/server')) return null;
+  const safeId = JSON.stringify(id);
+  const dt = `(typeof window !== 'undefined' && window.__SVELTE_DEVTOOLS__)`;
   return (
     `import '${RUNTIME_MODULE_ID}';if (${dt}) { window.__SVELTE_DEVTOOLS__._enterModule(${safeId}); }` +
     code +
     `\n;if (${dt}) { window.__SVELTE_DEVTOOLS__._leaveModule(); }\n`
-  )
+  );
 }

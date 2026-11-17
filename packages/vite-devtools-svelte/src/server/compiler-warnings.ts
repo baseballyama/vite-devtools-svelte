@@ -1,18 +1,18 @@
-import path from 'node:path'
+import path from 'node:path';
 
-import type { Plugin } from 'vite'
+import type { Plugin } from 'vite';
 
-import type { CompilerWarning } from '../types.js'
+import type { CompilerWarning } from '../types.js';
 
 /** The fields of a Svelte compiler `Warning` we read. */
 interface SvelteWarning {
-  code: string
-  message: string
-  filename?: string
-  start?: { line: number; column: number }
+  code: string;
+  message: string;
+  filename?: string;
+  start?: { line: number; column: number };
 }
 
-type OnWarn = (warning: SvelteWarning, defaultHandler: (warning: SvelteWarning) => void) => void
+type OnWarn = (warning: SvelteWarning, defaultHandler: (warning: SvelteWarning) => void) => void;
 
 /**
  * vite-plugin-svelte's resolved options: one object its sub-plugins share as
@@ -20,11 +20,11 @@ type OnWarn = (warning: SvelteWarning, defaultHandler: (warning: SvelteWarning) 
  */
 function svelteOptions(plugins: readonly Plugin[]): { onwarn?: OnWarn } | undefined {
   for (const p of plugins) {
-    if (!p.name.startsWith('vite-plugin-svelte')) continue
-    const options = (p.api as { options?: unknown } | undefined)?.options
-    if (typeof options === 'object' && options !== null) return options
+    if (!p.name.startsWith('vite-plugin-svelte')) continue;
+    const options = (p.api as { options?: unknown } | undefined)?.options;
+    if (typeof options === 'object' && options !== null) return options;
   }
-  return undefined
+  return undefined;
 }
 
 /**
@@ -41,9 +41,9 @@ export function captureCompilerWarnings(
   plugins: readonly Plugin[],
   record: (warning: CompilerWarning) => void,
 ): void {
-  const options = svelteOptions(plugins)
-  if (!options) return
-  const userOnwarn = options.onwarn
+  const options = svelteOptions(plugins);
+  if (!options) return;
+  const userOnwarn = options.onwarn;
   options.onwarn = (warning, defaultHandler) => {
     if (!warning.filename?.includes('node_modules')) {
       record({
@@ -53,9 +53,9 @@ export function captureCompilerWarnings(
         file: warning.filename ? path.resolve(warning.filename) : '',
         line: warning.start?.line,
         column: warning.start?.column,
-      })
+      });
     }
-    if (userOnwarn) userOnwarn(warning, defaultHandler)
-    else defaultHandler(warning)
-  }
+    if (userOnwarn) userOnwarn(warning, defaultHandler);
+    else defaultHandler(warning);
+  };
 }
