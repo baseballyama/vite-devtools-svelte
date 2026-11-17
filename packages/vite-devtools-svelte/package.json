@@ -1,5 +1,5 @@
 {
-  "name": "vite-devtools-svelte",
+  "name": "@sveltejs/vite-devtools-svelte",
   "version": "0.7.0",
   "description": "Svelte DevTools for Vite: standalone on your dev server or inside the Vite DevTools dock",
   "keywords": [
@@ -66,7 +66,7 @@
     "vitest": "^5.1.0"
   },
   "peerDependencies": {
-    "@sveltejs/kit": "^2.0.0 || ^3.0.0",
+    "@sveltejs/kit": "^3.0.0",
     "vite": "^8.3.5"
   },
   "peerDependenciesMeta": {

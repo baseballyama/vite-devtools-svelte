@@ -1,0 +1,45 @@
+{
+  "name": "vite-devtools-svelte-inspector",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Svelte Inspector for vite-devtools-svelte, forked from @sveltejs/vite-plugin-svelte",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/baseballyama/vite-devtools-svelte.git",
+    "directory": "packages/inspector"
+  },
+  "files": [
+    "src"
+  ],
+  "type": "module",
+  "types": "./src/public.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/public.d.ts",
+      "default": "./src/index.js"
+    }
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "obug": "^2.1.0"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "@vitest/coverage-v8": "^5.0.5",
+    "svelte": "^5.57.3",
+    "vite": "^8.3.5",
+    "vitest": "^5.1.0"
+  },
+  "peerDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.0.0",
+    "svelte": "^5.46.4",
+    "vite": "^8.0.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

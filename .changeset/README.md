@@ -2,13 +2,13 @@
 
 This directory contains [changesets](https://github.com/changesets/changesets)
 that drive version bumps, changelog entries, and npm publishes for
-`vite-devtools-svelte`.
+`@sveltejs/vite-devtools-svelte`.
 
 ## Workflow
 
 1. Make a change that should ship in a release.
 2. Run `pnpm changeset` and follow the prompts:
-   - Select `vite-devtools-svelte` (the `svelte-devtools-client`,
+   - Select `@sveltejs/vite-devtools-svelte` (the `svelte-devtools-client`,
      `playground`, and `site` packages are private and ignored).
    - Pick the bump type — `patch`, `minor`, or `major` — following
      [semver](https://semver.org/).

@@ -1,4 +1,4 @@
-import { products } from '$lib/server/products'
+import { products } from '#lib/server/products.ts'
 
 import type { PageServerLoad } from './$types'
 
