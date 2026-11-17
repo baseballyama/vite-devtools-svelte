@@ -228,9 +228,11 @@ svelteDevtools({
 
 `svelteDevtools()`: hold the toggle key combo (`alt-x` by default) in your app and click an element to open its source in your editor.
 
-`inspector` takes the same options as vite-plugin-svelte's inspector (`toggleKeyCombo`, `navKeys`, `openKey`, `openMenuKey`, `escapeKeys`, `holdMode`, `showToggleButton`, `toggleButtonPos`, `customStyles`). As upstream, `SVELTE_INSPECTOR_TOGGLE` and an options object in `SVELTE_INSPECTOR_OPTIONS` (shell or `.env` files) take precedence over them, for personal preferences; `SVELTE_INSPECTOR_OPTIONS=true|false` does not turn it on or off.
+`inspector` takes the options (`toggleKeyCombo`, `navKeys`, `openKey`, `openMenuKey`, `escapeKeys`, `holdMode`, `showToggleButton`, `toggleButtonPos`, `customStyles`). 
 
-With Vite DevTools in the Vite config, the inspector moves into its dock: **Svelte Inspector** on the dock bar (or the **Toggle Svelte Inspector** command) turns it on and off, and **Svelte Inspector settings** in the **Svelte** group edits your personal shortcut and keys, saved to `.env.local`.
+`SVELTE_INSPECTOR_TOGGLE` and an options object in `SVELTE_INSPECTOR_OPTIONS` (shell or `.env` files) take precedence over them, for personal preferences;
+
+The Svelte Inspector settings in the DevTools Svelte group edits your personal shortcut and keys, saved to `.env.local`.
 
 ## How It Works
 
@@ -387,7 +389,7 @@ matches across machines.
 │   │   │   ├── analyzers/      # Routes, components, assets, build, module graph, OG
 │   │   │   └── mcp/            # MCP server for AI agents
 │   │   └── test/               # Vitest: unit, reactivity (real Svelte), perf
-│   ├── inspector/              # Svelte Inspector fork (private), bundled into the plugin's dist/inspector
+│   ├── inspector/              # Svelte Inspector, bundled into the plugin's dist/inspector
 │   └── client/                 # DevTools UI (Svelte 5 SPA), built into the plugin's dist/client
 ├── playground/                 # Demo SvelteKit app for development
 ├── examples/                   # One app per app shape (Svelte, Kit SSR/SPA/SSG/remote, …); `pnpm examples` starts all
