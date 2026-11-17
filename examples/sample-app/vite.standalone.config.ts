@@ -3,8 +3,8 @@
 // itself. The default vite.config.ts (dock mode) is unchanged.
 import adapter from '@sveltejs/adapter-auto'
 import { sveltekit } from '@sveltejs/kit/vite'
+import { svelteDevtools } from '@sveltejs/vite-devtools-svelte'
 import { defineConfig } from 'vite'
-import { svelteDevtools } from 'vite-devtools-svelte'
 
 export default defineConfig({
   plugins: [svelteDevtools(), sveltekit({ adapter: adapter() })],

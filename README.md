@@ -155,7 +155,7 @@ After the app page reloads, a selected component id may belong to another instan
 ## Installation
 
 ```bash
-npm install -D vite-devtools-svelte
+npm install -D @sveltejs/vite-devtools-svelte
 # optional: show the panels inside the Vite DevTools dock
 npm install -D @vitejs/devtools
 ```
@@ -167,8 +167,8 @@ Register the plugin in your `vite.config.ts`. `svelteDevtools()` **must come bef
 ```ts
 // vite.config.ts
 import { sveltekit } from '@sveltejs/kit/vite'
+import { svelteDevtools } from '@sveltejs/vite-devtools-svelte'
 import { defineConfig } from 'vite'
-import { svelteDevtools } from 'vite-devtools-svelte'
 
 export default defineConfig({
   plugins: [
@@ -289,7 +289,7 @@ The endpoint is served wherever your Vite dev server listens. With the default (
 
 ### Skills
 
-Two Claude Code skills ship under `node_modules/vite-devtools-svelte/skills/`:
+Two Claude Code skills ship under `node_modules/@sveltejs/vite-devtools-svelte/skills/`:
 
 - `vite-devtools-svelte-perf-audit` — captures a baseline session, calls `list_performance_issues`, and presents the top issues for the user to triage.
 - `vite-devtools-svelte-perf-fix` — one issue per run: baseline → edit → after → `compare_sessions`, with `verdict` reported verbatim and an explicit revert path if the change regresses or has no effect.
@@ -300,7 +300,7 @@ To install for a given project:
 
 ```bash
 mkdir -p .claude/skills
-cp -r node_modules/vite-devtools-svelte/skills/* .claude/skills/
+cp -r node_modules/@sveltejs/vite-devtools-svelte/skills/* .claude/skills/
 ```
 
 ### Scope

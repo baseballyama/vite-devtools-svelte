@@ -191,7 +191,7 @@ export function generate(opts = DEFAULTS) {
             '@sveltejs/vite-plugin-svelte',
             'svelte',
             'vite',
-            'vite-devtools-svelte',
+            '@sveltejs/vite-devtools-svelte',
           ].map(d => [d, '*']),
         ),
       },
@@ -205,7 +205,7 @@ export function generate(opts = DEFAULTS) {
   write(
     path.join(out, 'vite.config.js'),
     `import { sveltekit } from '@sveltejs/kit/vite'
-import { svelteDevtools } from 'vite-devtools-svelte'
+import { svelteDevtools } from '@sveltejs/vite-devtools-svelte'
 import { defineConfig } from 'vite'
 
 const withDevtools = process.env.PERF_DEVTOOLS !== '0'

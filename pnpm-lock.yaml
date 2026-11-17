@@ -223,6 +223,9 @@ importers:
 
   examples/plain-svelte:
     devDependencies:
+      '@sveltejs/vite-devtools-svelte':
+        specifier: workspace:*
+        version: link:../../packages/vite-devtools-svelte
       '@sveltejs/vite-plugin-svelte':
         specifier: 7.3.1
         version: 7.3.1(svelte@5.57.3(@typescript-eslint/types@8.72.1))(vite@8.3.5)
@@ -238,9 +241,6 @@ importers:
       vite:
         specifier: 8.3.5
         version: 8.3.5(@types/node@25.9.9)(@vitejs/devtools@0.8.0)(jiti@2.7.0)(yaml@2.9.1)
-      vite-devtools-svelte:
-        specifier: workspace:*
-        version: link:../../packages/vite-devtools-svelte
 
   examples/sample-app:
     devDependencies:
@@ -250,6 +250,9 @@ importers:
       '@sveltejs/kit':
         specifier: ^3.1.1
         version: 3.1.1(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.3(@typescript-eslint/types@8.72.1))(vite@8.3.5))(svelte@5.57.3(@typescript-eslint/types@8.72.1))(typescript@6.0.3)(vite@8.3.5)
+      '@sveltejs/vite-devtools-svelte':
+        specifier: workspace:*
+        version: link:../../packages/vite-devtools-svelte
       '@sveltejs/vite-plugin-svelte':
         specifier: ^7.3.1
         version: 7.3.1(svelte@5.57.3(@typescript-eslint/types@8.72.1))(vite@8.3.5)
@@ -268,9 +271,6 @@ importers:
       vite:
         specifier: ^8.3.5
         version: 8.3.5(@types/node@25.9.9)(@vitejs/devtools@0.8.0)(jiti@2.7.0)(yaml@2.9.1)
-      vite-devtools-svelte:
-        specifier: workspace:*
-        version: link:../../packages/vite-devtools-svelte
 
   examples/strict-csp-app:
     devDependencies:
@@ -280,6 +280,9 @@ importers:
       '@sveltejs/kit':
         specifier: ^3.1.1
         version: 3.1.1(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.3(@typescript-eslint/types@8.72.1))(vite@8.3.5))(svelte@5.57.3(@typescript-eslint/types@8.72.1))(typescript@6.0.3)(vite@8.3.5)
+      '@sveltejs/vite-devtools-svelte':
+        specifier: workspace:*
+        version: link:../../packages/vite-devtools-svelte
       '@sveltejs/vite-plugin-svelte':
         specifier: ^7.3.1
         version: 7.3.1(svelte@5.57.3(@typescript-eslint/types@8.72.1))(vite@8.3.5)
@@ -295,9 +298,6 @@ importers:
       vite:
         specifier: ^8.3.5
         version: 8.3.5(@types/node@25.9.9)(@vitejs/devtools@0.8.0)(jiti@2.7.0)(yaml@2.9.1)
-      vite-devtools-svelte:
-        specifier: workspace:*
-        version: link:../../packages/vite-devtools-svelte
 
   packages/client:
     devDependencies:
@@ -420,6 +420,9 @@ importers:
       '@sveltejs/kit':
         specifier: ^3.1.1
         version: 3.1.1(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.3(@typescript-eslint/types@8.72.1))(vite@8.3.5))(svelte@5.57.3(@typescript-eslint/types@8.72.1))(typescript@6.0.3)(vite@8.3.5)
+      '@sveltejs/vite-devtools-svelte':
+        specifier: workspace:*
+        version: link:../packages/vite-devtools-svelte
       '@sveltejs/vite-plugin-svelte':
         specifier: ^7.3.1
         version: 7.3.1(svelte@5.57.3(@typescript-eslint/types@8.72.1))(vite@8.3.5)
@@ -435,9 +438,6 @@ importers:
       vite:
         specifier: ^8.3.5
         version: 8.3.5(@types/node@25.9.9)(@vitejs/devtools@0.8.0)(jiti@2.7.0)(yaml@2.9.1)
-      vite-devtools-svelte:
-        specifier: workspace:*
-        version: link:../packages/vite-devtools-svelte
 
   site:
     devDependencies:
