@@ -6,7 +6,7 @@ import { defineDevframe, defineRpcFunction } from 'devframe'
 import type { DevframeDefinition } from 'devframe'
 import { z } from 'zod'
 
-import { analyzeApiEndpoints, sendApiRequest } from '../analyzers/api.js'
+import { analyzeApiEndpoints } from '../analyzers/api.js'
 import { analyzeAssets } from '../analyzers/assets.js'
 import { analyzeBuild } from '../analyzers/build.js'
 import { analyzeComponents } from '../analyzers/components.js'
@@ -17,7 +17,6 @@ import { analyzeProject } from '../analyzers/project.js'
 import { analyzeRoutes } from '../analyzers/routes.js'
 import { findReactiveLine } from '../analyzers/source.js'
 import type {
-  ApiResponse,
   CaptureInfoMap,
   InspectResult,
   OGPreview,
@@ -63,7 +62,7 @@ export interface SvelteDevtoolsHost {
     code: string
     map?: { mappings?: string; sources?: string[] } | string | null
   } | null>
-  /** Origins the dev server itself is reachable at (API playground / OG preview may call them). */
+  /** Origins the dev server itself is reachable at (the OG preview may call them). */
   serverOrigins: () => string[]
   /** Open `file[:line]` in the user's editor. */
   openInEditor: (target: string) => void
@@ -188,22 +187,7 @@ export function createRpcFunctions(host: SvelteDevtoolsHost) {
     }),
     query('get-versions', () => ({ ...collector.versions })),
     action('clear-state-timeline', () => collector.clearStateTimeline()),
-    query('get-api-endpoints', () => analyzeApiEndpoints(routes())),
-    defineRpcFunction({
-      name: 'send-api-request',
-      type: 'action',
-      jsonSerializable: true,
-      args: [
-        z.object({
-          url: z.string().max(8192),
-          method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']),
-          headers: z.string().max(65536),
-          body: z.string().max(1_000_000),
-        }),
-      ],
-      returns: z.custom<ApiResponse>(),
-      handler: input => sendApiRequest(input, { allowedOrigins: host.serverOrigins() }),
-    }),
+    query('get-api-endpoints', () => analyzeApiEndpoints(routes(), host.publicBase())),
     query('get-compiler-warnings', () => collector.compilerWarnings),
     query('get-runtime-errors', () => collector.runtimeErrors),
     action('clear-errors', () => collector.clearErrors()),

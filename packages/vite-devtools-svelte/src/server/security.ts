@@ -54,7 +54,7 @@ function isInternalHostname(host: string): boolean {
 export interface OutboundUrlOptions {
   /**
    * Origins that may be fetched even though they are local — the dev
-   * server's own resolved URLs, so the API playground can call the app.
+   * server's own resolved URLs, so the OG preview can read the app's pages.
    */
   allowedOrigins?: readonly string[]
 }

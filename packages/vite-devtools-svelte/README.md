@@ -12,7 +12,7 @@ Svelte DevTools for Vite, built on [Devframe](https://devfra.me/). Provides 15 s
 - **Route Viewer** — Explore SvelteKit file-based routing structure with dynamic parameters
 - **Load Profiler** — Monitor SvelteKit `load` functions with waterfall visualization
 - **State Timeline** — Record and replay state changes across the application
-- **API Playground** — Test SvelteKit server endpoints (`+server.ts`) directly from DevTools
+- **API Playground** — Test SvelteKit server endpoints (`+server.ts`) directly from DevTools, sent by the browser with your app's cookies
 - **Error Dashboard** — Centralized view of compiler warnings and runtime errors
 - **Code Inspector** — View compiled Svelte output with source mapping
 - **Module Graph** — Visualize module dependencies and detect circular imports
@@ -317,7 +317,7 @@ Some RPCs read files from disk or open them in your editor, so the DevTools back
 - **Origin checks.** The RPC WebSocket only accepts loopback origins (plus the dev server's own LAN origins when you use `--host`), which blocks cross-site pages and DNS-rebinding attacks.
 - **Schema-validated arguments.** RPC inputs are validated with zod schemas before any handler runs.
 - **Path sandbox.** `inspect-file`, `open-in-editor`, and `open-reactive-in-editor` resolve their input through `fs.realpath()` and refuse anything outside the project root. Symlinks inside the project are followed normally.
-- **SSRF defenses.** Outbound fetches from the API playground and OG preview block private / loopback / link-local IPv4 and IPv6 targets (also when a hostname _resolves_ to one), `localhost`, `*.local` and `*.internal`, and never follow redirects. The dev server's own origins are the only local targets allowed, so the playground can call your app's endpoints.
+- **SSRF defenses.** The OG preview's outbound fetch blocks private / loopback / link-local IPv4 and IPv6 targets (also when a hostname _resolves_ to one), `localhost`, `*.local` and `*.internal`, and never follows redirects. The dev server's own origins are the only local targets allowed, so it can read your app's pages. The API playground does not fetch on the server at all: the browser sends its requests from the DevTools page, under the same-origin and CORS rules as your app.
 - **Dev-only by construction.** Nothing is registered during `vite build`.
 
 Trusted-browser tokens are stored in your home directory (`~/.svelte-devtools/devframe/auth.json`) and shared across projects. The SSRF check resolves hostnames before fetching, so a resolver that changes its answer between that check and the request (DNS rebinding) is not fully excluded. If you bind your dev server to a non-loopback address, only use it on networks you trust.

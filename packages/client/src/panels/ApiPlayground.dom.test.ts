@@ -2,27 +2,34 @@ import { fireEvent, render, screen, within } from '@testing-library/svelte'
 import { userEvent } from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import * as http from '../lib/http.js'
+import type { ApiResponse } from '../lib/http.js'
 import * as rpc from '../lib/rpc.js'
-import type { ApiEndpoint, ApiResponse } from '../lib/types.js'
+import type { ApiEndpoint } from '../lib/types.js'
 import { layout, settle } from '../test/dom.js'
 import ApiPlayground from './ApiPlayground.svelte'
+
+vi.mock('../lib/http.js', () => ({ sendRequest: vi.fn() }))
 
 const endpoints: ApiEndpoint[] = [
   {
     route: '/api/users',
     path: '/api/users',
+    url: '/app/api/users',
     methods: ['GET', 'POST'],
     file: 'src/routes/api/users/+server.ts',
   },
   {
     route: '/api/items/[id]',
-    path: '/api/items/[id]',
+    path: '/api/items/:id',
+    url: '/app/api/items/:id',
     methods: ['GET', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     file: 'src/routes/api/items/[id]/+server.ts',
   },
   {
     route: '/api/ping',
     path: '/api/ping',
+    url: '/app/api/ping',
     methods: ['HEAD'],
     file: 'src/routes/api/ping/+server.ts',
   },
@@ -35,6 +42,9 @@ function ok(over: Partial<ApiResponse> = {}): ApiResponse {
     headers: { 'content-type': 'application/json' },
     body: '{"a":1}',
     duration: 12,
+    url: 'http://x/',
+    redirected: false,
+    truncated: null,
     ...over,
   }
 }
@@ -70,6 +80,7 @@ const response = () => screen.getByRole('region', { name: 'Response' })
 beforeEach(() => {
   layout(() => ({ width: 1200, height: 600 }))
   vi.mocked(rpc.getApiEndpoints).mockResolvedValue(endpoints)
+  vi.mocked(http.sendRequest).mockReset().mockResolvedValue(ok())
 })
 
 describe('ApiPlayground', () => {
@@ -120,12 +131,13 @@ describe('ApiPlayground', () => {
   })
 
   it('picking an endpoint fills method and URL; sending calls the RPC and shows the response', async () => {
-    vi.mocked(rpc.sendApiRequest).mockResolvedValue(
+    vi.mocked(http.sendRequest).mockResolvedValue(
       ok({ headers: { 'Content-Type': 'application/json', 'x-id': '7' } }),
     )
     const { user, list } = await setup()
     await user.click(within(list).getAllByRole('option')[0]!)
-    expect(urlInput().value).toBe(`${location.origin}/api/users`)
+    // The endpoint's URL under the dev server base, on the app's origin.
+    expect(urlInput().value).toBe(`${location.origin}/app/api/users`)
     const method = screen.getByRole<HTMLSelectElement>('combobox', { name: 'HTTP method' })
     expect(method.value).toBe('GET')
     // Only the endpoint's methods are offered.
@@ -146,12 +158,12 @@ describe('ApiPlayground', () => {
     await user.click(sendButton())
     await settle()
 
-    expect(rpc.sendApiRequest).toHaveBeenCalledWith(
-      `${location.origin}/api/users`,
-      'POST',
-      '{"x-a":"b"}',
-      '{"n":1}',
-    )
+    expect(http.sendRequest).toHaveBeenCalledWith({
+      url: `${location.origin}/app/api/users`,
+      method: 'POST',
+      headers: { 'x-a': 'b' },
+      body: '{"n":1}',
+    })
     const res = response()
     expect(within(res).getByText('200 OK')).toBeTruthy()
     expect(within(res).getByText('2 headers')).toBeTruthy()
@@ -168,7 +180,7 @@ describe('ApiPlayground', () => {
   })
 
   it('sends a typed URL with ⌘↵, drops the body for GET and empty headers become {}', async () => {
-    vi.mocked(rpc.sendApiRequest).mockResolvedValue(
+    vi.mocked(http.sendRequest).mockResolvedValue(
       ok({ status: 404, statusText: 'Not Found', headers: {}, body: '' }),
     )
     const { user } = await setup()
@@ -177,14 +189,19 @@ describe('ApiPlayground', () => {
     await user.clear(screen.getByRole('textbox', { name: 'Request headers as JSON' }))
     await fireEvent.keyDown(urlInput(), { key: 'Enter', metaKey: true })
     await settle()
-    expect(rpc.sendApiRequest).toHaveBeenCalledWith('http://x/y', 'GET', '{}', '')
+    expect(http.sendRequest).toHaveBeenCalledWith({
+      url: 'http://x/y',
+      method: 'GET',
+      headers: {},
+      body: '',
+    })
     expect(within(response()).getByText('404 Not Found')).toBeTruthy()
     expect(within(response()).getByText('(empty body)')).toBeTruthy()
   })
 
   it('keeps non-JSON bodies verbatim and renders markup in them as text', async () => {
     const payload = '<img src=x onerror="alert(1)"><script>alert(2)</script>'
-    vi.mocked(rpc.sendApiRequest).mockResolvedValue(
+    vi.mocked(http.sendRequest).mockResolvedValue(
       ok({
         status: 301,
         statusText: 'Moved',
@@ -203,7 +220,7 @@ describe('ApiPlayground', () => {
   })
 
   it('falls back to the raw body when JSON-looking content does not parse', async () => {
-    vi.mocked(rpc.sendApiRequest).mockResolvedValue(
+    vi.mocked(http.sendRequest).mockResolvedValue(
       ok({ status: 100, statusText: 'Continue', headers: {}, body: '{oops' }),
     )
     const { user } = await setup()
@@ -214,8 +231,8 @@ describe('ApiPlayground', () => {
   })
 
   it('shows a failed request and recovers on the next send', async () => {
-    vi.mocked(rpc.sendApiRequest).mockRejectedValueOnce(new Error('ECONNREFUSED'))
-    vi.mocked(rpc.sendApiRequest).mockRejectedValueOnce('plain failure')
+    vi.mocked(http.sendRequest).mockRejectedValueOnce(new Error('ECONNREFUSED'))
+    vi.mocked(http.sendRequest).mockRejectedValueOnce('plain failure')
     const { user } = await setup()
     await user.type(urlInput(), 'http://x/')
     await user.click(sendButton())
@@ -231,7 +248,7 @@ describe('ApiPlayground', () => {
 
   it('shows "Sending…" and ignores repeat sends while a request is in flight', async () => {
     let resolve!: (r: ApiResponse) => void
-    vi.mocked(rpc.sendApiRequest).mockReturnValue(
+    vi.mocked(http.sendRequest).mockReturnValue(
       new Promise(r => {
         resolve = r
       }),
@@ -242,7 +259,7 @@ describe('ApiPlayground', () => {
     expect(sendButton().textContent).toContain('Sending…')
     expect(sendButton().disabled).toBe(true)
     await fireEvent.keyDown(urlInput(), { key: 'Enter', ctrlKey: true })
-    expect(rpc.sendApiRequest).toHaveBeenCalledOnce()
+    expect(http.sendRequest).toHaveBeenCalledOnce()
     resolve(ok())
     await settle()
     expect(sendButton().textContent).toContain('Send')
@@ -261,10 +278,44 @@ describe('ApiPlayground', () => {
     await user.type(headers, 'x')
     expect(headers.getAttribute('aria-invalid')).toBe('true')
     await fireEvent.keyDown(headers, { key: 'Enter', metaKey: true })
-    expect(rpc.sendApiRequest).not.toHaveBeenCalled()
+    expect(http.sendRequest).not.toHaveBeenCalled()
     // Back to the body tab: HEAD/GET explain there is no body.
     await user.click(screen.getByRole('tab', { name: 'Body' }))
     expect(screen.getByRole('tab', { name: 'Body' }).getAttribute('aria-selected')).toBe('true')
+  })
+
+  it('rejects header values that are not strings', async () => {
+    const { user } = await setup()
+    await user.type(urlInput(), 'http://x/')
+    await user.click(screen.getByRole('tab', { name: /Headers/ }))
+    const headers = screen.getByRole('textbox', { name: 'Request headers as JSON' })
+    await user.clear(headers)
+    await user.type(headers, '{{"x-n":1}')
+    expect(screen.getByText('Header values must be strings')).toBeTruthy()
+    expect(sendButton().disabled).toBe(true)
+  })
+
+  it.each([
+    ['size', 'Body cut at 5 MB'],
+    ['timeout', 'Still streaming at the timeout; showing what arrived'],
+    ['error', 'Connection failed midway; showing what arrived'],
+  ] as const)('says why a %s-truncated body is partial', async (truncated, note) => {
+    vi.mocked(http.sendRequest).mockResolvedValue(ok({ truncated }))
+    const { user } = await setup()
+    await user.type(urlInput(), 'http://x/')
+    await user.click(sendButton())
+    await settle()
+    expect(within(response()).getByText(note)).toBeTruthy()
+    expect(within(response()).queryByText(/Redirected/)).toBeNull()
+  })
+
+  it('shows where a redirect ended', async () => {
+    vi.mocked(http.sendRequest).mockResolvedValue(ok({ redirected: true, url: 'http://x/login' }))
+    const { user } = await setup()
+    await user.type(urlInput(), 'http://x/')
+    await user.click(sendButton())
+    await settle()
+    expect(within(response()).getByText('Redirected to http://x/login')).toBeTruthy()
   })
 
   it('rescans endpoints', async () => {
@@ -278,6 +329,6 @@ describe('ApiPlayground', () => {
     const { user } = await setup()
     await user.type(urlInput(), 'http://x/')
     await fireEvent.keyDown(urlInput(), { key: 'a', metaKey: true })
-    expect(rpc.sendApiRequest).not.toHaveBeenCalled()
+    expect(http.sendRequest).not.toHaveBeenCalled()
   })
 })

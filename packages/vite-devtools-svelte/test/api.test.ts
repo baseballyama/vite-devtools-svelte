@@ -4,21 +4,14 @@ import path from 'node:path'
 
 /**
  * API playground: which methods a `+server` file exports (parsed), and the
- * outbound request (SSRF guard, no redirects, timeout). Offline: fetch and
- * DNS are mocked.
+ * outbound fetch helper the OG preview shares (no redirects, timeout).
+ * Offline: fetch is mocked.
  */
-import { describe, it, expect, vi, afterEach, afterAll, beforeEach } from 'vitest'
+import { describe, it, expect, vi, afterEach, afterAll } from 'vitest'
 
-import { analyzeApiEndpoints, exportedNames, sendApiRequest } from '../src/analyzers/api.js'
+import { analyzeApiEndpoints, exportedNames } from '../src/analyzers/api.js'
 import { fetchWithTimeout, OUTBOUND_TIMEOUT_MS } from '../src/analyzers/http.js'
 import type { RouteInfo } from '../src/types.js'
-
-const lookup = vi.hoisted(() =>
-  vi.fn((_host: string, _opts?: unknown) =>
-    Promise.resolve([{ address: '93.184.215.14', family: 4 }]),
-  ),
-)
-vi.mock('node:dns/promises', () => ({ default: { lookup } }))
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sdt-api-'))
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }))
@@ -54,7 +47,8 @@ const ALL = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
 
 describe('analyzeApiEndpoints: exported methods', () => {
   it.each<[label: string, code: string, methods: string[]]>([
-    ['function', 'export function GET() {}', ['GET']],
+    // SvelteKit answers HEAD with the GET handler
+    ['function', 'export function GET() {}', ['GET', 'HEAD']],
     ['async function', 'export async function POST() {}', ['POST']],
     ['const arrow', 'export const PUT = () => new Response()', ['PUT']],
     [
@@ -63,18 +57,18 @@ describe('analyzeApiEndpoints: exported methods', () => {
       ['PATCH'],
     ],
     ['multiple declarators', 'export const DELETE = h, OPTIONS = h', ['DELETE', 'OPTIONS']],
-    ['export list', 'function GET() {}\nexport { GET }', ['GET']],
+    ['export list', 'function GET() {}\nexport { GET }', ['GET', 'HEAD']],
     [
       'renamed export',
       'const handler = () => {}\nexport { handler as POST, handler as HEAD }',
       ['POST', 'HEAD'],
     ],
     ['string export name', "const h = 1\nexport { h as 'PUT' }", ['PUT']],
-    ['re-export', "export { GET } from './shared'", ['GET']],
+    ['re-export', "export { GET } from './shared'", ['GET', 'HEAD']],
     [
       'display order, not source order',
       'export const OPTIONS = h\nexport const GET = h',
-      ['GET', 'OPTIONS'],
+      ['GET', 'HEAD', 'OPTIONS'],
     ],
     ['fallback answers every method', 'export const fallback = h', ALL],
     ['fallback with GET', 'export const GET = h\nexport async function fallback() {}', ALL],
@@ -96,7 +90,7 @@ describe('analyzeApiEndpoints: exported methods', () => {
 
   it('parses .js endpoints as JavaScript', () => {
     const [js] = analyzeApiEndpoints([endpointRoute('export async function GET() {}', 'js')])
-    expect(js!.methods).toEqual(['GET'])
+    expect(js!.methods).toEqual(['GET', 'HEAD'])
     // TS-only syntax is not JavaScript
     const [bad] = analyzeApiEndpoints([endpointRoute('export const GET: number = 1', 'js')])
     expect(bad!.methods).toEqual([])
@@ -105,8 +99,23 @@ describe('analyzeApiEndpoints: exported methods', () => {
   it('reports an unreadable endpoint with no methods instead of throwing', () => {
     const route = endpointRoute(null)
     expect(analyzeApiEndpoints([route])).toEqual([
-      { route: route.id, path: route.path, methods: [], file: route.files[0]!.path },
+      {
+        route: route.id,
+        path: route.path,
+        url: route.path,
+        methods: [],
+        file: route.files[0]!.path,
+      },
     ])
+  })
+
+  it('puts the URL under the dev server base', () => {
+    const route = { ...endpointRoute('export const GET = h'), path: '/api/items/:id' }
+    for (const base of ['/app/', '/app']) {
+      const [endpoint] = analyzeApiEndpoints([route], base)
+      expect(endpoint).toMatchObject({ path: '/api/items/:id', url: '/app/api/items/:id' })
+    }
+    expect(analyzeApiEndpoints([route])[0]!.url).toBe('/api/items/:id')
   })
 
   it('skips routes without an endpoint file', () => {
@@ -124,139 +133,6 @@ function mockFetch(impl: (url: string, init: RequestInit) => Promise<Response>) 
   // every call in this file passes the URL as a string
   return vi.spyOn(globalThis, 'fetch').mockImplementation((url, init) => impl(url as string, init!))
 }
-
-const req = (over: Partial<Parameters<typeof sendApiRequest>[0]> = {}) => ({
-  url: 'https://example.com/api',
-  method: 'GET',
-  headers: '',
-  body: '',
-  ...over,
-})
-
-describe('sendApiRequest', () => {
-  beforeEach(() => lookup.mockClear())
-
-  it('returns status, headers and body; never follows redirects', async () => {
-    const fetchMock = mockFetch(() =>
-      Promise.resolve(
-        new Response('moved', { status: 302, statusText: 'Found', headers: { location: '/x' } }),
-      ),
-    )
-    const res = await sendApiRequest(req())
-    expect(res).toMatchObject({
-      status: 302,
-      statusText: 'Found',
-      body: 'moved',
-      headers: { location: '/x' },
-    })
-    expect(res.duration).toBeGreaterThanOrEqual(0)
-    expect(fetchMock.mock.calls[0]![1]).toMatchObject({ method: 'GET', redirect: 'manual' })
-  })
-
-  it.each([
-    ['GET', 'x', undefined],
-    ['HEAD', 'x', undefined],
-    ['POST', 'x', 'x'],
-    ['PUT', '', undefined],
-    ['DELETE', '{"a":1}', '{"a":1}'],
-  ])('%s with body %j sends body %j', async (method, body, sent) => {
-    const fetchMock = mockFetch(() => Promise.resolve(new Response('')))
-    await sendApiRequest(req({ method, body }))
-    expect(fetchMock.mock.calls[0]![1]!.body).toBe(sent)
-  })
-
-  it.each([
-    ['', {}],
-    ['  ', {}],
-    ['{}', {}],
-    ['{"x-a":"1","Accept":"text/plain"}', { 'x-a': '1', Accept: 'text/plain' }],
-  ])('headers %j are sent as %j', async (headers, sent) => {
-    const fetchMock = mockFetch(() => Promise.resolve(new Response('')))
-    const res = await sendApiRequest(req({ headers }))
-    expect(res.status).toBe(200)
-    expect(fetchMock.mock.calls[0]![1]!.headers).toEqual(sent)
-  })
-
-  it.each([
-    ['{bad', /SyntaxError/],
-    ['5', /JSON object of string values/],
-    ['null', /JSON object of string values/],
-    ['[]', /JSON object of string values/],
-    ['"x"', /JSON object of string values/],
-    ['{"a":1}', /JSON object of string values/],
-    ['{"a":{"b":"c"}}', /JSON object of string values/],
-  ])('invalid headers %j fail without sending', async (headers, message) => {
-    const fetchMock = mockFetch(() => Promise.resolve(new Response('')))
-    const res = await sendApiRequest(req({ headers }))
-    expect(res).toMatchObject({ status: 0, headers: {}, body: '' })
-    expect(res.statusText).toMatch(message)
-    expect(fetchMock).not.toHaveBeenCalled()
-  })
-
-  it.each([
-    ['http://169.254.169.254/latest/meta-data', /Blocked: private IP/],
-    ['http://localhost:6379/', /Blocked: internal hostname/],
-    ['file:///etc/passwd', /Blocked URL scheme/],
-    ['not a url', /Invalid URL/],
-  ])('blocks %s before fetching', async (url, message) => {
-    const fetchMock = mockFetch(() => Promise.resolve(new Response('')))
-    const res = await sendApiRequest(req({ url }))
-    expect(res.status).toBe(0)
-    expect(res.statusText).toMatch(message)
-    expect(fetchMock).not.toHaveBeenCalled()
-  })
-
-  it('blocks a public name resolving to a private address (DNS-based SSRF)', async () => {
-    lookup.mockResolvedValueOnce([{ address: '10.0.0.1', family: 4 }])
-    const fetchMock = mockFetch(() => Promise.resolve(new Response('')))
-    const res = await sendApiRequest(req({ url: 'https://rebind.example/' }))
-    expect(res.statusText).toMatch(/resolves to private address/)
-    expect(fetchMock).not.toHaveBeenCalled()
-  })
-
-  it('allows the dev server origin', async () => {
-    const fetchMock = mockFetch(() => Promise.resolve(new Response('ok')))
-    const res = await sendApiRequest(req({ url: 'http://localhost:5173/api/x' }), {
-      allowedOrigins: ['http://localhost:5173'],
-    })
-    expect(res).toMatchObject({ status: 200, body: 'ok' })
-    expect(fetchMock).toHaveBeenCalledOnce()
-    expect(lookup).not.toHaveBeenCalled()
-  })
-
-  it('reports network errors as status 0', async () => {
-    mockFetch(() => Promise.reject(new TypeError('fetch failed')))
-    const res = await sendApiRequest(req())
-    expect(res).toMatchObject({ status: 0, statusText: 'TypeError: fetch failed' })
-  })
-
-  it('gives up after the timeout when the server never answers', async () => {
-    vi.useFakeTimers()
-    let signal: AbortSignal | null | undefined
-    mockFetch((_url, init) => {
-      signal = init.signal
-      return new Promise(() => {}) // never settles, ignores the abort
-    })
-    const pending = sendApiRequest(req(), {}, 1000)
-    await vi.advanceTimersByTimeAsync(999)
-    let settled = false
-    void pending.then(() => (settled = true))
-    await Promise.resolve()
-    expect(settled).toBe(false)
-    await vi.advanceTimersByTimeAsync(1)
-    const res = await pending
-    expect(res).toMatchObject({ status: 0, statusText: 'Error: Timed out after 1000ms' })
-    expect(signal?.aborted).toBe(true)
-  })
-
-  it('the timeout also covers a body that never finishes', async () => {
-    vi.useFakeTimers()
-    mockFetch(() => Promise.resolve(new Response(new ReadableStream({ start() {} }))))
-    const pending = sendApiRequest(req(), {}, 50)
-    await vi.advanceTimersByTimeAsync(50)
-    expect((await pending).statusText).toMatch(/Timed out/)
-  })
-})
 
 describe('fetchWithTimeout', () => {
   it('defaults to OUTBOUND_TIMEOUT_MS and clears its timer on success', async () => {

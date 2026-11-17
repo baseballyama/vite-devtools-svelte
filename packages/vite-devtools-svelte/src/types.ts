@@ -327,17 +327,12 @@ export interface LiveComponentsMeta {
 
 export interface ApiEndpoint {
   route: string
+  /** Route path with params as `:name` / `:name?` / `*name`. */
   path: string
+  /** `path` under the dev server's base: what to request from the app's origin. */
+  url: string
   methods: string[]
   file: string
-}
-
-export interface ApiResponse {
-  status: number
-  statusText: string
-  headers: Record<string, string>
-  body: string
-  duration: number
 }
 
 export interface CompilerWarning {

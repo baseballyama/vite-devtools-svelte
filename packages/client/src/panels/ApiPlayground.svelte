@@ -11,10 +11,12 @@
   import type { Tone } from '../components/types.js'
   import VirtualList from '../components/VirtualList.svelte'
   import { errorMessage, formatBytes, formatMs } from '../lib/format.js'
+  import { sendRequest } from '../lib/http.js'
+  import type { ApiResponse, Truncation } from '../lib/http.js'
   import { matcher } from '../lib/match.js'
   import { resource } from '../lib/resource.svelte.js'
-  import { getApiEndpoints, sendApiRequest, openInEditor } from '../lib/rpc.js'
-  import type { ApiEndpoint, ApiResponse } from '../lib/types.js'
+  import { getApiEndpoints, openInEditor } from '../lib/rpc.js'
+  import type { ApiEndpoint } from '../lib/types.js'
 
   const endpoints = resource<ApiEndpoint[]>(getApiEndpoints, { initial: [] })
 
@@ -47,17 +49,29 @@
     selected ? (endpoints.data.find(e => e.route === selected) ?? null) : null,
   )
 
-  const headersError = $derived.by(() => {
-    if (!headers.trim()) return null
+  /** The typed headers as an object, or the reason they are not one. */
+  const parsedHeaders = $derived.by((): { value: Record<string, string> } | { error: string } => {
+    if (!headers.trim()) return { value: {} }
     try {
       const v: unknown = JSON.parse(headers)
-      return v && typeof v === 'object' && !Array.isArray(v)
-        ? null
-        : 'Headers must be a JSON object'
+      if (!v || typeof v !== 'object' || Array.isArray(v)) {
+        return { error: 'Headers must be a JSON object' }
+      }
+      if (!Object.values(v).every(x => typeof x === 'string')) {
+        return { error: 'Header values must be strings' }
+      }
+      return { value: v as Record<string, string> }
     } catch (e) {
-      return errorMessage(e)
+      return { error: errorMessage(e) }
     }
   })
+  const headersError = $derived('error' in parsedHeaders ? parsedHeaders.error : null)
+
+  const TRUNCATION: Record<Truncation, string> = {
+    size: 'Body cut at 5 MB',
+    timeout: 'Still streaming at the timeout; showing what arrived',
+    error: 'Connection failed midway; showing what arrived',
+  }
 
   const hasBody = $derived(method !== 'GET' && method !== 'HEAD')
 
@@ -77,17 +91,22 @@
   function pick(e: ApiEndpoint) {
     selected = e.route
     method = e.methods[0] ?? 'GET'
-    url = new URL(e.path, location.origin).href
+    url = new URL(e.url, location.origin).href
     response = null
     requestError = null
   }
 
   async function send() {
-    if (!url || headersError || sending) return
+    if (!url || 'error' in parsedHeaders || sending) return
     sending = true
     requestError = null
     try {
-      response = await sendApiRequest(url, method, headers.trim() || '{}', hasBody ? body : '')
+      response = await sendRequest({
+        url,
+        method,
+        headers: parsedHeaders.value,
+        body: hasBody ? body : '',
+      })
     } catch (e) {
       response = null
       requestError = errorMessage(e)
@@ -214,10 +233,19 @@
               </dl>
             </details>
           </header>
+          {#if response.redirected || response.truncated}
+            <p class="notes">
+              {#if response.redirected}<span class="mono">Redirected to {response.url}</span>{/if}
+              {#if response.truncated}<span>{TRUNCATION[response.truncated]}</span>{/if}
+            </p>
+          {/if}
           <pre class="body mono">{pretty || '(empty body)'}</pre>
         {:else}
           <EmptyState icon="send" title="Send a request">
-            <p>Pick an endpoint on the left or type any URL. <kbd>⌘</kbd> <kbd>↵</kbd> sends.</p>
+            <p>
+              Pick an endpoint on the left or type a URL. The browser sends it with the app's
+              cookies. <kbd>⌘</kbd> <kbd>↵</kbd> sends.
+            </p>
           </EmptyState>
         {/if}
       </section>
@@ -340,6 +368,16 @@
     gap: 10px;
     padding: 8px 12px;
     font-size: var(--fs-xs);
+  }
+  .notes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    margin: 0;
+    padding: 0 12px 8px;
+    color: var(--yellow);
+    font-size: var(--fs-xs);
+    overflow-wrap: anywhere;
   }
   .hdrs {
     margin-left: auto;

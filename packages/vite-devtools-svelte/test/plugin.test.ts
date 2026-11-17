@@ -235,7 +235,7 @@ describe('mainPlugin devtools hook (Vite DevTools)', () => {
       'get-routes',
       'get-live-components',
       'get-module-graph',
-      'send-api-request',
+      'get-api-endpoints',
     ]
     expect(expected.filter(name => !handlers.has(`svelte-devtools:${name}`))).toEqual([])
     expect((await handlers.get('svelte-devtools:get-project')!()).name).toBeTruthy()
