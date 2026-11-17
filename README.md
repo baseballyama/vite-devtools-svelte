@@ -226,7 +226,7 @@ svelteDevtools({
 
 ### Svelte Inspector
 
-`svelteDevtools()` includes a fork of the [Svelte Inspector](https://github.com/sveltejs/vite-plugin-svelte/blob/main/docs/inspector.md) from `@sveltejs/vite-plugin-svelte`: hold the toggle key combo (`alt-x` by default) in your app and click an element to open its source in your editor. There is nothing else to install or register. While it is on, it turns off vite-plugin-svelte's built-in inspector, so the two never run together; `inspector: false` leaves it out (vite-plugin-svelte's own `inspector` option then applies again).
+`svelteDevtools()`: hold the toggle key combo (`alt-x` by default) in your app and click an element to open its source in your editor.
 
 `inspector` takes the same options as vite-plugin-svelte's inspector (`toggleKeyCombo`, `navKeys`, `openKey`, `openMenuKey`, `escapeKeys`, `holdMode`, `showToggleButton`, `toggleButtonPos`, `customStyles`). As upstream, `SVELTE_INSPECTOR_TOGGLE` and an options object in `SVELTE_INSPECTOR_OPTIONS` (shell or `.env` files) take precedence over them, for personal preferences; `SVELTE_INSPECTOR_OPTIONS=true|false` does not turn it on or off.
 
@@ -387,7 +387,7 @@ matches across machines.
 │   │   │   ├── analyzers/      # Routes, components, assets, build, module graph, OG
 │   │   │   └── mcp/            # MCP server for AI agents
 │   │   └── test/               # Vitest: unit, reactivity (real Svelte), perf
-│   ├── inspector/              # Svelte Inspector fork (private), bundled into the plugin's dist/inspector
+│   ├── inspector/              # Svelte Inspector, bundled into the plugin's dist/inspector
 │   └── client/                 # DevTools UI (Svelte 5 SPA), built into the plugin's dist/client
 ├── playground/                 # Demo SvelteKit app for development
 ├── examples/                   # One app per app shape (Svelte, Kit SSR/SPA/SSG/remote, …); `pnpm examples` starts all
