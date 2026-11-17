@@ -1,9 +1,9 @@
 <script lang="ts">
   const managers = [
-    { id: 'npm', cmd: 'npm install -D vite-devtools-svelte' },
-    { id: 'pnpm', cmd: 'pnpm add -D vite-devtools-svelte' },
-    { id: 'yarn', cmd: 'yarn add -D vite-devtools-svelte' },
-    { id: 'bun', cmd: 'bun add -d vite-devtools-svelte' },
+    { id: 'npm', cmd: 'npm install -D @sveltejs/vite-devtools-svelte' },
+    { id: 'pnpm', cmd: 'pnpm add -D @sveltejs/vite-devtools-svelte' },
+    { id: 'yarn', cmd: 'yarn add -D @sveltejs/vite-devtools-svelte' },
+    { id: 'bun', cmd: 'bun add -d @sveltejs/vite-devtools-svelte' },
   ]
   let active = $state(0)
   let copied = $state(false)
