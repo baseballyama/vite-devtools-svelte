@@ -115,6 +115,10 @@ describe('analyzeApiEndpoints: exported methods', () => {
     ['namespace re-export', "export * as GET from './handlers'", ['GET', 'HEAD']],
     ['namespace re-export, string name', "export * as 'PUT' from './handlers'", ['PUT']],
     ['empty file', '', []],
+    // type-only exports have no runtime value
+    ['type-only export list', 'type GET = 1\nexport type { GET }', []],
+    ['type-only specifier', 'const POST = h\ntype GET = 1\nexport { type GET, POST }', ['POST']],
+    ['declared const', 'export declare const GET: () => Response', []],
   ])('%s', async (_label, code, methods) => {
     expect(await methodsOf(code)).toMatchObject({ methods, complete: true })
   })
@@ -210,6 +214,26 @@ describe('collectExports: export * from', () => {
       'broken.ts': 'export {',
     })
     expect(await collectExports(path.join(dir, '+server.ts'), resolveRelative)).toEqual({
+      names: new Set(['GET']),
+      complete: false,
+    })
+  })
+
+  it('treats a type-only star as no export at all', async () => {
+    const dir = project({
+      '+server.ts': "export type * from './types'",
+      'types.ts': 'export const GET = h',
+    })
+    expect(await collectExports(path.join(dir, '+server.ts'), resolveRelative)).toEqual({
+      names: new Set(),
+      complete: true,
+    })
+  })
+
+  it('keeps going when the resolver throws, marking the star unknown', async () => {
+    const dir = project({ '+server.ts': "export * from 'x'\nexport const GET = h" })
+    const resolve: ResolveFile = () => Promise.reject(new Error('plugin failed'))
+    expect(await collectExports(path.join(dir, '+server.ts'), resolve)).toEqual({
       names: new Set(['GET']),
       complete: false,
     })

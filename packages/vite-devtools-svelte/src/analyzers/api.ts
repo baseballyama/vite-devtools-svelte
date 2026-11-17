@@ -67,6 +67,13 @@ export function moduleExports(code: string, filename: string): ModuleExports | n
   const stars: string[] = []
   for (const node of program.body) {
     // `export * as ns from` exports only `ns`, never a handler name directly.
+    // Type-only exports (`export type { GET }`, `export type * from`) have no runtime value.
+    if (
+      (node.type === 'ExportAllDeclaration' || node.type === 'ExportNamedDeclaration') &&
+      node.exportKind === 'type'
+    ) {
+      continue
+    }
     if (node.type === 'ExportAllDeclaration') {
       if (node.exported) {
         names.add(node.exported.type === 'Literal' ? node.exported.value : node.exported.name)
@@ -77,10 +84,11 @@ export function moduleExports(code: string, filename: string): ModuleExports | n
     const decl = node.declaration
     if ((decl?.type === 'FunctionDeclaration' || decl?.type === 'ClassDeclaration') && decl.id) {
       names.add(decl.id.name)
-    } else if (decl?.type === 'VariableDeclaration') {
+    } else if (decl?.type === 'VariableDeclaration' && !decl.declare) {
       for (const d of decl.declarations) bindingNames(d.id, names)
     }
     for (const spec of node.specifiers) {
+      if (spec.exportKind === 'type') continue
       const exported = spec.exported
       names.add(exported.type === 'Literal' ? exported.value : exported.name)
     }
@@ -164,7 +172,12 @@ export async function collectExports(
     for (const name of exports.names) names.add(name)
     await Promise.all(
       exports.stars.map(async specifier => {
-        const target = depth < MAX_DEPTH ? await resolve(specifier, module) : null
+        let target: string | null = null
+        if (depth < MAX_DEPTH) {
+          // A resolver that throws (a plugin rejecting the specifier) leaves
+          // this star unknown; it must not fail every endpoint.
+          target = await resolve(specifier, module).catch(() => null)
+        }
         if (target) await visit(target, depth + 1)
         else complete = false
       }),
