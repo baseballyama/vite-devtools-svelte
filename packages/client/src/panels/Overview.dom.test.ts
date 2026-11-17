@@ -138,6 +138,7 @@ describe('Overview panel', () => {
         reactiveGraph: 0,
         errors: 0,
         fps: 0,
+        apiEndpoints: 0,
       }),
     );
     render(Overview);

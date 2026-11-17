@@ -45,7 +45,7 @@ export interface Resource<T> {
   readonly error: string | null;
   /** True until the first request settles. */
   readonly loading: boolean;
-  /** True while any request is in flight. */
+  /** True while data is being fetched (not while a poll only checks `version`). */
   readonly busy: boolean;
   readonly updatedAt: number | null;
   /** Whether interval polling is enabled (user-togglable). */
@@ -94,13 +94,13 @@ export function resource<T>(fetcher: () => Promise<T>, opts: ResourceOptions<T>)
 
   function load(force: boolean): Promise<void> {
     if (inflight) return inflight;
-    busy = true;
     const started = generation;
     let stale = false;
     inflight = (async () => {
       try {
         const version = opts.version ? await opts.version() : undefined;
         if (!force && version !== undefined && version === lastVersion) return;
+        busy = true;
         const next = await fetcher();
         if (started !== generation) {
           stale = true;

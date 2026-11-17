@@ -152,6 +152,11 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       server = devServer;
       const generation = ++serverGeneration;
       collector.attach(devServer.hot);
+      // The watcher closes with its server, so these listeners need no cleanup.
+      const sourceChanged = () => collector.sourceChanged();
+      devServer.watcher.on('add', sourceChanged);
+      devServer.watcher.on('change', sourceChanged);
+      devServer.watcher.on('unlink', sourceChanged);
       devServer.httpServer?.once('close', () => {
         if (server === devServer) {
           collector.detach();

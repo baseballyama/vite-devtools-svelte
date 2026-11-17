@@ -208,6 +208,7 @@ function mockServer() {
       hot: { on: vi.fn(), off: vi.fn(), send: vi.fn() },
       middlewares: { use: (...args: any[]) => middlewares.push(args.at(-1)) },
       httpServer,
+      watcher: { on: vi.fn() },
       config: { server: {}, logger: { info: () => {}, error: () => {} } },
       environments: {},
     } as any,

@@ -134,6 +134,14 @@ describe('Collector ingestion caps', () => {
     expect(c.versions.renderProfiles).toBe(before.renderProfiles);
   });
 
+  it('a source change moves only the API endpoints version', () => {
+    const c = new Collector();
+    const before = { ...c.versions };
+    c.sourceChanged();
+    expect(c.versions).toEqual({ ...before, apiEndpoints: c.versions.apiEndpoints });
+    expect(c.versions.apiEndpoints).not.toBe(before.apiEndpoints);
+  });
+
   it('B1: a new collector (restarted server) never reports a version a client already saw', () => {
     const old = new Collector();
     for (let i = 0; i < 5; i++) old.ingestComponents({ epoch: 'a', components: [] });

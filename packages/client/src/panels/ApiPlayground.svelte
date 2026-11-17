@@ -17,8 +17,14 @@
   import { resource } from '../lib/resource.svelte.js';
   import { getApiEndpoints, openInEditor } from '../lib/rpc.js';
   import type { ApiEndpoint } from '../lib/types.js';
+  import { datasetVersion } from '../lib/versions.js';
 
-  const endpoints = resource<ApiEndpoint[]>(getApiEndpoints, { initial: [] });
+  // Rescans after the dev server sees a file added, changed or deleted.
+  const endpoints = resource<ApiEndpoint[]>(getApiEndpoints, {
+    initial: [],
+    interval: 2000,
+    version: datasetVersion('apiEndpoints'),
+  });
 
   const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
   const METHOD_TONES: Partial<Record<string, Tone>> = {

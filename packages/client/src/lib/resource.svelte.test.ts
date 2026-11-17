@@ -309,6 +309,21 @@ describe('resource: change detection', () => {
     expect(fetcher).toHaveBeenCalledTimes(5);
   });
 
+  it('a poll is not busy while it only checks an unchanged version', async () => {
+    const check = controlled<string>();
+    const fetcher = vi.fn(() => Promise.resolve(1));
+    const { res } = mount(fetcher, { initial: 0, interval: 1_000, version: check.fetcher });
+    check.last().resolve('a');
+    await settle();
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(res.busy).toBe(false); // the version check is still pending
+    check.last().resolve('a');
+    await settle();
+    expect(res.busy).toBe(false);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
   it('a failed fetch does not record its version, so the next poll retries', async () => {
     const fetcher = vi
       .fn()
