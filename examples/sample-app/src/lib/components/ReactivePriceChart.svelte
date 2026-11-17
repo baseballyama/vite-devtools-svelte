@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { cart } from '$lib/stores/cart.svelte'
+  import { cart } from '#lib/stores/cart.svelte.ts'
 
   let taxRate = $state(0.1)
   let shippingFreeThreshold = $state(5000)

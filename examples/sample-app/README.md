@@ -1,6 +1,6 @@
 # sample-app — vite-devtools-svelte demo
 
-`vite-devtools-svelte` の各 DevTools パネルを実際に触って体感するための SvelteKit サンプル EC アプリです。
+`vite-devtools-svelte` の各 DevTools パネルを実際に触って体感するための SvelteKit 3 サンプル EC アプリです。
 
 ## 起動
 
@@ -61,13 +61,14 @@ src/
 ## vite.config.ts
 
 ```ts
+import adapter from '@sveltejs/adapter-auto'
 import { sveltekit } from '@sveltejs/kit/vite'
 import { svelteDevtools } from '@sveltejs/vite-devtools-svelte'
 import { DevTools } from '@vitejs/devtools'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
-  plugins: [svelteDevtools(), DevTools(), sveltekit()],
+  plugins: [svelteDevtools(), DevTools(), sveltekit({ adapter: adapter() })],
 })
 ```
 

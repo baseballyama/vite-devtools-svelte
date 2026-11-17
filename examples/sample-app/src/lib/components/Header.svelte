@@ -1,7 +1,8 @@
 <script lang="ts">
   import { resolve } from '$app/paths'
   import { page } from '$app/state'
-  import { cart } from '$lib/stores/cart.svelte'
+
+  import { cart } from '#lib/stores/cart.svelte.ts'
 
   // route ids; resolve() adds the app's base path
   const links = [

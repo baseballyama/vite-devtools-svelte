@@ -38,7 +38,7 @@ function withData() {
   vi.mocked(rpc.getProject).mockResolvedValue({
     ...project,
     dependencies: { svelte: '^5.0.0', zod: '^3.0.0' },
-    devDependencies: { vite: '^6.0.0', '@sveltejs/kit': '^2.0.0' },
+    devDependencies: { vite: '^6.0.0', '@sveltejs/kit': '^3.0.0' },
   })
   vi.mocked(rpc.getRoutes).mockResolvedValue([
     route('/', true, false),
@@ -73,7 +73,7 @@ describe('Overview panel', () => {
     expect(screen.getByRole('heading', { name: 'demo-app' })).toBeTruthy()
     expect(screen.getByText('v1.0.0')).toBeTruthy()
     const versions = screen.getAllByRole('definition').map(d => d.textContent)
-    expect(versions).toEqual(['5.0.0', '2.0.0', '6.0.0'])
+    expect(versions).toEqual(['5.0.0', '3.0.0', '6.0.0'])
   })
 
   it('falls back for a project without name, version or framework versions', async () => {
@@ -175,7 +175,7 @@ describe('Overview panel', () => {
     render(Overview)
     await settle()
     expect(depNames()).toEqual([
-      '@sveltejs/kit dev ^2.0.0',
+      '@sveltejs/kit dev ^3.0.0',
       'svelte ^5.0.0',
       'vite dev ^6.0.0',
       'zod ^3.0.0',
@@ -187,11 +187,11 @@ describe('Overview panel', () => {
     await userEvent.click(within(kinds).getByRole('radio', { name: 'Runtime 2' }))
     expect(depNames()).toEqual(['svelte ^5.0.0', 'zod ^3.0.0'])
     await userEvent.click(within(kinds).getByRole('radio', { name: 'Dev 2' }))
-    expect(depNames()).toEqual(['@sveltejs/kit dev ^2.0.0', 'vite dev ^6.0.0'])
+    expect(depNames()).toEqual(['@sveltejs/kit dev ^3.0.0', 'vite dev ^6.0.0'])
 
     await userEvent.click(within(kinds).getByRole('radio', { name: 'All 4' }))
     await userEvent.type(screen.getByRole('searchbox', { name: /^Filter/ }), 'svelte')
-    expect(depNames()).toEqual(['@sveltejs/kit dev ^2.0.0', 'svelte ^5.0.0'])
+    expect(depNames()).toEqual(['@sveltejs/kit dev ^3.0.0', 'svelte ^5.0.0'])
     await userEvent.type(screen.getByRole('searchbox', { name: /^Filter/ }), 'zzz')
     expect(depNames()).toEqual(['No packages match.'])
   })

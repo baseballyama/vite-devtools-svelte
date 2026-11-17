@@ -1,7 +1,8 @@
 <script lang="ts">
   import { resolve } from '$app/paths'
-  import ProductCard from '$lib/components/ProductCard.svelte'
-  import { cart } from '$lib/stores/cart.svelte'
+
+  import ProductCard from '#lib/components/ProductCard.svelte'
+  import { cart } from '#lib/stores/cart.svelte.ts'
 
   import type { PageProps } from './$types'
 

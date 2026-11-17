@@ -2,7 +2,7 @@
   "name": "compat-kit3",
   "version": "0.0.1",
   "private": true,
-  "description": "SvelteKit 3 compatibility fixture. Outside the pnpm workspace on purpose: it pins Svelte 5.57.2 (Kit 3 requires >= 5.57.1) without moving the Kit 2 profile's (examples/sample-app) versions, and installs the plugin from a packed tarball (see e2e/compat/README.md).",
+  "description": "SvelteKit 3 compatibility fixture. Outside the pnpm workspace on purpose: it pins exact versions and installs the plugin from a packed tarball (see e2e/compat/README.md).",
   "type": "module",
   "imports": {
     "#lib/*": "./src/lib/*"
