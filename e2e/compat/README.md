@@ -11,7 +11,8 @@ Smoke tests that run the plugin in two kinds of apps, each **standalone**
 | `kit3`         | `e2e/compat/kit3`       | SvelteKit 3                 | **outside** the workspace |
 
 `e2e/compat/kit3` stays outside the workspace on purpose: it installs the
-plugin from a packed tarball, the way users get it.
+plugin from a packed tarball, the way users get it, with its own exact
+versions. SvelteKit 2 is not supported.
 
 This is a compatibility check, not a benchmark. The 50k-instance performance
 runs live under `perf/` and are opt-in.

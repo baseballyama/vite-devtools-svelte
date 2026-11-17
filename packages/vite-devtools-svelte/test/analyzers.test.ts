@@ -144,7 +144,7 @@ describe('analyzeProject', () => {
       'package.json': JSON.stringify({
         name: 'app',
         version: '1.2.3',
-        dependencies: { svelte: '^5.0.0', '@sveltejs/kit': '^2.0.0', bad: 1 },
+        dependencies: { svelte: '^5.0.0', '@sveltejs/kit': '^3.0.0', bad: 1 },
         devDependencies: { vite: '^8.0.0' },
       }),
     })
@@ -152,9 +152,9 @@ describe('analyzeProject', () => {
       name: 'app',
       version: '1.2.3',
       svelteVersion: '^5.0.0',
-      sveltekitVersion: '^2.0.0',
+      sveltekitVersion: '^3.0.0',
       viteVersion: '^8.0.0',
-      dependencies: { svelte: '^5.0.0', '@sveltejs/kit': '^2.0.0' },
+      dependencies: { svelte: '^5.0.0', '@sveltejs/kit': '^3.0.0' },
       devDependencies: { vite: '^8.0.0' },
       routesDir: path.join(root, 'src', 'routes'),
       staticDir: path.join(root, 'static'),
@@ -194,7 +194,7 @@ describe('analyzeProject', () => {
     const root = tree({
       'package.json': JSON.stringify({
         dependencies: { svelte: '^5.0.0', vite: '' },
-        devDependencies: { svelte: '^4.0.0', vite: '^8.0.0', '@sveltejs/kit': '^2.0.0' },
+        devDependencies: { svelte: '^4.0.0', vite: '^8.0.0', '@sveltejs/kit': '^3.0.0' },
       }),
       'node_modules/svelte/package.json': JSON.stringify({ version: '5.1.0' }),
       'node_modules/@sveltejs/kit/package.json': '{ broken',
@@ -202,7 +202,7 @@ describe('analyzeProject', () => {
     })
     expect(analyzeProject(root)).toMatchObject({
       svelteVersion: '5.1.0',
-      sveltekitVersion: '^2.0.0', // unreadable installed manifest
+      sveltekitVersion: '^3.0.0', // unreadable installed manifest
       viteVersion: '^8.0.0', // non-string installed version; empty dependency entry skipped
     })
   })

@@ -375,7 +375,7 @@ matches across machines.
 │   │   └── test/               # Vitest: unit, reactivity (real Svelte), perf
 │   └── client/                 # DevTools UI (Svelte 5 SPA), built into the plugin's dist/client
 ├── playground/                 # Demo SvelteKit app for development
-├── examples/                   # Sample apps (Kit 2, plain Svelte, strict CSP)
+├── examples/                   # Sample apps (SvelteKit, plain Svelte, strict CSP)
 ├── e2e/                        # Browser end-to-end checks: compat matrix, reactivity through MCP
 ├── perf/                       # Opt-in large-app benchmarks
 ├── scripts/screenshots/        # Doc screenshot and MCP example capture

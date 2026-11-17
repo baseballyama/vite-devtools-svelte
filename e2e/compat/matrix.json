@@ -88,6 +88,11 @@
   ],
   "existingUnchanged": [
     {
+      "dir": "examples/sample-app",
+      "kit": "3.1.1",
+      "note": "Demo app used for the reactivity screenshots and MCP examples (scripts/screenshots); vite.standalone.config.ts serves the standalone mode. Not a compat profile."
+    },
+    {
       "dir": "examples/strict-csp-app",
       "kit": "3.1.1",
       "note": "Existing strict-CSP example, not a compat profile. Built and type-checked in the CI job \"Playground production build\"."

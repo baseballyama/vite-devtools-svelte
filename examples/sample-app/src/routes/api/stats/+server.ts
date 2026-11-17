@@ -1,5 +1,4 @@
-import { products } from '$lib/server/products'
-import { json } from '@sveltejs/kit'
+import { products } from '#lib/server/products.ts'
 
 import type { RequestHandler } from './$types'
 
@@ -8,7 +7,7 @@ export const GET: RequestHandler = () => {
   const totalValue = products.reduce((s, p) => s + p.stock * p.price, 0)
   const lowStockSku = products.filter(p => p.stock <= 8).length
 
-  return json({
+  return Response.json({
     totalSku: products.length,
     totalStock,
     totalValue,
