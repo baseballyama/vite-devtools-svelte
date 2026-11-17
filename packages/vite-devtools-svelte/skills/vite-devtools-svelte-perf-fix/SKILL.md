@@ -9,7 +9,7 @@ You are about to fix exactly **one** performance issue and verify it with measur
 
 ## Inputs
 
-The user will name an issue. Resolve it to a target by calling the matching detail tool — `get_component_hotspots`, `get_reactive_graph_problems`, `get_load_waterfall`, `get_fps_drops`, or `get_render_profile` — based on the issue `kind` / `suggestedTool` from `/vite-devtools-svelte-perf-audit`.
+The user will name an issue. Resolve it to a target by calling the matching detail tool — `get_component_hotspots`, `get_reactive_graph_problems`, `get_load_waterfall`, `get_fps_drops`, `get_render_profile`, or `get_performance_recording` (for `slow-update`) — based on the issue `kind` / `suggestedTool` from `/vite-devtools-svelte-perf-audit`.
 
 ## Workflow
 

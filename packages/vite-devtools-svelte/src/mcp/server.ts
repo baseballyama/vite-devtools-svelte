@@ -16,9 +16,11 @@ import type {
   ReactiveSummary,
   ReactiveSummaryRequest,
   StateTimelineDelta,
+  PerformanceRecording,
 } from '../types.js';
 import { MCP_INSTRUCTIONS } from './instructions.js';
 import { listPerformanceIssues, summarizeReactiveProblems } from './issues.js';
+import { recordingSummary } from './performance.js';
 import type { SessionStore } from './sessions.js';
 import { isSessionId } from './sessions.js';
 import { avg, avgRenderTime, max, min, round } from './stats.js';
@@ -39,7 +41,15 @@ export interface McpDeps {
   getReactiveScope: (req: ReactiveGraphRequest) => Promise<ReactiveGraphResult>;
   getStateTimelineDelta: (since?: number) => StateTimelineDelta;
   getCaptureInfo: () => CaptureInfoMap;
+  /** Performance recording in the app page(s) (the Performance panel's Record / Stop). */
+  performance: {
+    start: () => { recordingId: string; startedAt: number };
+    stop: () => Promise<PerformanceRecording>;
+    get: () => PerformanceRecording;
+  };
 }
+
+const PERF_TOP = { default: 20, max: 200 } as const;
 
 export const MCP_TIMELINE_LIMIT = 500;
 const MCP_VALUE_CHARS = { default: 2048, max: 32768 } as const;
@@ -86,7 +96,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     {
       title: 'List performance issues',
       description:
-        'Cross-cuts render/reactive/load/fps metrics and returns ranked issues. The entry point for AI-driven performance audits. Each issue carries `suggestedTool` naming the detail tool to call next.',
+        'Cross-cuts render/reactive/load/fps metrics (and the updates of the last performance recording, if any) and returns ranked issues. The entry point for AI-driven performance audits. Each issue carries `suggestedTool` naming the detail tool to call next.',
       // 0 or a negative threshold would flag every component / load, including never-rendered ones.
       inputSchema: {
         avgRenderTimeMs: z.number().positive().optional(),
@@ -94,6 +104,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
         loadDurationMs: z.number().positive().optional(),
         fpsDropThreshold: z.number().min(1).max(120).optional(),
         effectMaxDeps: z.number().int().min(1).optional(),
+        slowUpdateMs: z.number().positive().optional(),
       },
     },
     async thresholds => {
@@ -103,6 +114,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
           reactiveGraph: await deps.getReactiveGraph(),
           loadProfiles: deps.getLoadProfiles(),
           fpsSamples: deps.getFpsSamples(),
+          updates: deps.performance.get().updates,
         },
         thresholds,
       );
@@ -233,6 +245,46 @@ export function buildMcpServer(deps: McpDeps): McpServer {
         }));
       return text(matches);
     },
+  );
+
+  const perfSummaryInput = {
+    topN: z.number().int().min(1).max(PERF_TOP.max).optional(),
+    minDurationMs: z.number().nonnegative().optional(),
+  };
+
+  server.registerTool(
+    'start_performance_recording',
+    {
+      title: 'Start a performance recording',
+      description:
+        'Starts recording every update (one Svelte flush) in the open app page(s): what state write triggered it, its duration, and the self time of render effects, $effect and $derived per component. Interact with the app (or ask the user to), then call stop_performance_recording. A running recording is replaced; one that is not stopped ends after 5 minutes. Recording adds some overhead to the app while it runs.',
+      inputSchema: {},
+    },
+    () => text({ ...deps.performance.start(), next: 'stop_performance_recording' }),
+  );
+
+  server.registerTool(
+    'stop_performance_recording',
+    {
+      title: 'Stop the performance recording',
+      description:
+        'Stops the recording and returns its summary (as get_performance_recording): the slowest updates first, each with the states written before it (triggers; `writtenDuringUpdate` = written by an $effect while it ran), the input event that started it when it ran in the same task, how many components re-rendered, $derived re-runs that returned the same value, and self time per component.',
+      inputSchema: perfSummaryInput,
+    },
+    async ({ topN = PERF_TOP.default, minDurationMs = 0 }) =>
+      text(recordingSummary(await deps.performance.stop(), { topN, minDurationMs })),
+  );
+
+  server.registerTool(
+    'get_performance_recording',
+    {
+      title: 'The current or last performance recording',
+      description:
+        'Summary of the running or last performance recording: totals, the slowest updates (at most `topN`, at least `minDurationMs` long) and per-component self time over the whole recording. Times are measured in the page (dev build, with devtools attached), so compare them with each other rather than with production.',
+      inputSchema: perfSummaryInput,
+    },
+    ({ topN = PERF_TOP.default, minDurationMs = 0 }) =>
+      text(recordingSummary(deps.performance.get(), { topN, minDurationMs })),
   );
 
   server.registerTool(

@@ -65,9 +65,9 @@ export const MCP_TOOL_GROUPS: McpToolGroup[] = [
       {
         name: 'list_performance_issues',
         input:
-          'avgRenderTimeMs?, renderCount?, loadDurationMs?, fpsDropThreshold?, effectMaxDeps? (thresholds)',
+          'avgRenderTimeMs?, renderCount?, loadDurationMs?, fpsDropThreshold?, effectMaxDeps?, slowUpdateMs? (thresholds)',
         summary:
-          'Cross-cuts all metrics and returns ranked issues. Each issue names the tool to call next in `suggestedTool`.',
+          'Cross-cuts all metrics, including updates of the last performance recording, and returns ranked issues. Each issue names the tool to call next in `suggestedTool`.',
         note: 'Reads the whole-app reactive graph, capped at 5000 nodes / 20000 edges.',
       },
       {
@@ -96,6 +96,32 @@ export const MCP_TOOL_GROUPS: McpToolGroup[] = [
         name: 'get_fps_drops',
         input: 'threshold?: 1–120 (default 40), sinceMs?: number',
         summary: 'Frame-rate samples below the threshold.',
+      },
+    ],
+  },
+  {
+    id: 'performance',
+    title: 'Performance recording',
+    intro:
+      'The Performance panel for agents: record while the app is used, then read the slowest updates with what triggered them and where the time went.',
+    tools: [
+      {
+        name: 'start_performance_recording',
+        input: '(none)',
+        summary:
+          'Starts recording every update (one Svelte flush) in the open app page(s). A running recording is replaced.',
+        note: 'A recording that is not stopped ends after 5 minutes.',
+      },
+      {
+        name: 'stop_performance_recording',
+        input: 'topN?: 1–200 (default 20), minDurationMs?: number',
+        summary:
+          'Stops the recording and returns its summary, the slowest updates first: triggering state writes, input event, re-rendered components, $derived re-runs that returned the same value and self time per component.',
+      },
+      {
+        name: 'get_performance_recording',
+        input: 'topN?: 1–200 (default 20), minDurationMs?: number',
+        summary: 'The same summary for the running or last recording.',
       },
     ],
   },

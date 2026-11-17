@@ -323,7 +323,7 @@ const PANEL_LABELS = [
   'Routes',
   'Assets',
   'Modules',
-  'Render',
+  'Performance',
   'Reactive',
   'FPS',
   'Loads',
@@ -505,7 +505,7 @@ async function benchUi(browser, srv, opts, outDir) {
     }
   }
 
-  for (const label of ['Render', 'FPS', 'Timeline']) {
+  for (const label of ['Performance', 'FPS', 'Timeline']) {
     const ctl = await findPanelControl(page, label);
     if (!ctl) continue;
     await ctl.click();

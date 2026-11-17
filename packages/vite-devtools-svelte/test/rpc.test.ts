@@ -194,6 +194,27 @@ describe('collector-backed RPCs', () => {
   });
 });
 
+describe('performance recording RPCs', () => {
+  it('start, read while recording, stop', async () => {
+    const host = createTestHost(FIXTURES_DIR);
+    const rpc = rpcHandlers(host);
+    const { recordingId } = await rpc.get('svelte-devtools:start-performance-recording')!();
+    expect(await rpc.get('svelte-devtools:get-performance-recording')!()).toMatchObject({
+      state: 'recording',
+      recordingId,
+    });
+    host.collector.ingestPerformance({
+      recordingId,
+      epoch: 'e1',
+      updates: [{ id: 1, start: 3, duration: 20 }],
+      final: true,
+    });
+    const stopped = await rpc.get('svelte-devtools:stop-performance-recording')!();
+    expect(stopped).toMatchObject({ state: 'idle', recordingId, epoch: 'e1' });
+    expect(stopped.updates.map((u: any) => u.duration)).toEqual([20]);
+  });
+});
+
 describe('file access sandbox', () => {
   const host = createTestHost(FIXTURES_DIR);
   const rpc = rpcHandlers(host);
@@ -342,6 +363,10 @@ describe('every RPC with valid input', () => {
         () => expect(host.opened.at(-1)).toMatch(/\+page\.svelte:3$/),
       ],
       'get-render-profiles': [[], r => expect(r).toEqual([])],
+      'start-performance-recording': [[], r => expect(r.recordingId).toMatch(/^p/)],
+      'get-performance-recording': [[], r => expect(r.state).toBe('recording')],
+      // no runtime channel in this host: answered at once
+      'stop-performance-recording': [[], r => expect(r.state).toBe('idle')],
       'get-reactive-graph': [[], r => expect(r).toMatchObject({ nodes: [], edges: [] })],
       'get-reactive-summary': [[{ topK: 1 }], r => expect(r).toBeTypeOf('object')],
       'get-capture-info': [[], r => expect(r).toBeTypeOf('object')],

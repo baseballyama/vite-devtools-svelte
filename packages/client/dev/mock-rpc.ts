@@ -5,8 +5,11 @@ import type {
   ComponentInstance,
   ComponentRelation,
   ModuleNode,
+  PerfComponentTotal,
+  PerfCost,
+  PerfUpdate,
+  PerformanceRecording,
   ReactiveGraph,
-  RenderProfile,
   RouteInfo,
   StateChange,
 } from '../src/lib/types.js';
@@ -35,6 +38,41 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 function log(...args: unknown[]): void {
   // oxlint-disable-next-line no-console -- the dev server terminal is this mock's only output for side-effect calls
   console.log('[mock]', ...args);
+}
+
+const selfMs = (c: { renderMs: number; effectMs: number; derivedMs: number }) =>
+  c.renderMs + c.effectMs + c.derivedMs;
+
+/** Per-file totals over recorded updates (what the runtime sends with each push). */
+function totals(updates: PerfUpdate[]): PerfComponentTotal[] {
+  const byFile = new Map<string, PerfComponentTotal>();
+  for (const u of updates) {
+    for (const c of u.costs) {
+      let t = byFile.get(c.file);
+      if (!t) {
+        t = {
+          ...c,
+          updates: 0,
+          renders: 0,
+          effects: 0,
+          deriveds: 0,
+          renderMs: 0,
+          effectMs: 0,
+          derivedMs: 0,
+        };
+        byFile.set(c.file, t);
+      }
+      t.instances = Math.max(t.instances, c.instances);
+      t.updates++;
+      t.renders += c.renders;
+      t.effects += c.effects;
+      t.deriveds += c.deriveds;
+      t.renderMs += c.renderMs;
+      t.effectMs += c.effectMs;
+      t.derivedMs += c.derivedMs;
+    }
+  }
+  return [...byFile.values()].toSorted((a, b) => selfMs(b) - selfMs(a));
 }
 
 export function createMockBackend(scale = 5000) {
@@ -358,25 +396,6 @@ export function createMockBackend(scale = 5000) {
   });
 
   let fps: { timestamp: number; fps: number }[] = [];
-  const profiles = () => {
-    const out: RenderProfile[] = [];
-    for (const c of live) {
-      const h = (c.id * 2654435761) >>> 0;
-      const renders = 1 + (h % 40) + Math.floor((Date.now() / 1000) % (1 + (h % 7)));
-      const avg = ((h >>> 8) % 1000) / 400;
-      out.push({
-        componentId: c.id,
-        file: c.file,
-        name: c.name,
-        initTime: ((h >>> 4) % 900) / 100,
-        renderCount: renders,
-        totalRenderTime: renders * avg,
-        lastRenderTime: avg,
-        lastRenderAt: Date.now() - (h % 60000),
-      });
-    }
-    return out;
-  };
 
   // Mirror the dev server's bounded buffers (src/collector.ts LIMITS, `tail`
   // = newest kept) so >cap apps reproduce the real truncation, including
@@ -399,6 +418,7 @@ export function createMockBackend(scale = 5000) {
     errors: 0,
     fps: 0,
     apiEndpoints: 0,
+    performance: 0,
   };
   let lastTick = 0;
   function tick() {
@@ -421,7 +441,102 @@ export function createMockBackend(scale = 5000) {
     versions.stateTimeline++;
     versions.reactiveGraph++;
     versions.fps++;
+    if (recording.state === 'recording') {
+      const at = Date.now() - recording.startedAt!;
+      for (let i = Math.floor(r() * 3); i >= 0; i--) {
+        recording.updates.push(mockUpdate(recording.updates.length + 1, at - i * 180));
+      }
+      recording.components = totals(recording.updates);
+      versions.performance++;
+    }
   }
+
+  // ---- performance recording: a finished one to look at, Record starts a live one
+  const EVENTS = [
+    { type: 'click', target: 'button.send' },
+    { type: 'input', target: 'input#search' },
+    { type: 'click', target: 'li.row' },
+    { type: 'keydown', target: 'input#search', key: 'Enter' },
+    null,
+  ] as const;
+  function mockUpdate(id: number, start: number): PerfUpdate {
+    const heavy = r() < 0.12;
+    const n = pick(stateNodes);
+    const row = pick(files);
+    const costs: PerfCost[] = [];
+    const count = 1 + Math.floor(r() * (heavy ? 6 : 3));
+    for (let i = 0; i < count; i++) {
+      const f = i === 0 && heavy ? row : pick(files);
+      const instances = i === 0 && heavy ? 120 + Math.floor(r() * 120) : 1 + Math.floor(r() * 3);
+      const weight = (heavy ? 40 : 3) / (i + 1);
+      const renderMs = r() * weight;
+      const derivedMs = r() * weight * 0.4;
+      const effectMs = r() < 0.3 ? r() * weight * 0.3 : 0;
+      costs.push({
+        file: f.file,
+        name: f.name,
+        kind: 'component',
+        componentId: pick(live)?.id ?? null,
+        instances,
+        rendered: Math.max(1, Math.floor(instances * (0.6 + r() * 0.4))),
+        renderMs,
+        effectMs,
+        derivedMs,
+        renders: instances,
+        effects: effectMs > 0 ? 1 + Math.floor(r() * 3) : 0,
+        deriveds: Math.floor(instances * (1 + r() * 2)),
+      });
+    }
+    costs.sort((a, b) => selfMs(b) - selfMs(a));
+    const self = costs.reduce((t, c) => t + selfMs(c), 0);
+    const deriveds = costs.reduce((t, c) => t + c.deriveds, 0);
+    const wasted = heavy ? Math.floor(deriveds * 0.6) : Math.floor(r() * 2);
+    const scope = n.componentFile
+      .slice(n.componentFile.lastIndexOf('/') + 1)
+      .replace('.svelte', '');
+    return {
+      id,
+      start: Math.max(0, start),
+      duration: self * (1.05 + r() * 0.15),
+      event: pick(EVENTS),
+      triggers: [
+        {
+          nodeId: n.id,
+          name: n.name,
+          scopeId: n.componentId,
+          scope,
+          file: n.componentFile,
+          loc: { file: n.componentFile, line: 3 + Math.floor(r() * 60), column: 6 },
+          during: false,
+        },
+      ],
+      triggersOmitted: 0,
+      components: costs.reduce((t, c) => t + c.rendered, 0),
+      renders: costs.reduce((t, c) => t + c.renders, 0),
+      effects: costs.reduce((t, c) => t + c.effects, 0),
+      deriveds,
+      wastedDeriveds: wasted,
+      unchangedDeriveds: heavy
+        ? [{ name: 'isRead', scope: row.name, file: row.file, runs: deriveds, unchanged: wasted }]
+        : [],
+      costs,
+      costsOmitted: 0,
+      droppedFrames: heavy ? Math.round(self / 16) : r() < 0.2 ? 0 : null,
+    };
+  }
+  let recording: PerformanceRecording = {
+    state: 'idle',
+    recordingId: 'mock-0',
+    startedAt: Date.now() - 14_000,
+    stoppedAt: Date.now() - 2_000,
+    epoch: 'mock-epoch-1',
+    updates: Array.from({ length: 38 }, (_, i) => mockUpdate(i + 1, 300 + i * 310 + r() * 120)),
+    droppedUpdates: 0,
+    components: [],
+    componentsOmitted: false,
+  };
+  recording.components = totals(recording.updates);
+  let recordings = 0;
   const MOCK_EPOCH = 'mock-epoch-1';
   const info = (total: number, n = CAP) => ({
     captured: n > 0 ? Math.min(total, n) : total,
@@ -479,7 +594,29 @@ export function createMockBackend(scale = 5000) {
     'svelte-devtools:get-assets': () => assets,
     'svelte-devtools:get-component-relations': () => relations,
     'svelte-devtools:get-live-components': () => headCapped(live),
-    'svelte-devtools:get-render-profiles': () => capped(profiles()),
+    'svelte-devtools:get-performance-recording': () => recording,
+    'svelte-devtools:start-performance-recording': () => {
+      recording = {
+        state: 'recording',
+        recordingId: `mock-${++recordings}`,
+        startedAt: Date.now(),
+        stoppedAt: null,
+        epoch: MOCK_EPOCH,
+        updates: [],
+        droppedUpdates: 0,
+        components: [],
+        componentsOmitted: false,
+      };
+      versions.performance++;
+      return { recordingId: recording.recordingId, startedAt: recording.startedAt };
+    },
+    'svelte-devtools:stop-performance-recording': () => {
+      if (recording.state === 'recording') {
+        recording = { ...recording, state: 'idle', stoppedAt: Date.now() };
+        versions.performance++;
+      }
+      return recording;
+    },
     // scoped to one instance (its nodes + direct neighbours) or the
     // whole app within maxNodes / maxEdges, with totals and truncation.
     'svelte-devtools:get-reactive-graph': (args?: {

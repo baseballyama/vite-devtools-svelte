@@ -7,6 +7,8 @@ export interface ReactiveScope {
   /** Display name, e.g. `<Row>`. */
   label: string;
   file: string;
+  /** Node to select once the graph is loaded (e.g. a state from the Performance panel). */
+  focus?: string;
 }
 
 let current = $state<ReactiveScope | null>(null);
@@ -18,7 +20,11 @@ export const reactiveScope = {
   set(scope: ReactiveScope | null) {
     current = scope;
   },
-  scopeTo(componentId: number, file: string, epoch: string) {
-    current = { componentId, epoch, label: `<${componentName(file)}>`, file };
+  scopeTo(componentId: number, file: string, epoch: string, focus?: string) {
+    current = { componentId, epoch, label: `<${componentName(file)}>`, file, focus };
+  },
+  /** The focused node was selected: later visits keep the user's own selection. */
+  focused() {
+    if (current?.focus !== undefined) current = { ...current, focus: undefined };
   },
 };

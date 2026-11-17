@@ -18,6 +18,7 @@ import type {
   LiveComponentsMeta,
   ModuleGraphData,
   OGPreview,
+  PerformanceRecording,
   ProjectInfo,
   ReactiveGraphResult,
   ReactiveSummary,
@@ -74,6 +75,19 @@ export const versions: DatasetVersions = {
   errors: 0,
   fps: 0,
   apiEndpoints: 0,
+  performance: 0,
+};
+
+export const idleRecording: PerformanceRecording = {
+  state: 'idle',
+  recordingId: null,
+  startedAt: null,
+  stoppedAt: null,
+  epoch: null,
+  updates: [],
+  droppedUpdates: 0,
+  components: [],
+  componentsOmitted: false,
 };
 
 const liveMeta: LiveComponentsMeta = {
@@ -119,7 +133,9 @@ const defaults: { [K in FnKey]: RealRpc[K] } = {
   getReactiveGraph: () => Promise.resolve(emptyGraph),
   getReactiveSummary: () => Promise.resolve(emptySummary),
   getCaptureInfo: () => Promise.resolve({}),
-  getRenderProfiles: () => Promise.resolve([]),
+  startPerformanceRecording: () => Promise.resolve({ recordingId: 'p1', startedAt: 0 }),
+  stopPerformanceRecording: () => Promise.resolve(idleRecording),
+  getPerformanceRecording: () => Promise.resolve(idleRecording),
   getLoadProfiles: () => Promise.resolve([]),
   clearLoadProfiles: () => Promise.resolve(),
   getStateTimeline: () => Promise.resolve([]),
@@ -160,7 +176,9 @@ export const onElementPicked = fake('onElementPicked');
 export const getReactiveGraph = fake('getReactiveGraph');
 export const getReactiveSummary = fake('getReactiveSummary');
 export const getCaptureInfo = fake('getCaptureInfo');
-export const getRenderProfiles = fake('getRenderProfiles');
+export const startPerformanceRecording = fake('startPerformanceRecording');
+export const stopPerformanceRecording = fake('stopPerformanceRecording');
+export const getPerformanceRecording = fake('getPerformanceRecording');
 export const getLoadProfiles = fake('getLoadProfiles');
 export const clearLoadProfiles = fake('clearLoadProfiles');
 export const getStateTimeline = fake('getStateTimeline');
@@ -197,7 +215,9 @@ const all: { [K in FnKey]: Mock<RealRpc[K]> } = {
   getReactiveGraph,
   getReactiveSummary,
   getCaptureInfo,
-  getRenderProfiles,
+  startPerformanceRecording,
+  stopPerformanceRecording,
+  getPerformanceRecording,
   getLoadProfiles,
   clearLoadProfiles,
   getStateTimeline,

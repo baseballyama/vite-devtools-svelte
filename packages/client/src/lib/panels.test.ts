@@ -46,7 +46,7 @@ describe('panel registry', () => {
       'timeline',
     ]);
     expect(panelsForView(true, 'profile').map(p => p.id)).toEqual([
-      'render',
+      'performance',
       'loads',
       'fps',
       'build',
@@ -58,7 +58,7 @@ describe('panel registry', () => {
       'assets',
       'og',
     ]);
-    expect(panelsForView(false, 'profile').map(p => p.id)).toEqual(['render', 'fps']);
+    expect(panelsForView(false, 'profile').map(p => p.id)).toEqual(['performance', 'fps']);
     expect(panelsForView(false, 'project').map(p => p.id)).toEqual(['modules', 'assets', 'og']);
     expect(panelsForView(true, 'add', true).map(p => p.id)).toEqual(['addons']);
     expect(panelsForView(true, 'add', false)).toEqual([]);

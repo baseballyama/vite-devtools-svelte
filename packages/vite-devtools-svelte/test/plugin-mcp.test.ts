@@ -256,6 +256,40 @@ describe('MCP endpoint over HTTP', () => {
     expect(s.subscriptions()).toHaveLength(1);
   });
 
+  it('performance recording tools reach the collector', async () => {
+    const s = setup();
+    const url = await listen(s.handler);
+    s.sendSnapshot();
+    const callTool = async (name: string) => {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+          'mcp-protocol-version': '2025-06-18',
+          'x-svelte-devtools-token': s.token,
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'tools/call',
+          params: { name, arguments: {} },
+        }),
+      });
+      const body = (await res.json()) as { result: { content: Array<{ text: string }> } };
+      return JSON.parse(body.result.content[0]!.text);
+    };
+    const { recordingId } = await callTool('start_performance_recording');
+    expect(await callTool('get_performance_recording')).toMatchObject({
+      state: 'recording',
+      recordingId,
+    });
+    expect(await callTool('stop_performance_recording')).toMatchObject({
+      state: 'idle',
+      recordingId,
+    });
+  });
+
   it('a malformed MCP message is answered by the transport and logged', async () => {
     const s = setup();
     const url = await listen(s.handler);

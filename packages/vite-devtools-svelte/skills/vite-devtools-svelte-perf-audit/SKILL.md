@@ -16,9 +16,9 @@ If either is missing, stop and tell the user what to do; do not invent metrics.
 
 ## Workflow
 
-1. Call `start_session` with `label: "baseline-<short description>"` and `persist: false`. Tell the user that they should now use the app in the browser (golden path + any flow they care about) for ~10–30 seconds.
+1. Call `start_session` with `label: "baseline-<short description>"` and `persist: false`, then `start_performance_recording`. Tell the user that they should now use the app in the browser (golden path + any flow they care about) for ~10–30 seconds.
 2. Wait for the user to confirm they are done exercising the app. Do not poll.
-3. Call `end_session` with `keep: "memory"`. Note the session id from the response — you will need it later.
+3. Call `stop_performance_recording` (its slowest updates show what triggered them and where the time went), then `end_session` with `keep: "memory"`. Note the session id from the response — you will need it later.
 4. Call `list_performance_issues` (no thresholds first; defaults are sensible). Read the `issues` array.
 5. Present the top 3 issues to the user as a compact table: `severity | kind | summary | file`. Add any context from the `metric` field that aids interpretation.
 6. Ask the user which issue (if any) to investigate. **Do not implement fixes in this skill.** Hand off to `/vite-devtools-svelte-perf-fix <issue id or summary>` once they pick one.

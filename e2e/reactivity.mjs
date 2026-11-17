@@ -555,6 +555,39 @@ try {
     comps.filter(isFile('lib/lab/Panel.svelte')).length === 1,
   );
 
+  // Record → click → Stop: the click is an update triggered by the state it
+  // wrote, started by the click, with its time attributed to components.
+  await tool('start_performance_recording');
+  await sleep(300);
+  await page.click('[data-testid=tab]');
+  await page.click('[data-testid=tab]');
+  await sleep(300);
+  const perf = await tool('stop_performance_recording', { topN: 50 });
+  const tabUpdates = perf.slowest.filter(u => u.triggers.some(t => t.state.endsWith('.tab')));
+  check(
+    'performance: both clicks are updates triggered by `tab`',
+    tabUpdates.length === 2,
+    perf.slowest.map(u => [u.event, u.triggers.map(t => t.state)]),
+  );
+  check(
+    'performance: the update names the click and the declaration of `tab`',
+    tabUpdates.every(
+      u =>
+        u.event?.startsWith('click on') &&
+        u.triggers.some(t => t.file.endsWith('routes/lab/+page.svelte') && t.line > 0),
+    ),
+    tabUpdates.map(u => [u.event, u.triggers]),
+  );
+  check(
+    'performance: self time is attributed to app components',
+    tabUpdates.every(u => u.selfTime.some(c => c.kind === 'component')),
+    tabUpdates.map(u => u.selfTime),
+  );
+  check(
+    'performance: the recording is stopped',
+    (await tool('get_performance_recording')).state === 'idle',
+  );
+
   const before = comps.filter(isFile('lib/lab/Row.svelte')).map(r => r.id);
   const epochBefore = (await tool('get_live_components', { includeMeta: true })).epoch;
   fs.writeFileSync(

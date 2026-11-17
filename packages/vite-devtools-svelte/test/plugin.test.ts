@@ -393,10 +393,10 @@ describe('mainPlugin devtools hook (Vite DevTools)', () => {
       {
         id: 'svelte-devtools:profile',
         title: 'Profile',
-        description: 'Render, load, frame rate and build performance',
+        description: 'Updates, load, frame rate and build performance',
         icon: 'ph:gauge-duotone',
         type: 'iframe',
-        url: '/.svelte-devtools/?view=profile#/render',
+        url: '/.svelte-devtools/?view=profile#/performance',
         groupId: 'svelte',
         category: 'default',
         defaultOrder: 30,

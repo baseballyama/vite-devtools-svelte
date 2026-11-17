@@ -11,6 +11,7 @@ const V: DatasetVersions = {
   errors: 6,
   fps: 7,
   apiEndpoints: 8,
+  performance: 9,
 };
 
 /** Fresh module (its cache is module state) over a mocked RPC layer. */

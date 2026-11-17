@@ -31,6 +31,9 @@ export const fieldApi = {
   },
   snapshot: <T>(value: T): T => value,
   sourceNode: (): string | null => null,
+  isFork: (b: any) => b?.fork === true,
+  trackedComponent: (ctx: any): number | null => ctx?.tracked ?? null,
+  filename: (ctx: any): string | undefined => ctx?.file,
 };
 
 /** A write to a tracked signal, as Svelte reports it (hooks.js → markWritten). */
@@ -53,6 +56,10 @@ export interface Harness {
   /** live intervals (cleared ones are removed) */
   intervals: Array<{ fn: () => void; ms: number; id: number }>;
   rafCallbacks: number;
+  /** run the pending animation frame callbacks at time `t` */
+  frame: (t: number) => void;
+  /** listeners on the fake window, by event type */
+  windowListeners: Map<string, Array<(event: unknown) => void>>;
   flushTimers: () => void;
   /** deliver a server → runtime hot event */
   emit: (event: string, data?: unknown) => void;
@@ -81,6 +88,7 @@ export function createRuntime(
   const handlers = new Map<string, Array<(data: unknown) => void>>();
   let timers: Array<() => void> = [];
   let rafCallbacks = 0;
+  let frames: Array<(t: number) => void> = [];
   const hot = {
     send(event: string, data: unknown) {
       const bytes = JSON.stringify(data ?? null).length;
@@ -96,7 +104,12 @@ export function createRuntime(
     addEventListener(type: string, cb: (event: unknown) => void) {
       windowListeners.set(type, [...(windowListeners.get(type) ?? []), cb]);
     },
-    removeEventListener() {},
+    removeEventListener(type: string, cb: (event: unknown) => void) {
+      windowListeners.set(
+        type,
+        (windowListeners.get(type) ?? []).filter(fn => fn !== cb),
+      );
+    },
   };
   const visibilityListeners: Array<() => void> = [];
   const document = {
@@ -140,8 +153,9 @@ export function createRuntime(
       const i = intervals.findIndex(x => x.id === id);
       if (i !== -1) intervals.splice(i, 1);
     },
-    requestAnimationFrame: () => {
+    requestAnimationFrame: (cb: (t: number) => void) => {
       rafCallbacks++;
+      frames.push(cb);
       return 0;
     },
     performance: opts.clock ? { now: opts.clock } : performance,
@@ -166,6 +180,12 @@ export function createRuntime(
     get rafCallbacks() {
       return rafCallbacks;
     },
+    frame(t: number) {
+      const pending = frames;
+      frames = [];
+      for (const cb of pending) cb(t);
+    },
+    windowListeners,
     flushTimers() {
       const pending = timers;
       timers = [];

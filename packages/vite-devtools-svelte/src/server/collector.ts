@@ -15,9 +15,11 @@ import type {
   StateTimelineEntry,
   DatasetVersions,
   ElementPick,
+  PerformanceRecording,
 } from '../types.js';
 import { arrayOf, asPayload, clampInt, finiteOrNull } from './payload.js';
 import type { Payload } from './payload.js';
+import { MAX_RECORDING_MS, PerformanceStore } from './performance.js';
 import {
   emptyGraph,
   emptySummary,
@@ -84,6 +86,10 @@ export const HOT_EVENTS = {
   elementPicked: 'svelte-devtools:element-picked',
   /** browser → server: a `load` run in the browser, which has no recorder (see load-profile.ts). */
   loadProfile: 'svelte-devtools:load-profile',
+  /** server → runtime(s): `{ active, recordingId? }` — start / stop a performance recording. */
+  performanceRecording: 'svelte-devtools:performance-recording',
+  /** runtime → server: `{ epoch, recordingId, updates, dropped, components, final }`. */
+  performance: 'svelte-devtools:performance',
 } as const;
 
 // A DevTools UI that connects this soon after a pick (the dock opening the
@@ -172,6 +178,7 @@ export class Collector {
     errors: nextSeq(),
     fps: nextSeq(),
     apiEndpoints: nextSeq(),
+    performance: nextSeq(),
   };
 
   // Each pull carries a requestId + the served epoch, and only the matching
@@ -192,6 +199,10 @@ export class Collector {
   private snapshotWaiters: Array<() => void> = [];
   private active = false;
   private sweepTimer: ReturnType<typeof setTimeout> | undefined;
+
+  private readonly perf = new PerformanceStore();
+  private perfTimer: ReturnType<typeof setTimeout> | undefined;
+  private perfWaiters: Array<() => void> = [];
 
   private readonly pickListeners = new Set<(pick: ElementPick) => void>();
   private lastPick: { pick: ElementPick; at: number } | null = null;
@@ -215,8 +226,14 @@ export class Collector {
     const listeners: Array<[string, (payload: unknown, client: HotClient) => void]> = [
       [
         HOT_EVENTS.runtimeReady,
-        (_, client) => client?.send(HOT_EVENTS.subscription, this.subscription),
+        (_, client) => {
+          // joins a recording in progress; a runtime still recording for a
+          // previous server (restart) stops
+          client?.send(HOT_EVENTS.performanceRecording, this.recordingMessage);
+          client?.send(HOT_EVENTS.subscription, this.subscription);
+        },
       ],
+      [HOT_EVENTS.performance, d => this.ingestPerformance(asPayload(d))],
       [HOT_EVENTS.components, (d, client) => this.ingestComponents(asPayload(d), client)],
       [HOT_EVENTS.profiles, d => this.ingestProfiles(asPayload(d))],
       [HOT_EVENTS.stateTimeline, d => this.ingestStateTimeline(asPayload(d))],
@@ -261,6 +278,7 @@ export class Collector {
     // Answer pending pulls from cache instead of leaving them to time out.
     for (const id of this.pulls.keys()) this.settle(id, 'no-runtime');
     this.flushStateTimeline();
+    this.wakePerfWaiters();
   }
 
   /** What the runtime is told: collect/poll only while somebody is watching. */
@@ -387,6 +405,62 @@ export class Collector {
   get recentPick(): ElementPick | null {
     const last = this.lastPick;
     return last && Date.now() - last.at <= RECENT_PICK_MS ? last.pick : null;
+  }
+
+  private get recordingMessage(): { active: boolean; recordingId?: string } {
+    const id = this.perf.recordingId;
+    return this.perf.active && id !== null ? { active: true, recordingId: id } : { active: false };
+  }
+
+  get performanceRecording(): PerformanceRecording {
+    return this.perf.recording(this.servedEpoch);
+  }
+
+  /** Start a recording in every connected app page (a running one is replaced). */
+  startPerformanceRecording(): { recordingId: string; startedAt: number } {
+    const started = this.perf.start();
+    this.hot?.send(HOT_EVENTS.performanceRecording, this.recordingMessage);
+    clearTimeout(this.perfTimer);
+    this.perfTimer = setTimeout(() => void this.stopPerformanceRecording(), MAX_RECORDING_MS);
+    this.perfTimer.unref?.();
+    this.bump('performance');
+    return started;
+  }
+
+  /**
+   * Stop the recording; resolves once every page that sent part of it sent
+   * its last push, or after {@link RUNTIME_REQUEST_TIMEOUT}.
+   */
+  async stopPerformanceRecording(): Promise<PerformanceRecording> {
+    if (this.perf.active) {
+      clearTimeout(this.perfTimer);
+      this.perfTimer = undefined;
+      this.perf.stop();
+      this.hot?.send(HOT_EVENTS.performanceRecording, this.recordingMessage);
+      this.bump('performance');
+      if (this.hot && !this.perf.settled) {
+        await new Promise<void>(resolve => {
+          const done = () => {
+            clearTimeout(timer);
+            this.perfWaiters = this.perfWaiters.filter(w => w !== done);
+            resolve();
+          };
+          const timer = setTimeout(done, RUNTIME_REQUEST_TIMEOUT);
+          this.perfWaiters.push(done);
+        });
+      }
+    }
+    return this.performanceRecording;
+  }
+
+  ingestPerformance(data: Payload | undefined): void {
+    if (!this.perf.ingest(data)) return;
+    this.bump('performance');
+    if (this.perf.settled) this.wakePerfWaiters();
+  }
+
+  private wakePerfWaiters(): void {
+    for (const done of this.perfWaiters.slice()) done();
   }
 
   // The first lease activates the runtime's polling/FPS sampling; the last

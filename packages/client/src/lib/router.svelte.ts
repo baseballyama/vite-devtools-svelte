@@ -6,12 +6,15 @@ import { leadingDigits } from './chars.js';
 import { panels, type PanelId } from './panels.js';
 
 const ids = new Set<string>(panels.map(p => p.id));
+/** Links to panels that were renamed. */
+const renamed: Record<string, PanelId> = { render: 'performance' };
 
 function parse(): PanelId {
   let h = location.hash;
   if (h.startsWith('#')) h = h.slice(1);
   if (h.startsWith('/')) h = h.slice(1);
   const id = h.split('?')[0]!.split('/')[0]!;
+  if (Object.hasOwn(renamed, id)) return renamed[id]!;
   return (ids.has(id) ? id : 'overview') as PanelId;
 }
 

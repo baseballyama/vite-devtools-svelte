@@ -271,7 +271,8 @@ async function measureUi(side, srv, scale, opts, outDir, tag) {
     Overview: /^\s*Overview\b/i,
     Components: /^\s*Components\b/i,
     Routes: /^\s*Routes\b/i,
-    Render: /^\s*Render\b/i,
+    // "Render" in the baseline UI, "Performance" in the new one
+    Render: /^\s*(Render|Performance)\b/i,
     Reactive: /^\s*Reactiv(e|ity)\b/i,
     Timeline: /^\s*(State\s+)?timeline\b/i,
   };

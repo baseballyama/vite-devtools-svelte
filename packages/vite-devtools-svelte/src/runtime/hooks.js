@@ -93,6 +93,17 @@ if (dt) {
     return null;
   };
 
+  // The tracked component a context belongs to: the context itself, else its
+  // nearest tracked ancestor (the context `mount` creates around the root
+  // component and library components are transparent). null when none.
+  const trackedComponent = ctx => {
+    for (let c = ctx; c !== null; c = parentComponent(c)) {
+      const id = idByContext.get(c);
+      if (id !== undefined) return id;
+    }
+    return null;
+  };
+
   dt._api = {
     signalValue,
     isUninitialized,
@@ -103,6 +114,10 @@ if (dt) {
     children,
     snapshot,
     sourceNode,
+    trackedComponent,
+    filename,
+    parentComponent,
+    isFork,
   };
 
   // Tracked $state nodes written per batch, handed to the runtime once the
@@ -129,17 +144,6 @@ if (dt) {
   const painted = new WeakSet();
   // Running render effects and their start times (deriveds can run inside).
   const renders = [];
-
-  // The tracked component a context belongs to: the context itself, else its
-  // nearest tracked ancestor (the context `mount` creates around the root
-  // component and library components are transparent). null when none.
-  const trackedComponent = ctx => {
-    for (let c = ctx; c !== null; c = parentComponent(c)) {
-      const id = idByContext.get(c);
-      if (id !== undefined) return id;
-    }
-    return null;
-  };
 
   // Scope of a signal/effect declared at `loc` (`file:line:column`): the
   // component it is created in, else (module code, class instances created
@@ -196,15 +200,18 @@ if (dt) {
       if (scope === null) return;
       const label = info.label ?? '';
       if (info.kind === 'state') {
-        const id = dt.trackState(signal, label, scope, info.effect);
+        const id = dt.trackState(signal, label, scope, info.effect, info.location);
         // `let obj = $state({...})`: the proxy is announced next, under the
         // same name; its properties belong to this node
         claim(signalValue(signal), id);
       } else if (info.kind === 'proxy-version') {
         const name = label.slice(0, -' version'.length);
-        nodeOfProxy.set(info.proxy, dt.trackProxy(info.proxy, name, scope, info.effect));
+        nodeOfProxy.set(
+          info.proxy,
+          dt.trackProxy(info.proxy, name, scope, info.effect, info.location),
+        );
       } else {
-        dt.trackDerived(signal, label, scope, info.effect);
+        dt.trackDerived(signal, label, scope, info.effect, info.location);
       }
     },
 
@@ -333,4 +340,19 @@ if (dt) {
     event.preventDefault();
     dt._send('svelte-devtools:element-picked', { epoch: dt._epoch, componentId: instance.id });
   });
+
+  // Performance recording: subscribed only while one is on (the runtime
+  // calls this), so Svelte emits nothing more for it otherwise. Runs after
+  // the listener above (subscription order), which has adopted new proxies.
+  const recorder = {
+    name: 'vite-devtools-svelte:performance',
+    signalWritten: (signal, { batch }) => dt._perfWritten(signal, batch),
+    flushStart: batch => dt._perfFlushStart(batch),
+    flushEnd: batch => dt._perfFlushEnd(batch),
+    batchCommitted: batch => dt._perfCommitted(batch),
+    batchDiscarded: batch => dt._perfDiscarded(batch),
+    reactionRunStart: reaction => dt._perfRunStart(reaction),
+    reactionRunEnd: reaction => dt._perfRunEnd(reaction),
+  };
+  dt._subscribePerf = () => listen(recorder);
 }
