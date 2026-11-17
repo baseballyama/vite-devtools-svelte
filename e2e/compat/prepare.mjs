@@ -19,6 +19,18 @@ if (!profile) {
 
 const run = (cmd, args, cwd = root) => execFileSync(cmd, args, { cwd, stdio: 'inherit' });
 
+// --ignore-workspace also ignores the root pnpm-workspace.yaml, so its
+// minimumReleaseAgeExclude list is passed to the install as flags.
+function releaseAgeExcludes() {
+  const yaml = fs.readFileSync(path.join(root, 'pnpm-workspace.yaml'), 'utf8');
+  const list = /^minimumReleaseAgeExclude:\n((?:[ \t]+-.*\n)+)/m.exec(yaml);
+  if (!list) throw new Error('minimumReleaseAgeExclude not found in pnpm-workspace.yaml');
+  return list[1]
+    .trim()
+    .split('\n')
+    .map(line => line.replace(/^\s*-\s*/, '').replace(/^(['"])(.*)\1$/, '$2'));
+}
+
 if (!profile.workspace) {
   const packDir = path.join(root, 'e2e/compat/.pack');
   fs.rmSync(packDir, { recursive: true, force: true });
@@ -39,10 +51,7 @@ if (!profile.workspace) {
       'install',
       '--ignore-workspace',
       '--no-frozen-lockfile',
-      // --ignore-workspace also ignores minimumReleaseAgeExclude in the root
-      // pnpm-workspace.yaml. Remove this once @sveltejs/kit 3.3.0 is old
-      // enough to pass minimumReleaseAge.
-      '--config.minimumReleaseAgeExclude=@sveltejs/kit@3.3.0',
+      ...releaseAgeExcludes().map(name => `--config.minimumReleaseAgeExclude=${name}`),
     ],
     path.join(root, profile.dir),
   );
