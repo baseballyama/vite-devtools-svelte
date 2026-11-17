@@ -1,4 +1,4 @@
-import { assertOutboundUrl } from '../server/security.js';
+import { assertOutboundUrl, outboundLookup } from '../server/security.js';
 import type { OutboundUrlOptions } from '../server/security.js';
 import type { OGPreview, OGTag } from '../types.js';
 import { HTML_WHITESPACE, collapseWhitespace, decodeEntities, htmlTags } from './html.js';
@@ -118,7 +118,7 @@ export async function getOGPreview(
     await assertOutboundUrl(url, options);
     const page = await fetchWithTimeout(
       url,
-      {},
+      { lookup: outboundLookup(url, options) },
       async res => ({
         status: res.status,
         location: res.headers.get('location'),

@@ -2,13 +2,15 @@ import path from 'node:path';
 
 /**
  * OG preview: tag parsing, charset and entity decoding, relative og:image,
- * redirects / HTTP errors / timeouts, SSRF guard. Offline: fetch and DNS are
- * mocked.
+ * redirects / HTTP errors / timeouts, SSRF guard. Offline: the transport and
+ * DNS are mocked.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
 import { decodeEntities } from '../src/analyzers/html.js';
+import { transport } from '../src/analyzers/http.js';
 import { decodeBody, getOGPreview, parseMetaTags } from '../src/analyzers/og.js';
+import { publicOnlyLookup } from '../src/server/security.js';
 import { createTestHost, rpcHandlers } from './helpers.js';
 
 vi.mock('node:dns/promises', () => ({
@@ -24,7 +26,7 @@ const PAGE = 'https://example.com/blog/post';
 
 function serve(body: ConstructorParameters<typeof Response>[0], init: ResponseInit = {}) {
   return vi
-    .spyOn(globalThis, 'fetch')
+    .spyOn(transport, 'get')
     .mockImplementation(() => Promise.resolve(new Response(body, init)));
 }
 
@@ -281,7 +283,8 @@ describe('getOGPreview', () => {
     expect(r.issues).toEqual(['Redirects to http://10.0.0.1/ (not followed)']);
     expect(r.tags).toEqual([]);
     expect(fetchMock).toHaveBeenCalledOnce();
-    expect(fetchMock.mock.calls[0]![1]).toMatchObject({ redirect: 'manual' });
+    // a public page connects through the DNS guard (the transport never follows redirects)
+    expect(fetchMock.mock.calls[0]![1]).toMatchObject({ lookup: publicOnlyLookup });
   });
 
   it('reports a redirect without location', async () => {
@@ -321,13 +324,13 @@ describe('getOGPreview', () => {
   });
 
   it('reports network errors', async () => {
-    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network error'));
+    vi.spyOn(transport, 'get').mockRejectedValue(new Error('Network error'));
     expect((await getOGPreview(PAGE)).issues).toEqual(['Failed to fetch: Error: Network error']);
   });
 
   it('gives up after the timeout', async () => {
     vi.useFakeTimers();
-    vi.spyOn(globalThis, 'fetch').mockImplementation(() => new Promise(() => {}));
+    vi.spyOn(transport, 'get').mockImplementation(() => new Promise(() => {}));
     const pending = getOGPreview(PAGE, {}, 100);
     await vi.advanceTimersByTimeAsync(100);
     expect((await pending).issues).toEqual(['Failed to fetch: Error: Timed out after 100ms']);

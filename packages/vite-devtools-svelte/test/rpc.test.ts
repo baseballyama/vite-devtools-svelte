@@ -6,6 +6,7 @@ import { getRpcHandler } from 'devframe/rpc';
 import { describe, it, expect, vi } from 'vitest';
 
 import type { ResolveFile } from '../src/analyzers/api.js';
+import { transport } from '../src/analyzers/http.js';
 import {
   createRpcFunctions,
   createSvelteDevframe,
@@ -341,7 +342,7 @@ describe('every RPC with valid input', () => {
   it('answers JSON-serializable data for each registered function', async () => {
     const root = projectRoot();
     const fetchMock = vi
-      .spyOn(globalThis, 'fetch')
+      .spyOn(transport, 'get')
       .mockImplementation(() => Promise.resolve(new Response('<title>t</title>')));
     const host = createTestHost(root, { serverOrigins: () => ['http://localhost:5173'] });
     const rpc = await validated(host);
@@ -444,7 +445,7 @@ describe('RPC input validation', () => {
     ['get-og-preview', [{ url: long(8193) }]],
     ['get-og-preview', [{ url: 5 }]],
   ])('%s rejects %j before the handler runs', async (name, args) => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch');
+    const fetchMock = vi.spyOn(transport, 'get');
     const rpc = await validated(host);
     const opened = host.opened.length;
     await expect(rpc.get(name)!(...args)).rejects.toThrow(/invalid argument/);

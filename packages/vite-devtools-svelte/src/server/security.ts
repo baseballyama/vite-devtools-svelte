@@ -1,6 +1,8 @@
+import dnsCallbacks from 'node:dns';
 import dns from 'node:dns/promises';
 import fs from 'node:fs';
 import net from 'node:net';
+import type { LookupFunction } from 'node:net';
 import path from 'node:path';
 
 /**
@@ -64,8 +66,9 @@ export interface OutboundUrlOptions {
  * rejects names that point at private / loopback addresses (DNS-based SSRF),
  * or that do not resolve at all. Exact dev-server origins in
  * `allowedOrigins` bypass the private checks.
- * Callers must also fetch with `redirect: 'manual'` so a public URL cannot
- * bounce the request to a private one.
+ * Callers must also not follow redirects, so a public URL cannot bounce
+ * the request to a private one, and connect with {@link outboundLookup}, so
+ * the name cannot resolve differently by then.
  */
 export async function assertOutboundUrl(
   urlStr: string,
@@ -87,6 +90,40 @@ export async function assertOutboundUrl(
   }
   return parsed;
 }
+
+/**
+ * The `lookup` an outbound request to `url` connects with: none (the
+ * default resolver) for an allowed dev-server origin, otherwise
+ * {@link publicOnlyLookup}. {@link assertOutboundUrl} checks a name
+ * before the request; this checks the addresses the socket really uses.
+ */
+export function outboundLookup(
+  urlStr: string,
+  options: OutboundUrlOptions = {},
+): LookupFunction | undefined {
+  return options.allowedOrigins?.includes(parseUrl(urlStr).origin) ? undefined : publicOnlyLookup;
+}
+
+/**
+ * `dns.lookup` for a socket that may only reach public addresses. The
+ * check runs on the addresses the connection then uses, so a name that
+ * answered with a public address a moment ago and a private one now (DNS
+ * rebinding) is refused.
+ */
+export const publicOnlyLookup: LookupFunction = (hostname, options, callback) => {
+  dnsCallbacks.lookup(hostname, { ...options, all: true }, (err, addresses) => {
+    if (err) {
+      callback(err, '');
+      return;
+    }
+    if (addresses.length === 0 || addresses.some(a => isPrivateIP(a.address))) {
+      callback(new Error(`Blocked: ${hostname} resolves to private address`), '');
+      return;
+    }
+    if (options.all) callback(null, addresses);
+    else callback(null, addresses[0]!.address, addresses[0]!.family);
+  });
+};
 
 /**
  * Addresses an outbound request must not reach: this host, the local
