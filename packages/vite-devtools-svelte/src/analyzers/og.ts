@@ -1,4 +1,4 @@
-import { assertOutboundUrl, outboundLookup } from '../server/security.js';
+import { outboundLookup } from '../server/security.js';
 import type { OutboundUrlOptions } from '../server/security.js';
 import type { OGPreview, OGTag } from '../types.js';
 import { HTML_WHITESPACE, collapseWhitespace, decodeEntities, htmlTags } from './html.js';
@@ -9,6 +9,17 @@ import { fetchWithTimeout, readCapped } from './http.js';
  * endless body is cut here instead of filling the dev server's memory.
  */
 export const MAX_PAGE_BYTES = 5 * 1024 * 1024;
+
+/**
+ * Sent with the request, as a browser would. Some sites refuse a request
+ * without a User-Agent; a compressed body is decompressed (and the cap
+ * applies to what that yields).
+ */
+const REQUEST_HEADERS = {
+  'user-agent': 'Mozilla/5.0 (compatible; vite-devtools-svelte OG preview)',
+  accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
+  'accept-encoding': 'gzip, deflate, br',
+};
 
 /**
  * Meta tags with a `property` (or `name`) and a `content` attribute, in
@@ -121,19 +132,20 @@ export async function getOGPreview(
 ): Promise<OGPreview> {
   const preview: OGPreview = { url, title: '', description: '', image: '', tags: [], issues: [] };
   try {
-    await assertOutboundUrl(url, options);
+    const lookup = outboundLookup(url, options);
     const page = await fetchWithTimeout(
       url,
-      { lookup: outboundLookup(url, options) },
+      { lookup, headers: REQUEST_HEADERS },
       async res => {
+        // A redirect's body is left unread; the request is aborted after this.
         const redirect = res.status >= 300 && res.status < 400;
         const { bytes, truncated } = redirect
           ? { bytes: new Uint8Array(), truncated: false }
-          : await readCapped(res, MAX_PAGE_BYTES);
+          : await readCapped(res.body, MAX_PAGE_BYTES);
         return {
           status: res.status,
-          location: res.headers.get('location'),
-          html: decodeBody(bytes, res.headers.get('content-type')),
+          location: res.headers.location,
+          html: decodeBody(bytes, res.headers['content-type'] ?? null),
           truncated,
         };
       },

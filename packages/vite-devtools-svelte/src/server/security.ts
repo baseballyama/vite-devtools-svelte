@@ -1,5 +1,4 @@
-import dnsCallbacks from 'node:dns';
-import dns from 'node:dns/promises';
+import dns from 'node:dns';
 import fs from 'node:fs';
 import net from 'node:net';
 import type { LookupFunction } from 'node:net';
@@ -62,46 +61,23 @@ export interface OutboundUrlOptions {
 }
 
 /**
- * Like {@link validateExternalUrl}, but also resolves the hostname and
- * rejects names that point at private / loopback addresses (DNS-based SSRF),
- * or that do not resolve at all. Exact dev-server origins in
- * `allowedOrigins` bypass the private checks.
+ * Checks a URL an outbound request may fetch, and returns the `lookup` its
+ * connection must use. An exact dev-server origin in `allowedOrigins`
+ * connects with the default resolver (undefined). Anything else must pass
+ * {@link validateExternalUrl} (scheme, IP literals, which no lookup sees,
+ * internal names) and connects through {@link publicOnlyLookup}, which
+ * checks the addresses the socket really uses: a name is never resolved
+ * once for a check and again for the connection (DNS rebinding).
  * Callers must also not follow redirects, so a public URL cannot bounce
- * the request to a private one, and connect with {@link outboundLookup}, so
- * the name cannot resolve differently by then.
- */
-export async function assertOutboundUrl(
-  urlStr: string,
-  options: OutboundUrlOptions = {},
-): Promise<URL> {
-  const parsed = parseUrl(urlStr);
-  if (options.allowedOrigins?.includes(parsed.origin)) return parsed;
-  validateExternalUrl(urlStr);
-  const host = hostOf(parsed);
-  if (net.isIP(host)) return parsed;
-  let addresses: { address: string }[];
-  try {
-    addresses = await dns.lookup(host, { all: true });
-  } catch {
-    throw new Error(`Blocked: ${host} does not resolve`);
-  }
-  for (const { address } of addresses) {
-    if (isPrivateIP(address)) throw new Error(`Blocked: ${host} resolves to private address`);
-  }
-  return parsed;
-}
-
-/**
- * The `lookup` an outbound request to `url` connects with: none (the
- * default resolver) for an allowed dev-server origin, otherwise
- * {@link publicOnlyLookup}. {@link assertOutboundUrl} checks a name
- * before the request; this checks the addresses the socket really uses.
+ * the request to a private one.
  */
 export function outboundLookup(
   urlStr: string,
   options: OutboundUrlOptions = {},
 ): LookupFunction | undefined {
-  return options.allowedOrigins?.includes(parseUrl(urlStr).origin) ? undefined : publicOnlyLookup;
+  if (options.allowedOrigins?.includes(parseUrl(urlStr).origin)) return undefined;
+  validateExternalUrl(urlStr);
+  return publicOnlyLookup;
 }
 
 /**
@@ -111,7 +87,7 @@ export function outboundLookup(
  * rebinding) is refused.
  */
 export const publicOnlyLookup: LookupFunction = (hostname, options, callback) => {
-  dnsCallbacks.lookup(hostname, { ...options, all: true }, (err, addresses) => {
+  dns.lookup(hostname, { ...options, all: true }, (err, addresses) => {
     if (err) {
       callback(err, '');
       return;
@@ -149,10 +125,10 @@ for (const [prefix, bits] of [
 ] as const) {
   BLOCKED.addSubnet(prefix, bits, 'ipv4');
   // IPv6 forms that embed an IPv4 address are judged by that address:
-  // mapped (::ffff:a.b.c.d), compatible (::a.b.c.d, deprecated; its
-  // 0.0.0.0/8 covers `::` and `::1`), NAT64 (64:ff9b::a.b.c.d) and 6to4
-  // (2002:aabb:ccdd::/48).
-  for (const embedding of ['::ffff:', '::', '64:ff9b::']) {
+  // mapped (::ffff:a.b.c.d), SIIT-translated (::ffff:0:a.b.c.d),
+  // compatible (::a.b.c.d, deprecated; its 0.0.0.0/8 covers `::` and
+  // `::1`), NAT64 (64:ff9b::a.b.c.d) and 6to4 (2002:aabb:ccdd::/48).
+  for (const embedding of ['::ffff:', '::ffff:0:', '::', '64:ff9b::']) {
     BLOCKED.addSubnet(embedding + prefix, 96 + bits, 'ipv6');
   }
   const [a, b, c, d] = prefix.split('.').map(Number) as [number, number, number, number];
@@ -160,7 +136,9 @@ for (const [prefix, bits] of [
   BLOCKED.addSubnet(sixToFour, 16 + bits, 'ipv6');
 }
 for (const [prefix, bits] of [
+  ['64:ff9b:1::', 48], // local-use NAT64 (RFC 8215): the embedding is the network's choice
   ['100::', 64], // discard-only
+  ['2001::', 32], // Teredo: tunnels to an IPv4 address it obscures
   ['2001:db8::', 32], // documentation
   ['fc00::', 7], // unique local
   ['fe80::', 10], // link-local
@@ -173,7 +151,7 @@ for (const [prefix, bits] of [
 /**
  * Whether `ip` (an IPv4 or IPv6 literal, IPv6 optionally in brackets) is a
  * private, loopback or otherwise non-public address. IPv6 forms that embed
- * an IPv4 address (mapped, compatible, NAT64, 6to4) are judged by that
+ * an IPv4 address (mapped, SIIT, compatible, NAT64, 6to4) are judged by that
  * address. Anything that is not a valid IP literal counts as private, so a
  * malformed value is never let through.
  */

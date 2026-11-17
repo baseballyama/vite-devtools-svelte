@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { Readable } from 'node:stream';
 
 import { getRpcHandler } from 'devframe/rpc';
 import { describe, it, expect, vi } from 'vitest';
@@ -341,9 +342,13 @@ async function validated(host: ReturnType<typeof createTestHost>) {
 describe('every RPC with valid input', () => {
   it('answers JSON-serializable data for each registered function', async () => {
     const root = projectRoot();
-    const fetchMock = vi
-      .spyOn(transport, 'get')
-      .mockImplementation(() => Promise.resolve(new Response('<title>t</title>')));
+    const fetchMock = vi.spyOn(transport, 'get').mockImplementation(() =>
+      Promise.resolve({
+        status: 200,
+        headers: {},
+        body: Readable.from([Buffer.from('<title>t</title>')]),
+      }),
+    );
     const host = createTestHost(root, { serverOrigins: () => ['http://localhost:5173'] });
     const rpc = await validated(host);
     const calls: Record<string, [args: unknown[], check: (r: any) => void]> = {

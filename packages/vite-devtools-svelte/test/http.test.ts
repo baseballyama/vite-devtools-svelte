@@ -1,14 +1,16 @@
 /**
- * The OG preview's outbound GET: `node:http` as a fetch Response, no
- * redirects, timeout, and a connection-time DNS guard (DNS rebinding).
- * Requests go to a local server; DNS answers are mocked.
+ * The OG preview's outbound GET: `node:http`, no redirects, decompression,
+ * timeout, and a connection-time DNS guard (DNS rebinding). Requests go to
+ * local servers; DNS answers are mocked.
  */
 import type * as DnsModule from 'node:dns';
 import http from 'node:http';
 import net from 'node:net';
 import type { AddressInfo } from 'node:net';
+import { Readable } from 'node:stream';
+import zlib from 'node:zlib';
 
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import {
   fetchWithTimeout,
@@ -16,38 +18,28 @@ import {
   readCapped,
   transport,
 } from '../src/analyzers/http.js';
+import type { OutboundResponse } from '../src/analyzers/http.js';
 import { getOGPreview } from '../src/analyzers/og.js';
-import { outboundLookup, publicOnlyLookup } from '../src/server/security.js';
+import { publicOnlyLookup } from '../src/server/security.js';
 
-type Answer = { address: string; family: number }[] | Error;
-/** What each name resolves to, per lookup: the guard's (`node:dns`) and the pre-check's. */
-const dnsAnswers = vi.hoisted(() => ({
-  connect: new Map<string, Answer>(),
-  precheck: new Map<string, Answer>(),
-}));
+type Address = { address: string; family: number };
+/** What each name resolves to for the guard (`node:dns`); unknown names use the real resolver. */
+const dnsAnswers = vi.hoisted(() => new Map<string, Address[] | Error>());
 vi.mock('node:dns', async importOriginal => {
   const real = await importOriginal<typeof DnsModule>();
+  // like dns.lookup: an array with `all`, else the first address and its family
   const lookup = (
     host: string,
-    _options: unknown,
-    callback: (err: Error | null, addresses?: { address: string; family: number }[]) => void,
+    options: { all?: boolean },
+    callback: (err: Error | null, address?: string | Address[], family?: number) => void,
   ) => {
-    const answer = dnsAnswers.connect.get(host);
-    if (answer === undefined) real.lookup(host, { all: true }, callback);
+    const answer = dnsAnswers.get(host);
+    if (answer === undefined) real.lookup(host, options, callback as never);
     else if (answer instanceof Error) callback(answer);
-    else callback(null, answer);
+    else if (options.all) callback(null, answer);
+    else callback(null, answer[0]?.address, answer[0]?.family);
   };
   return { ...real, default: { ...real, lookup }, lookup };
-});
-vi.mock('node:dns/promises', () => {
-  // oxlint-disable-next-line unicorn/consistent-function-scoping -- vi.mock factories are hoisted above module-scope helpers
-  const lookup = (host: string) => {
-    const answer = dnsAnswers.precheck.get(host);
-    return answer instanceof Error || answer === undefined
-      ? Promise.reject(answer ?? new Error('ENOTFOUND'))
-      : Promise.resolve(answer);
-  };
-  return { default: { lookup }, lookup };
 });
 
 const server = http.createServer((req, res) => {
@@ -60,6 +52,24 @@ const server = http.createServer((req, res) => {
   } else if (req.url === '/hang') {
     res.writeHead(200);
     res.write('partial');
+  } else if (req.url === '/gzip') {
+    res.writeHead(200, { 'content-encoding': 'gzip', 'content-type': 'text/html' });
+    res.end(zlib.gzipSync('<title>zipped</title>'));
+  } else if (req.url === '/deflate') {
+    res.writeHead(200, { 'content-encoding': 'deflate' });
+    res.end(zlib.deflateSync('<title>deflated</title>'));
+  } else if (req.url === '/x-gzip') {
+    res.writeHead(200, { 'content-encoding': ' X-Gzip ' });
+    res.end(zlib.gzipSync('<title>x-zipped</title>'));
+  } else if (req.url === '/br') {
+    res.writeHead(200, { 'content-encoding': 'br' });
+    res.end(zlib.brotliCompressSync('<title>brotli</title>'));
+  } else if (req.url === '/bad-gzip') {
+    res.writeHead(200, { 'content-encoding': 'gzip' });
+    res.end('not gzip at all');
+  } else if (req.url === '/echo-headers') {
+    const h = req.headers;
+    res.end(`<title>${h['user-agent']} | ${h.accept} | ${h['accept-encoding']}</title>`);
   } else {
     res.setHeader('set-cookie', ['a=1', 'b=2']);
     res.setHeader('content-type', 'text/html');
@@ -78,33 +88,65 @@ afterAll(() => {
   server.close();
 });
 afterEach(() => {
-  dnsAnswers.connect.clear();
-  dnsAnswers.precheck.clear();
+  dnsAnswers.clear();
   vi.restoreAllMocks();
   vi.useRealTimers();
 });
 
 const local = (p = '/') => `http://127.0.0.1:${port}${p}`;
+/** The local server by name, as the dev server's own origin would be. */
+const origin = () => `http://localhost:${port}`;
+const text = async (res: OutboundResponse) =>
+  new TextDecoder().decode((await readCapped(res.body, 1024 * 1024)).bytes);
+
+/** A server answering every request with `raw` bytes; closed after the test. */
+async function rawServer(raw: string): Promise<string> {
+  const evil = net.createServer(socket => {
+    socket.once('data', () => {
+      socket.end(Buffer.from(raw, 'latin1'));
+    });
+  });
+  await new Promise<void>(resolve => {
+    evil.listen(0, '127.0.0.1', resolve);
+  });
+  onTestFinished(() => {
+    evil.close();
+  });
+  return `http://127.0.0.1:${(evil.address() as AddressInfo).port}/`;
+}
 
 describe('transport.get', () => {
-  it('answers a fetch Response with status, every header and the body', async () => {
+  it('answers the status, every header and the body', async () => {
     const res = await transport.get(local(), { headers: { 'x-probe': 'hi' } });
     expect(res.status).toBe(200);
-    expect(res.headers.get('content-type')).toBe('text/html');
-    expect(res.headers.getSetCookie()).toEqual(['a=1', 'b=2']);
-    expect(await res.text()).toBe('<title>local hi</title>');
+    expect(res.headers['content-type']).toBe('text/html');
+    expect(res.headers['set-cookie']).toEqual(['a=1', 'b=2']);
+    expect(await text(res)).toBe('<title>local hi</title>');
   });
 
   it('returns a redirect instead of following it', async () => {
     const res = await transport.get(local('/redirect'));
     expect(res.status).toBe(302);
-    expect(res.headers.get('location')).toBe('/elsewhere');
+    expect(res.headers.location).toBe('/elsewhere');
   });
 
-  it('has no body for a null-body status', async () => {
+  it('has an empty body for a null-body status', async () => {
     const res = await transport.get(local('/empty'));
     expect(res.status).toBe(204);
-    expect(res.body).toBeNull();
+    expect(await text(res)).toBe('');
+  });
+
+  it.each([
+    ['gzip', '/gzip', '<title>zipped</title>'],
+    ['brotli', '/br', '<title>brotli</title>'],
+    ['deflate', '/deflate', '<title>deflated</title>'],
+    ['x-gzip (any case and padding)', '/x-gzip', '<title>x-zipped</title>'],
+  ])('decompresses a %s body', async (_label, p, body) => {
+    expect(await text(await transport.get(local(p)))).toBe(body);
+  });
+
+  it('fails the read of a body that does not decompress', async () => {
+    await expect(text(await transport.get(local('/bad-gzip')))).rejects.toThrow(/header/);
   });
 
   it('rejects when the connection fails', async () => {
@@ -112,45 +154,33 @@ describe('transport.get', () => {
   });
 
   it.each([
-    [
-      'a status text with DEL',
-      'HTTP/1.1 200 O\u007FK\r\nContent-Length: 0\r\n\r\n',
-      /Invalid statusText/,
-    ],
-    [
-      'a status a Response cannot hold',
-      'HTTP/1.1 999 X\r\nContent-Length: 0\r\n\r\n',
-      /Unsupported HTTP status 999/,
-    ],
-  ])('rejects (and does not throw out of the callback) on %s', async (_label, raw, reason) => {
+    ['a status text with DEL', 'HTTP/1.1 200 O\u007FK\r\nContent-Length: 2\r\n\r\nok', 200],
+    ['a status a fetch Response cannot hold', 'HTTP/1.1 999 X\r\nContent-Length: 2\r\n\r\nok', 999],
+  ])('reads %s instead of throwing out of the callback', async (_label, raw, status) => {
     // a raw socket: a real HTTP server would not send these
-    const evil = net.createServer(socket => {
-      socket.once('data', () => {
-        socket.end(Buffer.from(raw, 'latin1'));
-      });
-    });
-    await new Promise<void>(resolve => {
-      evil.listen(0, '127.0.0.1', resolve);
-    });
-    const url = `http://127.0.0.1:${(evil.address() as AddressInfo).port}/`;
-    const error = await transport.get(url).catch((e: unknown) => e as Error);
-    expect(error).toBeInstanceOf(Error);
-    expect((error as Error).message).toMatch(/^Unreadable response: /);
-    expect((error as Error).message).toMatch(reason);
-    evil.close();
+    const res = await transport.get(await rawServer(raw));
+    expect(res.status).toBe(status);
+    expect(await text(res)).toBe('ok');
   });
 
-  it('connects through the given lookup', async () => {
-    dnsAnswers.connect.set('rebind.example', [{ address: '127.0.0.1', family: 4 }]);
+  it('rejects a protocol upgrade instead of waiting for the timeout', async () => {
+    const url = await rawServer(
+      'HTTP/1.1 101 Switching Protocols\r\nUpgrade: x\r\nConnection: upgrade\r\n\r\n',
+    );
+    await expect(transport.get(url)).rejects.toThrow('Unexpected protocol upgrade');
+  });
+
+  it('connects through the given lookup, on a fresh connection every time', async () => {
+    dnsAnswers.set('rebind.example', [{ address: '127.0.0.1', family: 4 }]);
     const url = `http://rebind.example:${port}/`;
-    // the default resolver would reach the local server through this name…
+    // the first request reaches the local server through this name and is
+    // read to its end, so a keep-alive socket would now be free for reuse…
     const lookup = vi.fn<typeof publicOnlyLookup>((_host, _options, callback) => {
       callback(null, [{ address: '127.0.0.1', family: 4 }]);
     });
-    expect((await transport.get(url, { lookup })).status).toBe(200);
-    // (no pooled socket carries over: every request resolves again)
+    expect(await text(await transport.get(url, { lookup }))).toBe('<title>local </title>');
     expect(lookup).toHaveBeenCalledWith('rebind.example', expect.anything(), expect.any(Function));
-    // …but not through the guard
+    // …but the next request resolves again, through the guard, and is refused
     await expect(transport.get(url, { lookup: publicOnlyLookup })).rejects.toThrow(
       /Blocked: rebind.example resolves to private address/,
     );
@@ -171,7 +201,7 @@ describe('publicOnlyLookup', () => {
       { address: '93.184.215.14', family: 4 },
       { address: '2606:2800:21f:cb07:6820:80da:af6b:8b2c', family: 6 },
     ];
-    dnsAnswers.connect.set('public.example', answers);
+    dnsAnswers.set('public.example', answers);
     expect(await run('public.example', true)).toEqual({
       err: null,
       address: answers,
@@ -186,37 +216,37 @@ describe('publicOnlyLookup', () => {
 
   it.each([
     [
-      'any private answer',
+      'a private answer',
       [
-        { address: '93.184.215.14', family: 4 },
         { address: '10.0.0.1', family: 4 },
+        { address: '93.184.215.14', family: 4 },
+      ],
+    ],
+    // asked for one address only, the resolver would hand over the public one
+    [
+      'a private answer after a public one',
+      [
+        { address: '8.8.8.8', family: 4 },
+        { address: '127.0.0.1', family: 4 },
       ],
     ],
     ['no answer', []],
   ])('blocks %s', async (_label, answers) => {
-    dnsAnswers.connect.set('mixed.example', answers);
+    dnsAnswers.set('mixed.example', answers);
     expect((await run('mixed.example', false)).err?.message).toBe(
       'Blocked: mixed.example resolves to private address',
     );
   });
 
   it('passes resolver errors through', async () => {
-    dnsAnswers.connect.set('gone.example', new Error('ENOTFOUND gone.example'));
+    dnsAnswers.set('gone.example', new Error('ENOTFOUND gone.example'));
     expect((await run('gone.example', true)).err?.message).toBe('ENOTFOUND gone.example');
-  });
-
-  it('outboundLookup guards every origin but the allowed dev server ones', () => {
-    const allowedOrigins = ['http://localhost:5173'];
-    expect(outboundLookup('http://localhost:5173/x', { allowedOrigins })).toBeUndefined();
-    expect(outboundLookup('http://localhost:5174/x', { allowedOrigins })).toBe(publicOnlyLookup);
-    expect(outboundLookup('https://example.com/')).toBe(publicOnlyLookup);
   });
 });
 
-describe('OG preview against DNS rebinding', () => {
-  it('refuses a name that was public at the check and private at the connection', async () => {
-    dnsAnswers.precheck.set('rebind.example', [{ address: '93.184.215.14', family: 4 }]);
-    dnsAnswers.connect.set('rebind.example', [{ address: '127.0.0.1', family: 4 }]);
+describe('OG preview over the network', () => {
+  it('refuses a name that resolves to a private address when connecting', async () => {
+    dnsAnswers.set('rebind.example', [{ address: '127.0.0.1', family: 4 }]);
     const preview = await getOGPreview(`http://rebind.example:${port}/`);
     expect(preview.title).toBe('');
     expect(preview.issues).toEqual([
@@ -224,67 +254,80 @@ describe('OG preview against DNS rebinding', () => {
     ]);
   });
 
-  it('still reads the dev server itself', async () => {
-    const preview = await getOGPreview(local(), { allowedOrigins: [local().slice(0, -1)] });
+  it('still reads the dev server itself by name', async () => {
+    // `localhost` is refused but for the allow list
+    const preview = await getOGPreview(`${origin()}/`, { allowedOrigins: [origin()] });
     expect(preview.title).toBe('local');
+  });
+
+  it('asks as a browser would, and reads a compressed page', async () => {
+    const allowedOrigins = [origin()];
+    expect((await getOGPreview(`${origin()}/echo-headers`, { allowedOrigins })).title).toBe(
+      'Mozilla/5.0 (compatible; vite-devtools-svelte OG preview) | text/html,application/xhtml+xml;q=0.9,*/*;q=0.8 | gzip, deflate, br',
+    );
+    expect((await getOGPreview(`${origin()}/gzip`, { allowedOrigins })).title).toBe('zipped');
   });
 });
 
 describe('readCapped', () => {
-  it('reads a body up to the cap, cancelling the rest', async () => {
-    const cancel = vi.fn();
-    const body = new ReadableStream<Uint8Array>({
-      start(c) {
-        c.enqueue(new Uint8Array([1, 2]));
-        c.enqueue(new Uint8Array([3, 4, 5]));
-      },
-      cancel,
-    });
-    expect(await readCapped(new Response(body), 4)).toEqual({
+  it('reads a body up to the cap, destroying the rest', async () => {
+    const body = Readable.from([new Uint8Array([1, 2]), new Uint8Array([3, 4, 5])]);
+    expect(await readCapped(body, 4)).toEqual({
       bytes: new Uint8Array([1, 2, 3, 4]),
       truncated: true,
     });
-    expect(cancel).toHaveBeenCalledOnce();
+    expect(body.destroyed).toBe(true);
   });
 
   it('reads a body of exactly the cap, and no body, whole', async () => {
-    expect(await readCapped(new Response(new Uint8Array([1, 2, 3, 4])), 4)).toEqual({
+    expect(await readCapped(Readable.from([new Uint8Array([1, 2, 3, 4])]), 4)).toEqual({
       bytes: new Uint8Array([1, 2, 3, 4]),
       truncated: false,
     });
-    expect(await readCapped(new Response(null, { status: 204 }), 4)).toEqual({
+    expect(await readCapped(Readable.from([]), 4)).toEqual({
       bytes: new Uint8Array(),
       truncated: false,
     });
   });
 
-  it('a source that fails to cancel does not fail the read', async () => {
-    const body = new ReadableStream<Uint8Array>({
-      start(c) {
-        c.enqueue(new Uint8Array([1, 2, 3]));
-      },
-      cancel() {
-        throw new Error('cannot cancel');
+  it('rejects a body that fails midway', async () => {
+    const body = new Readable({
+      read() {
+        this.destroy(new Error('reset'));
       },
     });
-    expect((await readCapped(new Response(body), 2)).truncated).toBe(true);
+    await expect(readCapped(body, 4)).rejects.toThrow('reset');
   });
 });
 
 describe('fetchWithTimeout', () => {
   it('defaults to OUTBOUND_TIMEOUT_MS and clears its timer on success', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    expect(await fetchWithTimeout(local(), {}, r => r.text())).toBe('<title>local </title>');
+    expect(await fetchWithTimeout(local(), {}, text)).toBe('<title>local </title>');
     expect(vi.getTimerCount()).toBe(0);
     expect(OUTBOUND_TIMEOUT_MS).toBe(30_000);
   });
 
   it('gives up on a body that never ends, and aborts the transfer', async () => {
     const get = vi.spyOn(transport, 'get');
-    await expect(fetchWithTimeout(local('/hang'), {}, r => r.text(), 100)).rejects.toThrow(
+    await expect(fetchWithTimeout(local('/hang'), {}, text, 100)).rejects.toThrow(
       'Timed out after 100ms',
     );
     expect(get.mock.calls[0]![1]!.signal!.aborted).toBe(true);
+  });
+
+  it('aborts the transfer of a body left unread, so its socket closes', async () => {
+    const get = vi.spyOn(transport, 'get');
+    let body: OutboundResponse['body'] | undefined;
+    const status = await fetchWithTimeout(local('/hang'), {}, res => {
+      body = res.body;
+      return Promise.resolve(res.status);
+    });
+    expect(status).toBe(200);
+    expect(get.mock.calls[0]![1]!.signal!.aborted).toBe(true);
+    await vi.waitFor(() => {
+      expect(body!.destroyed).toBe(true);
+    });
   });
 
   it('propagates a failure of the reader', async () => {

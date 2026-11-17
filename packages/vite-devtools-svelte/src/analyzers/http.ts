@@ -1,7 +1,9 @@
 import http from 'node:http';
 import https from 'node:https';
 import type { LookupFunction } from 'node:net';
-import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream';
+import type { Readable } from 'node:stream';
+import zlib from 'node:zlib';
 
 /** Longest an outbound devtools request (OG preview) may take, body included. */
 export const OUTBOUND_TIMEOUT_MS = 30_000;
@@ -10,61 +12,64 @@ export interface OutboundInit {
   headers?: Record<string, string>;
   /**
    * Resolves the host for the connection itself. A guard here checks the
-   * very addresses the socket connects to, which a check before `fetch`
-   * cannot: `fetch` resolves the name again (DNS rebinding).
+   * very addresses the socket connects to, which a check before connecting
+   * cannot: the connection would resolve the name again (DNS rebinding).
    */
   lookup?: LookupFunction;
   signal?: AbortSignal;
 }
 
-/** Statuses whose response has no body (the `Response` constructor refuses one). */
-const NULL_BODY = new Set([204, 205, 304]);
-
-/** A `node:http` response as a fetch `Response`; throws when it cannot be one. */
-function toResponse(res: http.IncomingMessage): Response {
-  const status = res.statusCode ?? 0;
-  // `Response` holds 200–599 only
-  if (status < 200 || status > 599) throw new RangeError(`Unsupported HTTP status ${status}`);
-  const headers = new Headers();
-  for (const [name, value] of Object.entries(res.headers)) {
-    for (const v of Array.isArray(value) ? value : [value ?? '']) headers.append(name, v);
-  }
-  const empty = NULL_BODY.has(status);
-  const response = new Response(
-    empty ? null : (Readable.toWeb(res) as ReadableStream<Uint8Array>),
-    { status, statusText: res.statusMessage, headers },
-  );
-  if (empty) res.resume();
-  return response;
+/**
+ * What a GET answered. Deliberately not a fetch `Response`: that one
+ * refuses statuses outside 200–599, some status texts and bodies on 204,
+ * and a remote server decides all of those.
+ */
+export interface OutboundResponse {
+  status: number;
+  /** Lowercase names, as `node:http` gives them. */
+  headers: http.IncomingHttpHeaders;
+  /** The body, decompressed when it came gzip, deflate or brotli encoded. */
+  body: Readable;
 }
 
+type Decoder = () => zlib.Gunzip | zlib.Inflate | zlib.BrotliDecompress;
+
+/** Decoders for the `content-encoding`s a response may carry (servers send them unasked, too). */
+const DECODERS: Partial<Record<string, Decoder>> = {
+  gzip: () => zlib.createGunzip(),
+  'x-gzip': () => zlib.createGunzip(),
+  deflate: () => zlib.createInflate(),
+  br: () => zlib.createBrotliDecompress(),
+};
+
+function decoded(res: http.IncomingMessage): Readable {
+  const decoder = DECODERS[res.headers['content-encoding']?.trim().toLowerCase() ?? ''];
+  // `pipeline` passes a failure of either stream on to the decoder's reader.
+  return decoder ? pipeline(res, decoder(), ignore) : res;
+}
+
+function ignore(): void {}
+
 /**
- * At most `maxBytes` of a response body, and whether more was left
- * (the rest is cancelled, not downloaded).
+ * At most `maxBytes` of a body, and whether more was left (the rest is not
+ * downloaded: the stream is destroyed). A body that fails midway rejects.
  */
 export async function readCapped(
-  res: Response,
+  body: Readable,
   maxBytes: number,
 ): Promise<{ bytes: Uint8Array; truncated: boolean }> {
-  if (!res.body) return { bytes: new Uint8Array(), truncated: false };
-  // Node's `Response` types its body loosely
-  const reader = (res.body as ReadableStream<Uint8Array>).getReader();
   const chunks: Uint8Array[] = [];
   let size = 0;
   let truncated = false;
-  for (;;) {
-    // oxlint-disable-next-line eslint/no-await-in-loop -- a stream is read chunk by chunk
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (size + value.byteLength > maxBytes) {
-      chunks.push(value.subarray(0, maxBytes - size));
+  for await (const chunk of body as AsyncIterable<Uint8Array>) {
+    if (size + chunk.byteLength > maxBytes) {
+      chunks.push(chunk.subarray(0, maxBytes - size));
       truncated = true;
-      break;
+      break; // leaving the loop destroys the stream
     }
-    chunks.push(value);
-    size += value.byteLength;
+    chunks.push(chunk);
+    size += chunk.byteLength;
   }
-  if (truncated) await reader.cancel().then(undefined, () => {});
   return { bytes: concat(chunks), truncated };
 }
 
@@ -79,33 +84,32 @@ function concat(chunks: Uint8Array[]): Uint8Array {
 }
 
 /**
- * A GET over `node:http(s)`, answered as a fetch `Response`. Redirects are
- * never followed. Unlike the global `fetch`, it takes a `lookup`. An object,
- * so tests can replace `get`.
+ * A GET over `node:http(s)`. Redirects are never followed. Unlike the
+ * global `fetch`, it takes a `lookup`. An object, so tests can replace `get`.
  */
 export const transport = {
-  get(url: string, init: OutboundInit = {}): Promise<Response> {
+  get(url: string, init: OutboundInit = {}): Promise<OutboundResponse> {
     return new Promise((resolve, reject) => {
       const client = new URL(url).protocol === 'https:' ? https : http;
       // A fresh connection every time: a pooled keep-alive socket was
       // resolved earlier, possibly by another lookup, and would skip this one.
+      // (Without an agent, no proxy from the environment applies either.)
       const options: https.RequestOptions = {
         headers: init.headers,
         signal: init.signal,
         agent: false,
       };
       if (init.lookup) options.lookup = init.lookup;
+      // Nothing here throws: a remote server controls the response, and a
+      // throw in this event callback would take the dev server down.
       const req = client.get(url, options, res => {
-        // This runs in an event callback: anything thrown here would be an
-        // uncaught exception and take the dev server down. A remote server
-        // controls the input (a status text `Response` refuses, such as one
-        // containing DEL), so every failure becomes a rejection.
-        try {
-          resolve(toResponse(res));
-        } catch (e) {
-          res.destroy();
-          reject(new Error(`Unreadable response: ${String(e)}`, { cause: e }));
-        }
+        resolve({ status: res.statusCode ?? 0, headers: res.headers, body: decoded(res) });
+      });
+      // 101 Switching Protocols never becomes a response: without this the
+      // request would wait for the timeout.
+      req.on('upgrade', (_res, socket) => {
+        socket.destroy();
+        reject(new Error('Unexpected protocol upgrade'));
       });
       req.on('error', reject);
     });
@@ -115,22 +119,22 @@ export const transport = {
 /**
  * GET that never follows redirects and gives up after `timeoutMs`, body
  * read (`read`) included. Without it a target that never answers left the
- * RPC pending forever. The request is aborted, and the result rejects even
- * if the transfer ignores the abort.
+ * RPC pending forever. The request is aborted once `read` settles or the
+ * time is up, so the rest of a body `read` left (a redirect's, say) is not
+ * downloaded and its socket closes; the result rejects on time even if the
+ * transfer ignores the abort.
  */
 export async function fetchWithTimeout<T>(
   url: string,
   init: Omit<OutboundInit, 'signal'>,
-  read: (res: Response) => Promise<T>,
+  read: (res: OutboundResponse) => Promise<T>,
   timeoutMs = OUTBOUND_TIMEOUT_MS,
 ): Promise<T> {
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
-      const error = new Error(`Timed out after ${timeoutMs}ms`);
-      controller.abort(error);
-      reject(error);
+      reject(new Error(`Timed out after ${timeoutMs}ms`));
     }, timeoutMs);
   });
   const work = (async () => {
@@ -138,10 +142,11 @@ export async function fetchWithTimeout<T>(
     return read(res);
   })();
   // A late failure of the abandoned transfer must not surface as unhandled.
-  work.catch(() => {});
+  work.catch(ignore);
   try {
     return await Promise.race([work, timeout]);
   } finally {
     clearTimeout(timer);
+    controller.abort();
   }
 }

@@ -1,9 +1,10 @@
 import path from 'node:path';
+import { Readable } from 'node:stream';
 
 /**
  * OG preview: tag parsing, charset and entity decoding, relative og:image,
- * redirects / HTTP errors / timeouts, SSRF guard. Offline: the transport and
- * DNS are mocked.
+ * redirects / HTTP errors / timeouts, SSRF guard. Offline: the transport is
+ * mocked.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
@@ -13,10 +14,6 @@ import { decodeBody, getOGPreview, MAX_PAGE_BYTES, parseMetaTags } from '../src/
 import { publicOnlyLookup } from '../src/server/security.js';
 import { createTestHost, rpcHandlers } from './helpers.js';
 
-vi.mock('node:dns/promises', () => ({
-  default: { lookup: () => Promise.resolve([{ address: '93.184.215.14', family: 4 }]) },
-}));
-
 afterEach(() => {
   vi.restoreAllMocks();
   vi.useRealTimers();
@@ -24,10 +21,18 @@ afterEach(() => {
 
 const PAGE = 'https://example.com/blog/post';
 
-function serve(body: ConstructorParameters<typeof Response>[0], init: ResponseInit = {}) {
-  return vi
-    .spyOn(transport, 'get')
-    .mockImplementation(() => Promise.resolve(new Response(body, init)));
+/** Answer every GET with `body` (a fresh stream each time). */
+function serve(
+  body: string | Uint8Array | null,
+  init: { status?: number; headers?: Record<string, string> } = {},
+) {
+  return vi.spyOn(transport, 'get').mockImplementation(() =>
+    Promise.resolve({
+      status: init.status ?? 200,
+      headers: init.headers ?? {},
+      body: Readable.from(body === null ? [] : [Buffer.from(body)]),
+    }),
+  );
 }
 
 const COMPLETE = `
