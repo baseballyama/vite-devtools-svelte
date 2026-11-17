@@ -207,6 +207,6 @@ describe('production build', () => {
     const without = await buildFiles(root, path.join(root, 'out-a'), []);
     const withPlugin = await buildFiles(root, path.join(root, 'out-b'), [svelteDevtools()]);
     expect(withPlugin).toEqual(without);
-    expect(JSON.stringify(withPlugin)).not.toMatch(/svelte-devtools|devframe|__SVELTE_DEVTOOLS__/);
+    expect(JSON.stringify(withPlugin)).not.toMatch(/svelte-devtools|devframe|vite-devtools-svelte/);
   });
 });

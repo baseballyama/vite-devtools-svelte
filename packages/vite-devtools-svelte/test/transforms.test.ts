@@ -3,213 +3,38 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { compile } from 'svelte/compiler';
 import type { Plugin } from 'vite';
 import { afterAll, afterEach, describe, it, expect, vi } from 'vitest';
 
 import { svelteDevtools } from '../src/plugin.js';
-import { RUNTIME_MODULE_ID } from '../src/runtime/ids.js';
-import {
-  injectComponentTracking,
-  injectModuleTracking,
-  isSvelteModule,
-} from '../src/runtime/transform.js';
+import { HOOKS_MODULE_ID } from '../src/runtime/ids.js';
+import { injectModuleTracking, isSvelteModule } from '../src/runtime/transform.js';
+import { LOAD_PROFILE_EVENT, parseLoadReport } from '../src/server/load-profile.js';
 import { callHook, codeOf, resolvePlugins } from './helpers.js';
 
-const RUNTIME_IMPORT = `import '${RUNTIME_MODULE_ID}';`;
-
-/** Real dev-mode client output of the Svelte compiler for `source`. */
-function compileClient(source: string, filename = '/app/src/lib/Counter.svelte'): string {
-  return compile(source, { generate: 'client', dev: true, filename }).js.code;
-}
-
-const COUNTER = compileClient(
-  '<script>let { step = 1 } = $props(); let count = $state(0)</script>' +
-    '<button onclick={() => (count += step)}>{count}</button>',
-);
-
-/** A fake browser window whose devtools hook records what injected code does. */
-function fakeWindow() {
-  const calls: unknown[][] = [];
-  const dt = {
-    _pendingFile: undefined as unknown,
-    _enterModule: (id: string) => calls.push(['enter', id]),
-    _leaveModule: () => calls.push(['leave']),
-  };
-  return { window: { __SVELTE_DEVTOOLS__: dt, calls }, dt, calls };
-}
-
-/** The text `injectComponentTracking` inserted into `code` (besides the import). */
-function insertedHint(code: string, out: string): string {
-  expect(out.startsWith(RUNTIME_IMPORT)).toBe(true);
-  const body = out.slice(RUNTIME_IMPORT.length);
-  let i = 0;
-  while (i < code.length && body[i] === code[i]) i++;
-  const hint = body.slice(i, i + body.length - code.length);
-  // everything else is the original, byte for byte
-  expect(body.slice(0, i) + body.slice(i + hint.length)).toBe(code);
-  return hint;
-}
-
-/** Compile generated code into a function of `window` (executing it is the point). */
-function asFunction(code: string): (window?: unknown) => void {
-  // oxlint-disable-next-line typescript/no-implied-eval -- running the generated code under test
-  return new Function('window', code) as (window?: unknown) => void;
-}
-
-// Ids that must survive being embedded in generated JS (JSON-encoded): quotes,
-// backslashes, line terminators, and `String#replace` substitution patterns.
-const AWKWARD_IDS = [
-  '/app/src/lib/Counter.svelte',
-  '/app/src/lib/My"Quote.svelte',
-  "/app/src/lib/It's.svelte",
-  String.raw`C:\app\src\lib\Win.svelte`,
-  '/app/src/lib/new\nline.svelte',
-  '/app/src/lib/sep\u2028ar.svelte',
-  "/app/src/routes/[$'x]/+page.svelte",
-  '/app/src/routes/$&/+page.svelte',
-  '/app/src/routes/$1$$/+page.svelte',
-  '/app/src/lib/</script>.svelte',
-  '/app/src/lib/`${tpl}`.svelte',
-];
-
-// =====================================================================
-// injectComponentTracking (compiled client components)
-// =====================================================================
-
-describe('injectComponentTracking', () => {
-  it.each(AWKWARD_IDS)('names the component file %j exactly, as JSON-safe JS', id => {
-    const hint = insertedHint(COUNTER, injectComponentTracking(COUNTER, id)!);
-    const { window, dt } = fakeWindow();
-    asFunction(hint)(window);
-    expect(dt._pendingFile).toBe(id);
-  });
-
-  it('is inert without a browser window or before the runtime installed itself', () => {
-    const run = asFunction(insertedHint(COUNTER, injectComponentTracking(COUNTER, '/a.svelte')!));
-    expect(() => run()).not.toThrow();
-    expect(() => run({})).not.toThrow();
-  });
-
-  it('names the file right before the component pushes its context, on the same line', () => {
-    const out = injectComponentTracking(COUNTER, '/a.svelte')!;
-    const hint = insertedHint(COUNTER, out);
-    const pushLine = out.split('\n').find(l => l.includes('$.push($$props'))!;
-    expect(pushLine.trim().startsWith(hint.trim())).toBe(true);
-    // no line inserted: every original line keeps its number (map: null)
-    expect(out.split('\n')).toHaveLength(COUNTER.split('\n').length);
-  });
-
-  it('ignores `$.push(` in the markup (hoisted template strings) and tags the real call', () => {
-    const code = compileClient(
-      '<script>let n = $state(0)</script><pre>$.push($$props, true);</pre><p>$.push(x)</p>{n}',
-    );
-    const templateLine = code.split('\n').find(l => l.includes('from_html('))!;
-    expect(templateLine).toContain('$.push(');
-    const out = injectComponentTracking(code, '/a.svelte')!;
-    insertedHint(code, out);
-    // the markup template is untouched
-    expect(out.split('\n')).toContain(templateLine);
-    const pushLine = out.split('\n').find(l => /^\s*if \(typeof window/.test(l))!;
-    expect(pushLine).toMatch(/_pendingFile = "\/a\.svelte"; \} \$\.push\(\$\$props/);
-  });
-
-  it('ignores a markup line that starts with `$.push($$props` (multi-line template string)', () => {
-    const code = compileClient(
-      '<script>let n = $state(0)</script><pre>\n$.push($$props, true);</pre>{n}',
-    );
-    const markupLine = code.split('\n').find(l => l.startsWith('$.push($$props'))!;
-    expect(markupLine).toBeDefined();
-    const out = injectComponentTracking(code, '/a.svelte')!;
-    insertedHint(code, out);
-    expect(out.split('\n')).toContain(markupLine);
-    const tagged = out.split('\n').find(l => l.includes('_pendingFile'))!;
-    // the component's own statement, not the markup line
-    expect(tagged.trimStart().startsWith('if (typeof window')).toBe(true);
-    expect(tagged).toContain('; } $.push($$props, true, ');
-  });
-
-  it('finds the call at the very start of the module', () => {
-    const out = injectComponentTracking('$.push($$props)', '/a.svelte')!;
-    expect(out.endsWith('} $.push($$props)')).toBe(true);
-  });
-
-  it('returns null for ambiguous unparsable code', () => {
-    const code = '$.push($$props, true);\n$.push($$props, true); (';
-    expect(injectComponentTracking(code, '/a.svelte')).toBeNull();
-  });
-
-  it('tags only the first component context push of a module', () => {
-    const twice = `${COUNTER}\nfunction Other($$anchor, $$props) {\n\t$.push($$props, true);\n\treturn $.pop();\n}`;
-    const out = injectComponentTracking(twice, '/a.svelte')!;
-    expect(out.split('_pendingFile').length - 1).toBe(1);
-  });
-
-  it.each([
-    [
-      'a module without a component',
-      "import * as $ from 'svelte/internal/client';\nexport const x = 1",
-    ],
-    [
-      'server output',
-      compile('<script>let { a } = $props()</script>{a}', { generate: 'server', dev: true }).js
-        .code,
-    ],
-    ['`$.push(` only inside a string', 'const s = "$.push($$props, true)"'],
-    ['another identifier', '\t$.push($$propsX, true)'],
-    [
-      'several `$.push($$props` texts but no such call',
-      'const a = `\n$.push($$props)`, b = `\n$.push($$props)`\n$.push()\n$.pop($$props)\n$[push]($$props)',
-    ],
-  ])('returns null for %s', (_, code) => {
-    expect(injectComponentTracking(code, '/a.svelte')).toBeNull();
-  });
-});
+const HOOKS_IMPORT = `import '${HOOKS_MODULE_ID}';`;
 
 // =====================================================================
 // injectModuleTracking (.svelte.js / .svelte.ts modules)
 // =====================================================================
 
-/** Run a transformed (import-free) module body against a fake window. */
-function runModule(out: string, window?: unknown) {
-  expect(out.startsWith(RUNTIME_IMPORT)).toBe(true);
-  asFunction(out.slice(RUNTIME_IMPORT.length))(window);
-}
-
 describe('injectModuleTracking', () => {
-  it.each(AWKWARD_IDS)('brackets the module body with enter(%j) / leave', id => {
-    const { window, calls } = fakeWindow();
-    runModule(injectModuleTracking("window.calls.push(['body'])", id)!, window);
-    expect(calls).toEqual([['enter', id], ['body'], ['leave']]);
-  });
-
-  it('still leaves the scope when the body ends in a line comment without a newline', () => {
-    const { window, calls } = fakeWindow();
-    runModule(
-      injectModuleTracking("window.calls.push(['body']) // trailing", '/m.svelte.js')!,
-      window,
+  it('imports the hooks before the module body', () => {
+    expect(injectModuleTracking('export const cart = $.proxy([])')).toBe(
+      `${HOOKS_IMPORT}export const cart = $.proxy([])`,
     );
-    expect(calls).toEqual([['enter', '/m.svelte.js'], ['body'], ['leave']]);
-  });
-
-  it('is inert without a browser window', () => {
-    const out = injectModuleTracking('const x = 1', '/m.svelte.js')!;
-    expect(() => runModule(out)).not.toThrow();
   });
 
   it('keeps every original line at its line number', () => {
     const code = ['const a = 1', '', 'export const b = $state(a)', '// end'].join('\n');
-    const lines = injectModuleTracking(code, '/m.svelte.ts')!.split('\n');
-    expect(lines[0]!.endsWith(code.split('\n')[0]!)).toBe(true);
-    expect(lines.slice(1, 4)).toEqual(code.split('\n').slice(1));
+    const lines = injectModuleTracking(code)!.split('\n');
+    expect(lines[0]).toBe(HOOKS_IMPORT + code.split('\n')[0]);
+    expect(lines.slice(1)).toEqual(code.split('\n').slice(1));
   });
 
   it('returns null for server-compiled modules', () => {
     expect(
-      injectModuleTracking(
-        "import * as $ from 'svelte/internal/server';\nexport const x = 1",
-        '/m',
-      ),
+      injectModuleTracking("import * as $ from 'svelte/internal/server';\nexport const x = 1"),
     ).toBeNull();
   });
 });
@@ -235,7 +60,7 @@ describe('isSvelteModule', () => {
 });
 
 // =====================================================================
-// Tracking plugin (which modules get which transform)
+// Tracking plugin (which modules get the hooks import)
 // =====================================================================
 
 function plugin(name: string, options = {}, config: Record<string, unknown> = {}): Plugin {
@@ -249,37 +74,25 @@ const tracking = (options = {}, config = {}) =>
 const MODULE_CODE = 'export const cart = $state([])';
 
 describe('trackingPlugin transform', () => {
-  it('a client component: runtime import + file hint, no sourcemap change', () => {
-    const result = callHook(tracking().transform, COUNTER, '/app/src/lib/Counter.svelte');
-    expect(result).toEqual({
-      code: injectComponentTracking(COUNTER, '/app/src/lib/Counter.svelte'),
-      map: null,
-    });
-  });
-
-  it('a client Svelte module: scope bracket named after the file (query stripped)', () => {
+  it('a client Svelte module (query stripped): hooks import, no sourcemap change', () => {
     const result = callHook(tracking().transform, MODULE_CODE, '/app/src/lib/cart.svelte.ts?v=1');
-    expect(result).toEqual({
-      code: injectModuleTracking(MODULE_CODE, '/app/src/lib/cart.svelte.ts'),
-      map: null,
-    });
-  });
-
-  it('names a component by its file, without the query string', () => {
-    const out = codeOf(
-      callHook(tracking().transform, COUNTER, '/app/src/lib/Counter.svelte?direct'),
-    );
-    expect(out).toBe(injectComponentTracking(COUNTER, '/app/src/lib/Counter.svelte'));
+    expect(result).toEqual({ code: injectModuleTracking(MODULE_CODE), map: null });
   });
 
   it.each([
-    ['server-side rendering (component)', [COUNTER, '/app/src/A.svelte', { ssr: true }], {}, {}],
-    ['server-side rendering (module)', [MODULE_CODE, '/app/a.svelte.ts', { ssr: true }], {}, {}],
-    ['node_modules', [COUNTER, '/app/node_modules/lib/A.svelte'], {}, {}],
-    ['componentTracking: false', [COUNTER, '/app/src/A.svelte'], { componentTracking: false }, {}],
-    ['vite build', [COUNTER, '/app/src/A.svelte'], {}, { command: 'build' }],
+    ['server-side rendering', [MODULE_CODE, '/app/a.svelte.ts', { ssr: true }], {}, {}],
+    ['node_modules', [MODULE_CODE, '/app/node_modules/lib/a.svelte.js'], {}, {}],
+    // compiled for the server without the ssr flag (e.g. a custom environment)
+    [
+      'a server-compiled module',
+      ["import * as $ from 'svelte/internal/server'", '/app/a.svelte.ts'],
+      {},
+      {},
+    ],
+    ['vite build', [MODULE_CODE, '/app/a.svelte.ts'], {}, { command: 'build' }],
     ['a plain module', ['export const x = 1', '/app/src/a.ts'], {}, {}],
-    ['a component without a context push', ['export {}', '/app/src/A.svelte'], {}, {}],
+    // components import the hooks through the compiler (experimental.devtools)
+    ['a component', ['export default function A() {}', '/app/src/A.svelte'], {}, {}],
   ])('leaves %s alone', (_, args, options, config) => {
     expect(callHook(tracking(options, config).transform, ...args)).toBeNull();
   });
@@ -322,6 +135,7 @@ afterEach(() => {
 });
 
 const PAGE = '/app/src/routes/blog/[slug]/+page.server.ts';
+const UNIVERSAL = '/app/src/routes/+page.ts';
 
 describe('loadProfilePlugin: profiled load functions', () => {
   // `result` is a module-level object so its identity can be checked
@@ -398,6 +212,49 @@ describe('loadProfilePlugin: profiled load functions', () => {
       '/app/src/routes/+page.ts',
     );
     expect(await mod.load()).toEqual({ ok: 1 });
+  });
+
+  it('in the browser (no recorder) sends the timing over the hot channel', async () => {
+    const send = vi.fn();
+    const hot = globalThis as { __fakeHot?: { send: typeof send } };
+    hot.__fakeHot = { send };
+    try {
+      const result = callHook(
+        loadProfile().transform,
+        'export const load = () => ({ ok: 1 })',
+        UNIVERSAL,
+      );
+      // a Node module has no `import.meta.hot`: stand in for Vite's
+      const file = path.join(tmpDir, `m${moduleSeq++}.mjs`);
+      fs.writeFileSync(file, codeOf(result).replace('import.meta.hot', 'globalThis.__fakeHot'));
+      const mod = await import(/* @vite-ignore */ pathToFileURL(file).href);
+      expect(await mod.load()).toEqual({ ok: 1 });
+      expect(send).toHaveBeenCalledOnce();
+      const [event, payload] = send.mock.calls[0]!;
+      expect(event).toBe(LOAD_PROFILE_EVENT);
+      expect(parseLoadReport(payload)).toEqual({
+        route: '/',
+        file: UNIVERSAL,
+        type: 'universal',
+        duration: payload.duration,
+        dataSize: JSON.stringify({ ok: 1 }).length,
+      });
+    } finally {
+      delete hot.__fakeHot;
+    }
+  });
+
+  it.each([
+    ['not an object', 'x'],
+    ['an unknown type', { route: '/', file: 'f', type: 'other', duration: 1, dataSize: 1 }],
+    [
+      'a negative duration',
+      { route: '/', file: 'f', type: 'universal', duration: -1, dataSize: 1 },
+    ],
+    ['a fractional size', { route: '/', file: 'f', type: 'universal', duration: 1, dataSize: 1.5 }],
+    ['a missing route', { file: 'f', type: 'universal', duration: 1, dataSize: 1 }],
+  ])('a browser report that is %s is dropped', (_, payload) => {
+    expect(parseLoadReport(payload)).toBeNull();
   });
 
   it('keeps the original line numbers of the module', () => {

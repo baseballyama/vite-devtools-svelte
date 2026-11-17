@@ -11,7 +11,7 @@
 
   /**
    * Hot states: the server's timeline buffer grouped by signal. It is the
-   * latest changes across all signals, sampled every 200 ms, so counts are
+   * latest changes across all signals, one per state per flush, so counts are
    * "seen in the buffer", not totals or rates.
    */
   let {
@@ -99,7 +99,7 @@
             >{/if}
           <span
             class="end num"
-            title="changes of this state in the buffer (sampled every 200 ms); not a total or a rate"
+            title="changes of this state in the buffer (one per flush); not a total or a rate"
             >≥ {h.changes.toLocaleString()}</span
           >
           {#if visible.has('value')}<span class="truncate mono value"
@@ -114,8 +114,8 @@
       </DataTable>
     </div>
     <p class="foot">
-      From the State timeline buffer: the latest {timeline.data.length.toLocaleString()} sampled changes
-      (every 200 ms) across all signals, since
+      From the State timeline buffer: the latest {timeline.data.length.toLocaleString()} changes (one
+      per state per flush) across all signals, since
       {bufferSince === null ? 'unknown (buffer empty)' : formatClock(bufferSince)}. Older changes
       and signals that changed less recently may be missing; counts are not totals or rates.
       Activate a row to open its component.

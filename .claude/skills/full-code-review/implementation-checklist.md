@@ -14,10 +14,10 @@ Priority: security > effect on production > correctness > performance > readabil
 
 ## Browser runtime (`src/runtime/`)
 
-- Runs in the user's page on every component: no work on the hot path that is not needed, no throw that can reach the app, no globals beyond `window.__SVELTE_DEVTOOLS__`, no prototype changes.
+- Runs in the user's page on every component: no work on the hot path that is not needed, no throw that can reach the app (listener errors are caught), no globals beyond the `Symbol.for('vite-devtools-svelte')` store, no prototype changes.
 - Values from the app are serialized defensively: cycles, getters that throw, huge or deep values (bounded).
 - Destroyed components, effects and `{#each}` item state are released, so nothing keeps the app's objects alive.
-- The wrapper depends on the shape of Svelte's compiled output and internals; changes to it need a reactivity test on real compiled components.
+- `.svelte.js/ts` modules get the hooks import from `transform.ts`; components from the compiler option. Changes to one path usually need the other.
 
 ## Plugin and server (`src/`)
 

@@ -55,8 +55,8 @@ export const emptyGraph: ReactiveGraphResult = {
 
 export const emptySummary: ReactiveSummary = {
   epoch: 'e1',
-  window: { ms: 10_000, since: 0, until: 10_000, sampledActiveMs: 10_000 },
-  policy: 'sampled-200ms',
+  computedAt: 10_000,
+  policy: 'per-flush',
   coverage: 'component-init',
   components: { total: 0, withActivity: 0 },
   rows: [],

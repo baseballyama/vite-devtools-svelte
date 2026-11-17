@@ -64,9 +64,11 @@ function setState(next: Partial<ConnectionState>): void {
 }
 
 // --- Activity lease ---
-// The injected runtime only polls state / samples FPS while some consumer
-// holds a lease (docs/devframe-migration.md §6.3). This tab holds one while
-// it is connected and visible, renewing well inside the server's 15 s TTL.
+// The injected runtime only records state changes / samples FPS while some
+// consumer holds a lease (docs/devframe-migration.md §6.3). This tab holds one
+// while it is connected, also while hidden: the app is usually used in
+// another tab meanwhile, and its changes must be there when the user comes
+// back. Renewed well inside the server's 15 s TTL.
 
 const HEARTBEAT_INTERVAL = 5_000;
 // Also loaded by unit tests outside a browser.
@@ -83,8 +85,7 @@ function sendActive(active: boolean): void {
 }
 
 function syncActivity(): void {
-  const wanted =
-    state.status === 'connected' && hasDocument && document.visibilityState === 'visible';
+  const wanted = state.status === 'connected' && hasDocument;
   if (wanted && !heartbeat) {
     sendActive(true);
     heartbeat = setInterval(() => sendActive(true), HEARTBEAT_INTERVAL);
@@ -96,7 +97,6 @@ function syncActivity(): void {
 }
 
 if (hasDocument) {
-  document.addEventListener('visibilitychange', syncActivity);
   window.addEventListener('pagehide', () => {
     if (heartbeat) clearInterval(heartbeat);
     heartbeat = undefined;

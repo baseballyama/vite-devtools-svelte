@@ -34,3 +34,10 @@ peerDependencyRules:
 # examples/ui-lib plays a published library: keep its injected copy under
 # node_modules (pnpm would otherwise dedupe it back to a symlink).
 dedupeInjectedDeps: false
+
+# Svelte with the devtools instrumentation channel (`svelte/internal/devtools`),
+# from a local checkout of https://github.com/sveltejs/svelte/tree/emit-dev-events
+# (run `pnpm install && pnpm -C packages/svelte build` there first; CI builds
+# it with .github/actions/svelte-branch).
+overrides:
+  svelte: link:../svelte-emit-dev-events/packages/svelte

@@ -15,6 +15,7 @@ import type {
   StateTimelineEntry,
   DatasetVersions,
 } from '../types.js';
+import { LOAD_PROFILE_EVENT, loadProfileOf, parseLoadReport } from './load-profile.js';
 import { arrayOf, asPayload, clampInt, finiteOrNull } from './payload.js';
 import type { Payload } from './payload.js';
 import {
@@ -72,7 +73,7 @@ export const HOT_EVENTS = {
   runtimeError: 'svelte-devtools:runtime-error',
   reactiveGraph: 'svelte-devtools:reactive-graph',
   requestReactiveGraph: 'svelte-devtools:request-reactive-graph',
-  /** server → runtime `{ requestId, epoch?, topK, windowMs }`; reply `reactiveSummary` (§6.7 I). */
+  /** server → runtime `{ requestId, epoch?, topK }`; reply `reactiveSummary` (§6.7 I). */
   requestReactiveSummary: 'svelte-devtools:request-reactive-summary',
   reactiveSummary: 'svelte-devtools:reactive-summary',
   requestStateTimeline: 'svelte-devtools:request-state-timeline',
@@ -232,6 +233,13 @@ export class Collector {
       ],
       [HOT_EVENTS.reactiveGraph, d => this.ingestReactiveGraph(asPayload(d))],
       [HOT_EVENTS.reactiveSummary, d => this.ingestReactiveSummary(asPayload(d))],
+      [
+        LOAD_PROFILE_EVENT,
+        d => {
+          const report = parseLoadReport(d);
+          if (report) this.recordLoadProfile(loadProfileOf(report));
+        },
+      ],
     ];
     for (const [event, listener] of listeners) hot.on(event, listener);
     this.detachHot = () => {
@@ -711,23 +719,16 @@ export class Collector {
 
   /** Ask the runtime for the overview aggregate (§6.7 I); never captures the graph. */
   requestReactiveSummary(req: ReactiveSummaryRequest = {}): Promise<ReactiveSummary> {
-    const { topK: defaultTopK, maxTopK, windowMs: defaultWindow } = SUMMARY_DEFAULTS;
-    const topK = clampInt(req.topK, 1, maxTopK, defaultTopK);
-    const windowMs = clampInt(
-      req.windowMs,
-      SUMMARY_DEFAULTS.minWindowMs,
-      SUMMARY_DEFAULTS.maxWindowMs,
-      defaultWindow,
-    );
+    const topK = clampInt(req.topK, 1, SUMMARY_DEFAULTS.maxTopK, SUMMARY_DEFAULTS.topK);
     const epoch = this.servedEpoch ?? null;
     return this.keyedPull<ReactiveSummary>({
       kind: 'summary',
-      key: `summary|${epoch ?? ''}|${topK}|${windowMs}`,
+      key: `summary|${epoch ?? ''}|${topK}`,
       epoch,
       scope: null,
       event: HOT_EVENTS.requestReactiveSummary,
-      payload: { topK, windowMs },
-      empty: reason => emptySummary(epoch, windowMs, reason),
+      payload: { topK },
+      empty: reason => emptySummary(epoch, reason),
     });
   }
 

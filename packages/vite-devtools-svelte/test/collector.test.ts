@@ -11,6 +11,7 @@ import {
   STATE_TIMELINE_BYTES,
 } from '../src/server/collector.js';
 import type { HotChannel, HotClient } from '../src/server/collector.js';
+import { LOAD_PROFILE_EVENT } from '../src/server/load-profile.js';
 import { normalizeSummary } from '../src/server/reactive.js';
 
 function fakeHot() {
@@ -304,7 +305,7 @@ describe('Collector component deltas + per-epoch state (§6.5)', () => {
     expect(c.liveComponents).toHaveLength(n - 1);
   });
 
-  it('componentTracking: false (no component snapshots ever): profiles of the newest pusher are served', () => {
+  it('no component snapshots ever: profiles of the newest pusher are served', () => {
     const c = new Collector();
     c.ingestProfiles({ epoch: 'tab1', profiles: [{ componentId: 1 }] });
     c.ingestStateTimeline({ epoch: 'tab1', changes: [change(1)] });
@@ -338,6 +339,22 @@ describe('Collector hot channel', () => {
     expect(a.listeners.size).toBe(0);
     b.emit(HOT_EVENTS.runtimeError, { message: 'boom' });
     expect(c.runtimeErrors).toHaveLength(1);
+  });
+
+  it('records load timings the browser sends (universal loads, ssr = false) and drops malformed ones', () => {
+    const c = new Collector();
+    const h = fakeHot();
+    c.attach(h.hot);
+    const report = {
+      route: '/a',
+      file: '/app/src/routes/a/+page.ts',
+      type: 'universal',
+      duration: 1.234,
+      dataSize: 9,
+    };
+    h.emit(LOAD_PROFILE_EVENT, report);
+    h.emit(LOAD_PROFILE_EVENT, { ...report, type: 'nope' });
+    expect(c.loadProfiles).toEqual([{ ...report, duration: 1.23, timestamp: expect.any(Number) }]);
   });
 
   it('clearStateTimeline tells the runtime to clear too', () => {
@@ -789,7 +806,7 @@ describe('Collector capture info (§6.7 B)', () => {
       captured: 1,
       total: null,
       truncated: true,
-      policy: 'sampled-200ms',
+      policy: 'per-flush',
       dropped: [
         { reason: 'runtime-count', count: 3 },
         { reason: 'runtime-bytes', count: 1 },
@@ -801,7 +818,7 @@ describe('Collector capture info (§6.7 B)', () => {
       captured: 0,
       total: null,
       truncated: false,
-      policy: 'sampled-200ms',
+      policy: 'per-flush',
     });
   });
 
@@ -856,17 +873,17 @@ describe('Collector reactive summary pulls (§6.7 I)', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  it('clamps topK/windowMs, correlates by requestId and never assumes capabilities', async () => {
+  it('clamps topK, correlates by requestId and never assumes capabilities', async () => {
     const c = new Collector();
     const h = fakeHot();
     c.attach(h.hot);
-    const p = c.requestReactiveSummary({ topK: 9999, windowMs: 1 });
+    const p = c.requestReactiveSummary({ topK: 9999 });
     const req = h.sent.find(s => s.event === HOT_EVENTS.requestReactiveSummary)!.payload as any;
-    expect(req).toEqual({ requestId: expect.any(String), topK: 200, windowMs: 1000 });
+    expect(req).toEqual({ requestId: expect.any(String), topK: 200 });
     h.emit(HOT_EVENTS.reactiveSummary, { requestId: 'nobody', rows: [] });
     h.emit(HOT_EVENTS.reactiveSummary, {
       requestId: req.requestId,
-      window: { ms: 1000, since: 1, until: 1001, sampledActiveMs: 800 },
+      computedAt: 1001,
       components: { total: 50000, withActivity: 3 },
       rows: [
         {
@@ -876,6 +893,7 @@ describe('Collector reactive summary pulls (§6.7 I)', () => {
           changes: 5,
           renders: 2,
           renderMs: 1.5,
+          lastActiveAt: 990,
         },
       ],
       other: { components: 49999, nodes: 120000 },
@@ -883,11 +901,12 @@ describe('Collector reactive summary pulls (§6.7 I)', () => {
       capabilities: { valueInspection: 'yes' },
     });
     await expect(p).resolves.toMatchObject({
+      computedAt: 1001,
       components: { total: 50000, withActivity: 3 },
-      rows: [{ componentId: 4, changes: 5, renders: 2 }],
+      rows: [{ componentId: 4, changes: 5, renders: 2, lastActiveAt: 990 }],
       other: { components: 49999, nodes: 120000 },
       truncated: true,
-      policy: 'sampled-200ms',
+      policy: 'per-flush',
       coverage: 'component-init',
       capabilities: { valueInspection: false, signalHistory: false, writeCause: false },
     });
@@ -900,6 +919,7 @@ describe('Collector reactive summary pulls (§6.7 I)', () => {
     const p = c.requestReactiveSummary();
     vi.advanceTimersByTime(RUNTIME_REQUEST_TIMEOUT + 1);
     await expect(p).resolves.toMatchObject({
+      computedAt: null,
       rows: [],
       components: { total: null },
       stale: true,

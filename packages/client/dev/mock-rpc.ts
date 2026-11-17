@@ -528,10 +528,10 @@ export function createMockBackend(scale = 5000) {
         computedAt: Date.now(),
       };
     },
-    // §6.7 I: per-instance counters over a window, top-K + the rest as `other`.
-    'svelte-devtools:get-reactive-summary': (args?: { topK?: number; windowMs?: number }) => {
+    // §6.7 I: per-instance counters since mount, top-K + the rest as `other`.
+    'svelte-devtools:get-reactive-summary': (args?: { topK?: number }) => {
       const topK = args?.topK ?? 50;
-      const windowMs = args?.windowMs ?? 10000;
+      const computedAt = Date.now();
       const byComponent = new Map<
         number,
         { file: string; state: number; derived: number; effect: number }
@@ -553,17 +553,23 @@ export function createMockBackend(scale = 5000) {
         changes: componentId % 7 === 0 ? 0 : Math.floor(r() * 40),
         renders: Math.floor(r() * 30),
         renderMs: Math.round(r() * 4000) / 100,
+        lastActiveAt: computedAt - Math.floor(r() * 120_000),
       }));
       const active = all.filter(x => x.changes > 0 || x.renders > 0);
-      active.sort((a, b) => b.changes - a.changes || b.renders - a.renders);
+      active.sort(
+        (a, b) =>
+          b.changes - a.changes ||
+          b.renders - a.renders ||
+          b.renderMs - a.renderMs ||
+          b.lastActiveAt - a.lastActiveAt,
+      );
       const rows = active.slice(0, topK);
       const listed = new Set(rows.map(x => x.componentId));
       const rest = all.filter(x => !listed.has(x.componentId));
-      const until = Date.now();
       return {
         epoch: MOCK_EPOCH,
-        window: { ms: windowMs, since: until - windowMs, until, sampledActiveMs: windowMs },
-        policy: 'sampled-200ms',
+        computedAt,
+        policy: 'per-flush',
         coverage: 'component-init',
         components: { total: all.length, withActivity: active.length },
         rows,

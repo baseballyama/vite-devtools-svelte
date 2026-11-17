@@ -63,7 +63,7 @@ and what changed when I edited the tax rate.`;
     {
       id: 'summary',
       title: 'Find where the activity is',
-      text: 'Counters over all instances, without capturing the graph. The answer says what it covers: here 2 of 5 registered components were active, and sampledActiveMs shows that sampling ran for only 5 s of the 30 s window (the runtime samples only while a panel or an agent is reading). The price chart has not changed yet, so it is not listed.',
+      text: 'Counters over all live instances, totals since each mounted, without capturing the graph. The answer says what it covers: here 2 of 5 registered components were active, and lastActiveAt says when each last changed or rendered (state changes are observed only while a panel or an agent is reading). The price chart has not changed yet, so it is not listed.',
     },
     {
       id: 'live',
@@ -373,8 +373,7 @@ and what changed when I edited the tax rate.`;
           </li>
           <li>
             <strong>One page load.</strong> Component ids are valid within one epoch. Answers may
-            come from a cache for up to 1 s; <code>computedAt</code> and
-            <code>window.until</code> say when they were computed.
+            come from a cache for up to 1 s; <code>computedAt</code> says when they were computed.
           </li>
         </ul>
         <p>Performance with very large apps has not been measured; no size is promised.</p>
@@ -443,8 +442,7 @@ and what changed when I edited the tax rate.`;
           <div>
             <dt>No components or reactive nodes</dt>
             <dd>
-              Check that <code>componentTracking</code> is not set to <code>false</code> and that
-              the plugin comes before <code>sveltekit()</code> in
+              Check that the plugin comes before <code>sveltekit()</code> in
               <code>vite.config.ts</code>.
             </dd>
           </div>

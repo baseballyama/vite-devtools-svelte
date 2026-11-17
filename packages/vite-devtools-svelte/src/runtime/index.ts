@@ -1,28 +1,17 @@
-// Browser code the plugin serves as virtual modules. The sources are plain
-// JavaScript files next to this one (linted and formatted like any other
-// source) and are inlined as strings at build time.
-// oxlint-disable-next-line import/default -- `?raw` modules are resolved by Vite
-import runtimeSource from './client.js?raw';
-// oxlint-disable-next-line import/default -- `?raw` modules are resolved by Vite
-import wrapperSource from './wrapper.js?raw';
+// Browser code the plugin serves from disk: the Svelte compiler imports the
+// hooks by path (`experimental.devtools`), and the hooks import the runtime
+// (runtime.js) next to them. The build copies both next to the bundle, so the
+// same relative URLs work from `src` and `dist`.
+import { fileURLToPath } from 'node:url';
 
-export { RESOLVED_RUNTIME_ID, RUNTIME_MODULE_ID, WRAPPER_MODULE_ID } from './ids.js';
+export { HOOKS_MODULE_ID } from './ids.js';
+
+// A variable, not a literal: Vite's lib build would turn
+// `new URL('./hooks.js', import.meta.url)` into an inlined asset.
+const HOOKS_FILE_NAME = './hooks.js';
 
 /**
- * Wrapper code for svelte/internal/client (`./wrapper.js`).
- *
- * Re-exports everything from the real module, then overrides:
- * - push/pop: component lifecycle tracking
- * - tag/tag_proxy: named signal/proxy tracking (Svelte dev mode)
- * - state/derived/proxy: type markers consumed by tag/tag_proxy
- * - user_effect/user_pre_effect: effect tracking
- * - template_effect/deferred_template_effect: render count/time profiling
- * - each/if/key/await/component/boundary: block-callback owner attribution
- *
- * This single module replaces all post-compilation regex transforms
- * for reactive tracking, making the approach Svelte-compiler-output agnostic.
+ * Absolute path of `hooks.js`: creates the devtools store (runtime.js) and
+ * subscribes it to Svelte's devtools events (`svelte/internal/devtools`).
  */
-export const wrapperCode: string = wrapperSource;
-
-/** The devtools runtime (`./client.js`), installed once as `window.__SVELTE_DEVTOOLS__`. */
-export const runtimeCode: string = runtimeSource;
+export const HOOKS_FILE: string = fileURLToPath(new URL(HOOKS_FILE_NAME, import.meta.url));

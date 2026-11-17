@@ -1,6 +1,6 @@
 // Scaling and memory-bound tests for the browser runtime injected into the
-// user's app. They drive `window.__SVELTE_DEVTOOLS__` the same way the
-// svelte/internal/client wrapper does (register → registered → trackState →
+// user's app. They drive the devtools store the same way the
+// hooks do (register → registered → trackState →
 // unmount) with huge-app sized inputs.
 //
 // No `it.fails`: every known defect found so far is fixed and asserted here.
@@ -12,32 +12,14 @@ import {
   pollFn,
   settlePolling,
   unmountList,
+  write,
   type Harness,
 } from './harness.js';
 
 // Fake clock + deterministic JSON.stringify cost model (see P2 tests).
-/** One churn tick: every numeric signal changes. */
-function bumpNumbers(signals: Array<{ v: unknown }>) {
-  for (const s of signals) if (typeof s.v === 'number') s.v++;
-}
-
-/**
- * What the poller will do with this tick's slice (read before it runs):
- * object values whose ref / write version moved are dirty; unchanged ones
- * past their re-check time are overdue. Primitives are not counted.
- */
-function classifySlice(dt: any, slice: readonly unknown[], now: number) {
-  let dirty: number = dt._pollDirty.size;
-  let overdue = 0;
-  for (const nodeId of slice) {
-    const signal = dt._reactiveNodes.get(nodeId).signal.deref();
-    const value = dt._readStateValue(nodeId, signal);
-    if (value === null || typeof value !== 'object') continue;
-    const meta = dt._pollMeta.get(nodeId);
-    if (meta.ref !== value || meta.wv !== signal.wv) dirty++;
-    else if (now >= meta.nextCheckAt) overdue++;
-  }
-  return { dirty, overdue };
+/** One churn tick: every numeric $state signal is written. */
+function bumpNumbers(h: Harness, signals: Array<{ v: unknown; deps?: unknown }>) {
+  for (const s of signals) if (s.deps === null && typeof s.v === 'number') write(h, s, s.v + 1);
 }
 
 function simulatedClock(nsPerChar = 10) {
@@ -78,8 +60,8 @@ describe('runtime memory bounds', () => {
     const h = createRuntime();
     const list = mountList(h, 2000);
     expect(h.dt._instances.size).toBe(2001);
-    // poll once so snapshots exist for every state
-    for (const i of h.intervals) i.fn();
+    // observe until snapshots exist for every state
+    settlePolling(h, pollFn(h));
     unmountList(h, list);
     h.flushTimers();
     expect(h.dt._instances.size).toBe(0);
@@ -93,11 +75,10 @@ describe('runtime memory bounds', () => {
   it('keeps the state timeline bounded under sustained churn', () => {
     const h = createRuntime();
     const { signals } = mountList(h, 200, 1);
-    const poll = h.intervals.find(i => i.ms === 200);
-    expect(poll).toBeDefined();
+    const poll = pollFn(h);
     for (let tick = 0; tick < 50; tick++) {
-      bumpNumbers(signals);
-      poll!.fn();
+      bumpNumbers(h, signals);
+      poll();
     }
     // raw array: bulk-trimmed, at most 2 x the cap between trims
     expect(h.dt._stateTimeline.length).toBeLessThanOrEqual(1000);
@@ -174,66 +155,60 @@ describe('runtime scaling (huge app)', () => {
     expect(bytes).toBeLessThan(50_000);
   });
 
-  // P2: background polling must stay cheap however much state the app holds.
+  // P2: observation must stay cheap however much state the app holds.
   // Wall-clock timing is unreliable on loaded machines, so serialization cost
   // is simulated deterministically: a fake clock advances 10 ns per JSON char
-  // inside JSON.stringify (≈ V8's real throughput), 200 ms between ticks.
-  it('P2: amortized and worst-tick serialization with 20 large states stay bounded', () => {
+  // inside JSON.stringify (≈ V8's real throughput), 200 ms between observes.
+  it('P2: idle and worst-observe serialization with 20 large states stay bounded', () => {
     const sim = simulatedClock();
     const h = createRuntime({ clock: sim.now });
     const root = h.dt.register('/app/src/routes/+page.svelte');
     for (let c = 0; c < 20; c++) {
       const id = h.dt.register('/app/src/lib/Big.svelte');
       const big = Array.from({ length: 10_000 }, (_, i) => ({ i, label: 'item ' + i }));
-      h.dt.trackState({ v: big, wv: 1 }, 'items', id);
+      h.dt.trackState({ v: big }, 'items', id);
       h.dt.registered(id);
     }
     h.dt.registered(root);
     const poll = pollFn(h);
     const ticks = sim.run(poll, 50); // includes the initial snapshots
-    const steady = sim.run(poll, 100); // 20 s of steady state
+    const steady = sim.run(poll, 100); // 20 s of steady state, no writes
     const maxOp = 10_000 * 25 * sim.nsPerChar * 1e-6; // one array ≈ 2.5 ms
-    // amortized: deep re-checks are paid from a 0.5 ms/tick credit
+    // steady state: nothing written, nothing serialized
+    expect(steady.calls).toBe(0);
     expect(steady.mean).toBeLessThan(1);
-    // worst tick: budget (2 ms) + at most one unsplittable serialization
+    // worst observe: budget (2 ms) + at most one unsplittable serialization
     expect(steady.max).toBeLessThanOrEqual(2 + maxOp + 0.01);
     expect(ticks.max).toBeLessThanOrEqual(2 + maxOp + 0.01);
   });
 
-  // An idle tick must not serialize unchanged states because of the hint pass
-  // (O(1) per node), so latency is independent of app size. Since the hint pass
-  // is time-sliced (§6.7 D: ≤ 4096 nodes per tick), a node is visited only
-  // every few ticks, and an object whose 1 s deep re-check came due between two
-  // visits is re-checked on its next visit even when no time passed since the
-  // previous tick. Those re-checks are the designed deep pass (paid from the
-  // DEEP_MS credit), so the idle tick is accounted exactly: nothing dirty, and
-  // every serialization is an overdue deep re-check in this tick's slice.
-  it('P2: an idle tick over 10 000 unchanged states serializes only due deep re-checks', () => {
+  // Change detection is driven by markWritten: an observe with nothing
+  // written serializes nothing, however many states the app holds, and a
+  // write costs one serialization of that node only.
+  it('P2: an idle observe over 10 000 unchanged states serializes nothing', () => {
     const sim = simulatedClock();
     const h = createRuntime({ clock: sim.now });
     const root = h.dt.register('/app/src/routes/+page.svelte');
+    const objects: Array<{ v: unknown }> = [];
     for (let c = 0; c < 2500; c++) {
       const id = h.dt.register('/app/src/lib/Row.svelte');
-      h.dt.trackState({ v: c, wv: 1 }, 'n', id);
-      h.dt.trackState({ v: 'label ' + c, wv: 1 }, 's', id);
-      h.dt.trackState({ v: { c }, wv: 1 }, 'o', id);
+      h.dt.trackState({ v: c }, 'n', id);
+      h.dt.trackState({ v: 'label ' + c }, 's', id);
+      const o = { v: { c } };
+      objects.push(o);
+      h.dt.trackState(o, 'o', id);
       h.dt.trackProxy({ c }, 'p', id);
       h.dt.registered(id);
     }
     h.dt.registered(root);
     const poll = pollFn(h);
-    sim.run(poll, 20); // initial snapshots
-    // this tick's slice, read before it runs (no serialization here)
-    const dt = h.dt;
-    const ids: number[] = dt._pollIds;
-    const slice = Array.from(
-      { length: Math.min(4096, ids.length) },
-      (_, i) => ids[(dt._pollCursor + i) % ids.length],
-    );
-    const { dirty, overdue } = classifySlice(dt, slice, sim.now());
-    const idle = sim.run(poll, 1, 0); // same instant: nothing changed
-    expect(dirty).toBe(0);
-    expect(idle.calls).toBe(overdue);
+    settlePolling(h, poll); // initial snapshots
+    const idle = sim.run(poll, 1, 0); // same instant: nothing written
+    expect(idle.calls).toBe(0);
+    write(h, objects[1234]!, { c: -1 });
+    const one = sim.run(poll, 1, 0);
+    expect(one.calls).toBe(1);
+    expect(h.dt._stateTimeline.map((c: any) => c.newValue)).toEqual([{ c: -1 }]);
   });
 
   // P4 / RT4: with no DevTools client attached the runtime must not run a
@@ -248,12 +223,11 @@ describe('runtime scaling (huge app)', () => {
   });
 });
 
-// Fake clock: time-based re-checks are tested without real waiting.
+// Fake clock: the observe budget (performance.now based) is never spent.
 function single(value: unknown, opts: { proxy?: boolean } = {}) {
-  let now = 0;
-  const h = createRuntime({ clock: () => now });
+  const h = createRuntime({ clock: () => 0 });
   const id = h.dt.register('/app/src/lib/S.svelte');
-  const signal: any = { v: value, wv: 1 };
+  const signal: any = { v: value };
   if (opts.proxy) h.dt.trackProxy(value, 'x', id);
   else h.dt.trackState(signal, 'x', id);
   h.dt.registered(id);
@@ -262,18 +236,17 @@ function single(value: unknown, opts: { proxy?: boolean } = {}) {
     signal,
     poll: pollFn(h),
     nodeId: id + ':x',
-    advance: (ms: number) => (now += ms),
   };
 }
 
 const changesFor = (h: Harness, nodeId: string) =>
   h.dt._stateTimeline.filter((c: any) => c.id === nodeId);
 
-describe('state polling correctness under budgets', () => {
-  it('records primitive changes on the next tick', () => {
+describe('state observation correctness under budgets', () => {
+  it('records primitive changes on the next observe', () => {
     const { h, signal, poll, nodeId } = single(1);
     poll();
-    signal.v = 2;
+    write(h, signal, 2);
     poll();
     expect(changesFor(h, nodeId).at(-1)).toMatchObject({ oldValue: 1, newValue: 2 });
   });
@@ -281,9 +254,10 @@ describe('state polling correctness under budgets', () => {
   it('RT5: records transitions to and from undefined', () => {
     const { h, signal, poll, nodeId } = single(1);
     poll();
-    signal.v = undefined;
+    // oxlint-disable-next-line unicorn/no-useless-undefined -- the transition under test
+    write(h, signal, undefined);
     poll();
-    signal.v = 3;
+    write(h, signal, 3);
     poll();
     const changes = changesFor(h, nodeId);
     expect(changes.length).toBe(2); // the first observation is a seed
@@ -293,11 +267,11 @@ describe('state polling correctness under budgets', () => {
     expect(changes[1].oldValue).toBeUndefined();
   });
 
-  it('records an object reassignment on the next tick even for expensive objects', () => {
+  it('records an object reassignment on the next observe even for expensive objects', () => {
     const big = Array.from({ length: 50_000 }, (_, i) => ({ i }));
     const { h, signal, poll, nodeId } = single(big);
     poll();
-    signal.v = [1, 2, 3];
+    write(h, signal, [1, 2, 3]);
     poll();
     expect(changesFor(h, nodeId).at(-1)?.newValue).toEqual([1, 2, 3]);
   });
@@ -305,11 +279,9 @@ describe('state polling correctness under budgets', () => {
   it('records object -> primitive -> identical object transitions', () => {
     const { h, signal, poll, nodeId } = single({ a: 1 });
     poll();
-    signal.v = 0;
-    signal.wv++;
+    write(h, signal, 0);
     poll();
-    signal.v = { a: 1 };
-    signal.wv++;
+    write(h, signal, { a: 1 });
     poll();
     expect(changesFor(h, nodeId).map((c: any) => [c.oldValue, c.newValue])).toEqual([
       [{ a: 1 }, 0],
@@ -317,24 +289,24 @@ describe('state polling correctness under budgets', () => {
     ]);
   });
 
-  it('records a write-version bump on the next tick', () => {
+  it('records an in-place mutation of the same object, marked written, on the next observe', () => {
     const obj = { a: 1 };
-    const { h, signal, poll, nodeId } = single(obj);
+    const { h, poll, nodeId } = single(obj);
     poll();
     obj.a = 2;
-    signal.wv = 2;
+    h.dt.markWritten(nodeId);
     poll();
     expect(changesFor(h, nodeId).at(-1)?.newValue).toEqual({ a: 2 });
   });
 
-  it('RT2: records an in-place deep mutation after the time-based re-check', () => {
+  it('RT2: records an in-place deep mutation once it is marked written, not before', () => {
     const big = Array.from({ length: 500 }, (_, i) => ({ i, label: 'item ' + i }));
-    const { h, poll, nodeId, advance } = single(big);
+    const { h, poll, nodeId } = single(big);
     poll();
     big[5]!.label = 'changed';
     poll();
-    expect(changesFor(h, nodeId).length).toBe(0); // not yet: within RECHECK_MS (seed only)
-    advance(1001);
+    expect(changesFor(h, nodeId).length).toBe(0); // no write reported yet (seed only)
+    h.dt.markWritten(nodeId); // hooks.js, after Svelte flushed the deep write
     poll();
     const changes = changesFor(h, nodeId);
     expect(changes.length).toBe(1);
@@ -343,41 +315,41 @@ describe('state polling correctness under budgets', () => {
   });
 
   it('RT2: deep-mutation latency does not grow with the number of other nodes', () => {
-    let now = 0;
+    const now = 0;
     const h = createRuntime({ clock: () => now });
     mountList(h, 2500, 2); // 5 000 primitive states
     const id = h.dt.register('/app/src/lib/Obj.svelte');
     const obj = { items: [1, 2, 3] };
-    h.dt.trackState({ v: obj, wv: 1 }, 'obj', id);
+    h.dt.trackState({ v: obj }, 'obj', id);
     h.dt.registered(id);
     const poll = pollFn(h);
-    // seed every node first (5 001 nodes = 2 slices): a write before a node's
-    // first sample is not observable by design (seed only, review B-1)
+    // seed every node first (5 001 nodes = 2 × SEED_NODES): a write before a
+    // node's first observation is not observable by design (seed only, review B-1)
     poll();
     poll();
     expect(h.dt.getReactiveSummary({}).baseline).toEqual({ complete: true, pendingNodes: 0 });
     obj.items.push(4);
-    now += 1001;
-    poll();
+    h.dt.markWritten(id + ':obj');
+    poll(); // one observe, whatever the number of other nodes
     const hit = h.dt._stateTimeline.filter((c: any) => c.id === id + ':obj');
     expect(hit.map((c: any) => [c.oldValue, c.newValue])).toEqual([
       [{ items: [1, 2, 3] }, { items: [1, 2, 3, 4] }],
     ]);
   });
 
-  it('RT1: polls the live value of tag_proxy (non-reassigned) object state', () => {
+  it('RT1: polls the live value of proxy (non-reassigned) object state', () => {
     const list: number[] = [];
-    const { h, poll, nodeId, advance } = single(list, { proxy: true });
+    const { h, poll, nodeId } = single(list, { proxy: true });
     poll();
     list.push(1);
-    advance(1001);
+    h.dt.markWritten(nodeId); // a deep write inside the proxy
     poll();
     const changes = changesFor(h, nodeId);
     expect(changes.at(-1)?.newValue).toEqual([1]);
     expect(changes.at(-1)?.oldValue).toEqual([]);
   });
 
-  it('RT1: keeps tag_proxy nodes in the reactive graph while the component lives', () => {
+  it('RT1: keeps proxy nodes in the reactive graph while the component lives', () => {
     const { h, nodeId } = single([1, 2], { proxy: true });
     const entry = h.dt._reactiveNodes.get(nodeId);
     // marker must be strongly reachable (not a WeakRef to a throwaway object)
@@ -387,12 +359,12 @@ describe('state polling correctness under budgets', () => {
 
   it('RT3: stores a summary and a short key (not the full JSON) for huge values', () => {
     const big = Array.from({ length: 50_000 }, (_, i) => ({ i }));
-    const { h, poll, nodeId, advance } = single(big);
+    const { h, poll, nodeId } = single(big);
     poll();
     expect(changesFor(h, nodeId)).toHaveLength(0); // seed
     expect(h.dt._stateSnapshotStrs.get(nodeId).length).toBeLessThan(64);
     big[10]!.i = -1;
-    advance(60_000);
+    h.dt.markWritten(nodeId);
     poll();
     const changes = changesFor(h, nodeId);
     expect(changes).toHaveLength(1); // hash detected the change
@@ -400,18 +372,17 @@ describe('state polling correctness under budgets', () => {
     expect(changes[0].newValue).toMatch(/^\(object: \d+ chars/);
   });
 
-  // §6.7 D: the hint pass is time-sliced (4 096 nodes per tick), so 5 000
-  // nodes take 2 ticks — no starvation within a bounded number of ticks.
-  it('does not starve: 400 changed primitives among 5 000 are recorded within 2 ticks', () => {
+  // Written nodes left over when the 2 ms budget is spent stay in _written
+  // and follow in the next observe: nothing is dropped.
+  it('does not starve: 400 written primitives among 5 000 are all recorded', () => {
     const h = createRuntime();
     const { signals } = mountList(h, 2500, 2);
     const poll = pollFn(h);
     settlePolling(h, poll);
     h.dt._stateTimeline.length = 0;
     const states = signals.filter((s: any) => s.deps === null).slice(0, 400);
-    for (const s of states) s.v = -1;
-    poll();
-    poll();
+    for (const s of states) write(h, s, -1);
+    settlePolling(h, poll);
     const seen = new Set(
       h.dt._stateTimeline.filter((c: any) => c.newValue === -1).map((c: any) => c.id),
     );
@@ -437,24 +408,25 @@ describe('activity subscription (devframe-migration §6.3)', () => {
     expect((comp!.data as any).components.length).toBe(51);
     expect(events(h)).toContain('svelte-devtools:profiles');
     expect(events(h)).toContain('svelte-devtools:state-timeline');
-    expect(h.intervals.map(i => i.ms).toSorted((x, y) => x - y)).toEqual([200, 500]);
+    // only the FPS interval: state changes are observed per flush, not polled
+    expect(h.intervals.map(i => i.ms)).toEqual([500]);
     expect(h.rafCallbacks).toBe(1);
     // a repeated active:true is not a new activation
     const before = h.sent.length;
     h.emit('svelte-devtools:subscription', { active: true });
     expect(h.sent.length).toBe(before);
-    expect(h.intervals.length).toBe(2);
+    expect(h.intervals.length).toBe(1);
   });
 
   it('stops all sampling on deactivation and while the app tab is hidden', () => {
     const h = createRuntime();
-    expect(h.intervals.length).toBe(2);
+    expect(h.intervals.map(i => i.ms)).toEqual([500]);
     h.document.visibilityState = 'hidden';
     h.document.dispatch();
     expect(h.intervals.length).toBe(0);
     h.document.visibilityState = 'visible';
     h.document.dispatch();
-    expect(h.intervals.length).toBe(2);
+    expect(h.intervals.map(i => i.ms)).toEqual([500]);
     h.emit('svelte-devtools:subscription', { active: false });
     expect(h.intervals.length).toBe(0);
     // the stale rAF chain of the first generation must end
@@ -475,12 +447,13 @@ describe('activity subscription (devframe-migration §6.3)', () => {
 });
 
 function setup() {
-  const h = createRuntime();
+  // frozen clock: the 2 ms observe budget is never spent, one observe per write batch
+  const h = createRuntime({ clock: () => 0 });
   const id = h.dt.register('/app/src/lib/T.svelte');
   h.dt.registered(id);
   const add = (n: number, big = 0) => {
     const sigs = Array.from({ length: n }, (_, i) => {
-      const sig: any = { v: big ? Array.from({ length: big }, (_unused, k) => k + i) : i, wv: 1 };
+      const sig: any = { v: big ? Array.from({ length: big }, (_unused, k) => k + i) : i };
       h.dt.trackState(sig, 's' + h.dt._reactiveNodes.size, id);
       return sig;
     });
@@ -497,7 +470,7 @@ describe('state timeline transfer (devframe-migration §6.4)', () => {
     const sigs = add(3);
     poll();
     h.flushTimers();
-    sigs[0].v = 100;
+    write(h, sigs[0], 100);
     poll();
     h.flushTimers();
     const msgs = timelineMsgs();
@@ -516,7 +489,7 @@ describe('state timeline transfer (devframe-migration §6.4)', () => {
     poll(); // seeds
     h.flushTimers();
     h.sent.length = 0;
-    for (const sig of sigs) sig.v += 1000;
+    for (const sig of sigs) write(h, sig, sig.v + 1000);
     poll();
     h.flushTimers();
     const sizes = timelineMsgs().map((m: any) => m.changes.length);
@@ -527,7 +500,7 @@ describe('state timeline transfer (devframe-migration §6.4)', () => {
     const { h, add, poll, timelineMsgs } = setup();
     const sigs = add(2);
     poll(); // seeds
-    for (const sig of sigs) sig.v += 1;
+    for (const sig of sigs) write(h, sig, sig.v + 1);
     poll();
     h.flushTimers();
     expect(h.dt._stateTimeline).toHaveLength(2);
@@ -541,12 +514,14 @@ describe('state timeline transfer (devframe-migration §6.4)', () => {
   it('replies to request-state-timeline with the full buffer and reset: true, within 4 MB', () => {
     const { h, add, poll } = setup();
     const sigs = add(300, 1500); // 300 objects of ≈ 7 kB
-    for (let t = 0; t < 400; t++) poll(); // seeds
-    for (const sig of sigs) {
-      sig.v = sig.v.map((k: number) => -k);
-      sig.wv++;
-    }
-    for (let t = 0; t < 400; t++) poll(); // 300 changes of ≈ 14 kB (old + new): over 4 MB
+    poll(); // seeds
+    for (const sig of sigs)
+      write(
+        h,
+        sig,
+        sig.v.map((k: number) => -k),
+      );
+    poll(); // 300 changes of ≈ 14 kB (old + new): over 4 MB
     expect(h.dt._stateTimeline.length).toBeGreaterThan(0);
     h.sent.length = 0;
     h.emit('svelte-devtools:request-state-timeline', {});
