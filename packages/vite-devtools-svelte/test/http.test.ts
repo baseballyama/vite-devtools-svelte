@@ -212,7 +212,7 @@ describe('transport.get', () => {
 
   it('fails the read of a deflated body cut off midway', async () => {
     const res = await transport.get(local('/deflate-cut'));
-    await expect(readCapped(res.body, 64 * 1024 * 1024)).rejects.toThrow();
+    await expect(readCapped(res.body, 64 * 1024 * 1024)).rejects.toThrow('aborted');
   });
 
   it.each([
@@ -225,7 +225,10 @@ describe('transport.get', () => {
     expect((await getOGPreview(`${origin()}${p}`, { allowedOrigins })).issues).toEqual([
       'Redirects to /elsewhere (not followed)',
     ]);
-    await new Promise(resolve => setTimeout(resolve, 50));
+    // give the aborted body's failure time to surface
+    await new Promise(resolve => {
+      setTimeout(resolve, 50);
+    });
   });
 
   it('refuses a coding it cannot undo instead of reading garbled bytes', async () => {
