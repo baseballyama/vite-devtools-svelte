@@ -1,2 +1,0 @@
-minimumReleaseAgeExclude:
-  - '@sveltejs/kit@3.3.0'

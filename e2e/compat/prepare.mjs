@@ -35,7 +35,15 @@ if (!profile.workspace) {
   // for the plugin is refreshed; everything else stays at the locked versions.
   run(
     'pnpm',
-    ['install', '--ignore-workspace', '--no-frozen-lockfile'],
+    [
+      'install',
+      '--ignore-workspace',
+      '--no-frozen-lockfile',
+      // --ignore-workspace also ignores minimumReleaseAgeExclude in the root
+      // pnpm-workspace.yaml. Remove this once @sveltejs/kit 3.3.0 is old
+      // enough to pass minimumReleaseAge.
+      '--config.minimumReleaseAgeExclude=@sveltejs/kit@3.3.0',
+    ],
     path.join(root, profile.dir),
   );
 }
