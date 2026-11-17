@@ -14,6 +14,9 @@ importers:
       '@sveltejs/kit':
         specifier: 3.1.1
         version: 3.1.1(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.3)(vite@8.3.5))(svelte@5.57.3)(typescript@6.0.3)(vite@8.3.5)
+      '@sveltejs/vite-devtools-svelte':
+        specifier: file:../.pack/vite-devtools-svelte.tgz
+        version: file:../.pack/vite-devtools-svelte.tgz(@devframes/agentic@1.2.6)(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.3)(vite@8.3.5))(cac@7.1.0)(crossws@0.4.12(srvx@1.0.7))(srvx@1.0.7)(svelte@5.57.3)(typescript@6.0.3)(vite@8.3.5)
       '@sveltejs/vite-plugin-svelte':
         specifier: 7.3.1
         version: 7.3.1(svelte@5.57.3)(vite@8.3.5)
@@ -29,9 +32,6 @@ importers:
       vite:
         specifier: 8.3.5
         version: 8.3.5(@vitejs/devtools@0.8.0)
-      vite-devtools-svelte:
-        specifier: file:../.pack/vite-devtools-svelte.tgz
-        version: file:../.pack/vite-devtools-svelte.tgz(@devframes/agentic@1.2.6)(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.3)(vite@8.3.5))(cac@7.1.0)(crossws@0.4.12(srvx@1.0.7))(srvx@1.0.7)(svelte@5.57.3)(typescript@6.0.3)(vite@8.3.5)
 
 packages:
 
@@ -1001,7 +1001,7 @@ packages:
     resolution: {integrity: sha512-BNGbWLfd0eUPabhkXUVm0j8uuvREyTh5ovRa/dyow/BqAbZJyC+5fU+IzQOzmAKzYqYRAISoRhdQr3eIZ/PXqg==}
     engines: {node: '>= 0.8'}
 
-  vite-devtools-svelte@file:../.pack/vite-devtools-svelte.tgz:
+  '@sveltejs/vite-devtools-svelte@file:../.pack/vite-devtools-svelte.tgz':
     resolution: {integrity: sha512-1PZmTnz5rq3iZSqOPj6MT9VGVs9XZVGC/lxWwNYWIhd6hNYUY5pBkqK0vXfBl6tINmR7s/Pg3ZG3LevLrg8apA==, tarball: file:../.pack/vite-devtools-svelte.tgz}
     version: 0.6.2
     engines: {node: '>=22.0.0'}
@@ -1989,7 +1989,7 @@ snapshots:
 
   vary@1.1.2: {}
 
-  vite-devtools-svelte@file:../.pack/vite-devtools-svelte.tgz(@devframes/agentic@1.2.6)(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.3)(vite@8.3.5))(cac@7.1.0)(crossws@0.4.12(srvx@1.0.7))(srvx@1.0.7)(svelte@5.57.3)(typescript@6.0.3)(vite@8.3.5):
+  '@sveltejs/vite-devtools-svelte@file:../.pack/vite-devtools-svelte.tgz(@devframes/agentic@1.2.6)(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.3)(vite@8.3.5))(cac@7.1.0)(crossws@0.4.12(srvx@1.0.7))(srvx@1.0.7)(svelte@5.57.3)(typescript@6.0.3)(vite@8.3.5)':
     dependencies:
       '@modelcontextprotocol/sdk': 1.32.2(zod@4.6.7)
       '@vitejs/devtools-kit': 0.8.0(@devframes/agentic@1.2.6)(cac@7.1.0)(crossws@0.4.12(srvx@1.0.7))(srvx@1.0.7)(vite@8.3.5)

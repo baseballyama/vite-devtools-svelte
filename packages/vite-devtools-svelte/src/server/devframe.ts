@@ -35,7 +35,7 @@ export const DEVFRAME_BASE = '/.svelte-devtools/'
 // Self-reference by name: resolves to this package's root both from the
 // bundle (dist/index.mjs) and from the sources (tests run src/ directly).
 const require = createRequire(import.meta.url)
-const pkgJsonPath = require.resolve('vite-devtools-svelte/package.json')
+const pkgJsonPath = require.resolve('@sveltejs/vite-devtools-svelte/package.json')
 const pkg = require(pkgJsonPath) as {
   name: string
   version: string

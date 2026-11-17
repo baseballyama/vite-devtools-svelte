@@ -1,7 +1,8 @@
 <script lang="ts">
   import { goto } from '$app/navigation'
   import { resolve } from '$app/paths'
-  import ProductCard from '$lib/components/ProductCard.svelte'
+
+  import ProductCard from '#lib/components/ProductCard.svelte'
 
   import type { PageProps } from './$types'
 
@@ -13,7 +14,7 @@
       target.value === 'all'
         ? resolve('/products')
         : resolve(`/products?${new URLSearchParams({ category: target.value })}`)
-    void goto(href, { keepFocus: true })
+    void goto(href, { reset: false })
   }
 </script>
 

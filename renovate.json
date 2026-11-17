@@ -49,13 +49,6 @@
       "enabled": false
     },
     {
-      "description": "examples/sample-app is the SvelteKit 2 compat profile (e2e/compat/matrix.json). Keep it on Kit 2: no major updates of Kit or its adapter there; minor/patch still apply.",
-      "matchFileNames": ["examples/sample-app/package.json"],
-      "matchPackageNames": ["@sveltejs/kit", "@sveltejs/adapter-auto"],
-      "matchUpdateTypes": ["major"],
-      "enabled": false
-    },
-    {
       "description": "Keep typescript on 6.x for peers and API consumers (svelte-check peers ^5 || ^6). matchDepNames matches only the manifest key, so the root @typescript/native alias (TypeScript 7, packageName typescript) still updates. Do not switch this to matchPackageNames.",
       "matchDepNames": ["typescript"],
       "allowedVersions": "<7"

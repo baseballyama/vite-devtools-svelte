@@ -39,54 +39,6 @@
       }
     },
     {
-      "id": "kit2",
-      "dir": "examples/sample-app",
-      "workspace": true,
-      "framework": "kit",
-      "modes": ["standalone", "dock"],
-      "configs": {
-        "standalone": "vite.standalone.config.ts",
-        "dock": "vite.config.ts"
-      },
-      "versions": {
-        "@sveltejs/kit": "2.70.3",
-        "svelte": "5.57.3",
-        "vite": "8.3.5",
-        "@sveltejs/vite-plugin-svelte": "7.3.1",
-        "@vitejs/devtools": "0.8.0"
-      },
-      "smoke": {
-        "hmr": {
-          "file": "src/routes/+page.svelte",
-          "from": "<h1>devtools-shop</h1>",
-          "to": "<h1>devtools-shop (smoke)</h1>",
-          "text": "devtools-shop (smoke)"
-        },
-        "ssr": {
-          "path": "/products",
-          "contains": "<"
-        },
-        "load": {
-          "path": "/products"
-        },
-        "stateChange": {
-          "path": "/",
-          "click": {
-            "role": "button",
-            "name": "一時停止"
-          },
-          "file": "src/lib/components/FpsCanvas.svelte",
-          "state": "running",
-          "from": true,
-          "to": false
-        }
-      },
-      "status": {
-        "state": "written-not-run",
-        "evidence": null
-      }
-    },
-    {
       "id": "kit3",
       "dir": "e2e/compat/kit3",
       "workspace": false,
@@ -137,7 +89,8 @@
   "existingUnchanged": [
     {
       "dir": "examples/sample-app",
-      "note": "Used as the kit2 profile; its vite.config.ts (dock) is unchanged. Standalone uses the additive vite.standalone.config.ts."
+      "kit": "3.1.1",
+      "note": "Demo app used for the reactivity screenshots and MCP examples (scripts/screenshots); vite.standalone.config.ts serves the standalone mode. Not a compat profile."
     },
     {
       "dir": "examples/strict-csp-app",

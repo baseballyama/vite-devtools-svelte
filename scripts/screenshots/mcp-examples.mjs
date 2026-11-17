@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Real MCP request / response examples for the MCP guide on the site, recorded
 // in CI (Linux, headless) against the synthetic example app
-// `examples/sample-app` (SvelteKit 2, `vite.standalone.config.ts`, the
+// `examples/sample-app` (SvelteKit 3, `vite.standalone.config.ts`, the
 // workspace plugin build, real runtime).
 //
 //   node scripts/screenshots/mcp-examples.mjs --out=<dir>
@@ -210,7 +210,7 @@ const git = (...args) => {
   }
 }
 const manifest = {
-  app: 'examples/sample-app (SvelteKit 2, vite.standalone.config.ts) — synthetic demo app, real runtime',
+  app: 'examples/sample-app (SvelteKit 3, vite.standalone.config.ts) — synthetic demo app, real runtime',
   commit: git('rev-parse', 'HEAD'),
   serverTree: git('rev-parse', 'HEAD:packages/vite-devtools-svelte/src/mcp'),
   runner: `${process.platform} ${process.arch}, Node ${process.version}`,
