@@ -15,7 +15,7 @@ const NOTES: Note[] = [
   {
     slug: 'universal-load',
     title: 'Universal loads',
-    body: 'With ssr = false they run in the browser, after every hash change.',
+    body: 'With the hash router they run in the browser, after every hash change.',
     tags: ['load'],
   },
   {

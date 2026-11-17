@@ -42,8 +42,9 @@
   type="button"
   data-testid="shared-tag"
   onclick={() => {
-    shared.tags.push(tag || `tag${shared.tags.length}`);
-    log(`tag added: ${tag}`);
+    const added = tag || `tag${shared.tags.length}`;
+    shared.tags.push(added);
+    log(`tag added: ${added}`);
     tag = '';
   }}>push tag</button
 >

@@ -22,13 +22,10 @@
   <a href={resolve('/prerendered')}>prerender</a>
 </nav>
 
+<!-- No pending boundary here: SSR then awaits each page, so its remote data is
+     serialised and hydrated. Pending UI is shown by the boundaries in the pages. -->
 <main>
-  <svelte:boundary>
-    {@render children()}
-    {#snippet pending()}
-      <p class="pending">Loading the page…</p>
-    {/snippet}
-  </svelte:boundary>
+  {@render children()}
 </main>
 
 <style>
@@ -43,8 +40,5 @@
   main {
     padding: 1rem;
     font-family: system-ui, sans-serif;
-  }
-  .pending {
-    color: #888;
   }
 </style>

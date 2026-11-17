@@ -4,7 +4,8 @@
   import type { PageProps } from './$types';
 
   let { data }: PageProps = $props();
-  let likes = $state(0);
+  // SvelteKit reuses this component across notes: start each note at 0.
+  let likes = $derived(data.note.slug ? 0 : 0);
 </script>
 
 <h1>{data.note.title}</h1>

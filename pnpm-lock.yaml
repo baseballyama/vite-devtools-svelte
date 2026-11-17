@@ -483,7 +483,7 @@ importers:
     dependencies:
       examples-ui-lib:
         specifier: workspace:*
-        version: link:../ui-lib
+        version: file:examples/ui-lib(svelte@5.57.3(@typescript-eslint/types@8.72.1))
     dependenciesMeta:
       examples-ui-lib:
         injected: true
@@ -2484,6 +2484,11 @@ packages:
   eventsource@3.0.7:
     resolution: {integrity: sha512-CRT1WTyuQoD771GW56XEZFQ/ZoSfWid1alKGDYMmkt2yl8UXrVR4pspqWNEcqKvVIzg6PAltWjxcSSPrboA4iA==}
     engines: {node: '>=18.0.0'}
+
+  examples-ui-lib@file:examples/ui-lib:
+    resolution: {directory: examples/ui-lib, type: directory}
+    peerDependencies:
+      svelte: ^5.0.0
 
   expect-type@1.4.0:
     resolution: {integrity: sha512-KfYbmpRm0VbLjEvVa9yGwCi9GI34xvi7A/HXYWQO65CSD2u3MczUJSuwXKFIxlGsgBQizV9q5J9NHj4VG0n+pA==}
@@ -5184,6 +5189,10 @@ snapshots:
   eventsource@3.0.7:
     dependencies:
       eventsource-parser: 3.1.1
+
+  examples-ui-lib@file:examples/ui-lib(svelte@5.57.3(@typescript-eslint/types@8.72.1)):
+    dependencies:
+      svelte: 5.57.3(@typescript-eslint/types@8.72.1)
 
   expect-type@1.4.0: {}
 

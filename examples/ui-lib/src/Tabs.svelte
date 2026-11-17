@@ -10,4 +10,4 @@
     >
   {/each}
 </div>
-<div role="tabpanel">{@render panel(active ?? tabs[0] ?? '')}</div>
+<div role="tabpanel">{@render panel(active)}</div>

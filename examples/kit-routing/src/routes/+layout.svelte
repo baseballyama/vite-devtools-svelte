@@ -53,8 +53,6 @@
 
 <svelte:head>
   <title>kit-routing — {page.url.pathname}</title>
-  <meta property="og:title" content="kit-routing" />
-  <meta property="og:description" content="Every SvelteKit routing and data-loading feature" />
 </svelte:head>
 
 <div class="shell">

@@ -1,6 +1,5 @@
 <!-- Legacy mode on purpose (export let, $:, createEventDispatcher, <slot>): no runes. -->
 <script lang="ts">
-  // Legacy mode on purpose: export let, $:, createEventDispatcher, <slot>.
   import { createEventDispatcher } from 'svelte';
 
   export let start = 0;

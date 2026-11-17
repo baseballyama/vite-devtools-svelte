@@ -6,11 +6,16 @@ import { untrack } from 'svelte';
 /** Module-level $state object. */
 export const shared = $state({ clicks: 0, tags: ['svelte', 'vite'] as string[] });
 
-/** $state.raw: replaced, never deeply proxied. */
-export const rawLog = $state.raw({ entries: [] as string[] });
+/** $state.raw: replaced, never deeply proxied (read through a getter, so the reassignment is seen). */
+let logEntries = $state.raw<string[]>([]);
+export const rawLog = {
+  get entries(): string[] {
+    return logEntries;
+  },
+};
 
 export function log(entry: string): void {
-  rawLog.entries = [...rawLog.entries.slice(-4), entry];
+  logEntries = [...logEntries.slice(-4), entry];
 }
 
 /** A class with $state / $derived fields. */

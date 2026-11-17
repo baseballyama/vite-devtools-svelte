@@ -20,3 +20,7 @@ peerDependencyRules:
   allowAny:
     - vite
     - vitest
+
+# examples/ui-lib plays a published library: keep its injected copy under
+# node_modules (pnpm would otherwise dedupe it back to a symlink).
+dedupeInjectedDeps: false

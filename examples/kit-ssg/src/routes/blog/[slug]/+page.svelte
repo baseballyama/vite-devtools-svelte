@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
+
   import type { PageProps } from './$types';
   import Likes from './Likes.svelte';
 
@@ -20,3 +22,4 @@
 {#key data.post.slug}
   <Likes slug={data.post.slug} />
 {/key}
+<p><a href={resolve('/blog/[slug]', { slug: data.next.slug })}>Next: {data.next.title}</a></p>

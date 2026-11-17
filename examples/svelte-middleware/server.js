@@ -35,10 +35,12 @@ httpServer.on('request', (req, res) => {
       const { render } = await vite.ssrLoadModule('/src/entry-server.ts');
       const { head, body, props } = await render(url);
       const html = template
-        .replace('<!--ssr-head-->', head)
-        .replace('<!--ssr-body-->', body)
+        // Function replacers: `$&` etc. in the rendered output (e.g. from the
+        // URL) must not be read as replacement patterns.
+        .replace('<!--ssr-head-->', () => head)
+        .replace('<!--ssr-body-->', () => body)
         // `<` escaped so a value can never close the script tag.
-        .replace('/*ssr-props*/ null', JSON.stringify(props).replaceAll('<', '\\u003c'));
+        .replace('/*ssr-props*/ null', () => JSON.stringify(props).replaceAll('<', '\\u003c'));
       res.statusCode = 200;
       res.setHeader('content-type', 'text/html; charset=utf-8');
       res.end(html);
@@ -46,6 +48,7 @@ httpServer.on('request', (req, res) => {
       vite.ssrFixStacktrace(/** @type {Error} */ (error));
       console.error(error);
       res.statusCode = 500;
+      res.setHeader('content-type', 'text/plain; charset=utf-8');
       res.end(String(/** @type {Error} */ (error).stack ?? error));
     }
   });
@@ -57,7 +60,8 @@ httpServer.on('request', (req, res) => {
 const devtools = vite.config.plugins.find(p => p.name === 'vite-devtools-svelte');
 const mcpToken = devtools?.api?.getDevtoolsToken?.();
 
-httpServer.listen(port, () => {
+// localhost only, like `vite dev` (the runner turns the one-time code off).
+httpServer.listen(port, 'localhost', () => {
   console.warn(`  svelte-middleware: http://localhost:${port}/`);
   console.warn(`  Svelte DevTools:   http://localhost:${port}/.svelte-devtools/`);
   if (mcpToken) {

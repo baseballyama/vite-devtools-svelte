@@ -3,7 +3,7 @@ import { delay } from '#lib/delay.ts';
 import type { LayoutLoad } from './$types';
 
 // 2/4: universal layout load. Waits for its parent (sequential) and adds client-side
-// data; on client navigation it runs in the browser and reports over the HMR channel.
+// data; on client navigation it runs in the browser (`ranIn` says where).
 export const load: LayoutLoad = async ({ data, parent }) => {
   await parent();
   await delay(60);

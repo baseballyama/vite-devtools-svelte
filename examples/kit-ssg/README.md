@@ -20,8 +20,8 @@ pnpm -C examples/kit-ssg build      # build/ に全ページ・feed.json・sitem
 ## 確認項目
 
 - [ ] **Routes**: 7 ルート（うち 2 つが endpoint、`blog/[slug]` は動的）
-- [ ] **Load functions**: `/` で server + universal、`/blog/[slug]/` で server + universal の両方が記録される。`/client-only/` の universal load はブラウザから届く
-- [ ] **Components**: `/blog/[slug]/` で `Likes` が出て、別記事に移ると `{#key}` で別インスタンスになる
+- [ ] **Load functions**: `/` で server + universal、`/blog/[slug]/` で server + universal の両方が記録される。`/client-only/` の universal load はブラウザで走るので、#147 以降でだけ記録される（main では出ない）
+- [ ] **Components**: `/blog/[slug]/` で `Likes` が出て、記事下の「Next」リンクで別記事に移ると、ページは残ったまま `Likes` だけが `{#key}` で別インスタンスになる
 - [ ] `/no-js/` を開いてもアプリ・DevTools がエラーにならない（ランタイムがないので Components は空 / 直前のページのまま）
 - [ ] **Social preview**: `/` が og:title / og:image 付きで出る。trailingSlash = 'always' のルート（`/blog` など）はリダイレクトになる
 - [ ] **API**: `GET /feed.json`, `GET /sitemap.xml` が呼べる

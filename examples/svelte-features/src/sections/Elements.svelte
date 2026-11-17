@@ -42,10 +42,3 @@
   <option>blockquote</option>
 </select>
 <svelte:element this={tag}>rendered as &lt;{tag}&gt;</svelte:element>
-
-{#snippet passed(n: number)}
-  <strong>snippet rendered by a child with n = {n}</strong>
-{/snippet}
-<Frame title="snippet passed down">
-  {@render passed(42)}
-</Frame>

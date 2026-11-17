@@ -39,4 +39,4 @@ pnpm examples --dock    # 全アプリを Vite DevTools のドック内で起動
 
 ## アプリを足すとき
 
-`examples/<name>/package.json` に `"devtoolsExample": { "port": <未使用のポート> }` を書くと `pnpm examples` の対象になります（アプリの URL が `/` 以外なら `"base": "/base/"`、`vite dev` ではなく自前サーバーなら `"server": "server.js"`。サーバーは `PORT` を読むこと）。`vite.config.ts` では `SVELTE_DEVTOOLS_DOCK` と `SVELTE_DEVTOOLS_CLIENT_AUTH` を読んでください（既存アプリと同じ書き方）。
+`examples/<name>/package.json` に `"devtoolsExample": { "port": <未使用のポート> }` を書くと `pnpm examples` の対象になります（アプリの URL が `/` 以外なら `"base": "/base/"`、`vite dev` ではなく自前サーバーなら `"server": "server.js"`。サーバーは `PORT` を読み、localhost でだけ待ち受けること。常に `@vitejs/devtools` を読み込むアプリは `"dock": true`）。`vite.config.ts` では `SVELTE_DEVTOOLS_DOCK` と `SVELTE_DEVTOOLS_CLIENT_AUTH` を読んでください（既存アプリと同じ書き方）。SvelteKit のアプリは `kit-` で始まる名前にすると `pnpm sync:kit` の対象に入ります。

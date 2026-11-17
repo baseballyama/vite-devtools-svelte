@@ -8,6 +8,7 @@
 //   pnpm examples --auth               # keep the one-time code (off by default here)
 //   pnpm examples --list               # print the apps and exit
 //
+// `devtoolsExample.dock: true` marks an app that always loads @vitejs/devtools.
 // An app is any examples/<dir>/package.json with a `devtoolsExample.port`;
 // `devtoolsExample.server` names a custom Node server (started with PORT set)
 // instead of `vite dev`. Ctrl+C stops exactly the processes started here.
@@ -18,7 +19,8 @@ import path from 'node:path';
 const repoRoot = path.resolve(import.meta.dirname, '..');
 const examplesDir = path.join(repoRoot, 'examples');
 
-const args = process.argv.slice(2);
+// (`pnpm examples -- --list` passes the `--` through.)
+const args = process.argv.slice(2).filter(a => a !== '--');
 const flags = new Set(args.filter(a => a.startsWith('--')));
 const only = args.filter(a => !a.startsWith('--'));
 const known = new Set(['--dock', '--auth', '--list', '--help']);
@@ -29,7 +31,7 @@ for (const f of flags) {
   }
 }
 
-/** @typedef {{ name: string, dir: string, port: number, server?: string, description: string, base: string }} App */
+/** @typedef {{ name: string, dir: string, port: number, server?: string, description: string, base: string, alwaysDock: boolean }} App */
 
 /** @returns {App[]} */
 function discoverApps() {
@@ -49,6 +51,7 @@ function discoverApps() {
       server: meta.server,
       description: pkg.description ?? '',
       base: meta.base ?? '/',
+      alwaysDock: meta.dock === true,
     });
   }
   apps.sort((a, b) => a.port - b.port);
@@ -93,6 +96,15 @@ for (const required of ['index.mjs', 'client/index.html']) {
     process.exit(1);
   }
 }
+const notInstalled = apps.filter(
+  app => !app.server && !fs.existsSync(path.join(app.dir, 'node_modules/vite/bin/vite.js')),
+);
+if (notInstalled.length > 0) {
+  console.error(
+    `${notInstalled.map(a => a.name).join(', ')}: dependencies missing, run \`pnpm install\` first.`,
+  );
+  process.exit(1);
+}
 
 const dock = flags.has('--dock');
 const env = {
@@ -107,6 +119,8 @@ const width = Math.max(...apps.map(a => a.name.length));
 /** @type {Map<string, import('node:child_process').ChildProcess>} */
 const children = new Map();
 let stopping = false;
+/** Apps that exited before Ctrl+C (e.g. port taken): left out of the banner, exit code 1. */
+const failed = new Set();
 
 function prefixLines(app, color, stream, target) {
   let buffered = '';
@@ -148,9 +162,10 @@ apps.forEach((app, i) => {
   child.on('exit', (code, signal) => {
     children.delete(app.name);
     if (!stopping) {
+      failed.add(app.name);
       console.error(`\u001B[${color}m${app.name}\u001B[0m exited (${signal ?? code})`);
     }
-    if (children.size === 0) process.exit(stopping ? 0 : 1);
+    if (children.size === 0) process.exit(failed.size > 0 ? 1 : 0);
   });
 });
 
@@ -161,20 +176,24 @@ function stop() {
   // Anything still alive after 5 s gets SIGKILL (only the children started here).
   setTimeout(() => {
     for (const child of children.values()) child.kill('SIGKILL');
-    process.exit(0);
+    process.exit(failed.size > 0 ? 1 : 0);
   }, 5000).unref();
 }
 process.on('SIGINT', stop);
 process.on('SIGTERM', stop);
 
 const mode = dock ? 'dock (Vite DevTools)' : 'standalone';
-const rows = apps.map(app => {
-  const origin = `http://localhost:${app.port}`;
-  const appUrl = origin + app.base;
-  const devtools = dock ? `${appUrl} → dock → Svelte` : `${origin}/.svelte-devtools/`;
-  return `  ${app.name.padEnd(width)}  ${appUrl.padEnd(34)}  ${devtools}`;
-});
 setTimeout(() => {
+  // `dock: true` apps always load @vitejs/devtools: no standalone page there.
+  const rows = apps
+    .filter(app => !failed.has(app.name))
+    .map(app => {
+      const origin = `http://localhost:${app.port}`;
+      const appUrl = origin + app.base;
+      const devtools =
+        dock || app.alwaysDock ? `${appUrl} → dock → Svelte` : `${origin}/.svelte-devtools/`;
+      return `  ${app.name.padEnd(width)}  ${appUrl.padEnd(34)}  ${devtools}`;
+    });
   console.log(
     [
       '',

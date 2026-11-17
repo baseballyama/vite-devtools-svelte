@@ -1,6 +1,6 @@
 # kit-spa — `ssr = false` の SvelteKit SPA
 
-ルート `+layout.ts` で `export const ssr = false` を指定した SPA です（`adapter-static` の `fallback: '200.html'`）。サーバーで何もレンダリングしないため、**すべての load は universal load としてブラウザで実行**されます。load のタイミングはサーバー側のレコーダーではなく HMR チャンネル経由で DevTools に届く（`load-profile.ts` の `LOAD_PROFILE_EVENT`）ので、その経路を確かめるためのアプリです。データは `static/data/*.json` を load の `fetch` で取得します。
+ルート `+layout.ts` で `export const ssr = false` を指定した SPA です（`adapter-static` の `fallback: '200.html'`）。サーバーで何もレンダリングしないため、**すべての load は universal load としてブラウザで実行**されます。ブラウザで走る load を DevTools が計測できるかを確かめるためのアプリです（main 時点のプラグインはサーバーで走った load しか計測しない（ブラウザ側の計測経路は #147 で入る）ため、main ではこのアプリの Load functions は空になる）。データは `static/data/*.json` を load の `fetch` で取得します。
 
 | ルート        | ポイント                                                                                  |
 | ------------- | ----------------------------------------------------------------------------------------- |
@@ -14,7 +14,7 @@
 
 ## 確認項目
 
-- [ ] Load functions: どの load も `universal` として記録される（`server` は 0 件）。`/` では layout → page の順の waterfall
+- [ ] Load functions（#147 以降）: どの load も `universal` として記録される（`server` は 0 件）。main では空。`/` では layout → page の順の waterfall
 - [ ] `/live` で invalidate するたびに `/live` の load 件数が増える。`refreshAll()` では layout の load も増える
 - [ ] `/users/999` の 404（load が throw）は記録されず、エラーページが表示される
 - [ ] Routes: `/`, `/live`, `/settings`, `/users`, `/users/:id` が universal load 付きで並ぶ

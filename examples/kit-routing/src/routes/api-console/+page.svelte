@@ -21,6 +21,16 @@
   async function run(call: Call) {
     busy = true;
     output = `${call.method} ${call.url}\n`;
+    try {
+      await send(call);
+    } catch (error) {
+      output += `→ ${String(error)}\n`;
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function send(call: Call) {
     const response = await fetch(call.url, {
       method: call.method,
       headers: call.body ? { 'content-type': 'application/json' } : undefined,
@@ -34,7 +44,6 @@
       if (done) break;
       output += value;
     }
-    busy = false;
   }
 </script>
 
