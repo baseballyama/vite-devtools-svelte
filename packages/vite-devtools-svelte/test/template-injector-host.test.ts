@@ -20,14 +20,14 @@ import { sveltekitTemplateInjector } from '../src/server/template-injector.js'
 const INJECT_URL = '/__devtools/embedded.js'
 /** Removed from `@vitejs/devtools` 0.7.6; requesting it 500s (review H-INJ). */
 const REMOVED_INJECT_URL = '/@id/@vitejs/devtools/client/inject'
-const INTERNAL = '/.svelte-kit/generated/server/internal.js'
+const SERVER = '/.svelte-kit/generated/dev/server.js'
 
 const realHome = process.env.HOME
 const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'sdt-home-'))
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sdt-kit-inject-'))
-fs.mkdirSync(path.join(root, '.svelte-kit/generated/server'), { recursive: true })
+fs.mkdirSync(path.join(root, '.svelte-kit/generated/dev'), { recursive: true })
 fs.writeFileSync(
-  path.join(root, INTERNAL),
+  path.join(root, SERVER),
   `export const options = {
   templates: {
     app: ({ head, body }) => "<!doctype html><html><head>" + head + "</head><body>" + body + "</body></html>",
@@ -50,7 +50,7 @@ const hubStandIn: Plugin = { name: 'vite:devtools' }
 
 const servers: ViteDevServer[] = []
 let lastOrigin = ''
-async function transformedInternal(plugins: PluginOption[]): Promise<string> {
+async function transformedServer(plugins: PluginOption[]): Promise<string> {
   process.env.HOME = tmpHome
   const server = await createServer({
     configFile: false,
@@ -62,7 +62,7 @@ async function transformedInternal(plugins: PluginOption[]): Promise<string> {
   servers.push(server)
   await server.listen()
   lastOrigin = server.resolvedUrls!.local[0]!.replace(/\/$/, '')
-  const result = await server.environments.ssr.transformRequest(INTERNAL)
+  const result = await server.environments.ssr.transformRequest(SERVER)
   expect(result).not.toBeNull()
   return result!.code
 }
@@ -76,14 +76,14 @@ afterAll(async () => {
 
 describe('SvelteKit template injection follows the host', () => {
   it('standalone: the generated template never references the hub inject script', async () => {
-    const code = await transformedInternal([svelteDevtools()])
+    const code = await transformedServer([svelteDevtools()])
     expect(code).toContain('</body>')
     expect(code).not.toContain(INJECT_URL)
     expect(code).not.toContain(REMOVED_INJECT_URL)
   }, 20_000)
 
   it('inside Vite DevTools: the inject script is added before </body>', async () => {
-    const code = await transformedInternal([hubStandIn, svelteDevtools()])
+    const code = await transformedServer([hubStandIn, svelteDevtools()])
     expect(code).toContain(`${INJECT_URL}\\"></script></body>`)
     expect(code).not.toContain(REMOVED_INJECT_URL)
   }, 20_000)
@@ -92,7 +92,7 @@ describe('SvelteKit template injection follows the host', () => {
   // no built client to mount in the hub (dist/client), and hub detection is
   // covered by the stand-in cases above.
   it('with the real Vite DevTools hub: the injected script URL is served (review H-INJ)', async () => {
-    const code = await transformedInternal([
+    const code = await transformedServer([
       ...(await realHub()),
       sveltekitTemplateInjector(() => true),
     ])

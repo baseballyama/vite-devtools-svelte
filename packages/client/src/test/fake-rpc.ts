@@ -33,7 +33,7 @@ export const project: ProjectInfo = {
   name: 'demo-app',
   version: '1.0.0',
   svelteVersion: '5.0.0',
-  sveltekitVersion: '2.0.0',
+  sveltekitVersion: '3.0.0',
   viteVersion: '6.0.0',
   dependencies: {},
   devDependencies: {},

@@ -106,10 +106,11 @@ function stringLiteral(expression: string): string | undefined {
 }
 
 function resolveImportPath(importPath: string, dir: string, root: string): string | null {
-  // $lib alias (SvelteKit 2) or the `#lib/*` subpath import SvelteKit 3 uses
-  // instead, both conventionally mapped to <root>/src/lib. Resolved from the
-  // analysed root: the nearest package.json above the importing file (used
-  // before) may belong to a nested package under src/.
+  // The `#lib/*` subpath import SvelteKit uses, or a `$lib` alias an app keeps
+  // through `alias: { $lib: 'src/lib' }`, both conventionally mapped to
+  // <root>/src/lib. Resolved from the analysed root: the nearest package.json
+  // above the importing file (used before) may belong to a nested package
+  // under src/.
   if (importPath.startsWith('$lib/') || importPath.startsWith('#lib/')) {
     const libPath = path.join(root, 'src', 'lib', importPath.slice(5))
     return fs.existsSync(libPath) ? libPath : null

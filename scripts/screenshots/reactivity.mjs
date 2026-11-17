@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Real-runtime screenshots of the Reactivity UI for the README / PR, taken in
 // CI (Linux, headless) on the synthetic example app `examples/sample-app`
-// (SvelteKit 2, `vite.standalone.config.ts`, the workspace plugin build).
+// (SvelteKit 3, `vite.standalone.config.ts`, the workspace plugin build).
 //
 //   node scripts/screenshots/reactivity.mjs --out=<dir>
 //
@@ -227,7 +227,7 @@ const SENSITIVE = [
   ...homes.map(h => new RegExp(h)),
 ]
 const manifest = {
-  app: 'examples/sample-app (SvelteKit 2, vite.standalone.config.ts) — synthetic demo app, real runtime',
+  app: 'examples/sample-app (SvelteKit 3, vite.standalone.config.ts) — synthetic demo app, real runtime',
   commit: git('rev-parse', 'HEAD'),
   // Tree hash of the client UI sources the images show.
   clientTree: git('rev-parse', 'HEAD:packages/client/src'),
