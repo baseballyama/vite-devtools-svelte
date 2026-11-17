@@ -40,6 +40,9 @@
   let sending = $state(false)
   /** Stops the request in flight. */
   let inflight: AbortController | null = null
+  /** The latest streamed progress not yet shown, and the frame that will show it. */
+  let progress: ApiResponse | null = null
+  let frame = 0
   let bodyEl = $state<HTMLPreElement>()
   /** Whether a streaming body keeps scrolling to its end. */
   let following = true
@@ -116,8 +119,14 @@
         { url, method, headers: parsedHeaders.value, body: hasBody ? body : '' },
         {
           signal: controller.signal,
+          // At most one repaint per frame: a fast stream sends many chunks a
+          // frame, and each repaint renders the whole body so far.
           onProgress: r => {
-            response = r
+            progress = r
+            frame ||= requestAnimationFrame(() => {
+              frame = 0
+              if (progress) response = progress
+            })
           },
         },
       )
@@ -125,6 +134,9 @@
       response = null
       requestError = errorMessage(e)
     } finally {
+      cancelAnimationFrame(frame)
+      frame = 0
+      progress = null
       sending = false
       inflight = null
     }
@@ -133,6 +145,46 @@
   function stop() {
     inflight?.abort()
   }
+
+  // Leaving the panel stops a request still in flight (an endless stream
+  // would otherwise keep reading in the background).
+  $effect(() => () => {
+    inflight?.abort()
+    cancelAnimationFrame(frame)
+  })
+
+  /** Headers the browser sets itself and drops from a script's request (Fetch "forbidden" names). */
+  const FORBIDDEN = new Set([
+    'accept-charset',
+    'accept-encoding',
+    'access-control-request-headers',
+    'access-control-request-method',
+    'connection',
+    'content-length',
+    'cookie',
+    'cookie2',
+    'date',
+    'dnt',
+    'expect',
+    'host',
+    'keep-alive',
+    'origin',
+    'referer',
+    'set-cookie',
+    'te',
+    'trailer',
+    'transfer-encoding',
+    'upgrade',
+    'via',
+  ])
+  const droppedHeaders = $derived(
+    'value' in parsedHeaders
+      ? Object.keys(parsedHeaders.value).filter(name => {
+          const n = name.toLowerCase()
+          return FORBIDDEN.has(n) || n.startsWith('proxy-') || n.startsWith('sec-')
+        })
+      : [],
+  )
 
   // Follow a streaming body while the view is at its end; a reader who
   // scrolled up keeps their place.
@@ -247,6 +299,11 @@
             aria-invalid={!!headersError}
             spellcheck="false"></textarea>
           {#if headersError}<p class="hint error">{headersError}</p>{/if}
+          {#if droppedHeaders.length}<p class="hint">
+              The browser sets these itself and drops them here: <span class="mono"
+                >{droppedHeaders.join(', ')}</span
+              >. The app's cookies are sent automatically.
+            </p>{/if}
         {/if}
       </div>
 
@@ -259,7 +316,7 @@
             >
             {#if sending}<Badge tone="blue">Streaming…</Badge>{/if}
             <span class="num muted">{formatMs(response.duration)}</span>
-            <span class="num muted">{formatBytes(new Blob([response.body]).size)}</span>
+            <span class="num muted">{formatBytes(response.size)}</span>
             <details class="hdrs">
               <summary>{Object.keys(response.headers).length} headers</summary>
               <dl class="kv">
