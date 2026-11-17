@@ -11,7 +11,7 @@
   import type { Tone } from '../components/types.js'
   import VirtualList from '../components/VirtualList.svelte'
   import { errorMessage, formatBytes, formatMs } from '../lib/format.js'
-  import { sendRequest } from '../lib/http.js'
+  import { MAX_BODY_BYTES, sendRequest } from '../lib/http.js'
   import type { ApiResponse, Truncation } from '../lib/http.js'
   import { matcher } from '../lib/match.js'
   import { resource } from '../lib/resource.svelte.js'
@@ -40,6 +40,8 @@
   let sending = $state(false)
   /** Stops the request in flight. */
   let inflight: AbortController | null = null
+  /** Counts sends; a request whose number is no longer current shows nothing. */
+  let generation = 0
   /** The latest streamed progress not yet shown, and the frame that will show it. */
   let progress: ApiResponse | null = null
   let frame = 0
@@ -76,19 +78,24 @@
   const headersError = $derived('error' in parsedHeaders ? parsedHeaders.error : null)
 
   const TRUNCATION: Record<Truncation, string> = {
-    size: 'Body cut at 5 MB',
+    size: `Body cut at ${formatBytes(MAX_BODY_BYTES)}`,
     stopped: 'Stopped while streaming; showing what arrived',
     error: 'Connection failed midway; showing what arrived',
   }
 
   const hasBody = $derived(method !== 'GET' && method !== 'HEAD')
 
+  /** Characters of a streaming body shown while it arrives; the whole body shows once it ends. */
+  const STREAM_TAIL = 64 * 1024
+  const streamingTail = $derived(sending && (response?.body.length ?? 0) > STREAM_TAIL)
+
   const pretty = $derived.by(() => {
     if (!response?.body) return ''
-    // A body still arriving is shown as it comes: half a JSON document does not parse.
-    if (sending) return response.body
-    const ct =
-      Object.entries(response.headers).find(([k]) => k.toLowerCase() === 'content-type')?.[1] ?? ''
+    // A body still arriving is shown as it comes (half a JSON document does
+    // not parse), and only its end: each frame renders all of it again.
+    if (sending) return streamingTail ? response.body.slice(-STREAM_TAIL) : response.body
+    // `Headers` names are lowercase.
+    const ct = response.headers['content-type'] ?? ''
     const first = response.body.trimStart()[0]
     if (ct.includes('json') || first === '[' || first === '{') {
       try {
@@ -99,6 +106,9 @@
   })
 
   function pick(e: ApiEndpoint) {
+    // A request still streaming belongs to the endpoint picked before.
+    generation++
+    stop()
     selected = e.route
     method = e.methods[0] ?? 'GET'
     url = new URL(e.url, location.origin).href
@@ -112,33 +122,43 @@
     requestError = null
     response = null
     following = true
+    const id = ++generation
     const controller = new AbortController()
     inflight = controller
     try {
-      response = await sendRequest(
-        { url, method, headers: parsedHeaders.value, body: hasBody ? body : '' },
+      // `sendRequest` drops the body of GET and HEAD itself.
+      const result = await sendRequest(
+        { url, method, headers: parsedHeaders.value, body },
         {
           signal: controller.signal,
           // At most one repaint per frame: a fast stream sends many chunks a
-          // frame, and each repaint renders the whole body so far.
+          // frame, and each repaint renders the body shown so far.
           onProgress: r => {
             progress = r
             frame ||= requestAnimationFrame(() => {
               frame = 0
-              if (progress) response = progress
+              if (progress && id === generation) response = progress
             })
           },
         },
       )
+      if (id !== generation) return
+      // Status 0: no response at all (network, CORS, timeout, stopped early).
+      if (result.status === 0) {
+        response = null
+        requestError = result.statusText
+      } else response = result
     } catch (e) {
+      if (id !== generation) return
       response = null
       requestError = errorMessage(e)
     } finally {
+      // A frame still pending would paint older progress over the result.
       cancelAnimationFrame(frame)
       frame = 0
       progress = null
       sending = false
-      inflight = null
+      if (inflight === controller) inflight = null
     }
   }
 
@@ -307,11 +327,12 @@
         {/if}
       </div>
 
-      <section class="res" aria-label="Response" aria-live="polite" aria-busy={sending}>
+      <section class="res" aria-label="Response" aria-busy={sending}>
         {#if requestError}
           <EmptyState title="Request failed" error={requestError} />
         {:else if response}
-          <header class="res-head">
+          <!-- Announce the status line, not a body of up to 5 MB. -->
+          <header class="res-head" aria-live="polite">
             <Badge tone={statusTone(response.status)}>{response.status} {response.statusText}</Badge
             >
             {#if sending}<Badge tone="blue">Streaming…</Badge>{/if}
@@ -325,10 +346,13 @@
               </dl>
             </details>
           </header>
-          {#if response.redirected || response.truncated}
+          {#if response.redirected || response.truncated || streamingTail}
             <p class="notes">
               {#if response.redirected}<span class="mono">Redirected to {response.url}</span>{/if}
               {#if response.truncated}<span>{TRUNCATION[response.truncated]}</span>{/if}
+              {#if streamingTail}<span
+                  >Showing the last {formatBytes(STREAM_TAIL)} while streaming; all of it once it ends</span
+                >{/if}
             </p>
           {/if}
           <pre class="body mono" bind:this={bodyEl} {onscroll}>{pretty ||

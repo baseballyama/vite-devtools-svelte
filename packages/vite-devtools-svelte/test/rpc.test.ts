@@ -89,6 +89,8 @@ describe('project analysis RPCs', () => {
     const endpoints = await rpc.get('svelte-devtools:get-api-endpoints')!()
     expect(endpoints.length).toBeGreaterThan(0)
     for (const e of endpoints) expect(e.methods.length).toBeGreaterThan(0)
+    // the host's base reaches the endpoints' URLs
+    for (const e of endpoints) expect(e.url).toBe(`/base${e.path}`)
   })
 
   it('get-build-analysis is empty without build output', async () => {

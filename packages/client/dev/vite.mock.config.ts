@@ -46,8 +46,24 @@ const assets: Connect.NextHandleFunction = (_req, res) => {
   res.end(MOCK_ASSET_SVG)
 }
 
-/** Echoes every API playground request as JSON (DELETE answers 404). */
+/**
+ * Echoes every API playground request as JSON (DELETE answers 404). A path
+ * ending in `/stream` answers server-sent events until the client stops it.
+ */
 const api: Connect.NextHandleFunction = (req, res) => {
+  // `use(prefix)` strips the prefix from `req.url`; echo what was requested.
+  const requested = req.originalUrl ?? req.url ?? ''
+  if (req.url?.split('?')[0]?.endsWith('/stream')) {
+    res.setHeader('content-type', 'text/event-stream')
+    let n = 0
+    const timer = setInterval(() => {
+      res.write(`data: ${JSON.stringify({ n: ++n, at: Date.now() })}\n\n`)
+    }, 250)
+    req.on('close', () => {
+      clearInterval(timer)
+    })
+    return
+  }
   let body = ''
   req.on('data', c => {
     body += c
@@ -58,7 +74,13 @@ const api: Connect.NextHandleFunction = (req, res) => {
     res.setHeader('content-type', 'application/json')
     res.setHeader('cache-control', 'no-store')
     res.end(
-      JSON.stringify({ ok: !missing, url: req.url, method: req.method, body, items: [{ id: 1 }] }),
+      JSON.stringify({
+        ok: !missing,
+        url: requested,
+        method: req.method,
+        body,
+        items: [{ id: 1 }],
+      }),
     )
   })
 }

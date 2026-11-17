@@ -329,7 +329,10 @@ export interface ApiEndpoint {
   route: string
   /** Route path with params as `:name` / `:name?` / `*name`. */
   path: string
-  /** `path` under the dev server's base: what to request from the app's origin. */
+  /**
+   * `path` under the dev server's base, on the app's origin. Params stay
+   * placeholders (`:id`, `:id?`, `*rest`) to fill in before sending.
+   */
   url: string
   methods: string[]
   file: string

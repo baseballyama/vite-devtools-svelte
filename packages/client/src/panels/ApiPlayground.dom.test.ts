@@ -9,7 +9,10 @@ import type { ApiEndpoint } from '../lib/types.js'
 import { layout, settle } from '../test/dom.js'
 import ApiPlayground from './ApiPlayground.svelte'
 
-vi.mock('../lib/http.js', () => ({ sendRequest: vi.fn() }))
+vi.mock('../lib/http.js', async importOriginal => ({
+  ...(await importOriginal<typeof http>()),
+  sendRequest: vi.fn(),
+}))
 
 const endpoints: ApiEndpoint[] = [
   {
@@ -131,7 +134,7 @@ describe('ApiPlayground', () => {
     expect(within(list).getByText('Scanning +server files…')).toBeTruthy()
   })
 
-  it('picking an endpoint fills method and URL; sending calls the RPC and shows the response', async () => {
+  it('picking an endpoint fills method and URL; Send calls sendRequest and shows the response', async () => {
     vi.mocked(http.sendRequest).mockResolvedValue(
       ok({ headers: { 'Content-Type': 'application/json', 'x-id': '7' } }),
     )
@@ -274,12 +277,13 @@ describe('ApiPlayground', () => {
     expect(within(response()).getByText('Streaming…')).toBeTruthy()
     // An empty body so far is not "(empty body)".
     expect(response().querySelector('pre')!.textContent).toBe('')
-    // A half-arrived JSON-looking body is shown raw, and the view follows its end.
+    // A body still arriving is shown raw, even when it parses as JSON, and
+    // the view follows its end.
     const pre = response().querySelector('pre')!
     Object.defineProperty(pre, 'scrollHeight', { configurable: true, value: 500 })
-    onProgress!({ ...head, body: '{"a":' })
+    onProgress!({ ...head, body: '{"a":1}' })
     await settle()
-    expect(pre.textContent).toBe('{"a":')
+    expect(pre.textContent).toBe('{"a":1}')
     expect(pre.scrollTop).toBe(500)
     // A reader who scrolls up keeps their place.
     Object.defineProperty(pre, 'clientHeight', { configurable: true, value: 100 })
@@ -300,6 +304,116 @@ describe('ApiPlayground', () => {
     expect(sendButton().disabled).toBe(false)
   })
 
+  it('shows only the end of a long body while it streams', async () => {
+    const long = `${'a'.repeat(70 * 1024)}END`
+    vi.mocked(http.sendRequest).mockImplementation((_req, opts) => {
+      opts!.onProgress!(ok({ body: long, headers: {} }))
+      return new Promise(() => {})
+    })
+    const { user } = await setup()
+    await user.type(urlInput(), 'http://x/')
+    await user.click(sendButton())
+    await settle()
+    const shown = response().querySelector('pre')!.textContent
+    expect(shown).toHaveLength(64 * 1024)
+    expect(shown.endsWith('END')).toBe(true)
+    expect(
+      within(response()).getByText(
+        'Showing the last 64.0 KB while streaming; all of it once it ends',
+      ),
+    ).toBeTruthy()
+  })
+
+  it('a frame still pending never paints older progress over the result', async () => {
+    vi.mocked(http.sendRequest).mockImplementation((_req, opts) => {
+      // the last chunk and the end arrive in the same frame
+      opts!.onProgress!(ok({ body: 'partial' }))
+      return Promise.resolve(ok({ body: 'final', truncated: 'size' }))
+    })
+    const { user } = await setup()
+    await user.type(urlInput(), 'http://x/')
+    await user.click(sendButton())
+    await settle()
+    expect(response().querySelector('pre')!.textContent).toBe('final')
+    expect(within(response()).getByText('Body cut at 5.00 MB')).toBeTruthy()
+  })
+
+  it('shows a request with no response (status 0) as a failure', async () => {
+    vi.mocked(http.sendRequest).mockResolvedValue(
+      ok({ status: 0, statusText: 'Failed to fetch (cors hint)', headers: {}, body: '', size: 0 }),
+    )
+    const { user } = await setup()
+    await user.type(urlInput(), 'http://x/')
+    await user.click(sendButton())
+    await settle()
+    expect(within(response()).getByRole('alert').textContent).toContain(
+      'Failed to fetch (cors hint)',
+    )
+    expect(within(response()).queryByText(/^0 /)).toBeNull()
+  })
+
+  it('a new send clears the last response and follows its stream again', async () => {
+    const { user } = await setup()
+    await user.type(urlInput(), 'http://x/')
+    await user.click(sendButton())
+    await settle()
+    expect(within(response()).getByText('200 OK')).toBeTruthy()
+    // scroll up in the finished response
+    const pre = response().querySelector('pre')!
+    Object.defineProperty(pre, 'clientHeight', { configurable: true, value: 100 })
+    Object.defineProperty(pre, 'scrollHeight', { configurable: true, value: 500 })
+    pre.scrollTop = 0
+    await fireEvent.scroll(pre)
+
+    vi.mocked(http.sendRequest).mockReturnValue(new Promise(() => {}))
+    await user.click(sendButton())
+    // the previous response is gone while the new one is awaited
+    expect(within(response()).getByText('Waiting for a response…')).toBeTruthy()
+    const { onProgress } = vi.mocked(http.sendRequest).mock.calls[1]![1]!
+    onProgress!(ok({ body: 'streaming' }))
+    await settle()
+    const next = response().querySelector('pre')!
+    Object.defineProperty(next, 'scrollHeight', { configurable: true, value: 900 })
+    onProgress!(ok({ body: 'streaming more' }))
+    await settle()
+    expect(next.scrollTop).toBe(900)
+  })
+
+  it('picking another endpoint stops the request and drops its late results', async () => {
+    let resolve!: (r: ApiResponse) => void
+    vi.mocked(http.sendRequest).mockReturnValue(
+      new Promise(r => {
+        resolve = r
+      }),
+    )
+    const { user, list } = await setup()
+    await user.click(within(list).getAllByRole('option')[0]!)
+    await user.click(sendButton())
+    const { signal, onProgress } = vi.mocked(http.sendRequest).mock.calls[0]![1]!
+    onProgress!(ok({ body: 'old stream' }))
+    await settle()
+    expect(response().querySelector('pre')!.textContent).toBe('old stream')
+
+    await user.click(within(list).getAllByRole('option')[1]!)
+    expect(signal!.aborted).toBe(true)
+    // the old request's progress and result arrive after the switch
+    onProgress!(ok({ body: 'old stream, more' }))
+    resolve(ok({ body: 'old stream, more', truncated: 'stopped' }))
+    await settle()
+    expect(within(response()).getByText('Send a request')).toBeTruthy()
+    expect(urlInput().value).toBe(`${location.origin}/app/api/items/:id`)
+    expect(sendButton().disabled).toBe(false)
+  })
+
+  it('announces the status line, not the body', async () => {
+    const { user } = await setup()
+    await user.type(urlInput(), 'http://x/')
+    await user.click(sendButton())
+    await settle()
+    expect(response().hasAttribute('aria-live')).toBe(false)
+    expect(within(response()).getByText('200 OK').closest('[aria-live]')!.tagName).toBe('HEADER')
+  })
+
   it('shows one repaint per frame with the latest progress, and the byte size', async () => {
     vi.mocked(http.sendRequest).mockImplementation((_req, opts) => {
       // two chunks in the same frame: only the second is painted
@@ -315,6 +429,7 @@ describe('ApiPlayground', () => {
     expect(raf).toHaveBeenCalledOnce()
     expect(response().querySelector('pre')!.textContent).toBe('first second')
     expect(within(response()).getByText('2.0 KB')).toBeTruthy()
+    raf.mockRestore()
   })
 
   it('aborts the request in flight when the panel goes away', async () => {
@@ -373,7 +488,7 @@ describe('ApiPlayground', () => {
   })
 
   it.each([
-    ['size', 'Body cut at 5 MB'],
+    ['size', 'Body cut at 5.00 MB'],
     ['stopped', 'Stopped while streaming; showing what arrived'],
     ['error', 'Connection failed midway; showing what arrived'],
   ] as const)('says why a %s-truncated body is partial', async (truncated, note) => {
