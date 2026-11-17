@@ -32,7 +32,7 @@ describe('devframe definition', () => {
     expect(def.id).toBe(DEVFRAME_ID)
     expect(def.basePath).toBe(DEVFRAME_BASE)
     expect(def.capabilities).toEqual({ dev: true, build: false })
-    expect(def.packageName).toBe('vite-devtools-svelte')
+    expect(def.packageName).toBe('@sveltejs/vite-devtools-svelte')
     expect(def.clientAssets).toMatch(/client$/)
   })
 

@@ -149,13 +149,13 @@ After the app page reloads, a selected component id may belong to another instan
 
 - **Vite** >= 8.3.2
 - **Svelte** 5 (runes mode)
-- **SvelteKit** 2 or 3 (recommended, but not required for basic features)
+- **SvelteKit** 3 (recommended, but not required for basic features; SvelteKit 2 is not supported)
 - **[@vitejs/devtools](https://devtools.vite.dev/)** >= 0.8.0 — optional; only for the in-page dock
 
 ## Installation
 
 ```bash
-npm install -D vite-devtools-svelte
+npm install -D @sveltejs/vite-devtools-svelte
 # optional: show the panels inside the Vite DevTools dock
 npm install -D @vitejs/devtools
 ```
@@ -167,8 +167,8 @@ Register the plugin in your `vite.config.ts`. `svelteDevtools()` **must come bef
 ```ts
 // vite.config.ts
 import { sveltekit } from '@sveltejs/kit/vite'
+import { svelteDevtools } from '@sveltejs/vite-devtools-svelte'
 import { defineConfig } from 'vite'
-import { svelteDevtools } from 'vite-devtools-svelte'
 
 export default defineConfig({
   plugins: [
@@ -289,7 +289,7 @@ The endpoint is served wherever your Vite dev server listens. With the default (
 
 ### Skills
 
-Two Claude Code skills ship under `node_modules/vite-devtools-svelte/skills/`:
+Two Claude Code skills ship under `node_modules/@sveltejs/vite-devtools-svelte/skills/`:
 
 - `vite-devtools-svelte-perf-audit` — captures a baseline session, calls `list_performance_issues`, and presents the top issues for the user to triage.
 - `vite-devtools-svelte-perf-fix` — one issue per run: baseline → edit → after → `compare_sessions`, with `verdict` reported verbatim and an explicit revert path if the change regresses or has no effect.
@@ -300,7 +300,7 @@ To install for a given project:
 
 ```bash
 mkdir -p .claude/skills
-cp -r node_modules/vite-devtools-svelte/skills/* .claude/skills/
+cp -r node_modules/@sveltejs/vite-devtools-svelte/skills/* .claude/skills/
 ```
 
 ### Scope
@@ -375,7 +375,7 @@ matches across machines.
 │   │   └── test/               # Vitest: unit, reactivity (real Svelte), perf
 │   └── client/                 # DevTools UI (Svelte 5 SPA), built into the plugin's dist/client
 ├── playground/                 # Demo SvelteKit app for development
-├── examples/                   # Sample apps (Kit 2, plain Svelte, strict CSP)
+├── examples/                   # Sample apps (SvelteKit, plain Svelte, strict CSP)
 ├── e2e/                        # Browser end-to-end checks: compat matrix, reactivity through MCP
 ├── perf/                       # Opt-in large-app benchmarks
 ├── scripts/screenshots/        # Doc screenshot and MCP example capture

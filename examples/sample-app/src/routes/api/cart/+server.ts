@@ -1,5 +1,6 @@
-import { getProduct } from '$lib/server/products'
-import { json, error } from '@sveltejs/kit'
+import { error } from '@sveltejs/kit'
+
+import { getProduct } from '#lib/server/products.ts'
 
 import type { RequestHandler } from './$types'
 
@@ -16,7 +17,7 @@ export const POST: RequestHandler = async ({ request }) => {
   const qty = body.qty ?? 1
   if (qty > product.stock) error(409, 'insufficient stock')
 
-  return json({
+  return Response.json({
     ok: true,
     line: { id: product.id, name: product.name, price: product.price, qty },
   })

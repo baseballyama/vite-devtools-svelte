@@ -162,7 +162,7 @@
   {:else if project.error || !project.data}
     <EmptyState title="Dev server not reachable" error={project.error ?? ''}>
       <p>
-        This panel needs a running Vite dev server with <code>vite-devtools-svelte</code> installed.
+        This panel needs a running Vite dev server with <code>@sveltejs/vite-devtools-svelte</code> installed.
       </p>
       <Button icon="refresh" onclick={() => project.refresh()}>Retry</Button>
     </EmptyState>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths'
-  import { cart } from '$lib/stores/cart.svelte'
+
+  import { cart } from '#lib/stores/cart.svelte.ts'
 
   interface Props {
     id: string

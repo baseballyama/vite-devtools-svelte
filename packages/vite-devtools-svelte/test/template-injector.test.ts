@@ -4,10 +4,9 @@ import path from 'node:path'
 import { describe, it, expect } from 'vitest'
 
 import {
-  injectIntoSvelteKitInternal,
+  injectIntoSvelteKitTemplate,
   sveltekitTemplateInjector,
-  SVELTEKIT_INTERNAL_SUFFIX,
-  SVELTEKIT3_DEV_SERVER_SUFFIX,
+  SVELTEKIT_DEV_SERVER_SUFFIX,
   TEMPLATE_APP_MARKER,
 } from '../src/server/template-injector.js'
 
@@ -20,7 +19,7 @@ const REMOVED_INJECT_URL = '/@id/@vitejs/devtools/client/inject'
  * In real generated code `</body>` is NOT escaped (`JSON.stringify` doesn't
  * touch `/`), only newlines and quotes are.
  */
-const FAKE_INTERNAL_JS = `import root from '../src/root.js';
+const FAKE_SERVER_JS = `import root from '../src/root.js';
 import { set_assets } from '$app/paths/internal/server';
 
 export const options = {
@@ -32,9 +31,9 @@ export const options = {
 };
 `
 
-describe('injectIntoSvelteKitInternal', () => {
+describe('injectIntoSvelteKitTemplate', () => {
   it('inserts the inject script before the first </body> in the app template', () => {
-    const out = injectIntoSvelteKitInternal(FAKE_INTERNAL_JS)
+    const out = injectIntoSvelteKitTemplate(FAKE_SERVER_JS)
     expect(out).not.toBeNull()
     expect(out!).toContain(INJECT_URL)
     // The inject tag is itself a JS string literal substring, so the quotes
@@ -46,7 +45,7 @@ describe('injectIntoSvelteKitInternal', () => {
   })
 
   it('targets the app template literal, not later body close tags', () => {
-    const out = injectIntoSvelteKitInternal(FAKE_INTERNAL_JS)!
+    const out = injectIntoSvelteKitTemplate(FAKE_SERVER_JS)!
     const appTagIdx = out.indexOf(INJECT_URL)
     const errorTemplateIdx = out.indexOf('error: ')
     expect(appTagIdx).toBeGreaterThan(-1)
@@ -54,18 +53,18 @@ describe('injectIntoSvelteKitInternal', () => {
   })
 
   it('is idempotent across re-runs (HMR)', () => {
-    const once = injectIntoSvelteKitInternal(FAKE_INTERNAL_JS)!
-    const twice = injectIntoSvelteKitInternal(once)
+    const once = injectIntoSvelteKitTemplate(FAKE_SERVER_JS)!
+    const twice = injectIntoSvelteKitTemplate(once)
     expect(twice).toBeNull()
   })
 
   it('bails out cleanly if the templates marker is missing', () => {
-    expect(injectIntoSvelteKitInternal('export const x = 1;')).toBeNull()
+    expect(injectIntoSvelteKitTemplate('export const x = 1;')).toBeNull()
   })
 
   it('bails out cleanly if no </body> appears', () => {
     expect(
-      injectIntoSvelteKitInternal(
+      injectIntoSvelteKitTemplate(
         `export const options = { ${TEMPLATE_APP_MARKER} app: () => "" }`,
       ),
     ).toBeNull()
@@ -73,7 +72,7 @@ describe('injectIntoSvelteKitInternal', () => {
 })
 
 /** A generated module whose app template literal is `app` (already JSON-escaped). */
-const internalWith = (app: string, eol = '\n') =>
+const serverWith = (app: string, eol = '\n') =>
   [
     'export const options = {',
     '\ttemplates: {',
@@ -86,7 +85,7 @@ const internalWith = (app: string, eol = '\n') =>
 
 const TAG = String.raw`<script type=\"module\" src=\"/__devtools/embedded.js\"></script>`
 
-describe('injectIntoSvelteKitInternal: app.html edge cases', () => {
+describe('injectIntoSvelteKitTemplate: app.html edge cases', () => {
   it.each([
     [
       '`</body>` in an HTML comment before the real one',
@@ -109,31 +108,31 @@ describe('injectIntoSvelteKitInternal: app.html edge cases', () => {
       String.raw`<body>" + body + "<script src=\"/@id/@vitejs/devtools/client/inject\"></script>${TAG}</body>`,
     ],
   ])('%s: the tag goes before the document closing tag', (_, app, expected) => {
-    expect(injectIntoSvelteKitInternal(internalWith(app))).toBe(internalWith(expected))
+    expect(injectIntoSvelteKitTemplate(serverWith(app))).toBe(serverWith(expected))
   })
 
   it('handles a CRLF generated module (line ends after the literal)', () => {
     const app = '<body>" + body + "</body>'
-    expect(injectIntoSvelteKitInternal(internalWith(app, '\r\n'))).toBe(
-      internalWith(`<body>" + body + "${TAG}</body>`, '\r\n'),
+    expect(injectIntoSvelteKitTemplate(serverWith(app, '\r\n'))).toBe(
+      serverWith(`<body>" + body + "${TAG}</body>`, '\r\n'),
     )
   })
 
   it('patches exactly once; a second pass is a no-op', () => {
-    const once = injectIntoSvelteKitInternal(internalWith('<body></body>'))!
+    const once = injectIntoSvelteKitTemplate(serverWith('<body></body>'))!
     expect(once.split('/__devtools/embedded.js')).toHaveLength(2)
-    expect(injectIntoSvelteKitInternal(once)).toBeNull()
+    expect(injectIntoSvelteKitTemplate(once)).toBeNull()
   })
 
   it('never touches the error template', () => {
-    const out = injectIntoSvelteKitInternal(internalWith('<body></body>'))!
+    const out = injectIntoSvelteKitTemplate(serverWith('<body></body>'))!
     const errorLine = out.split('\n').find(l => l.includes('error:'))!
     expect(errorLine).not.toContain('embedded.js')
   })
 
   it('a multi-line app literal (unexpected shape) falls back to the first `</body>`', () => {
     const code = 'export const options = { templates: {\napp: () => `<body>\n</body>`\n} }'
-    expect(injectIntoSvelteKitInternal(code)).toBe(code.replace('</body>', `${TAG}</body>`))
+    expect(injectIntoSvelteKitTemplate(code)).toBe(code.replace('</body>', `${TAG}</body>`))
   })
 
   it.each([
@@ -143,12 +142,12 @@ describe('injectIntoSvelteKitInternal: app.html edge cases', () => {
       'export const options = { templates: { app: () => "<body></body>" } }',
     ],
   ])('%s: the first `</body>` after the marker', (_, code) => {
-    expect(injectIntoSvelteKitInternal(code)).toBe(code.replace('</body>', `${TAG}</body>`))
+    expect(injectIntoSvelteKitTemplate(code)).toBe(code.replace('</body>', `${TAG}</body>`))
   })
 
   it('a `</body>` only before the templates marker is not a target', () => {
     expect(
-      injectIntoSvelteKitInternal('// </body>\nexport const options = { templates: { app: x } }'),
+      injectIntoSvelteKitTemplate('// </body>\nexport const options = { templates: { app: x } }'),
     ).toBeNull()
   })
 })
@@ -167,38 +166,19 @@ describe('sveltekitTemplateInjector plugin', () => {
     expect(apply({}, { command: 'build', isSsrBuild: false })).toBe(false)
   })
 
-  it('matches the SvelteKit generated path and rewrites it', () => {
+  it('matches the SvelteKit dev server module and rewrites it', () => {
     const transform = plugin.transform as (
       this: unknown,
       code: string,
       id: string,
     ) => { code: string; map: null } | undefined
-    const result = transform.call(
-      {},
-      FAKE_INTERNAL_JS,
-      `/abs/project/.svelte-kit/generated/server/internal.js`,
-    )
+    const result = transform.call({}, FAKE_SERVER_JS, `/abs/project/${SVELTEKIT_DEV_SERVER_SUFFIX}`)
     expect(result).toBeDefined()
     expect(result!.code).toContain(INJECT_URL)
     expect(result!.code).not.toContain(REMOVED_INJECT_URL)
-  })
-
-  it('matches the SvelteKit 3 dev server module and rewrites it', () => {
-    const transform = plugin.transform as (
-      this: unknown,
-      code: string,
-      id: string,
-    ) => { code: string; map: null } | undefined
-    const result = transform.call(
-      {},
-      FAKE_INTERNAL_JS,
-      `/abs/project/${SVELTEKIT3_DEV_SERVER_SUFFIX}`,
-    )
-    expect(result).toBeDefined()
-    expect(result!.code).toContain(INJECT_URL)
     // the build-time module is never a dev target
     expect(
-      transform.call({}, FAKE_INTERNAL_JS, '/abs/project/.svelte-kit/generated/build/server.js'),
+      transform.call({}, FAKE_SERVER_JS, '/abs/project/.svelte-kit/generated/build/server.js'),
     ).toBeNull()
   })
 
@@ -207,11 +187,7 @@ describe('sveltekitTemplateInjector plugin', () => {
     hosted = false
     try {
       expect(
-        transform.call(
-          {},
-          FAKE_INTERNAL_JS,
-          `/abs/project/.svelte-kit/generated/server/internal.js`,
-        ),
+        transform.call({}, FAKE_SERVER_JS, `/abs/project/${SVELTEKIT_DEV_SERVER_SUFFIX}`),
       ).toBeNull()
     } finally {
       hosted = true
@@ -220,62 +196,47 @@ describe('sveltekitTemplateInjector plugin', () => {
 
   it('ignores other modules', () => {
     const transform = plugin.transform as (this: unknown, code: string, id: string) => unknown
-    expect(transform.call({}, FAKE_INTERNAL_JS, '/abs/project/src/lib/foo.ts')).toBeNull()
+    expect(transform.call({}, FAKE_SERVER_JS, '/abs/project/src/lib/foo.ts')).toBeNull()
   })
 })
 
 /**
- * Early-warning test: load the actual `internal.js` SvelteKit produced for the
- * strict-csp-app fixture and assert that the structural markers we depend on
- * are still present. If a future SvelteKit version changes the generated
- * shape, this test fails and we know to revisit the path matching rather
- * than silently shipping a missing dock.
+ * Early-warning test: load the actual dev server module SvelteKit generated
+ * for an example app and assert that the structural markers we depend on are
+ * still present. If a future SvelteKit version changes the generated shape,
+ * this test fails and we know to revisit the path matching rather than
+ * silently shipping a missing dock.
  */
 describe('SvelteKit shape contract', () => {
-  const fixtureCandidates = [
-    // Resolve relative to the test file so it works under both vitest cwd modes.
-    path.resolve(
-      import.meta.dirname,
-      '../../../examples/strict-csp-app/.svelte-kit/generated/server/internal.js',
-    ),
-    path.resolve(
-      import.meta.dirname,
-      '../../../examples/sample-app/.svelte-kit/generated/server/internal.js',
-    ),
-    path.resolve(
-      import.meta.dirname,
-      '../../../playground/.svelte-kit/generated/server/internal.js',
-    ),
-  ]
+  // Resolve relative to the test file so it works under both vitest cwd modes.
+  const fixtureCandidates = ['examples/strict-csp-app', 'examples/sample-app', 'playground'].map(
+    app => path.resolve(import.meta.dirname, '../../..', app, SVELTEKIT_DEV_SERVER_SUFFIX),
+  )
 
   // Resolved at collection time so the contract tests below are reported as
   // skipped (not silently passed) when no generated fixture exists.
   const realPath = fixtureCandidates.find(candidate => fs.existsSync(candidate)) ?? null
-  const realInternal = realPath === null ? null : fs.readFileSync(realPath, 'utf8')
+  const realServer = realPath === null ? null : fs.readFileSync(realPath, 'utf8')
   if (realPath === null) {
     console.warn(
-      '[skip] No generated/server/internal.js fixture found. ' +
+      '[skip] No generated/dev/server.js fixture found. ' +
         'Run `pnpm -C examples/strict-csp-app exec svelte-kit sync` to populate one.',
     )
   }
-  const noFixture = realInternal === null
-
-  it.skipIf(noFixture)('uses the documented generated file suffix', () => {
-    expect(realPath!.endsWith(SVELTEKIT_INTERNAL_SUFFIX)).toBe(true)
-  })
+  const noFixture = realServer === null
 
   it.skipIf(noFixture)('contains the templates.app structural marker', () => {
-    expect(realInternal!).toContain(TEMPLATE_APP_MARKER)
+    expect(realServer!).toContain(TEMPLATE_APP_MARKER)
   })
 
   it.skipIf(noFixture)('contains a literal </body> inside the app template arrow function', () => {
     // SvelteKit emits the template via `JSON.stringify`-style escaping which
     // leaves `/` untouched, so `</body>` appears verbatim inside the literal.
-    expect(realInternal!).toMatch(/templates:\s*\{[\s\S]*?app:[\s\S]*?<\/body>/)
+    expect(realServer!).toMatch(/templates:\s*\{[\s\S]*?app:[\s\S]*?<\/body>/)
   })
 
   it.skipIf(noFixture)('successfully rewrites the real generated file', () => {
-    const out = injectIntoSvelteKitInternal(realInternal!)
+    const out = injectIntoSvelteKitTemplate(realServer!)
     expect(out).not.toBeNull()
     expect(out!).toContain(INJECT_URL)
   })

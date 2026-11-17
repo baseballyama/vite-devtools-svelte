@@ -410,7 +410,7 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
             </div>
             <div>
               <dt>Svelte</dt>
-              <dd>5（runes モード）。plain Svelte、SvelteKit 2、Kit 3 を CI でテストしています</dd>
+              <dd>5（runes モード）。plain Svelte と SvelteKit 3 を CI でテストしています</dd>
             </div>
             <div>
               <dt>MCP</dt>

@@ -11,6 +11,11 @@
       "project": ["src/**/*.{ts,js}", "test/**/*.{ts,svelte}"],
       "ignore": ["test/fixtures/**"]
     },
+    "packages/inspector": {
+      "entry": ["src/runtime/load-inspector.js", "src/runtime/Inspector.svelte", "test/**/*.js"],
+      "project": ["src/**/*.{js,svelte}", "test/**/*.js"],
+      "ignoreDependencies": ["@sveltejs/vite-plugin-svelte"]
+    },
     "packages/client": {
       "entry": ["dev/vite.mock.config.ts"],
       "project": ["src/**/*.{ts,svelte}", "dev/**/*.ts", "test/**/*.ts"]
