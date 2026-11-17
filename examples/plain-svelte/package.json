@@ -2,6 +2,7 @@
   "name": "plain-svelte",
   "version": "0.0.1",
   "private": true,
+  "description": "Plain Svelte + Vite, the smallest app (compat smoke profile)",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -15,5 +16,8 @@
     "svelte": "5.57.3",
     "typescript": "6.0.3",
     "vite": "8.3.5"
+  },
+  "devtoolsExample": {
+    "port": 5201
   }
 }

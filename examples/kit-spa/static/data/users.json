@@ -1,0 +1,16 @@
+[
+  {
+    "id": 1,
+    "name": "Ada Lovelace",
+    "role": "admin",
+    "bio": "Wrote the first algorithm for a machine."
+  },
+  { "id": 2, "name": "Alan Turing", "role": "editor", "bio": "Asked whether machines can think." },
+  { "id": 3, "name": "Grace Hopper", "role": "editor", "bio": "Built the first compiler." },
+  {
+    "id": 4,
+    "name": "Edsger Dijkstra",
+    "role": "viewer",
+    "bio": "Shortest paths, and go to considered harmful."
+  }
+]

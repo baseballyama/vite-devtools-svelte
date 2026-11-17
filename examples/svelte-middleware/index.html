@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>svelte-middleware</title>
+    <!--ssr-head-->
+  </head>
+  <body>
+    <div id="app"><!--ssr-body--></div>
+    <script>
+      window.__INITIAL_PROPS__ = /*ssr-props*/ null;
+    </script>
+    <script type="module" src="/src/entry-client.ts"></script>
+  </body>
+</html>

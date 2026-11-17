@@ -10,6 +10,7 @@
     "test": "pnpm --recursive --filter './packages/*' run test",
     "dev": "pnpm build && pnpm -C playground dev",
     "dev:ui": "pnpm build && pnpm -C playground dev:ui",
+    "examples": "node scripts/examples.mjs",
     "lint": "oxlint && eslint .",
     "lint:fix": "oxlint --fix && eslint . --fix",
     "format": "oxfmt",
@@ -25,7 +26,7 @@
     "knip": "knip",
     "sherif": "sherif",
     "publint": "pnpm -C packages/vite-devtools-svelte exec publint --strict && pnpm -C packages/vite-devtools-svelte exec attw --pack . --profile esm-only",
-    "sync:kit": "pnpm --filter site --filter playground --filter ./examples/sample-app --filter ./examples/strict-csp-app exec svelte-kit sync",
+    "sync:kit": "pnpm --filter site --filter playground --filter \"./examples/*\" --filter=!plain-svelte --filter=!svelte-features --filter=!svelte-middleware --filter=!examples-ui-lib exec svelte-kit sync",
     "test:coverage": "pnpm --recursive --filter './packages/*' run test:coverage"
   },
   "devDependencies": {

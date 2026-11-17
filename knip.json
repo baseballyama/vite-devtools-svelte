@@ -25,6 +25,15 @@
     },
     "examples/sample-app": {
       "entry": ["vite.standalone.config.ts"]
+    },
+    "examples/svelte-middleware": {
+      "entry": ["src/entry-server.ts"]
+    },
+    "examples/kit-config": {
+      "entry": ["src/app-routes/**/+*.{ts,svelte}"]
+    },
+    "examples/kit-routing": {
+      "entry": ["src/params.ts"]
     }
   },
   "ignoreBinaries": ["top", "svelte-check", "svelte-kit"]

@@ -336,6 +336,9 @@ pnpm build
 # Run the playground app with DevTools
 pnpm dev
 
+# Start every example app at once, one port each (see examples/README.md)
+pnpm examples          # standalone; add --dock for the Vite DevTools dock
+
 # Run tests (plugin + client UI)
 pnpm test
 
@@ -375,7 +378,7 @@ matches across machines.
 │   │   └── test/               # Vitest: unit, reactivity (real Svelte), perf
 │   └── client/                 # DevTools UI (Svelte 5 SPA), built into the plugin's dist/client
 ├── playground/                 # Demo SvelteKit app for development
-├── examples/                   # Sample apps (SvelteKit, plain Svelte, strict CSP)
+├── examples/                   # One app per app shape (Svelte, Kit SSR/SPA/SSG/remote, …); `pnpm examples` starts all
 ├── e2e/                        # Browser end-to-end checks: compat matrix, reactivity through MCP
 ├── perf/                       # Opt-in large-app benchmarks
 ├── scripts/screenshots/        # Doc screenshot and MCP example capture
