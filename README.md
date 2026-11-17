@@ -387,7 +387,7 @@ matches across machines.
 │   │   │   ├── analyzers/      # Routes, components, assets, build, module graph, OG
 │   │   │   └── mcp/            # MCP server for AI agents
 │   │   └── test/               # Vitest: unit, reactivity (real Svelte), perf
-│   ├── inspector/              # Svelte Inspector, bundled into the plugin's dist/inspector
+│   ├── inspector/              # Svelte Inspector fork (private), bundled into the plugin's dist/inspector
 │   └── client/                 # DevTools UI (Svelte 5 SPA), built into the plugin's dist/client
 ├── playground/                 # Demo SvelteKit app for development
 ├── examples/                   # One app per app shape (Svelte, Kit SSR/SPA/SSG/remote, …); `pnpm examples` starts all
