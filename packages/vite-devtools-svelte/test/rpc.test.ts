@@ -8,11 +8,14 @@ import { describe, it, expect, vi } from 'vitest';
 
 import type { ResolveFile } from '../src/analyzers/api.js';
 import { transport } from '../src/analyzers/http.js';
+import { HOT_EVENTS } from '../src/server/collector.js';
+import type { HotChannel, HotClient } from '../src/server/collector.js';
 import {
   createRpcFunctions,
   createSvelteDevframe,
   DEVFRAME_BASE,
   DEVFRAME_ID,
+  PICK_BROADCAST,
 } from '../src/server/devframe.js';
 import { createTestHost, rpcHandlers } from './helpers.js';
 
@@ -370,6 +373,8 @@ describe('every RPC with valid input', () => {
         [{ file: 'src/lib/C.svelte', line: 2 }],
         () => expect(host.opened.at(-1)).toMatch(/C\.svelte:2$/),
       ],
+      'start-picker': [[], r => expect(r).toBeUndefined()],
+      'get-recent-element-pick': [[], r => expect(r).toBeNull()],
       'open-reactive-in-editor': [
         [{ file: 'src/routes/+page.svelte', name: 'n', type: 'state' }],
         () => expect(host.opened.at(-1)).toMatch(/\+page\.svelte:3$/),
@@ -548,5 +553,111 @@ describe('RPC behaviour details', () => {
       compiled: '',
       file: 'nope.svelte',
     });
+  });
+});
+
+function hotChannel() {
+  const listeners = new Map<string, (payload: unknown, client: HotClient) => void>();
+  const sent: Array<{ event: string; payload: unknown }> = [];
+  const hot: HotChannel = {
+    send: (event, payload) => void sent.push({ event, payload }),
+    on: (event, listener) => void listeners.set(event, listener),
+  };
+  const emit = (event: string, payload: unknown) =>
+    listeners.get(event)!(payload, { send: () => {} });
+  return { hot, sent, emit };
+}
+
+/** A devframe set up over a fake scoped context that records broadcasts. */
+async function setUp(host = createTestHost(FIXTURES_DIR)) {
+  const broadcasts: unknown[] = [];
+  const def = createSvelteDevframe(host);
+  const ctx = {
+    scope: () => ({
+      rpc: {
+        register: () => {},
+        broadcast: (options: unknown) => {
+          broadcasts.push(options);
+          return Promise.resolve();
+        },
+      },
+    }),
+  };
+  await def.setup(ctx as any);
+  const channel = hotChannel();
+  host.collector.attach(channel.hot);
+  return { host, def, ctx, broadcasts, ...channel };
+}
+
+describe('element picker', () => {
+  const pick = { epoch: 'e1', componentId: 4, loc: { file: 'src/App.svelte', line: 3, column: 2 } };
+
+  it('start-picker asks every app page to enter the picker', async () => {
+    const { host, sent } = await setUp();
+    await rpcHandlers(host).get('svelte-devtools:start-picker')!();
+    expect(sent).toEqual([{ event: HOT_EVENTS.picker, payload: { active: true } }]);
+  });
+
+  it('forwards a valid pick to every DevTools UI and ends the picker in other tabs', async () => {
+    const { broadcasts, sent, emit } = await setUp();
+    emit(HOT_EVENTS.elementPicked, pick);
+    expect(broadcasts).toEqual([
+      { method: PICK_BROADCAST, args: [pick], event: true, optional: true },
+    ]);
+    expect(sent).toEqual([{ event: HOT_EVENTS.picker, payload: { active: false } }]);
+  });
+
+  it.each([
+    ['not an object', 'pick'],
+    ['no epoch', { ...pick, epoch: '' }],
+    ['a long epoch', { ...pick, epoch: 'e'.repeat(201) }],
+    ['a negative id', { ...pick, componentId: -1 }],
+    ['a fractional id', { ...pick, componentId: 1.5 }],
+    ['a string id', { ...pick, componentId: '4' }],
+    ['no location', { ...pick, loc: null }],
+    ['an empty file', { ...pick, loc: { ...pick.loc, file: '' } }],
+    ['a long file', { ...pick, loc: { ...pick.loc, file: 'f'.repeat(4097) } }],
+    ['a negative line', { ...pick, loc: { ...pick.loc, line: -1 } }],
+    ['a fractional column', { ...pick, loc: { ...pick.loc, column: 0.5 } }],
+    ['a missing column', { ...pick, loc: { file: 'a', line: 1 } }],
+  ])('drops a pick with %s', async (_, payload) => {
+    const { broadcasts, sent, emit } = await setUp();
+    emit(HOT_EVENTS.elementPicked, payload);
+    expect(broadcasts).toEqual([]);
+    expect(sent).toEqual([]);
+  });
+
+  it('a UI connecting right after a pick can still read it', async () => {
+    const { host, emit } = await setUp();
+    const recent = rpcHandlers(host).get('svelte-devtools:get-recent-element-pick')!;
+    expect(await recent()).toBeNull();
+    emit(HOT_EVENTS.elementPicked, pick);
+    expect(await recent()).toEqual(pick);
+  });
+
+  it('inside the Vite DevTools dock, a pick switches the dock to this tool', async () => {
+    const host = createTestHost(FIXTURES_DIR);
+    const activated: string[] = [];
+    const def = createSvelteDevframe(host);
+    const ctx = {
+      scope: () => ({
+        rpc: { register: () => {}, broadcast: () => Promise.reject(new Error('x')) },
+      }),
+      docks: { activate: (id: string) => activated.push(id) },
+    };
+    await def.setup(ctx as any);
+    const channel = hotChannel();
+    host.collector.attach(channel.hot);
+    // a failed broadcast (no UI connected) is not an error
+    channel.emit(HOT_EVENTS.elementPicked, pick);
+    await Promise.resolve();
+    expect(activated).toEqual([DEVFRAME_ID]);
+  });
+
+  it('a second setup (dev-server restart) replaces the subscription', async () => {
+    const { def, ctx, broadcasts, emit } = await setUp();
+    await def.setup(ctx as any);
+    emit(HOT_EVENTS.elementPicked, pick);
+    expect(broadcasts).toHaveLength(1);
   });
 });

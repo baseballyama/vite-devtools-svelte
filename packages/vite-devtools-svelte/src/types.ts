@@ -73,6 +73,23 @@ export interface ComponentInstance {
   mounted: boolean;
 }
 
+/** A place in a source file (1-based line, 0-based column, as Svelte reports them). */
+export interface SourceLocation {
+  file: string;
+  line: number;
+  column: number;
+}
+
+/** An element picked on the app page: the component instance that rendered it. */
+export interface ElementPick {
+  /** App page load the id belongs to. */
+  epoch: string;
+  /** Nearest tracked component instance (library components are not tracked). */
+  componentId: number;
+  /** The element's location in its template. */
+  loc: SourceLocation;
+}
+
 // Phase 2: Performance Analysis
 
 export interface RenderProfile {

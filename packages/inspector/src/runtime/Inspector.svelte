@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  // vite-devtools-svelte: the DevTools link (null without the DevTools)
+  import devtools from 'virtual:vite-devtools-svelte-inspector-devtools';
   import options from 'virtual:vite-devtools-svelte-inspector-options';
 
   // Copied from Svelte's internal types
@@ -32,6 +34,9 @@
   const nav_keys = Object.values(options.navKeys).map(k => k.toLowerCase());
   const open_key = options.openKey.toLowerCase();
   const open_menu_key = options.openMenuKey.toLowerCase();
+
+  // vite-devtools-svelte: how the label writes the Alt modifier on this platform
+  const alt_key = /Mac|iPhone|iPad/.test(navigator.userAgent) ? '⌥' : 'Alt+';
 
   let enabled = $state(false);
   let has_opened = $state(false);
@@ -166,6 +171,12 @@
 
     if (active_el) {
       stop(e);
+      // vite-devtools-svelte: a click (or the open key) selects the element's component
+      // in the DevTools; with Alt, or when the DevTools do not know it, it opens the editor
+      if (!(e as MouseEvent | KeyboardEvent).altKey && devtools?.pick(active_el)) {
+        disable();
+        return;
+      }
       send(active_el.__svelte_meta.loc);
     }
   }
@@ -422,7 +433,10 @@
     }
     document.addEventListener('visibilitychange', visibilityChange);
     document.documentElement.addEventListener('mouseleave', onLeave);
+    // vite-devtools-svelte: the DevTools' "Pick element" turns the inspector on and off
+    const unlink = devtools?.connect({ enable, disable });
     return () => {
+      unlink?.();
       // make sure we get rid of everything
       disable();
       const s = document.head.querySelector('#svelte-inspector-style');
@@ -504,12 +518,23 @@
       </ul>
     {:else if active_el}
       {@const loc = active_el.__svelte_meta.loc}
+      <!-- vite-devtools-svelte: the component instance, and what a click does -->
+      {@const component = devtools?.describe(active_el)}
 
       <div class="svelte-inspector-grid">
         <div class="svelte-inspector-menu-row">
-          <span class="svelte-inspector-tag">&lt;{active_el.tagName.toLowerCase()}&gt;</span>
+          <span class="svelte-inspector-tag"
+            >&lt;{component?.name ?? active_el.tagName.toLowerCase()}&gt;</span
+          >
           <span class="svelte-inspector-file">{loc.file}:{loc.line}</span>
         </div>
+        {#if devtools}
+          <div class="svelte-inspector-hint">
+            {component
+              ? `click: inspect · ${alt_key}click: open in editor`
+              : 'click: open in editor'}
+          </div>
+        {/if}
       </div>
 
       <div id="svelte-inspector-announcer" aria-live="assertive" aria-atomic="true">
@@ -593,6 +618,14 @@
   .svelte-inspector-tag {
     white-space: nowrap;
     font-weight: 600;
+  }
+
+  /* vite-devtools-svelte */
+  .svelte-inspector-hint {
+    grid-column: 1 / 3;
+    padding: 0 8px 4px;
+    white-space: nowrap;
+    color: #666;
   }
 
   .svelte-inspector-file {

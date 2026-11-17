@@ -8,6 +8,7 @@ import type {
   ProjectInfo,
   ComponentRelation,
   ComponentInstance,
+  ElementPick,
   RenderProfile,
   LoadProfile,
   ReactiveGraphRequest,
@@ -104,6 +105,20 @@ if (hasDocument) {
   });
 }
 
+// --- Element picks pushed by the server (server → UI broadcast) ---
+
+const pickListeners = new Set<(pick: ElementPick) => void>();
+
+function listenForPicks(c: DevframeRpcClient): void {
+  c.scope(NAMESPACE).rpc.register({
+    name: 'element-picked',
+    type: 'event',
+    handler: (pick: ElementPick) => {
+      for (const listener of pickListeners) listener(pick);
+    },
+  });
+}
+
 function detectHost(c: DevframeRpcClient): ConnectionState['host'] {
   // Vite DevTools serves every mounted devframe through its hub, which
   // advertises hub UI configs in the connection meta.
@@ -145,6 +160,7 @@ async function getClient(): Promise<DevframeRpcClient> {
   connecting = connectDevframe({ simpleAuth: false })
     .then(c => {
       client = c;
+      listenForPicks(c);
       setState({ status: c.status, host: detectHost(c) });
       c.events.on('connection:status', status => {
         if (client !== c) return;
@@ -249,6 +265,30 @@ export async function openReactiveInEditor(
   type: string,
 ): Promise<void> {
   await call('open-reactive-in-editor', { file, name, type });
+}
+
+async function deliverRecentPick(cb: (pick: ElementPick) => void): Promise<void> {
+  const pick = await call<ElementPick | null>('get-recent-element-pick');
+  if (pick && pickListeners.has(cb)) cb(pick);
+}
+
+/**
+ * Elements picked in the app page's inspector (clicked while it is on).
+ * Delivered while this tab is hidden too, and a pick made just before this
+ * UI connected (the dock opening the Svelte panel for it) is delivered once
+ * on subscribing. Returns an unsubscribe function.
+ */
+export function onElementPicked(cb: (pick: ElementPick) => void): () => void {
+  pickListeners.add(cb);
+  deliverRecentPick(cb).catch(() => {});
+  return () => {
+    pickListeners.delete(cb);
+  };
+}
+
+/** Turn the inspector on in every connected app page ("Pick element"). */
+export async function startPicker(): Promise<void> {
+  await call('start-picker');
 }
 
 // --- Performance ---

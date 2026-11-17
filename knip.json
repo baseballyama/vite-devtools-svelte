@@ -7,9 +7,15 @@
       "ignoreDependencies": ["axe-core"]
     },
     "packages/vite-devtools-svelte": {
-      "entry": ["src/types.ts", "src/runtime/hooks.js", "test/**/*.ts"],
+      "entry": [
+        "src/types.ts",
+        "src/runtime/hooks.js",
+        "src/runtime/inspector-link.js",
+        "test/**/*.ts"
+      ],
       "project": ["src/**/*.{ts,js}", "test/**/*.{ts,svelte}"],
-      "ignore": ["test/fixtures/**"]
+      "ignore": ["test/fixtures/**"],
+      "ignoreDependencies": ["obug"]
     },
     "packages/inspector": {
       "entry": ["src/runtime/load-inspector.ts", "src/runtime/Inspector.svelte", "test/**/*.ts"],

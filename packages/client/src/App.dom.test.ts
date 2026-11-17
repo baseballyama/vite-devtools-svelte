@@ -4,8 +4,9 @@ import { flushSync } from 'svelte';
 import { describe, expect, it, vi } from 'vitest';
 
 import App from './App.svelte';
+import { elementPick } from './lib/element-pick.svelte.js';
 import { settle } from './test/dom.js';
-import { emitConnection } from './test/fake-rpc.js';
+import { emitConnection, emitPick } from './test/fake-rpc.js';
 
 // One panel whose module fails to load and one that throws while rendering,
 // to exercise the shell's error states. Every other panel is the real one
@@ -226,5 +227,23 @@ describe('App keyboard shortcuts and command palette', () => {
     document.body.focus();
     await userEvent.keyboard('/');
     expect(document.activeElement).toBe(document.body);
+  });
+});
+
+describe('element picks', () => {
+  it('a pick on the app page opens Components with the pick pending', async () => {
+    const view = await renderApp('#/routes');
+    const pick = { epoch: 'e1', componentId: 2, loc: { file: 'src/A.svelte', line: 1, column: 0 } };
+    emitPick(pick);
+    flushSync();
+    expect(location.hash).toBe('#/components');
+    expect(current()?.textContent).toContain('Components');
+    await waitFor(() => expect(visiblePanel().getAttribute('aria-label')).toBe('Components'));
+    // (no live instance #2 here: the pick stays pending)
+    expect(elementPick.pending).toBe(pick);
+    elementPick.done(pick);
+    view.unmount();
+    emitPick(pick);
+    expect(elementPick.pending).toBeNull();
   });
 });

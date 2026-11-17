@@ -1,4 +1,6 @@
 import { mount } from 'svelte';
+// vite-devtools-svelte: the inspector is not one of the app's components
+import devtools from 'virtual:vite-devtools-svelte-inspector-devtools';
 import Inspector from 'virtual:vite-devtools-svelte-inspector-path:Inspector.svelte';
 
 function create_inspector_host() {
@@ -12,4 +14,6 @@ function create_inspector_host() {
   return el;
 }
 
-mount(Inspector, { target: create_inspector_host() });
+const mount_inspector = () => mount(Inspector, { target: create_inspector_host() });
+if (devtools) devtools.untracked(mount_inspector);
+else mount_inspector();

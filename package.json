@@ -4,9 +4,9 @@
   "type": "module",
   "scripts": {
     "build:client": "pnpm -C packages/client build",
-    "build:plugin": "pnpm -C packages/vite-devtools-svelte build",
+    "build:plugin": "pnpm build:inspector && pnpm -C packages/vite-devtools-svelte build",
     "build:inspector": "pnpm -C packages/inspector build",
-    "build": "pnpm build:plugin && pnpm build:inspector && pnpm build:client",
+    "build": "pnpm build:plugin && pnpm build:client",
     "test": "pnpm --recursive --filter './packages/*' run test",
     "dev": "pnpm build && pnpm -C playground dev",
     "dev:ui": "pnpm build && pnpm -C playground dev:ui",

@@ -82,3 +82,12 @@ export interface InspectorOptions {
     base: string;
   };
 }
+
+/** vite-devtools-svelte: the second argument of `svelteInspector`. */
+export interface InspectorLink {
+  /**
+   * Absolute path of a module whose default export is an `InspectorDevtools`
+   * (src/runtime/ambient.d.ts).
+   */
+  devtools?: string;
+}

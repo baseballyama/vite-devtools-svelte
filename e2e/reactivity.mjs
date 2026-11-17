@@ -9,7 +9,9 @@
 // SvelteMap) with Playwright and checks what the MCP tools report: the
 // component tree, the reactive graph (edges, markup readers, module scopes,
 // orphans, isolated nodes), the state timeline after interactions, and the
-// tree after an HMR edit. Exit 0 when every check passes, 1 otherwise.
+// tree after an HMR edit, and the in-page inspector: a click on an element
+// picks the instance that rendered it. Exit 0 when every check passes, 1
+// otherwise.
 //
 // The dev server runs in its own process group and is killed on exit; the
 // HMR edit is undone in finally.
@@ -162,6 +164,15 @@ try {
   const pageErrors = [];
   page.on('pageerror', e => pageErrors.push(String(e)));
   page.on('console', m => m.type() === 'error' && pageErrors.push(m.text()));
+  // Picks the page sends the dev server over the HMR socket (inspector below).
+  const picks = [];
+  page.on('websocket', ws =>
+    ws.on('framesent', ({ payload }) => {
+      if (typeof payload !== 'string' || !payload.includes('element-picked')) return;
+      const msg = JSON.parse(payload);
+      if (msg.event === 'svelte-devtools:element-picked') picks.push(msg.data);
+    }),
+  );
   await page.goto(`${base}/lab`);
   await page.waitForFunction(
     () => document.querySelector('h1')?.textContent?.includes('items'),
@@ -197,6 +208,53 @@ try {
     'two panels ({#if} + {#key}), children of the page',
     panels.length === 2 && panels.every(p => p.parentId === labPage.id),
     panels,
+  );
+
+  // ---------------------------------------------------------------- inspector
+  // Alt+X turns the inspector on; a click on the second row's "+" picks that
+  // Row instance and does not reach the app.
+  const secondInc = page.locator('[data-testid=inc]').nth(1);
+  const qtyBefore = await page.locator('li').nth(1).textContent();
+  await page.mouse.move(5, 5);
+  await page.keyboard.press('Alt+KeyX');
+  await page.waitForFunction(
+    () => document.body.classList.contains('svelte-inspector-enabled'),
+    null,
+    {
+      timeout: 5000,
+    },
+  );
+  await secondInc.hover();
+  const hoverLabel = await page
+    .locator('#svelte-inspector-overlay')
+    .textContent({ timeout: 5000 })
+    .catch(() => '');
+  check(
+    'inspector: hover names the component instance and what a click does',
+    /<Row>/.test(hoverLabel) && /click: inspect · (⌥|Alt\+)click: open in editor/.test(hoverLabel),
+    hoverLabel,
+  );
+  await secondInc.click();
+  await sleep(500);
+  check(
+    'inspector: the click did not reach the app',
+    (await page.locator('li').nth(1).textContent()) === qtyBefore,
+  );
+  check(
+    'inspector: turned off after the pick',
+    !(await page.evaluate(() => document.body.classList.contains('svelte-inspector-enabled'))),
+  );
+  check(
+    'inspector: is not part of the app tree',
+    !(await tool('get_live_components', {})).components?.some(c =>
+      file(c).endsWith('Inspector.svelte'),
+    ),
+  );
+  const live = await tool('get_live_components', { includeMeta: true });
+  check(
+    'inspector: the pick names the second Row instance of the served page load',
+    picks.length === 1 && picks[0].componentId === rows[1]?.id && picks[0].epoch === live.epoch,
+    { picks, rows: rows.map(r => r.id), epoch: live.epoch },
   );
 
   // ---------------------------------------------------------------- graph

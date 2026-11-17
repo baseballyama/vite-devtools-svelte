@@ -8,6 +8,7 @@ import {
   RUNTIME_REQUEST_TIMEOUT,
   MAX_EPOCHS,
   PULL_FRESHNESS,
+  RECENT_PICK_MS,
   STATE_TIMELINE_BYTES,
 } from '../src/server/collector.js';
 import type { HotChannel, HotClient } from '../src/server/collector.js';
@@ -1037,5 +1038,51 @@ describe('Collector state timeline baseline disclosure (review B1/B2)', () => {
     expect(
       normalizeSummary({ baseline: { complete: 1, pendingNodes: 3 } }, 'e'),
     ).not.toHaveProperty('baseline');
+  });
+});
+
+describe('Collector element picks', () => {
+  const loc = { file: 'src/App.svelte', line: 1, column: 0 };
+
+  it("serves the pick's page load, so its instance id resolves in the tree read next", () => {
+    const c = new Collector();
+    const seen: unknown[] = [];
+    const off = c.onElementPicked(pick => {
+      seen.push(pick);
+    });
+    c.ingestComponents({ epoch: 'tab1', components: [comp(1)] });
+    c.ingestComponents({ epoch: 'tab2', components: [comp(2)] });
+    const before = c.versions.components;
+    c.ingestPick({ epoch: 'tab1', componentId: 1, loc });
+    expect(c.epochInfo.epoch).toBe('tab1');
+    expect(c.liveComponents.map(x => x.id)).toEqual([1]);
+    expect(c.versions.components).not.toBe(before);
+    // an unknown page load is not created (nor served)
+    c.ingestPick({ epoch: 'gone', componentId: 1, loc });
+    expect(c.epochInfo).toEqual({ epoch: 'tab1', epochs: 2 });
+    expect(seen).toHaveLength(2);
+    off();
+    c.ingestPick({ epoch: 'tab1', componentId: 1, loc });
+    expect(seen).toHaveLength(2);
+  });
+
+  it('keeps the last pick as recent for RECENT_PICK_MS', () => {
+    vi.useFakeTimers();
+    try {
+      const c = new Collector();
+      expect(c.recentPick).toBeNull();
+      const pick = { epoch: 'tab1', componentId: 1, loc };
+      c.ingestPick(pick);
+      vi.advanceTimersByTime(RECENT_PICK_MS);
+      expect(c.recentPick).toBe(pick);
+      vi.advanceTimersByTime(1);
+      expect(c.recentPick).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('setPicker without a runtime channel is a no-op', () => {
+    expect(() => new Collector().setPicker(true)).not.toThrow();
   });
 });

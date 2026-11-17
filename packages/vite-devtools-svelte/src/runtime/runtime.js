@@ -104,6 +104,10 @@ export function createStore(env) {
     _idByProxy: new WeakMap(),
     // Svelte component context -> component id (set by hooks.js)
     _idByContext: new WeakMap(),
+    // The in-page inspector's { enable, disable } once it is mounted
+    // (inspector-link.js), and whether components created now are its own.
+    _inspector: null,
+    _untracked: false,
     // componentId -> (name -> last suffix) for names declared more than once
     // per instance ({@const} in {#each} items, several $state class instances)
     _nameSeq: new Map(),
@@ -170,8 +174,9 @@ export function createStore(env) {
     _fpsGen: 0,
     // Readers of Svelte's objects (set by hooks.js from svelte/internal/devtools):
     // signalValue, isUninitialized, deps, reactions, kind, componentOf,
-    // children, snapshot, and sourceNode (the node a $state proxy's
-    // property / version signal belongs to, or null).
+    // children, snapshot, sourceNode (the node a $state proxy's
+    // property / version signal belongs to, or null) and trackedComponent
+    // (the id of a context's nearest tracked component, or null).
     _api: null,
     // the HMR channel (connectHot, by the first hooks.js copy that has one)
     _hot: null,
@@ -1546,5 +1551,10 @@ export function connectHot(dt, hot) {
   });
   hot.on('svelte-devtools:clear-state-timeline', () => {
     dt.clearStateTimeline();
+  });
+  // The DevTools' "Pick element", and the end of a pick in another tab.
+  hot.on('svelte-devtools:picker', data => {
+    if (data?.active === true) dt._inspector?.enable();
+    else dt._inspector?.disable();
   });
 }

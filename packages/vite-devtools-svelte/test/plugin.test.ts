@@ -5,8 +5,8 @@ import type { Plugin } from 'vite';
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 
 import { svelteDevtools } from '../src/plugin.js';
-import { HOOKS_FILE, HOOKS_MODULE_ID } from '../src/runtime/index.js';
-import { callHook, resolvePlugins } from './helpers.js';
+import { HOOKS_FILE, HOOKS_MODULE_ID, INSPECTOR_LINK_FILE } from '../src/runtime/index.js';
+import { callHook, codeOf, resolvePlugins } from './helpers.js';
 
 // The app's Svelte as svelteSupport finds it from the root (svelte-support.test.ts
 // covers the lookup): one with the devtools events, unless a test changes it.
@@ -35,7 +35,15 @@ describe('svelteDevtools factory', () => {
       { name: 'vite-devtools-svelte:tracking', enforce: 'post', apply: 'serve' },
       { name: 'vite-devtools-svelte:load-profile', enforce: 'post', apply: 'serve' },
       { name: 'vite-devtools-svelte:warning-capture', enforce: 'post', apply: 'serve' },
+      // after main, whose configResolved completes the inspector's options
+      { name: 'vite-devtools-svelte-inspector', enforce: 'pre', apply: 'serve' },
     ]);
+  });
+
+  it('leaves the inspector out with `inspector: false`', () => {
+    expect(svelteDevtools({ inspector: false }).map(p => p.name)).not.toContain(
+      'vite-devtools-svelte-inspector',
+    );
   });
 });
 
@@ -88,6 +96,19 @@ describe('mainPlugin module resolution', () => {
   });
 
   it.each([
+    ['svelte', INSPECTOR_LINK_FILE],
+    ['svelte/internal/client', `${path.dirname(HOOKS_FILE)}/runtime/Inspector.svelte?svelte`],
+  ])(
+    'resolves %s imported by the browser files next to the hooks (%s) from the project root',
+    async (id, importer) => {
+      const { calls, ctx } = resolveContext();
+      await resolveWith(getMainPlugin(), id, importer, ctx);
+      expect(calls).toEqual([[id, '/test/index.html', { skipSelf: true }]]);
+    },
+  );
+
+  it.each([
+    ['svelte-other', HOOKS_FILE],
     ['svelte', '/test/src/App.svelte'],
     ['svelte/internal/client', '/test/src/App.svelte'],
     ['svelte/internal/devtools', '/test/src/App.svelte'],
@@ -162,6 +183,9 @@ describe('experimental.devtools', () => {
   });
 });
 
+/** The inspector's virtual module for its link to the DevTools. */
+const INSPECTOR_DEVTOOLS_ID = 'virtual:vite-devtools-svelte-inspector-devtools';
+
 /** Serve with vite-plugin-svelte, recording the warnings. */
 function serveWithSvelte(plugins = svelteDevtools()) {
   const api = { options: { compilerOptions: { dev: true } } };
@@ -196,7 +220,7 @@ describe('a Svelte without devtools events', () => {
     expect(resolved.server.fs.allow).toEqual(['/test']);
   });
 
-  it('imports the hooks nowhere: page, Svelte modules', () => {
+  it('imports the hooks nowhere: page, Svelte modules, inspector link', async () => {
     const { byName } = serveWithSvelte();
     const html = byName('vite-devtools-svelte').transformIndexHtml as { handler: () => unknown };
     expect(html.handler()).toEqual([]);
@@ -207,6 +231,10 @@ describe('a Svelte without devtools events', () => {
         '/test/src/cart.svelte.ts',
       ),
     ).toBeNull();
+    // the inspector gets `null` from its virtual module, as upstream
+    expect(await callHook(byName(INSPECTOR_PLUGIN).resolveId, INSPECTOR_DEVTOOLS_ID)).toBe(
+      INSPECTOR_DEVTOOLS_ID,
+    );
   });
 
   it('says why, with the version', () => {
@@ -226,8 +254,10 @@ describe('a Svelte without devtools events', () => {
     expect(serveWithSvelte().warn).not.toHaveBeenCalled();
   });
 
-  it('follows the Svelte of each restart (the plugin instance is reused)', () => {
+  it('follows the Svelte of each restart (the plugin instance is reused)', async () => {
     const plugins = svelteDevtools();
+    const linkOf = () =>
+      callHook(serveWithSvelte(plugins).byName(INSPECTOR_PLUGIN).resolveId, INSPECTOR_DEVTOOLS_ID);
 
     svelte.devtoolsEvents = true;
     const tracked = serveWithSvelte(plugins);
@@ -235,15 +265,14 @@ describe('a Svelte without devtools events', () => {
       dev: true,
       experimental: { devtools: [HOOKS_FILE] },
     });
+    expect(await linkOf()).toBe(INSPECTOR_LINK_FILE);
 
     svelte.devtoolsEvents = false;
     expect(serveWithSvelte(plugins).api.options.compilerOptions).toEqual({ dev: true });
+    expect(await linkOf()).toBe(INSPECTOR_DEVTOOLS_ID);
 
     svelte.devtoolsEvents = true;
-    expect(serveWithSvelte(plugins).api.options.compilerOptions).toEqual({
-      dev: true,
-      experimental: { devtools: [HOOKS_FILE] },
-    });
+    expect(await linkOf()).toBe(INSPECTOR_LINK_FILE);
   });
 });
 
@@ -616,5 +645,55 @@ describe('production build no-op', () => {
         .filter(appliesToBuild)
         .map(p => p.name),
     ).toEqual([]);
+  });
+});
+
+// =====================================================================
+// The in-page inspector (packages/inspector)
+// =====================================================================
+
+const INSPECTOR_PLUGIN = 'vite-devtools-svelte-inspector';
+
+/** The options the inspector's runtime gets, after configResolved. */
+async function inspectorOptionsOf(plugins: Plugin[]) {
+  const inspector = plugins.find(p => p.name === INSPECTOR_PLUGIN)!;
+  const code = await callHook(inspector.load, 'virtual:vite-devtools-svelte-inspector-options');
+  return JSON.parse(codeOf(code).replace('export default ', '')) as Record<string, unknown>;
+}
+
+describe('inspector', () => {
+  it('links the inspector to the DevTools (inspector-link.js)', async () => {
+    const plugins = svelteDevtools();
+    resolvePlugins(plugins);
+    const inspector = plugins.find(p => p.name === INSPECTOR_PLUGIN)!;
+    expect(
+      await callHook(inspector.resolveId, 'virtual:vite-devtools-svelte-inspector-devtools'),
+    ).toBe(INSPECTOR_LINK_FILE);
+  });
+
+  it("takes options from svelteDevtools(), then vite-plugin-svelte's `inspector`, then the defaults", async () => {
+    const plugins = svelteDevtools({ inspector: { holdMode: false } });
+    const api = { options: { inspector: { holdMode: true, toggleKeyCombo: 'meta-i' } } };
+    resolvePlugins(plugins, { plugins: [{ name: 'vite-plugin-svelte:config', api }] });
+    expect(await inspectorOptionsOf(plugins)).toMatchObject({
+      holdMode: false,
+      toggleKeyCombo: 'meta-i',
+      openKey: 'Enter',
+    });
+    // a restart with another svelte.config re-reads it
+    api.options.inspector = { holdMode: true, toggleKeyCombo: 'alt-i' };
+    resolvePlugins(plugins, { plugins: [{ name: 'vite-plugin-svelte:config', api }] });
+    expect(await inspectorOptionsOf(plugins)).toMatchObject({
+      holdMode: false,
+      toggleKeyCombo: 'alt-i',
+    });
+  });
+
+  it('uses the defaults when vite-plugin-svelte has no inspector options', async () => {
+    const plugins = svelteDevtools({ inspector: true });
+    resolvePlugins(plugins, {
+      plugins: [{ name: 'vite-plugin-svelte:config', api: { options: { inspector: true } } }],
+    });
+    expect(await inspectorOptionsOf(plugins)).toMatchObject({ toggleKeyCombo: 'alt-x' });
   });
 });

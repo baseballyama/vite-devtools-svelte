@@ -6,7 +6,7 @@ Svelte DevTools for Vite, built on [Devframe](https://devfra.me/). Provides 15 s
 
 ## Features
 
-- **Component Inspector** — View component hierarchy, props, state, and reactive values in real-time
+- **Component Inspector** — View component hierarchy, props, state, and reactive values in real-time; pick an element in the app (Alt+X, or **Pick element**) to jump to the component instance that rendered it
 - **Reactivity** — A whole-app overview of the busiest components, then the current dependencies of one component's `$state`, `$derived` and `$effect` signals (signals created during component init and shared `.svelte.js/.ts` module state, plus a _markup_ node for reads from the template; edges are "can affect", not a recorded cause, and not the complete app graph)
 - **Render Profiler** — Track component render counts, render times, and identify bottlenecks
 - **Route Viewer** — Explore SvelteKit file-based routing structure with dynamic parameters
@@ -209,6 +209,18 @@ export default defineConfig({
 
 Open your app, click the floating Vite DevTools handle and switch to the **Svelte** tab. The panels are also reachable directly at `/.svelte-devtools/`.
 
+### Picking an element in the app
+
+Start from what you see instead of searching the component tree. The plugin adds the Svelte Inspector to your app page (in place of vite-plugin-svelte's built-in one; options set in its `inspector` option still apply):
+
+- Turn it on with **Alt+X** (Option+X on macOS) in the app, or click **Pick element** in the header of the Components panel (every open app tab turns it on).
+- Hover the page: the element under the cursor is outlined, with the component instance that rendered it and the element's place in its template, e.g. `<Row> src/lib/Row.svelte:12`, and what a click does.
+- **Click** selects that instance in the Components panel: the live tree is shown, its ancestors are expanded, it is scrolled into view and its details open. Markup your app passes to a library component (from `node_modules`, not tracked) selects the nearest component of your app; elements of the library itself are skipped, as in the built-in inspector.
+- **Alt+click** (Option+click) opens the element in your editor, as the built-in inspector does. So does a click on an element whose component the DevTools do not know.
+- **Esc**, or the shortcut again, turns it off. A tap of the shortcut keeps it on; holding it keeps it on only until you release it (with the default Alt+X, a click while holding it is an Alt+click).
+
+With the DevTools in another tab, the pick reaches that tab even while it is in the background, and is shown when you switch to it (a page cannot bring another tab to the front). Inside the Vite DevTools dock, a pick opens the **Svelte** panel. The inspector does nothing until you turn it on, and like the rest of the plugin it is development-only.
+
 ## Options
 
 ```ts
@@ -216,6 +228,11 @@ svelteDevtools({
   // Require the one-time code for the standalone DevTools (default: true).
   // In the Vite DevTools dock use DevTools({ clientAuth: false }) instead.
   clientAuth: true,
+  // The Svelte Inspector in the app page (default: true). An object sets its
+  // options (the same as vite-plugin-svelte's `inspector`, e.g.
+  // { toggleKeyCombo: 'meta-shift' }); false leaves it out, and then
+  // "Pick element" does nothing.
+  inspector: true,
 });
 ```
 

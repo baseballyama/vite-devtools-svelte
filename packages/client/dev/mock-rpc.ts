@@ -640,6 +640,8 @@ export function createMockBackend(scale = 5000) {
     'svelte-devtools:clear-fps': () => ((fps = []), versions.fps++),
     'svelte-devtools:open-in-editor': ({ file, line }: { file: string; line?: number }) =>
       log('open-in-editor', file, line ?? ''),
+    'svelte-devtools:start-picker': () => log('start-picker'),
+    'svelte-devtools:get-recent-element-pick': () => null,
     'svelte-devtools:set-active': ({ client, active }: { client: string; active: boolean }) =>
       log('set-active', client, active),
     'svelte-devtools:open-reactive-in-editor': ({ file, name }: { file: string; name: string }) =>
@@ -655,7 +657,7 @@ export const MOCK_ASSET_SVG =
 
 /** RPCs with side effects are `action`s on the devframe wire. */
 export function rpcType(name: string): 'query' | 'action' {
-  return ['clear', 'open', 'send', 'set'].some(verb => name.includes(`:${verb}-`))
+  return ['clear', 'open', 'send', 'set', 'start'].some(verb => name.includes(`:${verb}-`))
     ? 'action'
     : 'query';
 }

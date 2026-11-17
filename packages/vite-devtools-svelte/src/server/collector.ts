@@ -14,6 +14,8 @@ import type {
   StateTimelineDelta,
   StateTimelineEntry,
   DatasetVersions,
+  ElementPick,
+  SourceLocation,
 } from '../types.js';
 import { LOAD_PROFILE_EVENT, loadProfileOf, parseLoadReport } from './load-profile.js';
 import { arrayOf, asPayload, clampInt, finiteOrNull } from './payload.js';
@@ -82,7 +84,40 @@ export const HOT_EVENTS = {
   runtimeReady: 'svelte-devtools:runtime-ready',
   /** server → runtime(s): `{ active: boolean }` — whether any consumer is watching. */
   subscription: 'svelte-devtools:subscription',
+  /** server → runtime(s): `{ active: boolean }` — turn the in-page inspector on / off. */
+  picker: 'svelte-devtools:picker',
+  /** runtime → server: `{ epoch, componentId, loc }` — an element was picked in the inspector. */
+  elementPicked: 'svelte-devtools:element-picked',
 } as const;
+
+/**
+ * How long a pick stays "recent": a DevTools UI that connects within this
+ * time after it (the dock opening the Svelte panel for it) still gets it.
+ */
+export const RECENT_PICK_MS = 10_000;
+
+/** Longest file path / epoch accepted in a pick. */
+const MAX_PICK_FILE = 4096;
+const MAX_EPOCH = 200;
+
+const isIndex = (v: unknown): v is number =>
+  typeof v === 'number' && Number.isSafeInteger(v) && v >= 0;
+
+/** A source location from the runtime, or null when malformed. */
+function parseSourceLocation(value: unknown): SourceLocation | null {
+  const { file, line, column } = asPayload(value) ?? {};
+  if (typeof file !== 'string' || file.length === 0 || file.length > MAX_PICK_FILE) return null;
+  return isIndex(line) && isIndex(column) ? { file, line, column } : null;
+}
+
+/** A pick from the runtime, or null when malformed. */
+function parseElementPick(value: unknown): ElementPick | null {
+  const { epoch, componentId, loc } = asPayload(value) ?? {};
+  if (typeof epoch !== 'string' || epoch.length === 0 || epoch.length > MAX_EPOCH) return null;
+  if (!isIndex(componentId)) return null;
+  const location = parseSourceLocation(loc);
+  return location && { epoch, componentId, loc: location };
+}
 
 interface EpochState {
   /** Insertion order = registration order (parents first). */
@@ -189,6 +224,9 @@ export class Collector {
   private active = false;
   private sweepTimer: ReturnType<typeof setTimeout> | undefined;
 
+  private readonly pickListeners = new Set<(pick: ElementPick) => void>();
+  private lastPick: { pick: ElementPick; at: number } | null = null;
+
   private readonly hooks: CollectorHooks;
   constructor(hooks: CollectorHooks = {}) {
     this.hooks = hooks;
@@ -233,6 +271,13 @@ export class Collector {
       ],
       [HOT_EVENTS.reactiveGraph, d => this.ingestReactiveGraph(asPayload(d))],
       [HOT_EVENTS.reactiveSummary, d => this.ingestReactiveSummary(asPayload(d))],
+      [
+        HOT_EVENTS.elementPicked,
+        d => {
+          const pick = parseElementPick(d);
+          if (pick) this.ingestPick(pick);
+        },
+      ],
       [
         LOAD_PROFILE_EVENT,
         d => {
@@ -378,6 +423,39 @@ export class Collector {
     if (this.servedEpoch !== undefined) this.bump('components', 'renderProfiles');
     this.servedEpoch = epoch;
     this.liveCache = undefined;
+  }
+
+  // --- element picker ---
+
+  /** Subscribe to elements picked in the app page's inspector; returns an unsubscribe function. */
+  onElementPicked(listener: (pick: ElementPick) => void): () => void {
+    this.pickListeners.add(listener);
+    return () => {
+      this.pickListeners.delete(listener);
+    };
+  }
+
+  /** Turn the inspector on (or off) in every connected app page. */
+  setPicker(active: boolean): void {
+    this.hot?.send(HOT_EVENTS.picker, { active });
+  }
+
+  /**
+   * A pick: its page load becomes the served one (when its tree is known),
+   * so the instance id resolves in the components the UI reads next; every
+   * other app tab leaves picker mode.
+   */
+  ingestPick(pick: ElementPick): void {
+    if (this.epochs.has(pick.epoch)) this.touchEpoch(pick.epoch);
+    this.lastPick = { pick, at: Date.now() };
+    this.setPicker(false);
+    for (const listener of this.pickListeners) listener(pick);
+  }
+
+  /** The last pick when it was made within `RECENT_PICK_MS`, else null. */
+  get recentPick(): ElementPick | null {
+    const last = this.lastPick;
+    return last && Date.now() - last.at <= RECENT_PICK_MS ? last.pick : null;
   }
 
   // --- consumers ---

@@ -8,7 +8,7 @@ import type { DevEnvironment, InlineConfig, PluginOption, ViteDevServer } from '
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { svelteInspector } from '../src/index.js';
-import type { InspectorOptions } from '../src/index.js';
+import type { InspectorLink, InspectorOptions } from '../src/index.js';
 
 const OPTIONS_ID = 'virtual:vite-devtools-svelte-inspector-options';
 
@@ -27,6 +27,7 @@ async function start(
   options?: InspectorOptions,
   plugins: PluginOption[] = [],
   config: InlineConfig = {},
+  link?: InspectorLink,
 ) {
   const root = mkdtempSync(path.join(tmpdir(), 'vds-inspector-'));
   dirs.push(root);
@@ -35,7 +36,7 @@ async function start(
     configFile: false,
     logLevel: 'silent',
     server: { middlewareMode: true, ws: false },
-    plugins: [...plugins, svelteInspector(options)],
+    plugins: [...plugins, svelteInspector(options, link)],
     ...config,
   });
   servers.push(server);
@@ -174,5 +175,15 @@ describe('svelteInspector', () => {
     expect(transform.handler('console.log(1)').code).toBe(
       "console.log(1)\nimport('virtual:vite-devtools-svelte-inspector-path:load-inspector.ts')",
     );
+  });
+
+  it('gives the runtime the DevTools link when one is passed, else null', async () => {
+    const DEVTOOLS_ID = 'virtual:vite-devtools-svelte-inspector-devtools';
+    const linked = await start({}, [], {}, { devtools: '/abs/devtools-link.js' });
+    expect((await linked.pluginContainer.resolveId(DEVTOOLS_ID))?.id).toBe('/abs/devtools-link.js');
+    const plain = await start();
+    const resolved = await plain.pluginContainer.resolveId(DEVTOOLS_ID);
+    expect(resolved?.id).toBe(DEVTOOLS_ID);
+    expect(await plain.pluginContainer.load(DEVTOOLS_ID)).toBe('export default null');
   });
 });

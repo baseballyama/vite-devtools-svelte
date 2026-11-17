@@ -35,8 +35,10 @@ function fileOf(loc) {
 
 // Library internals (SvelteKit's page state, UI kits) are not the app's code:
 // they stay out of the tree and the graph, as dependencies devtools does not track.
+// (filenames can be relative to the project root: `node_modules/x/X.svelte`)
+const LIBRARY_PATH = /(^|\/)node_modules\//;
 function isLibrary(file) {
-  return file.includes('/node_modules/');
+  return LIBRARY_PATH.test(file);
 }
 
 const isObject = value => typeof value === 'object' && value !== null;
@@ -93,6 +95,17 @@ if (dt) {
     return null;
   };
 
+  // The tracked component a context belongs to: the context itself, else its
+  // nearest tracked ancestor (the context `mount` creates around the root
+  // component and library components are transparent). null when none.
+  const trackedComponent = ctx => {
+    for (let c = ctx; c !== null; c = parentComponent(c)) {
+      const id = idByContext.get(c);
+      if (id !== undefined) return id;
+    }
+    return null;
+  };
+
   dt._api = {
     signalValue,
     isUninitialized,
@@ -103,6 +116,7 @@ if (dt) {
     children,
     snapshot,
     sourceNode,
+    trackedComponent,
   };
 
   // Tracked $state nodes written per batch, handed to the runtime once the
@@ -130,17 +144,6 @@ if (dt) {
   // Running render effects and their start times (deriveds can run inside).
   const renders = [];
 
-  // The tracked component a context belongs to: the context itself, else its
-  // nearest tracked ancestor (the context `mount` creates around the root
-  // component and library components are transparent). null when none.
-  const trackedComponent = ctx => {
-    for (let c = ctx; c !== null; c = parentComponent(c)) {
-      const id = idByContext.get(c);
-      if (id !== undefined) return id;
-    }
-    return null;
-  };
-
   // Scope of a signal/effect declared at `loc` (`file:line:column`): the
   // component it is created in, else (module code, class instances created
   // outside a component) the module it is declared in. null when declared in
@@ -156,6 +159,8 @@ if (dt) {
     name: 'vite-devtools-svelte',
 
     componentCreated(ctx) {
+      // the in-page inspector's own UI (inspector-link.js) is not the app's
+      if (dt._untracked) return;
       const file = filename(ctx);
       if (file === undefined || isLibrary(file)) return;
       const id = dt.register(file, trackedComponent(parentComponent(ctx)));

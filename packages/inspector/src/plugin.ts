@@ -2,11 +2,14 @@ import { normalizePath } from 'vite';
 import type { Plugin } from 'vite';
 
 import { defaultInspectorOptions, parseEnvironmentOptions } from './options.js';
-import type { InspectorOptions } from './types.js';
+import type { InspectorLink, InspectorOptions } from './types.js';
 import { log } from './utils/log.js';
 
 /** name of the inspector plugin that ships inside vite-plugin-svelte 7 */
 const BUILTIN_INSPECTOR_NAME = 'vite-plugin-svelte-inspector';
+
+/** vite-devtools-svelte: what the runtime imports to reach the DevTools (see `link`) */
+const DEVTOOLS_ID = 'virtual:vite-devtools-svelte-inspector-devtools';
 
 function getInspectorPath(): string {
   // vite-devtools-svelte: the runtime sits next to this file instead of under
@@ -24,8 +27,12 @@ function getInspectorPath(): string {
  *
  * vite-devtools-svelte: options come from the plugin argument instead of
  * vite-plugin-svelte's `inspector` option (see `configResolved`).
+ *
+ * vite-devtools-svelte: `link.devtools` is the absolute path of a module the
+ * runtime imports to work with the DevTools (default export: `InspectorDevtools`,
+ * declared in runtime/ambient.d.ts); without it the runtime gets `null` and behaves as upstream.
  */
-export function svelteInspector(options: InspectorOptions = {}): Plugin {
+export function svelteInspector(options: InspectorOptions = {}, link: InspectorLink = {}): Plugin {
   const inspectorPath = getInspectorPath();
   log.debug(`svelte inspector path: ${inspectorPath}`, null, 'inspector');
 
@@ -74,21 +81,27 @@ export function svelteInspector(options: InspectorOptions = {}): Plugin {
         if (id === 'virtual:vite-devtools-svelte-inspector-options') {
           return id;
         }
+        if (id === DEVTOOLS_ID) {
+          return link.devtools ?? id;
+        }
         if (id.startsWith('virtual:vite-devtools-svelte-inspector-path:') && !id.includes('..')) {
           return id.replace('virtual:vite-devtools-svelte-inspector-path:', inspectorPath);
         }
         return null;
       },
     },
-    // vite-devtools-svelte: only the virtual options module. Runtime files are read by Vite
-    // itself: it lets through files reached by imports even outside `server.fs.allow`, and its
-    // own read keeps them watched. (Upstream's disk-reading branch never ran: its glob was
-    // `<runtime>//**`.)
+    // vite-devtools-svelte: only the virtual modules (options, and the DevTools link when none
+    // is passed). Runtime files are read by Vite itself: it lets through files reached by
+    // imports even outside `server.fs.allow`, and its own read keeps them watched. (Upstream's
+    // disk-reading branch never ran: its glob was `<runtime>//**`.)
     load: {
       filter: {
-        id: /^virtual:vite-devtools-svelte-inspector-options$/,
+        id: /^virtual:vite-devtools-svelte-inspector-(?:options|devtools)$/,
       },
-      handler() {
+      handler(id) {
+        if (id === DEVTOOLS_ID) {
+          return 'export default null';
+        }
         return `export default ${JSON.stringify(inspectorOptions ?? {})}`;
       },
     },

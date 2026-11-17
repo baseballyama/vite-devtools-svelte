@@ -1,4 +1,4 @@
-// Small runtime behaviours: component names and runtime-error reports.
+// Small runtime behaviours: component names, runtime-error reports, picker requests.
 import { describe, expect, it } from 'vitest';
 
 import { createRuntime, type Harness } from './harness.js';
@@ -62,5 +62,18 @@ describe('runtime errors', () => {
     const h = createRuntime();
     expect(() => h.dispatchWindow('unhandledrejection', { reason })).not.toThrow();
     expect(errors(h)).toEqual([expect.objectContaining({ message })]);
+  });
+});
+
+describe('picker requests', () => {
+  it('the server turns the in-page inspector on / off; without one nothing happens', () => {
+    const h = createRuntime();
+    h.emit('svelte-devtools:picker', { active: true });
+    const calls: string[] = [];
+    h.dt._inspector = { enable: () => calls.push('enable'), disable: () => calls.push('disable') };
+    h.emit('svelte-devtools:picker', { active: true });
+    h.emit('svelte-devtools:picker', { active: false });
+    h.emit('svelte-devtools:picker', null);
+    expect(calls).toEqual(['enable', 'disable', 'disable']);
   });
 });

@@ -2,7 +2,10 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 
 import { launchEditor } from 'devframe/utils/launch-editor';
+import { normalizePath } from 'vite';
 import type { Plugin, ResolvedConfig, ViteDevServer } from 'vite';
+import { svelteInspector } from 'vite-devtools-svelte-inspector';
+import type { InspectorLink } from 'vite-devtools-svelte-inspector';
 
 import { serverResolver } from './analyzers/api.js';
 import { analyzeComponents } from './analyzers/components.js';
@@ -12,7 +15,7 @@ import { analyzeRoutes } from './analyzers/routes.js';
 import { createMcpMiddleware, MCP_PATH } from './mcp/http.js';
 import { buildMcpServer } from './mcp/server.js';
 import { SessionStore } from './mcp/sessions.js';
-import { HOOKS_FILE, HOOKS_MODULE_ID } from './runtime/index.js';
+import { HOOKS_FILE, HOOKS_MODULE_ID, INSPECTOR_LINK_FILE } from './runtime/index.js';
 import { injectModuleTracking, isSvelteModule } from './runtime/transform.js';
 import { Collector } from './server/collector.js';
 import { captureCompilerWarnings } from './server/compiler-warnings.js';
@@ -22,6 +25,31 @@ import { LOAD_RECORDER, loadProfileOf, profileLoad } from './server/load-profile
 import { mountStandalone, urlHost } from './server/mount.js';
 import { svelteSupport } from './svelte-support.js';
 import type { LoadProfile } from './types.js';
+
+/**
+ * Options of the Svelte Inspector in the app page: the same as
+ * vite-plugin-svelte's `inspector` option.
+ */
+export interface SvelteDevtoolsInspectorOptions {
+  /** Key combo that turns the inspector on and off. @default 'alt-x' */
+  toggleKeyCombo?: string;
+  /** Keys that move the selection to the parent / first child / next / previous element. */
+  navKeys?: { parent: string; child: string; next: string; prev: string };
+  /** Key that acts on the selected element, as a click does. @default 'Enter' */
+  openKey?: string;
+  /** Key that opens the menu of the selected element's components. @default ' ' */
+  openMenuKey?: string;
+  /** Keys that turn the inspector off. @default ['Backspace', 'Escape'] */
+  escapeKeys?: string[];
+  /** Holding the key combo turns the inspector on only until it is released. @default true */
+  holdMode?: boolean;
+  /** When to show the on-screen toggle button. @default 'active' */
+  showToggleButton?: 'always' | 'active' | 'never';
+  /** Where the toggle button is. @default 'top-right' */
+  toggleButtonPos?: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
+  /** Outline the element under the cursor and change the cursor while on. @default true */
+  customStyles?: boolean;
+}
 
 export interface SvelteDevtoolsOptions {
   /**
@@ -38,6 +66,16 @@ export interface SvelteDevtoolsOptions {
    * @default true
    */
   clientAuth?: boolean;
+  /**
+   * The Svelte Inspector in the app page, in place of vite-plugin-svelte's
+   * built-in one: hover an element to see its component and location; a
+   * click selects that component instance in the DevTools, Alt+click opens
+   * the element in your editor. Options left out are taken from
+   * vite-plugin-svelte's `inspector` option, then the defaults. `false`
+   * leaves the inspector out (and the "Pick element" button does nothing).
+   * @default true
+   */
+  inspector?: boolean | SvelteDevtoolsInspectorOptions;
 }
 
 /** Name of `@vitejs/devtools`' config plugin; its presence means the hub will call our `devtools.setup`. */
@@ -46,6 +84,24 @@ const VITE_DEVTOOLS_PLUGIN = 'vite:devtools';
 /** vite-plugin-svelte's config plugin; its `api.options` are the resolved Svelte options. */
 const VITE_PLUGIN_SVELTE_CONFIG = 'vite-plugin-svelte:config';
 
+/** The browser files served from disk (hooks.js and its neighbours; in `dist`, the inspector's too). */
+const BROWSER_DIR = `${normalizePath(path.dirname(HOOKS_FILE))}/`;
+
+/** vite-plugin-svelte's resolved options (its config plugin's api), if it is installed. */
+function svelteOptionsOf(plugins: readonly Plugin[]) {
+  const svelteConfig = plugins.find(p => p.name === VITE_PLUGIN_SVELTE_CONFIG);
+  return (
+    svelteConfig?.api as
+      | {
+          options?: {
+            compilerOptions?: { experimental?: { devtools?: string[] } };
+            inspector?: unknown;
+          };
+        }
+      | undefined
+  )?.options;
+}
+
 /**
  * Lists the hooks in the compiler's `experimental.devtools`, in the options
  * vite-plugin-svelte resolved (read when it compiles a component, including
@@ -53,12 +109,7 @@ const VITE_PLUGIN_SVELTE_CONFIG = 'vite-plugin-svelte:config';
  * an entry yet.
  */
 function addDevtoolsHooks(plugins: readonly Plugin[]): void {
-  const svelteConfig = plugins.find(p => p.name === VITE_PLUGIN_SVELTE_CONFIG);
-  const options = (
-    svelteConfig?.api as
-      | { options?: { compilerOptions?: { experimental?: { devtools?: string[] } } } }
-      | undefined
-  )?.options;
+  const options = svelteOptionsOf(plugins);
   if (!options) return;
   const compilerOptions = (options.compilerOptions ??= {});
   const experimental = (compilerOptions.experimental ??= {});
@@ -87,7 +138,13 @@ function collectModules(server: ViteDevServer): GraphModuleLike[] {
 }
 
 export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
-  const { clientAuth = true } = options;
+  const { clientAuth = true, inspector = true } = options;
+  // Filled in configResolved (over vite-plugin-svelte's `inspector` option),
+  // before the inspector plugin, listed after this one, reads it in its own.
+  const inspectorOptions: SvelteDevtoolsInspectorOptions = {};
+  // The inspector's link to the DevTools imports the hooks: dropped in
+  // configResolved when the app's Svelte has no devtools events.
+  const inspectorLink: InspectorLink = {};
 
   let config: ResolvedConfig;
   let server: ViteDevServer | undefined;
@@ -161,8 +218,21 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       root = config.root;
       hostedByViteDevtools = config.plugins.some(p => p.name === VITE_DEVTOOLS_PLUGIN);
       if (serving()) {
+        const fromSvelteConfig = svelteOptionsOf(config.plugins)?.inspector;
+        // (a restart with an inline config reuses this plugin: start over)
+        for (const key of Object.keys(inspectorOptions) as Array<keyof typeof inspectorOptions>) {
+          delete inspectorOptions[key];
+        }
+        Object.assign(
+          inspectorOptions,
+          typeof fromSvelteConfig === 'object' ? fromSvelteConfig : {},
+          typeof inspector === 'object' ? inspector : {},
+        );
+
         const support = svelteSupport(root);
         devtoolsEvents = support.devtoolsEvents;
+        if (devtoolsEvents) inspectorLink.devtools = INSPECTOR_LINK_FILE;
+        else delete inspectorLink.devtools;
         if (!devtoolsEvents && !process.env['VITEST']) {
           const why =
             support.version === undefined
@@ -263,14 +333,19 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       await Promise.all(doomed.map(m => m.dispose()));
     },
 
-    // Module resolution: the alias of the hooks file, and Svelte as the hooks
-    // import it.
+    // Module resolution: the alias of the hooks file, and Svelte as the
+    // browser files served from disk import it.
     async resolveId(id, importer) {
       if (!serving()) return null;
       if (id === HOOKS_MODULE_ID) return HOOKS_FILE;
-      // The hooks must listen to the app's Svelte instance, not one installed
-      // next to this package: resolve as if imported from the project root.
-      if (importer === HOOKS_FILE && id.startsWith('svelte/')) {
+      // The hooks (and the inspector) must use the app's Svelte instance, not
+      // one installed next to this package: resolve as if imported from the
+      // project root.
+      if (
+        (id === 'svelte' || id.startsWith('svelte/')) &&
+        importer !== undefined &&
+        normalizePath(importer).startsWith(BROWSER_DIR)
+      ) {
         return this.resolve(id, path.join(root, 'index.html'), { skipSelf: true });
       }
       return null;
@@ -366,5 +441,12 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     },
   };
 
-  return [mainPlugin, trackingPlugin, loadProfilePlugin, warningCapturePlugin];
+  return [
+    mainPlugin,
+    trackingPlugin,
+    loadProfilePlugin,
+    warningCapturePlugin,
+    // After mainPlugin, whose configResolved completes inspectorOptions.
+    ...(inspector === false ? [] : [svelteInspector(inspectorOptions, inspectorLink)]),
+  ];
 }

@@ -14,6 +14,7 @@ import type * as Real from '../lib/rpc.js';
 import type {
   BuildAnalysis,
   DatasetVersions,
+  ElementPick,
   InspectResult,
   LiveComponentsMeta,
   ModuleGraphData,
@@ -84,6 +85,7 @@ const inspected: InspectResult = { source: '', compiled: '', file: '' };
 
 let connectionState: ConnectionState = { status: 'connected', host: 'standalone' };
 const connectionListeners = new Set<(s: ConnectionState) => void>();
+const pickListeners = new Set<(pick: ElementPick) => void>();
 
 const defaults: { [K in FnKey]: RealRpc[K] } = {
   getConnectionState: () => connectionState,
@@ -104,6 +106,13 @@ const defaults: { [K in FnKey]: RealRpc[K] } = {
   getLiveComponentsMeta: () => Promise.resolve(liveMeta),
   openInEditor: () => Promise.resolve(),
   openReactiveInEditor: () => Promise.resolve(),
+  onElementPicked: cb => {
+    pickListeners.add(cb);
+    return () => {
+      pickListeners.delete(cb);
+    };
+  },
+  startPicker: () => Promise.resolve(),
   getReactiveGraph: () => Promise.resolve(emptyGraph),
   getReactiveSummary: () => Promise.resolve(emptySummary),
   getCaptureInfo: () => Promise.resolve({}),
@@ -143,6 +152,8 @@ export const getLiveComponents = fake('getLiveComponents');
 export const getLiveComponentsMeta = fake('getLiveComponentsMeta');
 export const openInEditor = fake('openInEditor');
 export const openReactiveInEditor = fake('openReactiveInEditor');
+export const onElementPicked = fake('onElementPicked');
+export const startPicker = fake('startPicker');
 export const getReactiveGraph = fake('getReactiveGraph');
 export const getReactiveSummary = fake('getReactiveSummary');
 export const getCaptureInfo = fake('getCaptureInfo');
@@ -178,6 +189,8 @@ const all: { [K in FnKey]: Mock<RealRpc[K]> } = {
   getLiveComponentsMeta,
   openInEditor,
   openReactiveInEditor,
+  onElementPicked,
+  startPicker,
   getReactiveGraph,
   getReactiveSummary,
   getCaptureInfo,
@@ -205,6 +218,11 @@ const all: { [K in FnKey]: Mock<RealRpc[K]> } = {
 export function emitConnection(next: ConnectionState): void {
   connectionState = next;
   for (const listener of connectionListeners) listener(next);
+}
+
+/** Deliver a server → UI element pick to every `onElementPicked` subscriber. */
+export function emitPick(pick: ElementPick): void {
+  for (const listener of pickListeners) listener(pick);
 }
 
 /** Restore every default implementation and clear recorded calls. */

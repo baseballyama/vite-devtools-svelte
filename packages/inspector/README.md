@@ -4,8 +4,13 @@ A fork of the Svelte Inspector that ships inside
 [`@sveltejs/vite-plugin-svelte`](https://github.com/sveltejs/vite-plugin-svelte/tree/main/packages/vite-plugin-svelte/src/plugins/inspector)
 (copied from commit [`42e49eb`](https://github.com/sveltejs/vite-plugin-svelte/tree/42e49ebcc77ad220bb0d4c4840f7053a850fab1e/packages/vite-plugin-svelte/src/plugins/inspector), `@sveltejs/vite-plugin-svelte@7.3.1`).
 
-It keeps the upstream behaviour and is the starting point for linking the inspector to
-vite-devtools-svelte (for example, jumping from a picked element to its node in the component graph).
+It keeps the upstream behaviour, plus a link to vite-devtools-svelte: a click on an element selects the
+component instance that rendered it in the DevTools, and the DevTools can turn the inspector on.
+
+This package is private. `@sveltejs/vite-devtools-svelte` bundles the built plugin into its
+`dist/index.mjs` and copies `dist/runtime/Inspector.svelte` and `load-inspector.ts` to its own
+`dist/runtime/`, where the bundled plugin looks for them. `svelteDevtools()` adds it (option
+`inspector`), linked to the DevTools through `inspector-link.js`.
 
 ## Differences from upstream
 
@@ -20,9 +25,25 @@ except for what a standalone plugin needs:
 - the source is TypeScript and built to `dist/` (`pnpm -C packages/inspector build`); the browser runtime in `src/runtime/` is copied as-is and compiled by the app's own Vite
 - runtime files are read by Vite itself; upstream's own disk read for them never ran (its filter glob ended in `//**`) and is removed
 - `src/utils/log.ts` is a reduced copy of upstream's logger
-- `src/types.ts` holds only `InspectorOptions`
+- `src/types.ts` holds only `InspectorOptions` (and `InspectorLink`, below)
+
+### DevTools link
+
+Every change for the DevTools is marked with a `vite-devtools-svelte:` comment. Without a link
+(`svelteInspector(options)` alone) the runtime gets `null` from the new virtual module and behaves as
+upstream.
+
+| File                            | Change from upstream                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/plugin.ts`                 | `svelteInspector(options, link)`: `link.devtools` is the absolute path of a module (the DevTools link). The new virtual id `virtual:vite-devtools-svelte-inspector-devtools` resolves to it, or to `export default null` without one.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `src/types.ts`                  | `InspectorLink`, the second argument of `svelteInspector()` (exported from `src/index.ts`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `src/runtime/ambient.d.ts`      | Declares the new virtual module and its `InspectorDevtools` interface (what the runtime calls on the link).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `src/runtime/load-inspector.ts` | Mounts the inspector inside `devtools.untracked()`, so the DevTools do not list it as one of the app's components.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `src/runtime/Inspector.svelte`  | Imports the link. **Click** (and `openKey`) asks `devtools.pick(element)` to select the element's component instance in the DevTools, then turns the inspector off; with **Alt** held, or when the link does not know the element (`pick` returns false), it opens the editor as upstream. The hover label shows the component instance's name (`devtools.describe`) in place of the element's tag, and a hint row (`click: inspect · ⌥click: open in editor`, `Alt+` outside Apple platforms; `click: open in editor` for an unknown element) with its style. In `onMount` it calls `devtools.connect({ enable, disable })` so the DevTools' "Pick element" can turn it on and a pick in another tab turns it off; the cleanup unlinks it. |
 
 ## Setup
+
+Through vite-devtools-svelte (the usual way): `svelteDevtools({ inspector: { ... } })`. Standalone:
 
 ```js
 // vite.config.js

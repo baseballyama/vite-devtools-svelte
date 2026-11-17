@@ -18,7 +18,7 @@ export default defineConfig({
       // Floors at the level reached (Nov 2026), so coverage cannot silently regress.
       thresholds: {
         statements: 100,
-        branches: 90,
+        branches: 93,
         functions: 100,
         lines: 100,
       },
