@@ -344,7 +344,7 @@ describe('ReactiveGraph: states overview', () => {
     // A node id without a numeric component id has no instance to open.
     expect(rows[1]!.textContent).not.toContain('#');
     expect(screen.getByRole('status', { name: '' }).textContent).toContain('2 states pending');
-    expect(screen.getByText(/the latest 3 sampled changes/)).toBeTruthy();
+    expect(screen.getByText(/the latest 3 changes/)).toBeTruthy();
   });
 
   it('sorts by every column', async () => {

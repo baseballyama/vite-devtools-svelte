@@ -1,7 +1,15 @@
 // Deterministic: fake timers and an injected clock, never wall-clock ratios.
 import { describe, expect, it, vi } from 'vitest';
 
-import { countVisits, createRuntime, mountList, pollFn, type Harness } from './harness.js';
+import {
+  countVisits,
+  createRuntime,
+  mountList,
+  pollFn,
+  settlePolling,
+  write,
+  type Harness,
+} from './harness.js';
 
 const graphReplies = (h: Harness) =>
   h.sent.filter(s => s.event === 'svelte-devtools:reactive-graph').map(s => s.data as any);
@@ -134,64 +142,97 @@ describe('reactive graph', () => {
   });
 });
 
-describe('time-sliced state poll', () => {
-  it('visits every node within ceil(n / 4096) ticks and carries the cursor', () => {
-    const h = createRuntime();
-    const { signals } = mountList(h, 5000, 2); // 10 000 $state nodes
+describe('bounded per-flush state observation', () => {
+  // frozen clock: only SEED_NODES bounds the work, not the 2 ms budget
+  it('seeds at most 4096 new nodes per observe; the rest stay in _unseeded and follow', () => {
+    const h = createRuntime({ clock: () => 0 });
+    mountList(h, 5000, 2); // 10 000 $state nodes
     const poll = pollFn(h);
-    for (let t = 0; t < 3; t++) poll(); // initial snapshots: 3 ticks cover 10 000
-    h.dt._stateTimeline.length = 0;
+    expect(h.dt._unseeded.size).toBe(10_000);
+    poll();
+    expect(h.dt._unseeded.size).toBe(10_000 - 4096);
+    poll();
+    expect(h.dt._unseeded.size).toBe(10_000 - 2 * 4096);
+    poll();
+    expect(h.dt._unseeded.size).toBe(0);
+    expect(h.dt._stateTimeline).toHaveLength(0); // seeds record nothing
+  });
+
+  it('writes to 3 of 10 000 nodes are recorded by the next observe', () => {
+    const h = createRuntime({ clock: () => 0 });
+    const { signals } = mountList(h, 5000, 2);
+    const poll = pollFn(h);
+    settlePolling(h, poll);
     const states = signals.filter((s: any) => s.deps === null);
-    for (const s of [states[0], states[5000], states[9999]]) s.v = -1;
-    for (let t = 0; t < 3; t++) poll();
+    for (const s of [states[0], states[5000], states[9999]]) write(h, s, -1);
+    expect(h.dt._written.size).toBe(3);
+    poll();
     const seen = new Set(
       h.dt._stateTimeline.filter((c: any) => c.newValue === -1).map((c: any) => c.id),
     );
     expect(seen.size).toBe(3);
+    expect(h.dt._written.size).toBe(0);
   });
 
-  it('a slice visits at most 4096 nodes', () => {
-    const h = createRuntime();
-    mountList(h, 5000, 2);
-    const poll = pollFn(h);
-    const before = h.dt._pollCursor;
-    poll();
-    expect(h.dt._pollCursor - before).toBe(4096);
-  });
-
-  it('removal during a sweep keeps the dense index consistent (swap with last)', () => {
+  it('unmount drops the pending work of the removed nodes', () => {
     const h = createRuntime();
     const list = mountList(h, 50, 2);
     const poll = pollFn(h);
     poll();
-    for (const id of list.ids.slice(10, 30)) h.dt.unmount(id);
-    const ids = h.dt._pollIds as string[];
-    expect(ids.length).toBe(60);
-    ids.forEach((id, i) => expect(h.dt._pollIndex.get(id)).toBe(i));
-    expect(new Set(ids).size).toBe(ids.length);
-    poll(); // no throw, cursor wraps
+    const doomed = list.ids.slice(10, 30);
+    for (const s of list.signals.slice(0, 150).filter(x => x.deps === null)) write(h, s, -1);
+    for (const id of doomed) h.dt.unmount(id);
+    expect(h.dt._reactiveNodes.size).toBe(30 * 4);
+    const gone = new Set(doomed.map(String));
+    const ofDoomed = (nodeId: string) => gone.has(nodeId.split(':')[0]!);
+    expect([...h.dt._reactiveNodes.keys()].filter(ofDoomed)).toEqual([]);
+    expect([...h.dt._written].filter(ofDoomed)).toEqual([]);
+    expect([...h.dt._unseeded].filter(ofDoomed)).toEqual([]);
+    poll();
+    expect(h.dt._written.size).toBe(0);
   });
 
-  it('an object found changed but not serialized (budget spent) stays queued for a later tick', () => {
+  it('a write with no active consumer schedules nothing', () => {
+    const h = createRuntime({ active: false });
+    const list = mountList(h, 2, 1);
+    h.flushTimers();
+    write(h, list.signals[0], 99);
+    expect(h.dt._observeTimer).toBeNull();
+    expect(h.pendingDelays()).toEqual([]);
+  });
+
+  it('a write while active schedules one observe task, not one per write', () => {
+    const h = createRuntime();
+    const list = mountList(h, 3, 1);
+    h.flushTimers(); // seeds + component push
+    expect(h.dt._observeTimer).toBeNull();
+    for (const s of list.signals.filter(x => x.deps === null)) write(h, s, -1);
+    const timer: unknown = h.dt._observeTimer;
+    expect(timer).not.toBeNull();
+    expect(h.pendingDelays()).toEqual([0]);
+    h.flushTimers();
+    expect(h.dt._stateTimeline.map((c: any) => c.newValue)).toEqual([-1, -1, -1]);
+  });
+
+  it('an object written but not serialized (budget spent) stays in _written for the next observe', () => {
     let now = 0;
     let step = 0;
     const h = createRuntime({ clock: () => (now += step) });
     const id = h.dt.register('/app/src/lib/O.svelte');
-    const sig: any = { v: { n: 1 }, wv: 1 };
+    const sig: any = { v: { n: 1 } };
     h.dt.trackState(sig, 'o', id);
     h.dt.registered(id);
     const poll = pollFn(h);
     poll();
     expect(h.dt._stateTimeline).toHaveLength(0); // first observation is a seed
-    sig.v = { n: 2 };
-    sig.wv = 2;
+    write(h, sig, { n: 2 });
     step = 5; // every clock read advances 5 ms: the 2 ms serialization budget is spent at once
     poll();
-    expect(h.dt._pollDirty.has(`${id}:o`)).toBe(true);
+    expect(h.dt._written.has(`${id}:o`)).toBe(true);
     expect(h.dt._stateTimeline).toHaveLength(0);
     step = 0;
     poll();
-    expect(h.dt._pollDirty.has(`${id}:o`)).toBe(false);
+    expect(h.dt._written.has(`${id}:o`)).toBe(false);
     expect(h.dt._stateTimeline.map((c: any) => [c.oldValue, c.newValue])).toEqual([
       [{ n: 1 }, { n: 2 }],
     ]);
@@ -199,13 +240,14 @@ describe('time-sliced state poll', () => {
 });
 
 function setup() {
-  const h = createRuntime();
+  // frozen clock: the 2 ms observe budget is never spent, one observe per write batch
+  const h = createRuntime({ clock: () => 0 });
   const id = h.dt.register('/app/src/lib/T.svelte');
   h.dt.registered(id);
   const sigs: any[] = [];
   const add = (n: number) => {
     for (let i = 0; i < n; i++) {
-      const sig: any = { v: i, wv: 1 };
+      const sig: any = { v: i };
       h.dt.trackState(sig, 's' + sigs.length, id);
       sigs.push(sig);
     }
@@ -222,11 +264,11 @@ describe('timeline throttle + disclosure', () => {
     poll();
     h.flushTimers();
     h.sent.length = 0;
-    sigs[0].v = 1000;
-    poll(); // every 200 ms
+    write(h, sigs[0], 1000);
+    poll(); // one observe per flushed write
     const timer: unknown = h.dt._timelineDebounceTimer;
     for (let t = 1; t < 10; t++) {
-      sigs[0].v = 1000 + t;
+      write(h, sigs[0], 1000 + t);
       poll();
       expect(h.dt._timelineDebounceTimer).toBe(timer); // armed once, never re-armed
     }
@@ -244,7 +286,7 @@ describe('timeline throttle + disclosure', () => {
     poll(); // seeds
     h.flushTimers();
     h.sent.length = 0;
-    for (const sig of sigs) sig.v += 1000;
+    for (const sig of sigs) write(h, sig, sig.v + 1000);
     poll();
     const sizes = timelineMsgs(h).map(m => m.changes.length);
     expect(sizes.slice(0, 2)).toEqual([200, 200]);
@@ -257,7 +299,7 @@ describe('timeline throttle + disclosure', () => {
     h.dt._active = false; // record without pushing
     add(700);
     poll(); // seeds
-    for (const sig of sigs) sig.v += 1000;
+    for (const sig of sigs) write(h, sig, sig.v + 1000);
     poll();
     expect(h.dt.getStateTimeline().length).toBe(500);
     h.sent.length = 0; // drop the activation snapshot sent at boot
@@ -270,7 +312,7 @@ describe('timeline throttle + disclosure', () => {
     h.dt._active = false;
     add(10);
     poll(); // seeds
-    for (const sig of sigs.slice(-10)) sig.v += 1000;
+    for (const sig of sigs.slice(-10)) write(h, sig, sig.v + 1000);
     poll();
     h.dt._active = true;
     h.dt._flushTimeline();
@@ -296,13 +338,16 @@ describe('timeline throttle + disclosure', () => {
   it('valueTooLarge counts changes recorded only as a size summary', () => {
     const { h } = setup();
     const id = h.dt.register('/app/src/lib/L.svelte');
-    const sig: any = { v: Array.from({ length: 50_000 }, (_, i) => ({ i })), wv: 1 };
+    const sig: any = { v: Array.from({ length: 50_000 }, (_, i) => ({ i })) };
     h.dt.trackState(sig, 'big', id);
     h.dt.registered(id);
     pollFn(h)(); // seed: not a change, not counted
     expect(h.dt._valueTooLarge).toBe(0);
-    sig.v = Array.from({ length: 50_000 }, (_, i) => ({ i: -i }));
-    sig.wv = 2;
+    write(
+      h,
+      sig,
+      Array.from({ length: 50_000 }, (_, i) => ({ i: -i })),
+    );
     pollFn(h)();
     const msg = h.dt._timelineDeltas()[0];
     expect(msg.valueTooLarge).toBe(1);
@@ -414,7 +459,7 @@ describe('timeline throttle + disclosure', () => {
 });
 
 describe('reactive summary', () => {
-  it('O(1) counters: rows + other = total, ranked by sampled changes, top-K', () => {
+  it('O(1) counters: rows + other = total, ranked by observed changes, top-K', () => {
     let now = 10_000;
     const h = createRuntime({ clock: () => now });
     const list = mountList(h, 20, 1); // per row: 1 state, 1 derived, 1 effect
@@ -422,15 +467,15 @@ describe('reactive summary', () => {
     poll();
     // row 3 changes 3 times, row 5 once
     const states = list.signals.filter((s: any) => s.deps === null);
-    states[5].v += 100; // seen by the first poll below, like row 3's first change
+    write(h, states[5], states[5].v + 100); // seen by the first observe below, like row 3's first change
     for (let t = 0; t < 3; t++) {
       now += 200;
-      states[3].v += 100;
+      write(h, states[3], states[3].v + 100);
       poll();
     }
     const before = Date.now();
     const s = h.dt.getReactiveSummary({ topK: 1 });
-    expect(s.policy).toBe('sampled-200ms');
+    expect(s.policy).toBe('per-flush');
     expect(s.coverage).toBe('component-init');
     expect(s.rows).toHaveLength(1);
     expect(s.rows[0].componentId).toBe(list.ids[3]);
@@ -503,10 +548,10 @@ describe('reactive summary', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     try {
       for (let t = 0; t < 4; t++) {
-        // 15 s apart: far beyond the former 10 s window
+        // 15 s apart: far beyond any former 10 s window
         now += 15_000;
         vi.setSystemTime(now);
-        state.v += 1;
+        write(h, state, state.v + 1);
         poll();
         h.dt.recordRender(list.ids[1]);
       }
@@ -556,6 +601,112 @@ describe('reactive summary', () => {
   });
 });
 
+// an {#each} row: its branch effect owns the row's signals and $effect
+function eachRow(h: Harness, id: number, branch: object) {
+  const count: any = { v: 1, deps: null };
+  const doubled: any = { v: 2, deps: [count] };
+  h.dt.trackState(count, 'count', id, branch);
+  h.dt.trackDerived(doubled, 'doubled', id, branch);
+  const effect = { deps: [doubled], fn() {} };
+  h.dt.bindEffect(h.dt.trackUserEffect('effect', id), effect);
+  return { count, doubled, effect };
+}
+
+describe('effectDestroyed: nodes leave with the effect they belong to', () => {
+  it('removes the owned nodes and the bound $effect at once, with their bookkeeping', () => {
+    const h = createRuntime();
+    const id = h.dt.register('/app/src/lib/List.svelte');
+    h.dt.registered(id);
+    const kept = { name: 'row 1' };
+    const doomed = { name: 'row 2' };
+    eachRow(h, id, kept);
+    const row = eachRow(h, id, doomed);
+    pollFn(h)();
+    write(h, row.count, 5); // pending observation of a node about to go
+    expect(h.dt._nodeTotals).toEqual({ state: 2, derived: 2, effect: 2 });
+    h.dt.effectDestroyed(row.effect);
+    expect(h.dt._nodeTotals).toEqual({ state: 2, derived: 2, effect: 1 });
+    h.dt.effectDestroyed(doomed);
+    expect(h.dt._nodeTotals).toEqual({ state: 1, derived: 1, effect: 1 });
+    expect(h.dt._nodeCounts.get(id)).toEqual({ state: 1, derived: 1, effect: 1 });
+    expect([...h.dt._reactiveNodes.keys()]).toEqual([
+      `${id}:count`,
+      `${id}:doubled`,
+      `${id}:effect_1`,
+    ]);
+    expect([...h.dt._nodesByComponent.get(id)]).toEqual([...h.dt._reactiveNodes.keys()]);
+    expect(h.dt._written.size).toBe(0);
+    expect(h.dt._stateSnapshots.has(`${id}:count#2`)).toBe(false);
+    expect(h.dt._idBySignal.has(row.count)).toBe(false);
+    expect(h.dt._idBySignal.has(row.effect)).toBe(false);
+    expect(h.dt._nodesByOwner.has(doomed)).toBe(false);
+    // no sweep pass ran: nothing observed the removal lazily
+    expect(
+      h.dt
+        .getReactiveGraph(id)
+        .nodes.map((n: any) => n.name)
+        .toSorted(),
+    ).toEqual(['count', 'doubled', 'effect_1']);
+  });
+
+  it('an unseeded node removed by its effect is pushed as seed progress', () => {
+    const h = createRuntime();
+    const id = h.dt.register('/app/src/lib/List.svelte');
+    h.dt.registered(id);
+    pollFn(h)();
+    h.flushTimers();
+    const branch = {};
+    h.dt.trackState({ v: 1 }, 'late', id, branch);
+    // the server has seen it pending
+    h.emit('svelte-devtools:request-state-timeline');
+    expect(timelineMsgs(h).at(-1).baseline).toEqual({ complete: false, pendingNodes: 1 });
+    expect(h.pendingDelays()).toEqual([0]); // only the scheduled seed
+    h.sent.length = 0;
+    h.dt.effectDestroyed(branch);
+    expect(h.pendingDelays()).toEqual([0, 300]);
+    h.flushTimers();
+    expect(timelineMsgs(h).map(m => m.baseline)).toEqual([{ complete: true, pendingNodes: 0 }]);
+  });
+
+  it('a node unmounted first is not removed twice; a reused id survives its old owner', () => {
+    const h = createRuntime();
+    const id = h.dt.register('/app/src/lib/List.svelte');
+    h.dt.registered(id);
+    const oldBranch = {};
+    const sig: any = { v: 1 };
+    h.dt.trackState(sig, 'x', id, oldBranch);
+    // the old signal is collected; a new signal takes the free name under another effect
+    h.dt._reactiveNodes.get(`${id}:x`).signal = { deref() {} }; // a collected WeakRef
+    const newBranch = {};
+    expect(h.dt.trackState({ v: 2 }, 'x', id, newBranch)).toBe(`${id}:x`);
+    h.dt.effectDestroyed(oldBranch);
+    expect(h.dt._reactiveNodes.has(`${id}:x`)).toBe(true);
+    h.dt.effectDestroyed(newBranch);
+    expect(h.dt._reactiveNodes.has(`${id}:x`)).toBe(false);
+    expect(h.dt._nodeTotals).toEqual({ state: 0, derived: 0, effect: 0 });
+  });
+
+  it('an elided effect hands its nodes to the child that replaces it', () => {
+    const h = createRuntime();
+    const id = h.dt.register('/app/src/lib/List.svelte');
+    h.dt.registered(id);
+    const elided = {};
+    const child = {};
+    const orphan = {};
+    h.dt.trackState({ v: 1 }, 'a', id, elided);
+    h.dt.trackState({ v: 1 }, 'b', id, orphan);
+    h.dt.effectElided(elided, child);
+    h.dt.effectElided(orphan, null);
+    expect(h.dt._reactiveNodes.size).toBe(2);
+    h.dt.effectDestroyed(elided); // never happens after elision; harmless
+    expect(h.dt._reactiveNodes.size).toBe(2);
+    h.dt.effectDestroyed(child);
+    expect([...h.dt._reactiveNodes.keys()]).toEqual([`${id}:b`]);
+    h.dt.unmount(id);
+    expect(h.dt._reactiveNodes.size).toBe(0);
+  });
+});
+
 // A page loaded inactive and activated by an MCP lease: a click right after
 // activation must be seen as 1 -> 2 although nodes registered while inactive
 // have no sample yet. First observations are seeds (no entry, no counters),
@@ -566,8 +717,8 @@ describe('late activation (consumer arrives after mount)', () => {
   it('activation seeds: 0 entries, 0 activity, 0 drops; baseline complete', () => {
     const h = createRuntime({ active: false });
     const id = h.dt.register('/app/src/lib/Counter.svelte');
-    h.dt.trackState({ v: 1, wv: 1 }, 'count', id);
-    h.dt.trackState({ v: { a: 1 }, wv: 1 }, 'obj', id);
+    h.dt.trackState({ v: 1 }, 'count', id);
+    h.dt.trackState({ v: { a: 1 } }, 'obj', id);
     h.dt.registered(id);
     expect(summaryOf(h).baseline).toEqual({ complete: false, pendingNodes: 2 });
     h.emit('svelte-devtools:subscription', { active: true, componentDeltas: true });
@@ -585,12 +736,11 @@ describe('late activation (consumer arrives after mount)', () => {
   it('a write right after activation is exactly one old -> new entry, counted once', () => {
     const h = createRuntime({ active: false });
     const id = h.dt.register('/app/src/lib/Counter.svelte');
-    const count: any = { v: 1, wv: 1 };
+    const count: any = { v: 1 };
     h.dt.trackState(count, 'count', id);
     h.dt.registered(id);
     h.emit('svelte-devtools:subscription', { active: true, componentDeltas: true });
-    count.v = 2; // before the first 200 ms tick
-    count.wv = 2;
+    write(h, count, 2); // right after activation, before the scheduled observe ran
     pollFn(h)();
     h.flushTimers();
     const seen = timelineMsgs(h)
@@ -607,14 +757,14 @@ describe('late activation (consumer arrives after mount)', () => {
     poll();
     h.sent.length = 0;
     const id = h.dt.register('/app/src/lib/Late.svelte');
-    const sig: any = { v: 'x', wv: 1 };
+    const sig: any = { v: 'x' };
     h.dt.trackState(sig, 's', id);
     h.dt.registered(id);
     poll();
     h.flushTimers();
     expect(timelineMsgs(h).flatMap(m => m.changes)).toEqual([]);
     expect(summaryOf(h).rows).toEqual([]);
-    sig.v = 'y';
+    write(h, sig, 'y');
     poll();
     h.flushTimers();
     const seen = timelineMsgs(h)
@@ -628,7 +778,7 @@ describe('late activation (consumer arrives after mount)', () => {
     let step = 0;
     const h = createRuntime({ active: false, clock: () => (now += step) });
     const id = h.dt.register('/app/src/lib/O.svelte');
-    h.dt.trackState({ v: { n: 1 }, wv: 1 }, 'o', id);
+    h.dt.trackState({ v: { n: 1 } }, 'o', id);
     h.dt.registered(id);
     step = 5; // the 2 ms serialization budget is spent before the first object
     h.emit('svelte-devtools:subscription', { active: true, componentDeltas: true });
@@ -640,18 +790,19 @@ describe('late activation (consumer arrives after mount)', () => {
   });
 
   it('bounded activation work: one slice seeded, the rest pending, nothing recorded', () => {
-    const h = createRuntime({ active: false });
+    // frozen clock: only SEED_NODES bounds the activation pass, not the 2 ms budget
+    const h = createRuntime({ active: false, clock: () => 0 });
     const id = h.dt.register('/app/src/lib/Big.svelte');
-    for (let i = 0; i < 5000; i++) h.dt.trackState({ v: i, wv: 1 }, 's' + i, id);
+    for (let i = 0; i < 5000; i++) h.dt.trackState({ v: i }, 's' + i, id);
     h.dt.registered(id);
     h.emit('svelte-devtools:subscription', { active: true, componentDeltas: true });
-    expect(h.dt._pollCursor).toBe(4096); // one hint slice at activation
+    // one SEED_NODES slice at activation
     expect(summaryOf(h).baseline).toEqual({ complete: false, pendingNodes: 5000 - 4096 });
     const reset = timelineMsgs(h).find(m => m.reset);
     expect(reset.changes).toEqual([]);
     expect(reset.dropped).toBeUndefined();
     expect(reset.baseline).toEqual({ complete: false, pendingNodes: 5000 - 4096 });
-    pollFn(h)(); // the next tick seeds the rest
+    pollFn(h)(); // the next observe seeds the rest
     expect(summaryOf(h).baseline).toEqual({ complete: true, pendingNodes: 0 });
     expect(h.dt._stateTimeline).toHaveLength(0);
     // completion is pushed although nothing changed

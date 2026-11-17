@@ -71,7 +71,7 @@ and what changed when I edited the tax rate.`;
     {
       id: 'summary',
       title: 'Find where the activity is',
-      text: 'Counters over all live instances, totals since each mounted, without capturing the graph. The answer says what it covers: here 2 of 5 registered components were active, and lastActiveAt says when each last changed or rendered (the runtime samples state only while a panel or an agent is reading). The price chart has not changed yet, so it is not listed.',
+      text: 'Counters over all live instances, totals since each mounted, without capturing the graph. The answer says what it covers: here 2 of 5 registered components were active, and lastActiveAt says when each last changed or rendered (state changes are observed only while a panel or an agent is reading). The price chart has not changed yet, so it is not listed.',
     },
     {
       id: 'live',
@@ -553,8 +553,7 @@ and what changed when I edited the tax rate.`;
           <div>
             <dt>No components or reactive nodes</dt>
             <dd>
-              Check that <code>componentTracking</code> is not set to <code>false</code> and that
-              the plugin comes before <code>sveltekit()</code> in
+              Check that the plugin comes before <code>sveltekit()</code> in
               <code>vite.config.ts</code>.
             </dd>
           </div>

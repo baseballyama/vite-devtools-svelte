@@ -20,8 +20,6 @@ export default defineConfig({
   const standaloneCode = `npm install -D @sveltejs/vite-devtools-svelte`;
 
   const optionsCode = `svelteDevtools({
-  // Track component instances and their state (default: true)
-  componentTracking: true,
   // Ask for the one-time code on /.svelte-devtools/ (default: true)
   clientAuth: true,
   // Svelte Inspector options (dock only)

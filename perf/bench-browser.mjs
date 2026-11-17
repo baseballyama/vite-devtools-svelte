@@ -214,7 +214,7 @@ async function benchApp(browser, srv, opts, withDevtools) {
   await page.goto(`${srv.base}/bench`, { waitUntil: 'load' });
   await page.waitForFunction(() => window.__bench?.ready === true, null, { timeout: 120_000 });
   const hydrateMs = performance.now() - tNav;
-  const hasRuntime = await page.evaluate(() => !!window.__SVELTE_DEVTOOLS__);
+  const hasRuntime = await page.evaluate(() => !!window[Symbol.for('vite-devtools-svelte')]);
 
   const [depth, breadth] = opts.tree.split('x').map(Number);
   const res = { withDevtools, hasRuntime, hydrateMs: r1(hydrateMs), errors };
@@ -271,7 +271,7 @@ async function benchApp(browser, srv, opts, withDevtools) {
 
   res.heapMountedMB = r1((await heapAfterGc(cdp)) / 1048576);
   res.runtimeSizes = await page.evaluate(() => {
-    const dt = window.__SVELTE_DEVTOOLS__;
+    const dt = window[Symbol.for('vite-devtools-svelte')];
     if (!dt) return null;
     // oxlint-disable-next-line unicorn/consistent-function-scoping -- runs in the browser via page.evaluate; cannot reference module scope
     const size = x =>
@@ -301,7 +301,7 @@ async function benchApp(browser, srv, opts, withDevtools) {
     growthMB: r1((heap1 - heap0) / 1048576),
   };
   res.runtimeSizesAfterUnmount = await page.evaluate(() => {
-    const dt = window.__SVELTE_DEVTOOLS__;
+    const dt = window[Symbol.for('vite-devtools-svelte')];
     if (!dt) return null;
     // oxlint-disable-next-line unicorn/consistent-function-scoping -- runs in the browser via page.evaluate; cannot reference module scope
     const size = x =>

@@ -24,7 +24,7 @@ export const MCP_EXAMPLES: McpExample[] = [
     response: {
       epoch: 'yotxdjn137mutu4dc2',
       computedAt: 1791119196841,
-      policy: 'sampled-200ms',
+      policy: 'per-flush',
       coverage: 'component-init',
       components: {
         total: 5,
@@ -295,7 +295,7 @@ export const MCP_EXAMPLES: McpExample[] = [
         captured: 5,
         total: null,
         truncated: false,
-        policy: 'sampled-200ms',
+        policy: 'per-flush',
         baseline: {
           complete: true,
           pendingNodes: 0,

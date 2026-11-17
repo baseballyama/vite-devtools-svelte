@@ -16,7 +16,8 @@ export interface Graph {
   [k: string]: unknown;
 }
 
-export const dt = (): any => (globalThis as any).__SVELTE_DEVTOOLS__;
+// The page's store, under the registry key hooks.js creates it at.
+export const dt = (): any => (globalThis as any)[Symbol.for('vite-devtools-svelte')];
 
 // The tests run under a DOM environment, but the package type-checks against Node's
 // lib only: describe just the DOM surface the tests touch.
@@ -82,19 +83,21 @@ export const incoming = (g: Graph, id: string) => g.edges.filter(e => e.to === i
 export const outgoing = (g: Graph, id: string) => g.edges.filter(e => e.from === id).map(e => e.to);
 
 /**
- * Every object re-check is due: in-place proxy mutations are otherwise only
- * found by the time-based re-check (>= 1 s). The clock is frozen for the tick:
- * its 2 ms serialization budget is wall-clock, and on a loaded machine a GC
- * pause would otherwise defer part of the work to a later tick.
+ * Runs the observation the runtime schedules after Svelte's flush (a task
+ * later) now. The clock is frozen: its 2 ms serialization budget is
+ * wall-clock, and on a loaded machine a GC pause would otherwise defer part
+ * of the work to a later task.
  */
 export function poll() {
   const d = dt();
-  for (const meta of d._pollMeta.values()) meta.nextCheckAt = 0;
-  d._deepCredit = 1000;
+  if (d._observeTimer !== null) {
+    clearTimeout(d._observeTimer);
+    d._observeTimer = null;
+  }
   const now = performance.now();
   const clock = vi.spyOn(performance, 'now').mockReturnValue(now);
   try {
-    d._pollStateValues();
+    d._observeStates();
   } finally {
     clock.mockRestore();
   }

@@ -1,5 +1,5 @@
 name: Setup
-description: pnpm, Node and the workspace dependencies; optionally Chromium for browser tests.
+description: pnpm, Node, the Svelte devtools branch and the workspace dependencies; optionally Chromium for browser tests.
 
 inputs:
   node-version:
@@ -18,6 +18,10 @@ runs:
       with:
         node-version: ${{ inputs.node-version }}
         cache: pnpm
+
+    # Svelte with the devtools channel, linked by the pnpm override; must
+    # exist before `pnpm install`.
+    - uses: ./.github/actions/svelte-branch
 
     - name: Install dependencies
       shell: bash

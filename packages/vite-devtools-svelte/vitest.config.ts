@@ -1,7 +1,7 @@
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { defineConfig } from 'vitest/config';
 
-import { reactivityHarnessPlugin } from './test/reactivity/plugin.js';
+import { HOOKS_FILE, reactivityHarnessPlugin } from './test/reactivity/plugin.js';
 
 export default defineConfig({
   test: {
@@ -14,10 +14,10 @@ export default defineConfig({
         'src/types.ts',
         'src/index.ts',
         'src/env.d.ts',
-        // Evaluated as text (`?raw` / `new Function`), so V8 cannot attribute
-        // coverage to them; covered by test/perf and test/reactivity instead.
-        'src/runtime/client.js',
-        'src/runtime/wrapper.js',
+        // Browser sources: covered by test/perf (the runtime in a fake
+        // browser) and test/reactivity (real Svelte components through the hooks).
+        'src/runtime/runtime.js',
+        'src/runtime/hooks.js',
       ],
       reporter: ['text', 'json-summary'],
       // Floors at the level reached, so coverage cannot silently regress.
@@ -50,7 +50,10 @@ export default defineConfig({
         // .svelte.ts modules are then compiled after the tracking transform.
         plugins: [
           reactivityHarnessPlugin(),
-          svelte({ compilerOptions: { dev: true }, configFile: false }),
+          svelte({
+            compilerOptions: { dev: true, experimental: { devtools: [HOOKS_FILE] } },
+            configFile: false,
+          }),
         ],
         resolve: { conditions: ['browser'] },
         test: {

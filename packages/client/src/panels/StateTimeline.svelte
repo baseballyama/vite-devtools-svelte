@@ -106,9 +106,9 @@
     <span class="summary">{signals} signal{signals === 1 ? '' : 's'}</span>
     <span
       class="summary"
-      title="The app checks $state every 200 ms: several writes within one check are one entry, and times are when a change was detected. The dev server keeps the latest {MAX_ENTRIES} changes across all signals."
+      title="One entry per $state per Svelte flush: several writes in one flush are one entry, and times are when the flush was applied. The dev server keeps the latest {MAX_ENTRIES} changes across all signals."
     >
-      sampled every 200 ms · latest {MAX_ENTRIES}
+      per flush · latest {MAX_ENTRIES}
     </span>
   {/snippet}
   {#snippet actions()}

@@ -27,6 +27,19 @@ function copyInspectorRuntime(): Plugin {
 
 export default defineConfig({
   plugins: [
+    {
+      // Served from disk next to the bundle (see src/runtime/index.ts)
+      name: 'emit-browser-files',
+      generateBundle() {
+        for (const fileName of ['hooks.js', 'runtime.js']) {
+          this.emitFile({
+            type: 'asset',
+            fileName,
+            source: fs.readFileSync(new URL(`src/runtime/${fileName}`, import.meta.url), 'utf8'),
+          });
+        }
+      },
+    },
     dts({
       tsconfigPath: './tsconfig.build.json',
       entryRoot: 'src',

@@ -305,7 +305,7 @@ describe('Collector component deltas + per-epoch state', () => {
     expect(c.liveComponents).toHaveLength(n - 1);
   });
 
-  it('componentTracking: false (no component snapshots ever): profiles of the newest pusher are served', () => {
+  it('no component snapshots ever: profiles of the newest pusher are served', () => {
     const c = new Collector();
     c.ingestProfiles({ epoch: 'tab1', profiles: [{ componentId: 1 }] });
     c.ingestStateTimeline({ epoch: 'tab1', changes: [change(1)] });
@@ -790,7 +790,7 @@ describe('Collector capture info', () => {
       captured: 1,
       total: null,
       truncated: true,
-      policy: 'sampled-200ms',
+      policy: 'per-flush',
       dropped: [
         { reason: 'runtime-count', count: 3 },
         { reason: 'runtime-bytes', count: 1 },
@@ -802,7 +802,7 @@ describe('Collector capture info', () => {
       captured: 0,
       total: null,
       truncated: false,
-      policy: 'sampled-200ms',
+      policy: 'per-flush',
     });
   });
 
@@ -893,7 +893,7 @@ describe('Collector reactive summary pulls', () => {
       rows: [{ componentId: 4, changes: 5, renders: 2, lastActiveAt: 990 }],
       other: { components: 49999, nodes: 120000 },
       truncated: true,
-      policy: 'sampled-200ms',
+      policy: 'per-flush',
       coverage: 'component-init',
       capabilities: { valueInspection: false, signalHistory: false, writeCause: false },
     });

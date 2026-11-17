@@ -174,7 +174,7 @@
             {/if}
             <span
               class="end num"
-              title="at least this many changes since mount (sampled every 200 ms); not a rate"
+              title="changes since mount, seen while watched (one per state per flush); not a rate"
               >≥ {r.changes.toLocaleString()}</span
             >
             <span class="end num">{r.renders.toLocaleString()}</span>
