@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/svelte'
 import { userEvent } from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import * as http from '../lib/http.js'
 import type { ApiResponse } from '../lib/http.js'
@@ -59,9 +59,9 @@ function ok(over: Partial<ApiResponse> = {}): ApiResponse {
 
 async function setup() {
   const user = userEvent.setup()
-  render(ApiPlayground)
+  const { container } = render(ApiPlayground)
   await settle()
-  return { user, list: screen.getByRole('listbox', { name: 'API endpoints' }) }
+  return { user, container, list: screen.getByRole('listbox', { name: 'API endpoints' }) }
 }
 
 /**
@@ -84,6 +84,11 @@ async function choose(select: HTMLSelectElement, value: string) {
 const urlInput = () => screen.getByRole<HTMLInputElement>('textbox', { name: 'Request URL' })
 const sendButton = () => screen.getByRole<HTMLButtonElement>('button', { name: /^Send/ })
 const response = () => screen.getByRole('region', { name: 'Response' })
+
+// spies such as the requestAnimationFrame one stay inside the test that made them
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 beforeEach(() => {
   layout(() => ({ width: 1200, height: 600 }))
@@ -319,11 +324,15 @@ describe('ApiPlayground', () => {
     expect(sendButton().disabled).toBe(false)
   })
 
-  it('shows only the end of a long body while it streams', async () => {
+  it('shows only the end of a long body while it streams, and all of it once it ends', async () => {
+    const note = 'Showing the end while streaming; all of it once it ends'
     const long = `${'a'.repeat(70 * 1024)}END`
+    let resolve!: (r: ApiResponse) => void
     vi.mocked(http.sendRequest).mockImplementation((_req, opts) => {
       opts!.onProgress!(ok({ body: long, headers: {} }))
-      return new Promise(() => {})
+      return new Promise(r => {
+        resolve = r
+      })
     })
     const { user } = await setup()
     await user.type(urlInput(), 'http://x/')
@@ -332,11 +341,45 @@ describe('ApiPlayground', () => {
     const shown = response().querySelector('pre')!.textContent
     expect(shown).toHaveLength(64 * 1024)
     expect(shown.endsWith('END')).toBe(true)
-    expect(
-      within(response()).getByText(
-        'Showing the last 64.0 KB while streaming; all of it once it ends',
-      ),
-    ).toBeTruthy()
+    expect(within(response()).getByText(note)).toBeTruthy()
+
+    resolve(ok({ body: long, headers: {} }))
+    await settle()
+    expect(response().querySelector('pre')!.textContent).toBe(long)
+    expect(within(response()).queryByText(note)).toBeNull()
+  })
+
+  it('never starts the streaming tail inside a surrogate pair', async () => {
+    // '😀' is two UTF-16 units; the 64 Ki-character cut falls between them
+    const body = `😀${'a'.repeat(64 * 1024 - 1)}`
+    vi.mocked(http.sendRequest).mockImplementation((_req, opts) => {
+      opts!.onProgress!(ok({ body, headers: {} }))
+      return new Promise(() => {})
+    })
+    const { user } = await setup()
+    await user.type(urlInput(), 'http://x/')
+    await user.click(sendButton())
+    await settle()
+    expect(response().querySelector('pre')!.textContent).toBe('a'.repeat(64 * 1024 - 1))
+  })
+
+  it('stopping before any response is not a failure', async () => {
+    vi.mocked(http.sendRequest).mockImplementation(
+      (_req, opts) =>
+        new Promise(resolve => {
+          opts!.signal!.addEventListener('abort', () => {
+            resolve(ok({ status: 0, statusText: 'Stopped', headers: {}, body: '', size: 0 }))
+          })
+        }),
+    )
+    const { user } = await setup()
+    await user.type(urlInput(), 'http://x/')
+    await user.click(sendButton())
+    await user.click(screen.getByRole('button', { name: /^Stop/ }))
+    await settle()
+    expect(within(response()).getByText('Stopped before a response')).toBeTruthy()
+    expect(within(response()).queryByRole('alert')).toBeNull()
+    expect(sendButton().disabled).toBe(false)
   })
 
   it('a frame still pending never paints older progress over the result', async () => {
@@ -411,22 +454,49 @@ describe('ApiPlayground', () => {
 
     await user.click(within(list).getAllByRole('option')[1]!)
     expect(signal!.aborted).toBe(true)
-    // the old request's progress and result arrive after the switch
+    // the new endpoint is ready at once, not waiting for the old request
+    expect(within(response()).getByText('Send a request')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /^Stop/ })).toBeNull()
+    // a chunk of the old stream arrives and its frame fires
     onProgress!(ok({ body: 'old stream, more' }))
-    resolve(ok({ body: 'old stream, more', truncated: 'stopped' }))
     await settle()
     expect(within(response()).getByText('Send a request')).toBeTruthy()
+    // a new request starts before the old one ends
+    vi.mocked(http.sendRequest).mockReturnValue(new Promise(() => {}))
+    await user.click(sendButton())
+    // then the old request ends: the new one is still in flight
+    resolve(ok({ body: 'old stream, more', truncated: 'stopped' }))
+    await settle()
+    expect(within(response()).getByText('Waiting for a response…')).toBeTruthy()
+    const second = vi.mocked(http.sendRequest).mock.calls[1]![1]!.signal!
+    await user.click(screen.getByRole('button', { name: /^Stop/ }))
+    expect(second.aborted).toBe(true)
     expect(urlInput().value).toBe(`${location.origin}/app/api/items/:id`)
-    expect(sendButton().disabled).toBe(false)
   })
 
-  it('announces the status line, not the body', async () => {
-    const { user } = await setup()
+  it('announces the status and the final size, not every repaint', async () => {
+    let resolve!: (r: ApiResponse) => void
+    vi.mocked(http.sendRequest).mockReturnValue(
+      new Promise(r => {
+        resolve = r
+      }),
+    )
+    const { user, container } = await setup()
+    const live = () => container.querySelectorAll('[aria-live]')
+    expect(live()).toHaveLength(1)
     await user.type(urlInput(), 'http://x/')
     await user.click(sendButton())
+    const { onProgress } = vi.mocked(http.sendRequest).mock.calls[0]![1]!
+    onProgress!(ok({ body: 'a', size: 1, duration: 1 }))
     await settle()
-    expect(response().hasAttribute('aria-live')).toBe(false)
-    expect(within(response()).getByText('200 OK').closest('[aria-live]')!.tagName).toBe('HEADER')
+    expect(live()[0]!.textContent).toBe('200 OK, streaming')
+    onProgress!(ok({ body: 'ab', size: 2, duration: 2 }))
+    await settle()
+    expect(live()[0]!.textContent).toBe('200 OK, streaming')
+    resolve(ok({ body: 'abc', size: 3 }))
+    await settle()
+    expect(live()).toHaveLength(1)
+    expect(live()[0]!.textContent).toBe('200 OK, 3 B')
   })
 
   it('shows one repaint per frame with the latest progress, and the byte size', async () => {
@@ -444,7 +514,6 @@ describe('ApiPlayground', () => {
     expect(raf).toHaveBeenCalledOnce()
     expect(response().querySelector('pre')!.textContent).toBe('first second')
     expect(within(response()).getByText('2.0 KB')).toBeTruthy()
-    raf.mockRestore()
   })
 
   it('aborts the request in flight when the panel goes away', async () => {

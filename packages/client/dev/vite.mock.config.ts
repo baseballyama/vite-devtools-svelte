@@ -55,6 +55,11 @@ const api: Connect.NextHandleFunction = (req, res) => {
   const requested = req.originalUrl ?? req.url ?? ''
   if (req.url?.split('?')[0]?.endsWith('/stream')) {
     res.setHeader('content-type', 'text/event-stream')
+    // HEAD has no body to stream: answer the headers alone.
+    if (req.method === 'HEAD') {
+      res.end()
+      return
+    }
     let n = 0
     const timer = setInterval(() => {
       res.write(`data: ${JSON.stringify({ n: ++n, at: Date.now() })}\n\n`)
