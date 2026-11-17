@@ -230,9 +230,7 @@ svelteDevtools({
 
 `inspector` takes the options (`toggleKeyCombo`, `navKeys`, `openKey`, `openMenuKey`, `escapeKeys`, `holdMode`, `customStyles`).
 
-`SVELTE_DEVTOOLS_INSPECTOR_TOGGLE` and an options object in `SVELTE_DEVTOOLS_INSPECTOR_OPTIONS` (shell or `.env` files) take precedence over them, for personal preferences. vite-plugin-svelte's `SVELTE_INSPECTOR_TOGGLE` and `SVELTE_INSPECTOR_OPTIONS` are read too, with lower precedence.
-
-The Svelte Inspector settings in the DevTools Svelte group edits your personal shortcut and keys, saved to `.env.local`.
+`SVELTE_INSPECTOR_TOGGLE` and an options object in `SVELTE_INSPECTOR_OPTIONS` (shell or `.env` files) take precedence over them, for personal preferences;
 
 ## How It Works
 

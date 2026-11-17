@@ -16,32 +16,17 @@ export const defaultInspectorOptions: InspectorOptions = {
   customStyles: true,
 };
 
-/** prefix of the environment variables of vite-plugin-svelte's inspector: read, never written */
-export const UPSTREAM_ENV_PREFIX = 'SVELTE_INSPECTOR';
-/** prefix of this inspector's own environment variables, which win over the upstream ones */
-export const ENV_PREFIX = 'SVELTE_DEVTOOLS_INSPECTOR';
-/** the variable the settings view saves to */
-export const OPTIONS_ENV_KEY = `${ENV_PREFIX}_OPTIONS`;
-
-/**
- * The options set through `<prefix>_OPTIONS` (an options object) or `<prefix>_TOGGLE`.
- *
- * vite-devtools-svelte: `<prefix>_OPTIONS=true|false` sets nothing, the inspector is on
- * whenever the plugin is added.
- */
 export function parseEnvironmentOptions(
   config: ResolvedConfig,
-  prefix: string,
-): Partial<InspectorOptions> {
-  const optionsKey = `${prefix}_OPTIONS`;
-  const env = loadEnv(config.mode, config.envDir ?? process.cwd(), prefix);
-  const options = env?.[optionsKey];
-  const toggle = env?.[`${prefix}_TOGGLE`];
+): Partial<InspectorOptions> | boolean | undefined {
+  const env = loadEnv(config.mode, config.envDir ?? process.cwd(), 'SVELTE_INSPECTOR');
+  const options = env?.SVELTE_INSPECTOR_OPTIONS;
+  const toggle = env?.SVELTE_INSPECTOR_TOGGLE;
   if (options) {
     try {
       const parsed: unknown = JSON.parse(options);
       if (typeof parsed === 'boolean') {
-        return {};
+        return parsed;
       }
       if (typeof parsed === 'object') {
         if (parsed === null) {
@@ -56,7 +41,7 @@ export function parseEnvironmentOptions(
         const unknownKeys = Object.keys(record).filter(k => !defaultKeys.includes(k));
         if (unknownKeys.length > 0) {
           log.warn(
-            `[vite-devtools-svelte-inspector] ignoring unknown options in environment ${optionsKey}: ${unknownKeys.join(', ')}`,
+            `[vite-plugin-svelte-inspector] ignoring unknown options in environment SVELTE_INSPECTOR_OPTIONS: ${unknownKeys.join(', ')}`,
             null,
             'inspector',
           );
@@ -64,20 +49,20 @@ export function parseEnvironmentOptions(
             delete record[key];
           }
         }
-        log.debug(`loaded environment config from ${optionsKey}`, record, 'inspector');
+        log.debug('loaded environment config', record, 'inspector');
         return record;
       }
     } catch (e) {
       config.logger.error(
-        `[vite-devtools-svelte-inspector] failed to parse inspector options from environment ${optionsKey}="${options}"\n${String(e)}`,
+        `[vite-plugin-svelte-inspector] failed to parse inspector options from environment SVELTE_INSPECTOR_OPTIONS="${options}"\n${String(e)}`,
       );
     }
   } else if (toggle) {
     const keyConfig = {
       toggleKeyCombo: toggle,
     };
-    log.debug(`loaded environment config from ${prefix}_TOGGLE`, keyConfig, 'inspector');
+    log.debug('loaded environment config', keyConfig, 'inspector');
     return keyConfig;
   }
-  return {};
+  return undefined;
 }

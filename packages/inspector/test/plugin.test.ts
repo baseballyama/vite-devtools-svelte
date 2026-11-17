@@ -95,22 +95,10 @@ describe('svelteInspector', () => {
     expect(await loadOptions(await start())).toMatchObject({ toggleKeyCombo: 'meta-i' });
   });
 
-  it("lets its own variables win over vite-plugin-svelte's", async () => {
-    vi.stubEnv('SVELTE_INSPECTOR_OPTIONS', '{"holdMode":false,"openKey":"o"}');
-    vi.stubEnv('SVELTE_DEVTOOLS_INSPECTOR_OPTIONS', '{"openKey":"p"}');
-    expect(await loadOptions(await start())).toMatchObject({ holdMode: false, openKey: 'p' });
-    vi.stubEnv('SVELTE_DEVTOOLS_INSPECTOR_OPTIONS', '');
-    vi.stubEnv('SVELTE_DEVTOOLS_INSPECTOR_TOGGLE', 'meta-i');
-    expect(await loadOptions(await start())).toMatchObject({
-      toggleKeyCombo: 'meta-i',
-      openKey: 'o',
-    });
-  });
-
   it('names the variables in the error when they switch the built-in inspector on', async () => {
     vi.stubEnv('SVELTE_INSPECTOR_TOGGLE', 'meta-i');
     await expect(start({}, [VITE_DEVTOOLS, svelte()])).rejects.toThrow(
-      /rename the variable to SVELTE_DEVTOOLS_INSPECTOR_OPTIONS or SVELTE_DEVTOOLS_INSPECTOR_TOGGLE/,
+      /SVELTE_INSPECTOR_OPTIONS or SVELTE_INSPECTOR_TOGGLE in the shell or an env file switches it on too/,
     );
   });
 

@@ -230,9 +230,9 @@ svelteDevtools({
 
 `svelteDevtools()` includes a fork of the [Svelte Inspector](https://github.com/sveltejs/vite-plugin-svelte/blob/main/docs/inspector.md) from `@sveltejs/vite-plugin-svelte`: hold the toggle key combo (`alt-x` by default) in your app and click an element to open its source in your editor. It only runs in the [Vite DevTools](https://devtools.vite.dev) dock, so `@vitejs/devtools` has to be in the Vite config. The dev server fails to start when vite-plugin-svelte's built-in inspector is enabled too: turn that one off. `inspector: false` leaves it out.
 
-`inspector` takes these options (`toggleKeyCombo`, `navKeys`, `openKey`, `openMenuKey`, `escapeKeys`, `holdMode`, `customStyles`). `SVELTE_DEVTOOLS_INSPECTOR_TOGGLE` and an options object in `SVELTE_DEVTOOLS_INSPECTOR_OPTIONS` (shell or `.env` files) take precedence over them, for personal preferences. vite-plugin-svelte's `SVELTE_INSPECTOR_TOGGLE` and `SVELTE_INSPECTOR_OPTIONS` are read too, with lower precedence.
+`inspector` takes these options (`toggleKeyCombo`, `navKeys`, `openKey`, `openMenuKey`, `escapeKeys`, `holdMode`, `customStyles`). As upstream, `SVELTE_INSPECTOR_TOGGLE` and an options object in `SVELTE_INSPECTOR_OPTIONS` (shell or `.env` files) take precedence over them, for personal preferences; `SVELTE_INSPECTOR_OPTIONS=true|false` does not turn it on or off.
 
-**Svelte Inspector** on the dock bar (or the **Toggle Svelte Inspector** command) turns it on and off, and **Svelte Inspector settings** in the **Svelte** group edits your personal shortcut and keys, saved to `.env.local`.
+**Svelte Inspector** on the dock bar (or the **Toggle Svelte Inspector** command) turns it on and off.
 
 ## How It Works
 

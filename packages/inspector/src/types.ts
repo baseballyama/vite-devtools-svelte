@@ -70,7 +70,5 @@ export interface InspectorOptions {
     base: string;
     // vite root, to open files by absolute path through Vite DevTools
     root?: string;
-    // the options without personal settings from the environment (the settings view's defaults)
-    defaults?: Omit<InspectorOptions, '__internal'>;
   };
 }
