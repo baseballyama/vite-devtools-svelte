@@ -10,15 +10,15 @@
     "vite-devtools",
     "vite-plugin"
   ],
-  "homepage": "https://github.com/baseballyama/vite-devtools-svelte#readme",
+  "homepage": "https://github.com/sveltejs/vite-devtools-svelte#readme",
   "bugs": {
-    "url": "https://github.com/baseballyama/vite-devtools-svelte/issues"
+    "url": "https://github.com/sveltejs/vite-devtools-svelte/issues"
   },
   "license": "MIT",
   "author": "Yuichiro Yamashita",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/baseballyama/vite-devtools-svelte.git",
+    "url": "git+https://github.com/sveltejs/vite-devtools-svelte.git",
     "directory": "packages/vite-devtools-svelte"
   },
   "files": [

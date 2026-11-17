@@ -195,7 +195,7 @@ export default defineConfig({
           </li>
           <li>
             <a
-              href="https://github.com/baseballyama/vite-devtools-svelte"
+              href="https://github.com/sveltejs/vite-devtools-svelte"
               target="_blank"
               rel="noreferrer noopener"
             >

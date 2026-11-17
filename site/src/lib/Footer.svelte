@@ -4,7 +4,7 @@
   import SvelteMark from './SvelteMark.svelte'
   import { pkgVersion } from './version'
 
-  const repo = 'https://github.com/baseballyama/vite-devtools-svelte'
+  const repo = 'https://github.com/sveltejs/vite-devtools-svelte'
 </script>
 
 <footer class="band">
