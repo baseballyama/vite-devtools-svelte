@@ -89,6 +89,8 @@ describe('project analysis RPCs', () => {
     const endpoints = await rpc.get('svelte-devtools:get-api-endpoints')!();
     expect(endpoints.length).toBeGreaterThan(0);
     for (const e of endpoints) expect(e.methods.length).toBeGreaterThan(0);
+    // the host's base reaches the endpoints' URLs
+    for (const e of endpoints) expect(e.url).toBe(`/base${e.path}`);
   });
 
   it('get-build-analysis is empty without build output', async () => {
@@ -282,46 +284,6 @@ describe('module graph RPC', () => {
   });
 });
 
-describe('send-api-request', () => {
-  it('blocks private targets but allows the dev server origin, without following redirects', async () => {
-    const fetchMock = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response('ok', { status: 200, headers: { 'x-a': '1' } }));
-    const r = rpcHandlers(
-      createTestHost(FIXTURES_DIR, { serverOrigins: () => ['http://localhost:5173'] }),
-    );
-    const send = r.get('svelte-devtools:send-api-request')!;
-    const blocked = await send({
-      url: 'http://169.254.169.254/',
-      method: 'GET',
-      headers: '',
-      body: '',
-    });
-    expect(blocked.status).toBe(0);
-    expect(blocked.statusText).toMatch(/Blocked/);
-    const other = await send({
-      url: 'http://localhost:6379/',
-      method: 'GET',
-      headers: '',
-      body: '',
-    });
-    expect(other.status).toBe(0);
-
-    const own = await send({
-      url: 'http://localhost:5173/api/hello',
-      method: 'POST',
-      headers: '{"a":"b"}',
-      body: 'x',
-    });
-    expect(own).toMatchObject({ status: 200, body: 'ok', headers: { 'x-a': '1' } });
-    expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:5173/api/hello',
-      expect.objectContaining({ method: 'POST', body: 'x', redirect: 'manual' }),
-    );
-    fetchMock.mockRestore();
-  });
-});
-
 // =====================================================================
 // Every RPC through devframe's validating handler (as the wire calls it)
 // =====================================================================
@@ -393,11 +355,8 @@ describe('every RPC with valid input', () => {
       'clear-state-timeline': [[], () => {}],
       'get-api-endpoints': [
         [],
-        r => expect(r).toEqual([expect.objectContaining({ route: 'api', methods: ['GET'] })]),
-      ],
-      'send-api-request': [
-        [{ url: 'http://localhost:5173/api', method: 'GET', headers: '', body: '' }],
-        r => expect(r.status).toBe(200),
+        r =>
+          expect(r).toEqual([expect.objectContaining({ route: 'api', methods: ['GET', 'HEAD'] })]),
       ],
       'get-compiler-warnings': [[], r => expect(r).toEqual([])],
       'get-runtime-errors': [[], r => expect(r).toEqual([])],
@@ -418,7 +377,8 @@ describe('every RPC with valid input', () => {
       expect(jsonRoundTrip(result)).toEqual(result);
       check(result);
     }
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // only the OG preview fetches on the server
+    expect(fetchMock).toHaveBeenCalledOnce();
     fetchMock.mockRestore();
     fs.rmSync(root, { recursive: true, force: true });
   });
@@ -454,15 +414,6 @@ describe('RPC input validation', () => {
     ['get-state-timeline-delta', [{ since: -1 }]],
     ['get-state-timeline-delta', [{ since: 0.5 }]],
     ['get-state-timeline-delta', [undefined]],
-    ['send-api-request', [{ url: long(8193), method: 'GET', headers: '', body: '' }]],
-    ['send-api-request', [{ url: 'https://e.com', method: 'TRACE', headers: '', body: '' }]],
-    ['send-api-request', [{ url: 'https://e.com', method: 'get', headers: '', body: '' }]],
-    ['send-api-request', [{ url: 'https://e.com', method: 'GET', headers: long(65537), body: '' }]],
-    [
-      'send-api-request',
-      [{ url: 'https://e.com', method: 'GET', headers: '', body: long(1_000_001) }],
-    ],
-    ['send-api-request', [{ url: 'https://e.com', method: 'GET' }]],
     ['inspect-file', [{ file: '' }]],
     ['inspect-file', [{}]],
     ['get-og-preview', [{ url: long(8193) }]],
@@ -566,16 +517,5 @@ describe('RPC behaviour details', () => {
       compiled: '',
       file: 'nope.svelte',
     });
-  });
-
-  it('send-api-request passes the dev server origins as the allow list', async () => {
-    const r = rpcHandlers(createTestHost(FIXTURES_DIR, { serverOrigins: () => [] }));
-    const res = await r.get('svelte-devtools:send-api-request')!({
-      url: 'http://localhost:5173/',
-      method: 'GET',
-      headers: '',
-      body: '',
-    });
-    expect(res.statusText).toMatch(/Blocked: internal hostname/);
   });
 });

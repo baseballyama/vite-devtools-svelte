@@ -114,8 +114,6 @@ const defaults: { [K in FnKey]: RealRpc[K] } = {
   getVersions: () => Promise.resolve(versions),
   clearStateTimeline: () => Promise.resolve(),
   getApiEndpoints: () => Promise.resolve([]),
-  sendApiRequest: () =>
-    Promise.resolve({ status: 200, statusText: 'OK', headers: {}, body: '', duration: 1 }),
   getCompilerWarnings: () => Promise.resolve([]),
   getRuntimeErrors: () => Promise.resolve([]),
   clearErrors: () => Promise.resolve(),
@@ -155,7 +153,6 @@ export const getStateTimelineDelta = fake('getStateTimelineDelta');
 export const getVersions = fake('getVersions');
 export const clearStateTimeline = fake('clearStateTimeline');
 export const getApiEndpoints = fake('getApiEndpoints');
-export const sendApiRequest = fake('sendApiRequest');
 export const getCompilerWarnings = fake('getCompilerWarnings');
 export const getRuntimeErrors = fake('getRuntimeErrors');
 export const clearErrors = fake('clearErrors');
@@ -191,7 +188,6 @@ const all: { [K in FnKey]: Mock<RealRpc[K]> } = {
   getVersions,
   clearStateTimeline,
   getApiEndpoints,
-  sendApiRequest,
   getCompilerWarnings,
   getRuntimeErrors,
   clearErrors,

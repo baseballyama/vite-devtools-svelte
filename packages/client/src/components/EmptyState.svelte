@@ -7,20 +7,28 @@
   /**
    * Placeholder for an empty, loading or failed view. With `error` (the
    * failure message, shown monospace above any children) it is an alert
-   * with the error icon.
+   * with the error icon. `announce: false` drops the `status` role, for a
+   * view whose change a live region of its own already announces.
    */
   let {
     icon,
     title,
     error,
+    announce = true,
     children,
-  }: { icon?: IconName; title: string; error?: string | null; children?: Snippet } = $props();
+  }: {
+    icon?: IconName;
+    title: string;
+    error?: string | null;
+    announce?: boolean;
+    children?: Snippet;
+  } = $props();
 
   const failed = $derived(error != null);
   const ico = $derived(failed ? 'errors' : icon);
 </script>
 
-<div class="empty" class:failed role={failed ? 'alert' : 'status'}>
+<div class="empty" class:failed role={failed ? 'alert' : announce ? 'status' : undefined}>
   {#if ico}<span class="ico"><Icon name={ico} size={20} /></span>{/if}
   <p class="title">{title}</p>
   {#if error || children}<div class="body">

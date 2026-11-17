@@ -288,11 +288,6 @@ describe('calls', () => {
       r => r.getStateTimelineDelta(7),
       ['get-state-timeline-delta', { since: 7 }],
     ],
-    [
-      'sendApiRequest',
-      r => r.sendApiRequest('/api', 'POST', '{}', 'b'),
-      ['send-api-request', { url: '/api', method: 'POST', headers: '{}', body: 'b' }],
-    ],
     ['inspectFile', r => r.inspectFile('x.svelte'), ['inspect-file', { file: 'x.svelte' }]],
     ['getOGPreview', r => r.getOGPreview('/p'), ['get-og-preview', { url: '/p' }]],
   ])('%s sends the right method and arguments', async (_, run, expected) => {

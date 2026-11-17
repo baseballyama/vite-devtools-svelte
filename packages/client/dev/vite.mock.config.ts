@@ -23,7 +23,13 @@ import type { Connect, Plugin, ViteDevServer } from 'vite';
 import { defineConfig, mergeConfig } from 'vite';
 
 import base from '../vite.config.js';
-import { createMockBackend, MOCK_ASSET_BASE, MOCK_ASSET_SVG, rpcType } from './mock-rpc.js';
+import {
+  createMockBackend,
+  MOCK_API_BASE,
+  MOCK_ASSET_BASE,
+  MOCK_ASSET_SVG,
+  rpcType,
+} from './mock-rpc.js';
 
 const clientRoot = new URL('..', import.meta.url).pathname;
 const MOUNT = '/.svelte-devtools/';
@@ -38,6 +44,50 @@ function pickTransport(): 'devframe' | 'http' {
 const assets: Connect.NextHandleFunction = (_req, res) => {
   res.setHeader('content-type', 'image/svg+xml');
   res.end(MOCK_ASSET_SVG);
+};
+
+/**
+ * Echoes every API playground request as JSON (DELETE answers 404). A path
+ * ending in `/stream` answers server-sent events until the client stops it.
+ */
+const api: Connect.NextHandleFunction = (req, res) => {
+  // `use(prefix)` strips the prefix from `req.url`; echo what was requested.
+  const requested = req.originalUrl ?? req.url ?? '';
+  if (req.url?.split('?')[0]?.endsWith('/stream')) {
+    res.setHeader('content-type', 'text/event-stream');
+    // HEAD has no body to stream: answer the headers alone.
+    if (req.method === 'HEAD') {
+      res.end();
+      return;
+    }
+    let n = 0;
+    const timer = setInterval(() => {
+      res.write(`data: ${JSON.stringify({ n: ++n, at: Date.now() })}\n\n`);
+    }, 250);
+    req.on('close', () => {
+      clearInterval(timer);
+    });
+    return;
+  }
+  let body = '';
+  req.on('data', c => {
+    body += c;
+  });
+  req.on('end', () => {
+    const missing = req.method === 'DELETE';
+    res.statusCode = missing ? 404 : 200;
+    res.setHeader('content-type', 'application/json');
+    res.setHeader('cache-control', 'no-store');
+    res.end(
+      JSON.stringify({
+        ok: !missing,
+        url: requested,
+        method: req.method,
+        body,
+        items: [{ id: 1 }],
+      }),
+    );
+  });
 };
 
 function mockBackend(scale: number): Plugin {
@@ -112,6 +162,7 @@ function mockBackend(scale: number): Plugin {
     name: 'svelte-devtools-mock-backend',
     async configureServer(server) {
       server.middlewares.use(MOCK_ASSET_BASE, assets);
+      server.middlewares.use(MOCK_API_BASE, api);
       if (transport === 'http') server.middlewares.use('/__svelte-devtools/rpc', http);
       else await mountDevframe(server);
       server.config.logger.info(`  mock backend: ${transport}, scale ${scale}`);

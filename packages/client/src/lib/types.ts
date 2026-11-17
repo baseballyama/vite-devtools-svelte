@@ -14,7 +14,6 @@ export type {
   LoadProfile,
   StateChange,
   ApiEndpoint,
-  ApiResponse,
   CompilerWarning,
   RuntimeError,
   InspectResult,

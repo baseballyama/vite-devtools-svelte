@@ -34,6 +34,8 @@ const WORDS =
   );
 
 export const MOCK_ASSET_BASE = '/__mock-static/';
+/** Where the mock endpoints answer: the API playground fetches them from the browser. */
+export const MOCK_API_BASE = '/__mock-api';
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -349,9 +351,18 @@ export function createMockBackend(scale = 5000) {
     .map(x => ({
       route: x.id,
       path: x.path,
-      methods: r() < 0.5 ? ['GET'] : ['GET', 'POST', 'DELETE'],
+      url: MOCK_API_BASE + x.path,
+      methods: r() < 0.5 ? ['GET', 'HEAD'] : ['GET', 'HEAD', 'POST', 'DELETE'],
       file: x.files.find(f => f.type === 'endpoint')!.path,
     }));
+  // An endless server-sent-events endpoint (answered by vite.mock.config.ts) to try streaming.
+  endpoints.unshift({
+    route: 'api/stream',
+    path: '/api/stream',
+    url: `${MOCK_API_BASE}/api/stream`,
+    methods: ['GET', 'HEAD'],
+    file: 'src/routes/api/stream/+server.ts',
+  });
 
   let fps: { timestamp: number; fps: number }[] = [];
   const profiles = () => {
@@ -566,13 +577,6 @@ export function createMockBackend(scale = 5000) {
     'svelte-devtools:get-state-timeline': () => (tick(), timeline),
     'svelte-devtools:clear-state-timeline': () => ((timeline = []), versions.stateTimeline++),
     'svelte-devtools:get-api-endpoints': () => endpoints,
-    'svelte-devtools:send-api-request': ({ url, method }: { url: string; method: string }) => ({
-      status: method === 'DELETE' ? 404 : 200,
-      statusText: method === 'DELETE' ? 'Not Found' : 'OK',
-      headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
-      body: JSON.stringify({ ok: true, url, method, items: [{ id: 1, name: 'Widget' }] }),
-      duration: Math.round(20 + r() * 200),
-    }),
     'svelte-devtools:get-compiler-warnings': () => warnings,
     'svelte-devtools:get-runtime-errors': () => errors,
     'svelte-devtools:clear-errors': () => (

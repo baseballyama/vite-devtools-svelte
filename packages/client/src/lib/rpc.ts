@@ -17,7 +17,6 @@ import type {
   CaptureInfoMap,
   StateChange,
   ApiEndpoint,
-  ApiResponse,
   CompilerWarning,
   RuntimeError,
   InspectResult,
@@ -310,15 +309,6 @@ export async function clearStateTimeline(): Promise<void> {
 
 export function getApiEndpoints(): Promise<ApiEndpoint[]> {
   return call('get-api-endpoints');
-}
-
-export function sendApiRequest(
-  url: string,
-  method: string,
-  headers: string,
-  body: string,
-): Promise<ApiResponse> {
-  return call('send-api-request', { url, method, headers, body });
 }
 
 export function getCompilerWarnings(): Promise<CompilerWarning[]> {

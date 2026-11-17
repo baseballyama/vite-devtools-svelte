@@ -1,4 +1,4 @@
-/** Longest an outbound devtools request (API playground, OG preview) may take, body included. */
+/** Longest an outbound devtools request (OG preview) may take, body included. */
 export const OUTBOUND_TIMEOUT_MS = 30_000;
 
 /**

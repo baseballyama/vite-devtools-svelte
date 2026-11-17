@@ -145,9 +145,10 @@ describe('devframe host wiring', () => {
     for (const a of assets) expect(a.url.startsWith('/app/')).toBe(true);
   });
 
-  describe('send-api-request: the dev server origins are allowed', () => {
+  describe('get-og-preview: the dev server origins are allowed', () => {
     const local = http.createServer((_req, res) => {
-      res.end('hello');
+      res.setHeader('content-type', 'text/html');
+      res.end('<meta property="og:title" content="hello">');
     });
     afterAll(
       () =>
@@ -156,20 +157,22 @@ describe('devframe host wiring', () => {
         }),
     );
 
-    it('reaches its own server, and only once it knows its URLs', async () => {
+    it('reads its own server, and only once it knows its URLs', async () => {
       await new Promise<void>(resolve => {
         local.listen(0, '127.0.0.1', resolve);
       });
-      const url = `http://127.0.0.1:${(local.address() as AddressInfo).port}/api`;
+      const url = `http://127.0.0.1:${(local.address() as AddressInfo).port}/`;
       const s = setup();
       const call = await hub(s.plugins);
-      const request = { url, method: 'GET', headers: '', body: '' };
       // before configureServer: no origins, a loopback URL is refused (SSRF guard)
-      expect((await call('send-api-request', request)).status).toBe(0);
-      s.server.resolvedUrls = { local: [`${new URL(url).origin}/`], network: [] };
+      const blocked = await call('get-og-preview', { url });
+      expect(blocked.title).toBe('');
+      expect(blocked.issues.join(' ')).toMatch(/Blocked/);
+      s.server.resolvedUrls = { local: [url], network: [] };
       s.configure();
-      const res = await call('send-api-request', request);
-      expect({ status: res.status, body: res.body }).toEqual({ status: 200, body: 'hello' });
+      const res = await call('get-og-preview', { url });
+      expect(res.title).toBe('hello');
+      expect(res.issues.join(' ')).not.toMatch(/Blocked/);
     });
   });
 });
