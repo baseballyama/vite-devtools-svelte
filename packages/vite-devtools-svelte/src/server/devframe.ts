@@ -6,7 +6,7 @@ import { defineDevframe, defineRpcFunction } from 'devframe'
 import type { DevframeDefinition } from 'devframe'
 import { z } from 'zod'
 
-import { analyzeApiEndpoints, resolveRelative } from '../analyzers/api.js'
+import { analyzeApiEndpoints } from '../analyzers/api.js'
 import type { ResolveFile } from '../analyzers/api.js'
 import { analyzeAssets } from '../analyzers/assets.js'
 import { analyzeBuild } from '../analyzers/build.js'
@@ -194,7 +194,7 @@ export function createRpcFunctions(host: SvelteDevtoolsHost) {
     query('get-versions', () => ({ ...collector.versions })),
     action('clear-state-timeline', () => collector.clearStateTimeline()),
     query('get-api-endpoints', () =>
-      analyzeApiEndpoints(routes(), host.publicBase(), host.resolveFile ?? resolveRelative),
+      analyzeApiEndpoints(routes(), host.publicBase(), host.resolveFile),
     ),
     query('get-compiler-warnings', () => collector.compilerWarnings),
     query('get-runtime-errors', () => collector.runtimeErrors),

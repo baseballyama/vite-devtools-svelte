@@ -199,6 +199,25 @@ describe('ApiPlayground', () => {
     expect(within(method).getAllByRole('option')).toHaveLength(7)
   })
 
+  it('falls back to an offered method when a rescan drops the chosen one', async () => {
+    const { user, list } = await setup()
+    await user.click(within(list).getAllByRole('option')[2]!)
+    const method = screen.getByRole<HTMLSelectElement>('combobox', { name: 'HTTP method' })
+    await choose(method, 'PUT')
+    expect(screen.getByLabelText('Request body')).toBeTruthy()
+    // the fixed endpoint now exports only GET
+    vi.mocked(rpc.getApiEndpoints).mockResolvedValue([
+      ...endpoints.slice(0, 2),
+      { ...endpoints[2]!, methods: ['GET', 'HEAD'], complete: true },
+    ])
+    await user.click(screen.getByRole('button', { name: 'Rescan endpoints' }))
+    await settle()
+    expect(method.value).toBe('GET')
+    expect(screen.getByText('GET requests have no body.')).toBeTruthy()
+    await user.click(sendButton())
+    expect(vi.mocked(http.sendRequest).mock.calls[0]![0].method).toBe('GET')
+  })
+
   it('opens the handler file in the editor', async () => {
     const { user, list } = await setup()
     await user.click(within(list).getAllByRole('option')[0]!)

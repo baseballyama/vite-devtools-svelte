@@ -12,6 +12,8 @@ import { describe, it, expect, vi, afterEach, afterAll } from 'vitest'
 import {
   analyzeApiEndpoints,
   collectExports,
+  MAX_DEPTH,
+  MAX_MODULE_BYTES,
   moduleExports,
   resolveRelative,
   serverResolver,
@@ -112,13 +114,15 @@ describe('analyzeApiEndpoints: exported methods', () => {
     ['lowercase', 'export function get() {}', []],
     ['not exported', 'function GET() {}', []],
     ['default export', 'export default function GET() {}', []],
-    ['namespace re-export', "export * as GET from './handlers'", ['GET', 'HEAD']],
-    ['namespace re-export, string name', "export * as 'PUT' from './handlers'", ['PUT']],
+    // a namespace object is not a handler SvelteKit can call
+    ['namespace re-export', "export * as GET from './handlers'", []],
+    ['namespace re-export, string name', "export * as 'PUT' from './handlers'", []],
     ['empty file', '', []],
     // type-only exports have no runtime value
     ['type-only export list', 'type GET = 1\nexport type { GET }', []],
     ['type-only specifier', 'const POST = h\ntype GET = 1\nexport { type GET, POST }', ['POST']],
-    ['declared const', 'export declare const GET: () => Response', []],
+    // oxc marks `export declare` as a type-only export
+    ['declared const (type-only)', 'export declare const GET: () => Response', []],
   ])('%s', async (_label, code, methods) => {
     expect(await methodsOf(code)).toMatchObject({ methods, complete: true })
   })
@@ -179,16 +183,25 @@ describe('analyzeApiEndpoints: exported methods', () => {
   })
 })
 
+/** m0 → m1 → … → m{hops}, each `export *` from the next; m1 exports POST, the last GET. */
+function chain(hops: number): string {
+  const files: Record<string, string> = {}
+  for (let i = 0; i < hops; i++) files[`m${i}.ts`] = `export * from './m${i + 1}'`
+  files['m1.ts'] += '\nexport const POST = h'
+  files[`m${hops}.ts`] = 'export const GET = h'
+  return path.join(project(files), 'm0.ts')
+}
+
 describe('collectExports: export * from', () => {
   it('follows stars through relative modules, recursively', async () => {
     const dir = project({
-      '+server.ts': "export * from './a'\nexport const GET = h",
-      'a.ts': "export * from './b.js'\nexport const POST = h",
-      'b.ts': "export * from '../shared/index.js'",
+      'routes/+server.ts': "export * from './a'\nexport const GET = h",
+      'routes/a.ts': "export * from './b.js'\nexport const POST = h",
+      'routes/b.ts': "export * from '../shared/index.js'",
       // '../shared/index.js' resolves to the TypeScript source
-      '../shared/index.ts': 'export function DELETE() {}',
+      'shared/index.ts': 'export function DELETE() {}',
     })
-    const result = await collectExports(path.join(dir, '+server.ts'), resolveRelative)
+    const result = await collectExports(path.join(dir, 'routes/+server.ts'), resolveRelative)
     expect(result).toEqual({ names: new Set(['GET', 'POST', 'DELETE']), complete: true })
   })
 
@@ -239,15 +252,48 @@ describe('collectExports: export * from', () => {
     })
   })
 
-  it('gives up on a chain deeper than it follows', async () => {
-    const files: Record<string, string> = {}
-    for (let i = 0; i < 10; i++) files[`m${i}.ts`] = `export * from './m${i + 1}'`
-    files['m10.ts'] = 'export const GET = h'
-    const dir = project(files)
-    expect(await collectExports(path.join(dir, 'm0.ts'), resolveRelative)).toEqual({
-      names: new Set(),
+  it('follows a chain of MAX_DEPTH stars, and gives up past it keeping what it read', async () => {
+    expect(await collectExports(chain(MAX_DEPTH), resolveRelative)).toEqual({
+      names: new Set(['POST', 'GET']),
+      complete: true,
+    })
+    expect(await collectExports(chain(MAX_DEPTH + 1), resolveRelative)).toEqual({
+      names: new Set(['POST']),
       complete: false,
     })
+  })
+
+  it('does not look inside node_modules: a package may be CommonJS', async () => {
+    const dir = project({
+      '+server.ts': "export * from 'cjs-pkg'\nexport const POST = h",
+      'node_modules/cjs-pkg/index.js': 'exports.GET = () => new Response()',
+    })
+    const pkg = path.join(dir, 'node_modules/cjs-pkg/index.js')
+    expect(await collectExports(path.join(dir, '+server.ts'), () => Promise.resolve(pkg))).toEqual({
+      names: new Set(['POST']),
+      complete: false,
+    })
+  })
+
+  it('does not read a module over MAX_MODULE_BYTES', async () => {
+    const dir = project({
+      '+server.ts': "export * from './big'\nexport const POST = h",
+      'big.ts': `export const GET = h\n${' '.repeat(MAX_MODULE_BYTES)}`,
+    })
+    expect(await collectExports(path.join(dir, '+server.ts'), resolveRelative)).toEqual({
+      names: new Set(['POST']),
+      complete: false,
+    })
+  })
+
+  it('reads a module shared by many endpoints once per analysis', async () => {
+    const dir = project({ 'shared.ts': 'export const GET = h' })
+    const shared = path.join(dir, 'shared.ts')
+    const routes = [1, 2, 3].map(() => endpointRoute("export * from 'shared'"))
+    const read = vi.spyOn(fs.promises, 'readFile')
+    const endpoints = await analyzeApiEndpoints(routes, '/', () => Promise.resolve(shared))
+    for (const e of endpoints) expect(e).toMatchObject({ methods: ['GET', 'HEAD'], complete: true })
+    expect(read.mock.calls.filter(([file]) => file === shared)).toHaveLength(1)
   })
 
   it('resolveRelative finds index files and ignores directories', async () => {
@@ -265,14 +311,17 @@ describe('collectExports: export * from', () => {
       virtual: { id: '\0virtual', external: false },
       none: null,
     }
-    const resolveId = vi.fn((id: string) => Promise.resolve(answers[id]))
-    const holder: { server?: { pluginContainer: { resolveId: typeof resolveId } } } = {}
-    const resolve = serverResolver(() => holder.server as never)
+    const resolveId = vi.fn((id: string, _importer?: string) => Promise.resolve(answers[id]))
+    const holder: { server?: { environments: Record<string, unknown> } } = {}
+    const resolve = serverResolver(() => holder.server)
     // No server yet: relative resolution.
     expect(await resolve('./x', path.join(dir, 'y.ts'))).toBe(path.join(dir, 'x.ts'))
-    holder.server = { pluginContainer: { resolveId } }
+    // nor without an SSR environment
+    holder.server = { environments: {} }
+    expect(await resolve('./x', path.join(dir, 'y.ts'))).toBe(path.join(dir, 'x.ts'))
+    holder.server = { environments: { ssr: { pluginContainer: { resolveId } } } }
     expect(await resolve('$lib/a', '/abs/+server.ts')).toBe('/abs/real.ts')
-    expect(resolveId).toHaveBeenCalledWith('$lib/a', '/abs/+server.ts', { ssr: true })
+    expect(resolveId).toHaveBeenCalledWith('$lib/a', '/abs/+server.ts')
     for (const id of ['ext', 'virtual', 'none']) expect(await resolve(id, '/abs/i.ts')).toBeNull()
   })
 

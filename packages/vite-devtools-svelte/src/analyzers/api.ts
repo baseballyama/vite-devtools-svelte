@@ -66,7 +66,6 @@ export function moduleExports(code: string, filename: string): ModuleExports | n
   const names = new Set<string>()
   const stars: string[] = []
   for (const node of program.body) {
-    // `export * as ns from` exports only `ns`, never a handler name directly.
     // Type-only exports (`export type { GET }`, `export type * from`) have no runtime value.
     if (
       (node.type === 'ExportAllDeclaration' || node.type === 'ExportNamedDeclaration') &&
@@ -75,16 +74,17 @@ export function moduleExports(code: string, filename: string): ModuleExports | n
       continue
     }
     if (node.type === 'ExportAllDeclaration') {
-      if (node.exported) {
-        names.add(node.exported.type === 'Literal' ? node.exported.value : node.exported.name)
-      } else stars.push(node.source.value)
+      // `export * as GET from` exports a namespace object, which SvelteKit
+      // cannot call as a handler: only a bare `export *` adds names.
+      if (!node.exported) stars.push(node.source.value)
       continue
     }
     if (node.type !== 'ExportNamedDeclaration') continue
     const decl = node.declaration
     if ((decl?.type === 'FunctionDeclaration' || decl?.type === 'ClassDeclaration') && decl.id) {
       names.add(decl.id.name)
-    } else if (decl?.type === 'VariableDeclaration' && !decl.declare) {
+    } else if (decl?.type === 'VariableDeclaration') {
+      // `export declare const` is type-only (`exportKind: 'type'`), skipped above.
       for (const d of decl.declarations) bindingNames(d.id, names)
     }
     for (const spec of node.specifiers) {
@@ -106,13 +106,14 @@ const EXTENSIONS = ['', '.ts', '.js', '/index.ts', '/index.js']
  * extensions SvelteKit modules use. Aliases (`$lib`) and packages need
  * the dev server's resolver.
  */
-export const resolveRelative: ResolveFile = (specifier, importer) => {
-  if (!specifier.startsWith('./') && !specifier.startsWith('../')) return Promise.resolve(null)
+// oxlint-disable-next-line require-await -- async so a throw becomes a rejection the caller catches
+export const resolveRelative: ResolveFile = async (specifier, importer) => {
+  if (!specifier.startsWith('./') && !specifier.startsWith('../')) return null
   const target = path.resolve(path.dirname(importer), specifier)
   const candidates = EXTENSIONS.map(ext => target + ext)
   // TypeScript sources import `./x.js` for `./x.ts`.
   if (target.endsWith('.js')) candidates.push(`${target.slice(0, -'.js'.length)}.ts`)
-  return Promise.resolve(candidates.find(isFile) ?? null)
+  return candidates.find(isFile) ?? null
 }
 
 function isFile(file: string): boolean {
@@ -128,29 +129,65 @@ function isFile(file: string): boolean {
  * `$lib` resolve as in the app; {@link resolveRelative} while there is no
  * server. Virtual modules and externals are not files to parse.
  */
-export function serverResolver(
-  server: () => Pick<ViteDevServer, 'pluginContainer'> | undefined,
-): ResolveFile {
+export function serverResolver(server: () => ServerEnvironments | undefined): ResolveFile {
   return async (specifier, importer) => {
-    const current = server()
-    if (!current) return resolveRelative(specifier, importer)
-    const resolved = await current.pluginContainer.resolveId(specifier, importer, { ssr: true })
+    const ssr = server()?.environments.ssr
+    if (!ssr) return resolveRelative(specifier, importer)
+    const resolved = await ssr.pluginContainer.resolveId(specifier, importer)
     return resolved && !resolved.external && path.isAbsolute(resolved.id) ? resolved.id : null
   }
 }
 
+/** The part of a dev server {@link serverResolver} uses. */
+export interface ServerEnvironments {
+  environments: Partial<
+    Record<'ssr', Pick<ViteDevServer['environments'][string], 'pluginContainer'>>
+  >
+}
+
 /** Longest `export *` chain followed; deeper chains count as unknown. */
-const MAX_DEPTH = 8
+export const MAX_DEPTH = 8
+/** Larger modules are not read: no handler barrel is this big, and parsing blocks the server. */
+export const MAX_MODULE_BYTES = 2 * 1024 * 1024
+
+/**
+ * Reads and parses each module once per analysis, however many endpoints
+ * re-export it (a shared `$lib` barrel otherwise parses once per endpoint).
+ * Null for a module that cannot be read or parsed, sits in `node_modules`
+ * (a package may be CommonJS, whose exports no parse of ESM syntax sees),
+ * or is over {@link MAX_MODULE_BYTES}.
+ */
+export type ModuleCache = Map<string, Promise<ModuleExports | null>>
+
+function loadExports(module: string, cache: ModuleCache): Promise<ModuleExports | null> {
+  let entry = cache.get(module)
+  if (!entry) {
+    entry = readExports(module)
+    cache.set(module, entry)
+  }
+  return entry
+}
+
+async function readExports(module: string): Promise<ModuleExports | null> {
+  if (module.replaceAll('\\', '/').split('/').includes('node_modules')) return null
+  try {
+    if ((await fs.promises.stat(module)).size > MAX_MODULE_BYTES) return null
+    return moduleExports(await fs.promises.readFile(module, 'utf-8'), module)
+  } catch {
+    return null // vanished or unreadable
+  }
+}
 
 /**
  * The names `file` exports, following `export * from` through `resolve`.
- * `complete` is false when part of it could not be read: the file or a
- * re-exported module is unreadable or unparsable, a specifier does not
- * resolve to a file, or the chain is deeper than {@link MAX_DEPTH}.
+ * `complete` is false when part of it could not be read: a module
+ * {@link ModuleCache} has no exports for, a specifier that does not
+ * resolve to a file, or a chain deeper than {@link MAX_DEPTH}.
  */
 export async function collectExports(
   file: string,
   resolve: ResolveFile,
+  cache: ModuleCache = new Map(),
 ): Promise<{ names: Set<string>; complete: boolean }> {
   const names = new Set<string>()
   const seen = new Set<string>()
@@ -158,12 +195,7 @@ export async function collectExports(
   async function visit(module: string, depth: number): Promise<void> {
     if (seen.has(module)) return
     seen.add(module)
-    let exports: ModuleExports | null = null
-    try {
-      exports = moduleExports(await fs.promises.readFile(module, 'utf-8'), module)
-    } catch {
-      /* file vanished or is unreadable */
-    }
+    const exports = await loadExports(module, cache)
     if (!exports) {
       complete = false
       return
@@ -201,10 +233,11 @@ export async function analyzeApiEndpoints(
   resolve: ResolveFile = resolveRelative,
 ): Promise<ApiEndpoint[]> {
   const prefix = base.endsWith('/') ? base.slice(0, -1) : base
+  const cache: ModuleCache = new Map()
   const endpoints = routes.map(async (route): Promise<ApiEndpoint | null> => {
     const serverFile = route.files.find(f => f.type === 'endpoint')
     if (!serverFile) return null
-    const { names, complete } = await collectExports(serverFile.path, resolve)
+    const { names, complete } = await collectExports(serverFile.path, resolve, cache)
     const methods: string[] = names.has('fallback')
       ? [...HTTP_METHODS]
       : HTTP_METHODS.filter(m => names.has(m) || (m === 'HEAD' && names.has('GET')))
