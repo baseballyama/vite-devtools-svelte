@@ -155,6 +155,8 @@
           // At most one repaint per frame: a fast stream sends many chunks a
           // frame, and each repaint renders the body shown so far.
           onProgress: r => {
+            // a chunk of an abandoned request must not wait in `progress` for the next frame
+            if (id !== generation) return
             progress = r
             frame ||= requestAnimationFrame(() => {
               frame = 0
@@ -365,7 +367,8 @@
         {#if requestError}
           <EmptyState title="Request failed" error={requestError} />
         {:else if stoppedEarly}
-          <EmptyState icon="stop" title="Stopped before a response" />
+          <!-- the live region above says it -->
+          <EmptyState icon="stop" title="Stopped before a response" announce={false} />
         {:else if response}
           <header class="res-head">
             <Badge tone={statusTone(response.status)}>{response.status} {response.statusText}</Badge

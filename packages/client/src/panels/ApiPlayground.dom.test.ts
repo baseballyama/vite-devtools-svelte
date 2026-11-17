@@ -364,7 +364,35 @@ describe('ApiPlayground', () => {
     await settle()
     expect(within(response()).getByText('Stopped before a response')).toBeTruthy()
     expect(within(response()).queryByRole('alert')).toBeNull()
+    // announced once, by the live region
+    expect(within(response()).queryByRole('status')).toBeNull()
+    expect(document.querySelector('[aria-live]')!.textContent).toBe('Stopped before a response')
     expect(sendButton().disabled).toBe(false)
+
+    // sending again shows the next response
+    vi.mocked(http.sendRequest).mockResolvedValue(ok())
+    await user.click(sendButton())
+    await settle()
+    expect(within(response()).getByText('200 OK')).toBeTruthy()
+    expect(within(response()).queryByText('Stopped before a response')).toBeNull()
+  })
+
+  it('picking an endpoint after an early stop clears it', async () => {
+    vi.mocked(http.sendRequest).mockImplementation(
+      (_req, opts) =>
+        new Promise(resolve => {
+          opts!.signal!.addEventListener('abort', () => {
+            resolve(ok({ status: 0, statusText: 'Stopped', headers: {}, body: '', size: 0 }))
+          })
+        }),
+    )
+    const { user, list } = await setup()
+    await user.type(urlInput(), 'http://x/')
+    await user.click(sendButton())
+    await user.click(screen.getByRole('button', { name: /^Stop/ }))
+    await settle()
+    await user.click(within(list).getAllByRole('option')[0]!)
+    expect(within(response()).getByText('Send a request')).toBeTruthy()
   })
 
   it('a frame still pending never paints older progress over the result', async () => {
@@ -449,13 +477,18 @@ describe('ApiPlayground', () => {
     // a new request starts before the old one ends
     vi.mocked(http.sendRequest).mockReturnValue(new Promise(() => {}))
     await user.click(sendButton())
+    // a late chunk of the old request lands after the new one's own chunk
+    const next = vi.mocked(http.sendRequest).mock.calls[1]![1]!
+    next.onProgress!(ok({ body: 'NEW' }))
+    onProgress!(ok({ body: 'OLD' }))
+    await settle()
+    expect(response().querySelector('pre')!.textContent).toBe('NEW')
     // then the old request ends: the new one is still in flight
     resolve(ok({ body: 'old stream, more', truncated: 'stopped' }))
     await settle()
-    expect(within(response()).getByText('Waiting for a response…')).toBeTruthy()
-    const second = vi.mocked(http.sendRequest).mock.calls[1]![1]!.signal!
+    expect(within(response()).getByText('Streaming…')).toBeTruthy()
     await user.click(screen.getByRole('button', { name: /^Stop/ }))
-    expect(second.aborted).toBe(true)
+    expect(next.signal!.aborted).toBe(true)
     expect(urlInput().value).toBe(`${location.origin}/app/api/items/:id`)
   })
 
