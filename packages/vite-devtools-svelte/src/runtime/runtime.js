@@ -175,8 +175,9 @@ export function createStore(env) {
     // Readers of Svelte's objects (set by hooks.js from svelte/internal/devtools):
     // signalValue, isUninitialized, deps, reactions, kind, componentOf,
     // children, snapshot, sourceNode (the node a $state proxy's
-    // property / version signal belongs to, or null) and trackedComponent
-    // (the id of a context's nearest tracked component, or null).
+    // property / version signal belongs to, or null), trackedComponent
+    // (the id of a context's nearest tracked component, or null), filename
+    // and parentComponent (of a component context).
     _api: null,
     // the HMR channel (connectHot, by the first hooks.js copy that has one)
     _hot: null,

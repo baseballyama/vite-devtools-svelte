@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import Child from './fixtures/Child.svelte';
+import Outer from './fixtures/Outer.svelte';
 import Picked from './fixtures/Picked.svelte';
 import { dt, instances, render } from './harness.js';
 
@@ -10,9 +11,18 @@ import { dt, instances, render } from './harness.js';
 
 // DOM elements (the package type-checks against Node's lib only).
 type El = object;
+interface Entry {
+  type: string;
+  componentTag?: string;
+  file: string;
+  line: number;
+  column: number;
+  parent: Entry | null;
+}
 interface Link {
   describe(element: El): { name: string } | null;
-  pick(element: El): boolean;
+  parents(element: El): Map<Entry, { name: string }>;
+  pick(element: El, entry?: Entry): boolean;
   connect(controls: { enable(): void; disable(): void }): () => void;
   untracked<T>(fn: () => T): T;
 }
@@ -43,10 +53,10 @@ afterEach(() => {
   dt()._hot = null;
 });
 
-/** The component ids a pick of `el` reported. */
-function pick(el: El) {
+/** The component ids a pick of `el` (or of its `entry`) reported. */
+function pick(el: El, entry?: Entry) {
   sent = [];
-  link.pick(el);
+  link.pick(el, entry);
   return sent.filter(s => s.event === PICKED).map(s => s.data.componentId as number);
 }
 
@@ -136,6 +146,108 @@ describe('inspector link: element -> component instance', () => {
     // Svelte reports the context the snippet runs in: the component rendering it
     expect(pick(em)).toEqual([second.id]);
     expect(sent[0]!.data.loc.file).toMatch(/Picked\.svelte$/);
+    r.destroy();
+  });
+});
+
+/** The component entries of `el`'s `__svelte_meta.parent` chain, innermost first. */
+function componentEntries(el: El): Entry[] {
+  const entries: Entry[] = [];
+  for (let e: Entry | null = (el as any).__svelte_meta.parent; e !== null; e = e.parent) {
+    if (e.type === 'component') entries.push(e);
+  }
+  return entries;
+}
+
+/** For each component entry of `el`: `Tag@file:line -> id picked`, or `-> none`. */
+function parentRows(el: El) {
+  return componentEntries(el).map(entry => {
+    const ids = pick(el, entry);
+    const at = `${entry.componentTag}@${entry.file.slice(entry.file.lastIndexOf('/') + 1)}:${entry.line}`;
+    return `${at} -> ${ids.length > 0 ? ids[0] : 'none'}`;
+  });
+}
+
+describe('inspector link: the instances of the parent rows', () => {
+  // Outer.svelte renders <Card> (each rendering a <Leaf> in an {#if}) five
+  // times: plain twice, with a <Leaf> passed as children, through an alias,
+  // and with a css custom property.
+  it('pairs each component entry with the instance it rendered, among same-file siblings', () => {
+    const r = render(Outer);
+    const cards = instances('Card').map(c => c.id);
+    const leaves = instances('Leaf').map(c => c.id);
+    const [, two] = all(r.target, 'i');
+    expect(parentRows(two!)).toEqual([
+      `Leaf@Card.svelte:8 -> ${leaves[1]}`,
+      `Card@Outer.svelte:9 -> ${cards[1]}`,
+    ]);
+    expect(link.parents(two!)).toEqual(
+      new Map(componentEntries(two!).map(e => [e, { name: e.componentTag }])),
+    );
+    // the pick carries where the row's tag is written
+    pick(two!, componentEntries(two!)[1]);
+    expect(sent[0]!.data.loc).toEqual({
+      file: expect.stringMatching(/Outer\.svelte$/),
+      line: 9,
+      column: 0,
+    });
+    r.destroy();
+  });
+
+  it('a component passed as children pairs through the {@render} that ran it', () => {
+    const r = render(Outer);
+    const passed = all(r.target, 'i').find(i => (i as any).textContent === 'passed')!;
+    expect(parentRows(passed)).toEqual([
+      `Leaf@Outer.svelte:10 -> ${instances('Leaf')[3]!.id}`,
+      `Card@Outer.svelte:10 -> ${instances('Card')[2]!.id}`,
+    ]);
+    r.destroy();
+  });
+
+  it('an aliased tag is not paired; the rows inside it still are', () => {
+    const r = render(Outer);
+    const alias = all(r.target, 'i').find(i => (i as any).textContent === 'alias')!;
+    expect(parentRows(alias)).toEqual([
+      `Leaf@Card.svelte:8 -> ${instances('Leaf')[4]!.id}`,
+      'Alias@Outer.svelte:11 -> none',
+    ]);
+    expect([...link.parents(alias).values()]).toEqual([{ name: 'Leaf' }]);
+    r.destroy();
+  });
+
+  it('a call without an entry (css custom properties) leaves no row to pair', () => {
+    const r = render(Outer);
+    const styled = all(r.target, 'i').find(i => (i as any).textContent === 'styled')!;
+    expect(parentRows(styled)).toEqual([`Leaf@Card.svelte:8 -> ${instances('Leaf')[5]!.id}`]);
+    r.destroy();
+  });
+
+  it('an untracked component (a library) is not paired, and no ancestor stands in', () => {
+    const r = render(Outer);
+    const [, two] = all(r.target, 'i');
+    const card = dt()._api.parentComponent((two as any).__svelte_meta.component);
+    const id = dt()._idByContext.get(card);
+    dt()._idByContext.delete(card);
+    try {
+      expect(parentRows(two!)).toEqual([
+        `Leaf@Card.svelte:8 -> ${instances('Leaf')[1]!.id}`,
+        'Card@Outer.svelte:9 -> none',
+      ]);
+    } finally {
+      dt()._idByContext.set(card, id);
+    }
+    r.destroy();
+  });
+
+  it('an entry of another element, or none, picks nothing', () => {
+    const r = render(Outer);
+    const [one, two] = all(r.target, 'i');
+    expect(link.pick(one!, componentEntries(two!)[1])).toBe(false);
+    const plain = (
+      globalThis as unknown as { document: { createElement(tag: string): El } }
+    ).document.createElement('p');
+    expect(link.parents(plain)).toEqual(new Map());
+    expect(sent).toEqual([]);
     r.destroy();
   });
 });

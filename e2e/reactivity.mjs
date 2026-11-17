@@ -10,8 +10,8 @@
 // component tree, the reactive graph (edges, markup readers, module scopes,
 // orphans, isolated nodes), the state timeline after interactions, and the
 // tree after an HMR edit, and the in-page inspector: a click on an element
-// (or "inspect in DevTools" in its right-click menu) picks the instance that
-// rendered it. Exit 0 when every check passes, 1
+// (or "Inspect" on a row of its right-click menu) picks the instance that
+// rendered it (or that row's component). Exit 0 when every check passes, 1
 // otherwise.
 //
 // The dev server runs in its own process group and is killed on exit; the
@@ -258,7 +258,8 @@ try {
     { picks, rows: rows.map(r => r.id), epoch: live.epoch },
   );
 
-  // Right-click on the first row's "+": the menu's "inspect in DevTools" picks
+  // Right-click on the first row's "+": the menu lists the button and its
+  // parent <Row>, each with Inspect and Open; the <Row> row's Inspect picks
   // that Row instance.
   const firstInc = page.locator('[data-testid=inc]').nth(0);
   await page.mouse.move(5, 5);
@@ -270,16 +271,30 @@ try {
   );
   await firstInc.hover();
   await firstInc.click({ button: 'right' });
-  const inspectRow = page.locator('#svelte-inspector-overlay button', {
-    hasText: 'inspect in DevTools',
-  });
-  const menuRow = await inspectRow.textContent({ timeout: 5000 }).catch(() => '');
-  check('inspector: the right-click menu offers the Row instance', /<Row>/.test(menuRow), menuRow);
-  await inspectRow.click({ timeout: 5000 }).catch(() => {});
+  const menuRows = page.locator('#svelte-inspector-overlay li');
+  await menuRows
+    .first()
+    .waitFor({ timeout: 5000 })
+    .catch(() => {});
+  const menuText = (await menuRows.allTextContents()).map(t => t.replaceAll(/\s+/g, ' ').trim());
+  check(
+    'inspector: the right-click menu lists the element and its parent <Row>, each with Inspect and Open',
+    menuText.length >= 2 &&
+      /^<button> .*Row\.svelte:\d+ Inspect Open ↗$/.test(menuText[0]) &&
+      /^<Row> .*lab\/\+page\.svelte:\d+ Inspect Open ↗$/.test(menuText[1]),
+    menuText,
+  );
+  await menuRows
+    .nth(1)
+    .getByRole('button', { name: /^Inspect / })
+    .click({ timeout: 5000 })
+    .catch(() => {});
   await sleep(500);
   check(
-    'inspector: "inspect in DevTools" picks the first Row instance',
-    picks.length === 2 && picks[1].componentId === rows[0]?.id,
+    "inspector: the parent <Row> row's Inspect picks the first Row instance",
+    picks.length === 2 &&
+      picks[1].componentId === rows[0]?.id &&
+      (picks[1].loc?.file ?? '').endsWith('+page.svelte'),
     { picks, rows: rows.map(r => r.id) },
   );
   check(

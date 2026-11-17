@@ -63,7 +63,13 @@
 
   let active_el = $state<ElementWithMetadata | undefined>();
 
-  let menu = $state<{ x: number; y: number; stack: Array<Loc & { tag: string }> } | null>(null);
+  // vite-devtools-svelte: `entry` (a parent row's `__svelte_meta.parent` entry) resolves the row's
+  // instance by identity, so `$state.raw` keeps it unproxied (`menu` is only ever reassigned)
+  let menu = $state.raw<{
+    x: number;
+    y: number;
+    stack: Array<Loc & { tag: string; entry?: DevStackEntry }>;
+  } | null>(null);
 
   let hold_start_ts = $state<number | null>(null);
 
@@ -181,20 +187,23 @@
     }
   }
 
-  // vite-devtools-svelte: the menu's "inspect in DevTools" row
-  function inspect_menu_el() {
-    if (devtools!.pick(active_el!)) {
-      disable();
-    } else {
-      send(active_el!.__svelte_meta.loc);
-    }
+  // vite-devtools-svelte: a menu row's "Inspect" (the element row has no entry) and "Open"
+  function inspect_row(item: Loc & { entry?: DevStackEntry }) {
+    if (!devtools!.pick(active_el!, item.entry)) send(item);
+    disable();
+  }
+
+  function open_row(item: Loc) {
+    send(item);
+    disable();
   }
 
   function get_stack(target: ElementWithMetadata) {
     const el = find_selectable_parent(target, true)!;
     const meta = el.__svelte_meta;
 
-    const stack = [
+    // vite-devtools-svelte: typed for the parent rows' `entry`
+    const stack: Array<Loc & { tag: string; entry?: DevStackEntry }> = [
       {
         file: meta.loc.file,
         line: meta.loc.line,
@@ -214,6 +223,8 @@
         line: entry.line,
         column: entry.column,
         tag: entry.componentTag!,
+        // vite-devtools-svelte: resolves the row's component instance
+        entry,
       });
     }
 
@@ -515,26 +526,54 @@
 
       <hr />
 
-      <!-- vite-devtools-svelte: the element's component instance can also be inspected -->
-      {@const component = active_el && devtools?.describe(active_el)}
-      <ul class="svelte-inspector-grid">
-        {#if component}
-          <li>
-            <button type="button" class="svelte-inspector-menu-row" onclick={inspect_menu_el}>
-              <span class="svelte-inspector-tag">&lt;{component.name}&gt;</span>
-              <span class="svelte-inspector-file">inspect in DevTools</span>
-            </button>
-          </li>
-        {/if}
-        {#each menu.stack as item, i (`${item.file}:${item.line}:${i}`)}
-          <li>
-            <button type="button" class="svelte-inspector-menu-row" onclick={() => send(item)}>
+      <!-- vite-devtools-svelte: with the DevTools, each row inspects its instance or opens the editor -->
+      {#if devtools}
+        {@const parents = devtools.parents(active_el!)}
+        <ul class="svelte-inspector-actions-grid">
+          {#each menu.stack as item, i (`${item.file}:${item.line}:${i}`)}
+            {@const known = i === 0 ? devtools.describe(active_el!) : parents.get(item.entry!)}
+            <!-- the row is not a control: a click on its text must not close the menu -->
+            <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
+            <li class="svelte-inspector-actions-row" onclick={e => e.stopPropagation()}>
               <span class="svelte-inspector-tag">&lt;{item.tag}&gt;</span>
               <span class="svelte-inspector-file">{item.file}:{item.line}</span>
-            </button>
-          </li>
-        {/each}
-      </ul>
+              <span class="svelte-inspector-actions">
+                {#if known}
+                  <button
+                    type="button"
+                    class="svelte-inspector-action svelte-inspector-inspect"
+                    aria-label="Inspect {known.name} in DevTools"
+                    onclick={() => inspect_row(item)}>Inspect</button
+                  >
+                {:else}
+                  <!-- keeps "Open" aligned; hidden from focus and assistive tech -->
+                  <span
+                    class="svelte-inspector-action svelte-inspector-inspect svelte-inspector-placeholder"
+                    aria-hidden="true">Inspect</span
+                  >
+                {/if}
+                <button
+                  type="button"
+                  class="svelte-inspector-action"
+                  aria-label="Open {item.file}:{item.line} in editor"
+                  onclick={() => open_row(item)}>Open ↗</button
+                >
+              </span>
+            </li>
+          {/each}
+        </ul>
+      {:else}
+        <ul class="svelte-inspector-grid">
+          {#each menu.stack as item, i (`${item.file}:${item.line}:${i}`)}
+            <li>
+              <button type="button" class="svelte-inspector-menu-row" onclick={() => send(item)}>
+                <span class="svelte-inspector-tag">&lt;{item.tag}&gt;</span>
+                <span class="svelte-inspector-file">{item.file}:{item.line}</span>
+              </button>
+            </li>
+          {/each}
+        </ul>
+      {/if}
     {:else if active_el}
       {@const loc = active_el.__svelte_meta.loc}
       <!-- vite-devtools-svelte: the component instance, and what a click does -->
@@ -645,6 +684,78 @@
     padding: 0 8px 4px;
     white-space: nowrap;
     color: #666;
+  }
+
+  /* vite-devtools-svelte: menu rows with "Inspect" and "Open" buttons */
+  .svelte-inspector-actions-grid {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr) max-content;
+    column-gap: 8px;
+    row-gap: 2px;
+    /* fits the viewport, the file column is ellipsized */
+    max-width: min(560px, calc(100vw - 24px));
+    margin: 0;
+    padding: 2px 0;
+    list-style: none;
+  }
+
+  /* outranks the upstream `ul li { display: contents }` */
+  .svelte-inspector-actions-grid .svelte-inspector-actions-row {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
+    align-items: center;
+    padding: 2px 4px 2px 8px;
+    border-radius: 2px;
+    cursor: default;
+
+    &:hover {
+      background-color: rgb(0 0 0 / 0.05);
+    }
+  }
+
+  .svelte-inspector-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .svelte-inspector-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    min-height: 24px;
+    padding: 0 8px;
+    border: 1px solid #c8c8c8;
+    border-radius: 4px;
+    background-color: #fff;
+    color: #222;
+    white-space: nowrap;
+    cursor: pointer;
+
+    &:hover {
+      background-color: #f0f0f0;
+    }
+
+    &:focus-visible {
+      outline: 2px solid #2563eb;
+      outline-offset: 1px;
+    }
+  }
+
+  .svelte-inspector-inspect {
+    border-color: #ff3e00;
+    color: #c83200;
+
+    &:hover,
+    &:focus-visible {
+      background-color: #ff3e00;
+      color: #fff;
+    }
+  }
+
+  .svelte-inspector-placeholder {
+    visibility: hidden;
   }
 
   .svelte-inspector-file {

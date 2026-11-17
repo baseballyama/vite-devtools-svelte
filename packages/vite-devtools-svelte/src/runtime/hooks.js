@@ -117,6 +117,8 @@ if (dt) {
     snapshot,
     sourceNode,
     trackedComponent,
+    filename,
+    parentComponent,
   };
 
   // Tracked $state nodes written per batch, handed to the runtime once the

@@ -19,8 +19,16 @@ declare module 'virtual:vite-devtools-svelte-inspector-devtools' {
   export interface InspectorDevtools {
     /** The component instance that rendered `element`, for the label; null when unknown. */
     describe(element: Element): { name: string } | null;
-    /** Select the component instance of `element` in the DevTools; false when unknown. */
-    pick(element: Element): boolean;
+    /**
+     * The component instances of the component entries of `element`'s `__svelte_meta.parent`
+     * chain (the menu's parent rows), keyed by entry; an entry without a confident match is absent.
+     */
+    parents(element: Element): Map<object, { name: string }>;
+    /**
+     * Select in the DevTools the component instance of `element`, or with `entry` (one of its
+     * `__svelte_meta.parent` entries) the instance of that entry; false when unknown.
+     */
+    pick(element: Element, entry?: object): boolean;
     /** Let the DevTools turn the inspector on and off; returns a function that unlinks it. */
     connect(controls: { enable(): void; disable(): void }): () => void;
     /** Run `fn` (the inspector's own mount) without the DevTools tracking its components. */
