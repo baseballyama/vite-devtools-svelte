@@ -341,6 +341,28 @@ importers:
         specifier: ^5.1.0
         version: 5.1.0(@types/node@25.9.9)(@vitest/coverage-v8@5.0.5)(happy-dom@21.0.4)(vite@8.3.5)
 
+  packages/inspector:
+    dependencies:
+      obug:
+        specifier: ^2.1.0
+        version: 2.2.1
+    devDependencies:
+      '@sveltejs/vite-plugin-svelte':
+        specifier: ^7.3.1
+        version: 7.3.1(svelte@5.57.3(@typescript-eslint/types@8.72.1))(vite@8.3.5)
+      '@vitest/coverage-v8':
+        specifier: ^5.0.5
+        version: 5.0.5(vitest@5.1.0)
+      svelte:
+        specifier: ^5.57.3
+        version: 5.57.3(@typescript-eslint/types@8.72.1)
+      vite:
+        specifier: ^8.3.5
+        version: 8.3.5(@types/node@25.9.9)(@vitejs/devtools@0.8.0)(jiti@2.7.0)(yaml@2.9.1)
+      vitest:
+        specifier: ^5.1.0
+        version: 5.1.0(@types/node@25.9.9)(@vitest/coverage-v8@5.0.5)(happy-dom@21.0.4)(vite@8.3.5)
+
   packages/vite-devtools-svelte:
     dependencies:
       '@modelcontextprotocol/sdk':

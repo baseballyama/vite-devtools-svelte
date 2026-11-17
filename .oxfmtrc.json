@@ -18,6 +18,8 @@
     "**/coverage/**",
     "pnpm-lock.yaml",
     "**/pnpm-lock.yaml",
-    "e2e/compat/kit3/pnpm-lock.yaml"
+    "e2e/compat/kit3/pnpm-lock.yaml",
+    "packages/inspector/src/**",
+    "packages/inspector/README.md"
   ]
 }
