@@ -149,3 +149,4 @@ result-*
 reactivity-shots/
 mcp-examples/
 site-shots/
+.playwright-mcp/

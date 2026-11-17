@@ -6,7 +6,6 @@ on:
     paths:
       - 'site/**'
       - 'docs/images/**'
-      - 'ROADMAP.md'
       - 'pnpm-workspace.yaml'
       - '.github/workflows/site.yml'
   workflow_dispatch:
