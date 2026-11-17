@@ -59,13 +59,13 @@ export interface InspectorOptions {
 	holdMode?: boolean;
 
 	/**
-	 * when to show the toggle button
+	 * when to show the toggle button. Not used in the Vite DevTools dock, which has its own toggle
 	 * @default 'active'
 	 */
 	showToggleButton?: 'always' | 'active' | 'never';
 
 	/**
-	 * where to display the toggle button
+	 * where to display the toggle button. Not used in the Vite DevTools dock, which has its own toggle
 	 * @default 'top-right'
 	 */
 	toggleButtonPos?: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
@@ -82,6 +82,10 @@ export interface InspectorOptions {
 	__internal?: {
 		// vite base url
 		base: string;
+		// vite root, to open files by absolute path through Vite DevTools
+		root?: string;
+		// the options without personal settings from the environment (the settings view's defaults)
+		defaults?: Omit<InspectorOptions, '__internal'>;
 	};
 }
 
@@ -90,6 +94,7 @@ export interface InspectorOptions {
  *
  * It is always enabled once added (during `vite dev`), and it turns off the built-in
  * inspector of vite-plugin-svelte so the two never run together. To turn it off, leave the
- * plugin out.
+ * plugin out. With Vite DevTools (`@vitejs/devtools`) in the Vite config, it is added to the
+ * dock instead of the page.
  */
 export function svelteInspector(options?: InspectorOptions): Plugin;

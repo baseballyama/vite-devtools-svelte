@@ -343,6 +343,9 @@ importers:
 
   packages/inspector:
     dependencies:
+      '@vitejs/devtools':
+        specifier: ^0.8.0
+        version: 0.8.0(crossws@0.4.17(srvx@1.0.8))(srvx@1.0.8)(vite@8.3.5)
       obug:
         specifier: ^2.1.0
         version: 2.2.1
@@ -438,6 +441,9 @@ importers:
       vite-devtools-svelte:
         specifier: workspace:*
         version: link:../packages/vite-devtools-svelte
+      vite-devtools-svelte-inspector:
+        specifier: workspace:*
+        version: link:../packages/inspector
 
   site:
     devDependencies:

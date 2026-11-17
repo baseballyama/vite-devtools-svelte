@@ -3,6 +3,7 @@ import { sveltekit } from '@sveltejs/kit/vite'
 import { DevTools } from '@vitejs/devtools'
 import { defineConfig } from 'vite'
 import { svelteDevtools } from 'vite-devtools-svelte'
+import { svelteInspector } from 'vite-devtools-svelte-inspector'
 
 export default defineConfig({
   plugins: [
@@ -11,5 +12,6 @@ export default defineConfig({
     svelteDevtools(),
     DevTools(),
     sveltekit({ adapter: adapter() }),
+    svelteInspector(),
   ],
 })

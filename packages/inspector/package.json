@@ -36,8 +36,14 @@
   },
   "peerDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.0.0",
+    "@vitejs/devtools": "^0.8.0",
     "svelte": "^5.46.4",
     "vite": "^8.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@vitejs/devtools": {
+      "optional": true
+    }
   },
   "engines": {
     "node": ">=22.0.0"
