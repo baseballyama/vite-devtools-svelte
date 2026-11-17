@@ -158,12 +158,15 @@ describe('ApiPlayground', () => {
     await user.click(sendButton())
     await settle()
 
-    expect(http.sendRequest).toHaveBeenCalledWith({
-      url: `${location.origin}/app/api/users`,
-      method: 'POST',
-      headers: { 'x-a': 'b' },
-      body: '{"n":1}',
-    })
+    expect(http.sendRequest).toHaveBeenCalledWith(
+      {
+        url: `${location.origin}/app/api/users`,
+        method: 'POST',
+        headers: { 'x-a': 'b' },
+        body: '{"n":1}',
+      },
+      { signal: expect.any(AbortSignal), onProgress: expect.any(Function) },
+    )
     const res = response()
     expect(within(res).getByText('200 OK')).toBeTruthy()
     expect(within(res).getByText('2 headers')).toBeTruthy()
@@ -189,7 +192,7 @@ describe('ApiPlayground', () => {
     await user.clear(screen.getByRole('textbox', { name: 'Request headers as JSON' }))
     await fireEvent.keyDown(urlInput(), { key: 'Enter', metaKey: true })
     await settle()
-    expect(http.sendRequest).toHaveBeenCalledWith({
+    expect(vi.mocked(http.sendRequest).mock.calls[0]![0]).toEqual({
       url: 'http://x/y',
       method: 'GET',
       headers: {},
@@ -246,7 +249,7 @@ describe('ApiPlayground', () => {
     expect(within(response()).getByText('200 OK')).toBeTruthy()
   })
 
-  it('shows "Sending…" and ignores repeat sends while a request is in flight', async () => {
+  it('streams the body as it arrives, follows it, and Stop aborts the request', async () => {
     let resolve!: (r: ApiResponse) => void
     vi.mocked(http.sendRequest).mockReturnValue(
       new Promise(r => {
@@ -256,13 +259,44 @@ describe('ApiPlayground', () => {
     const { user } = await setup()
     await user.type(urlInput(), 'http://x/')
     await user.click(sendButton())
-    expect(sendButton().textContent).toContain('Sending…')
-    expect(sendButton().disabled).toBe(true)
+    // Waiting for the headers: Stop replaces Send, and ⌘↵ does not send twice.
+    expect(within(response()).getByText('Waiting for a response…')).toBeTruthy()
+    expect(response().getAttribute('aria-busy')).toBe('true')
+    expect(screen.queryByRole('button', { name: /^Send/ })).toBeNull()
     await fireEvent.keyDown(urlInput(), { key: 'Enter', ctrlKey: true })
     expect(http.sendRequest).toHaveBeenCalledOnce()
-    resolve(ok())
+
+    const { signal, onProgress } = vi.mocked(http.sendRequest).mock.calls[0]![1]!
+    const head = ok({ headers: { 'content-type': 'text/event-stream' }, body: '' })
+    onProgress!(head)
     await settle()
-    expect(sendButton().textContent).toContain('Send')
+    expect(within(response()).getByText('Streaming…')).toBeTruthy()
+    // An empty body so far is not "(empty body)".
+    expect(response().querySelector('pre')!.textContent).toBe('')
+    // A half-arrived JSON-looking body is shown raw, and the view follows its end.
+    const pre = response().querySelector('pre')!
+    Object.defineProperty(pre, 'scrollHeight', { configurable: true, value: 500 })
+    onProgress!({ ...head, body: '{"a":' })
+    await settle()
+    expect(pre.textContent).toBe('{"a":')
+    expect(pre.scrollTop).toBe(500)
+    // A reader who scrolls up keeps their place.
+    Object.defineProperty(pre, 'clientHeight', { configurable: true, value: 100 })
+    pre.scrollTop = 0
+    await fireEvent.scroll(pre)
+    onProgress!({ ...head, body: '{"a":1' })
+    await settle()
+    expect(pre.scrollTop).toBe(0)
+
+    await user.click(screen.getByRole('button', { name: /^Stop/ }))
+    expect(signal!.aborted).toBe(true)
+    resolve(ok({ body: '{"a":1', truncated: 'stopped' }))
+    await settle()
+    expect(within(response()).queryByText('Streaming…')).toBeNull()
+    expect(
+      within(response()).getByText('Stopped while streaming; showing what arrived'),
+    ).toBeTruthy()
+    expect(sendButton().disabled).toBe(false)
   })
 
   it('validates headers JSON and blocks sending', async () => {
@@ -297,7 +331,7 @@ describe('ApiPlayground', () => {
 
   it.each([
     ['size', 'Body cut at 5 MB'],
-    ['timeout', 'Still streaming at the timeout; showing what arrived'],
+    ['stopped', 'Stopped while streaming; showing what arrived'],
     ['error', 'Connection failed midway; showing what arrived'],
   ] as const)('says why a %s-truncated body is partial', async (truncated, note) => {
     vi.mocked(http.sendRequest).mockResolvedValue(ok({ truncated }))

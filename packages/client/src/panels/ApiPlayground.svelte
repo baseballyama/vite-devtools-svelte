@@ -38,6 +38,11 @@
   let body = $state('')
   let tab = $state<'body' | 'headers'>('body')
   let sending = $state(false)
+  /** Stops the request in flight. */
+  let inflight: AbortController | null = null
+  let bodyEl = $state<HTMLPreElement>()
+  /** Whether a streaming body keeps scrolling to its end. */
+  let following = true
   let response = $state<ApiResponse | null>(null)
   let requestError = $state<string | null>(null)
 
@@ -69,7 +74,7 @@
 
   const TRUNCATION: Record<Truncation, string> = {
     size: 'Body cut at 5 MB',
-    timeout: 'Still streaming at the timeout; showing what arrived',
+    stopped: 'Stopped while streaming; showing what arrived',
     error: 'Connection failed midway; showing what arrived',
   }
 
@@ -77,6 +82,8 @@
 
   const pretty = $derived.by(() => {
     if (!response?.body) return ''
+    // A body still arriving is shown as it comes: half a JSON document does not parse.
+    if (sending) return response.body
     const ct =
       Object.entries(response.headers).find(([k]) => k.toLowerCase() === 'content-type')?.[1] ?? ''
     const first = response.body.trimStart()[0]
@@ -100,19 +107,42 @@
     if (!url || 'error' in parsedHeaders || sending) return
     sending = true
     requestError = null
+    response = null
+    following = true
+    const controller = new AbortController()
+    inflight = controller
     try {
-      response = await sendRequest({
-        url,
-        method,
-        headers: parsedHeaders.value,
-        body: hasBody ? body : '',
-      })
+      response = await sendRequest(
+        { url, method, headers: parsedHeaders.value, body: hasBody ? body : '' },
+        {
+          signal: controller.signal,
+          onProgress: r => {
+            response = r
+          },
+        },
+      )
     } catch (e) {
       response = null
       requestError = errorMessage(e)
     } finally {
       sending = false
+      inflight = null
     }
+  }
+
+  function stop() {
+    inflight?.abort()
+  }
+
+  // Follow a streaming body while the view is at its end; a reader who
+  // scrolled up keeps their place.
+  $effect(() => {
+    if (!bodyEl || !sending || pretty === '') return
+    if (following) bodyEl.scrollTop = bodyEl.scrollHeight
+  })
+  function onscroll() {
+    if (!bodyEl) return
+    following = bodyEl.scrollHeight - bodyEl.scrollTop - bodyEl.clientHeight < 24
   }
 
   function onkeydown(e: KeyboardEvent) {
@@ -158,15 +188,19 @@
           aria-label="Request URL"
           spellcheck="false"
         />
-        <Button
-          type="submit"
-          variant="primary"
-          icon="send"
-          disabled={!url || !!headersError || sending}
-          title="Send (⌘↵)"
-        >
-          {sending ? 'Sending…' : 'Send'}
-        </Button>
+        {#if sending}
+          <Button variant="danger" icon="stop" onclick={stop} title="Stop the request">Stop</Button>
+        {:else}
+          <Button
+            type="submit"
+            variant="primary"
+            icon="send"
+            disabled={!url || !!headersError}
+            title="Send (⌘↵)"
+          >
+            Send
+          </Button>
+        {/if}
       </form>
 
       <div class="tabs" role="tablist" aria-label="Request parts">
@@ -216,13 +250,14 @@
         {/if}
       </div>
 
-      <section class="res" aria-label="Response" aria-live="polite">
+      <section class="res" aria-label="Response" aria-live="polite" aria-busy={sending}>
         {#if requestError}
           <EmptyState title="Request failed" error={requestError} />
         {:else if response}
           <header class="res-head">
             <Badge tone={statusTone(response.status)}>{response.status} {response.statusText}</Badge
             >
+            {#if sending}<Badge tone="blue">Streaming…</Badge>{/if}
             <span class="num muted">{formatMs(response.duration)}</span>
             <span class="num muted">{formatBytes(new Blob([response.body]).size)}</span>
             <details class="hdrs">
@@ -239,7 +274,10 @@
               {#if response.truncated}<span>{TRUNCATION[response.truncated]}</span>{/if}
             </p>
           {/if}
-          <pre class="body mono">{pretty || '(empty body)'}</pre>
+          <pre class="body mono" bind:this={bodyEl} {onscroll}>{pretty ||
+              (sending ? '' : '(empty body)')}</pre>
+        {:else if sending}
+          <EmptyState icon="send" title="Waiting for a response…" />
         {:else}
           <EmptyState icon="send" title="Send a request">
             <p>

@@ -29,15 +29,18 @@ export interface ApiResponse {
   redirected: boolean
   /**
    * Why the body stopped early, null when it was read to the end: over
-   * {@link MAX_BODY_BYTES}, still streaming at the timeout (SSE, a hung
-   * transfer), or the connection failed midway.
+   * {@link MAX_BODY_BYTES}, stopped by the user (an endless stream such as
+   * SSE ends this way), or the connection failed midway.
    */
   truncated: Truncation | null
 }
 
-export type Truncation = 'size' | 'timeout' | 'error'
+export type Truncation = 'size' | 'stopped' | 'error'
 
-/** Longest a request may take, body included. */
+/**
+ * Longest wait for the response headers. The body has no time limit: it
+ * streams until it ends, the caller stops it, or it reaches `maxBytes`.
+ */
 export const REQUEST_TIMEOUT_MS = 30_000
 /** Body bytes kept for display; a longer (or endless) body is cut here. */
 export const MAX_BODY_BYTES = 5 * 1024 * 1024
@@ -45,17 +48,31 @@ export const MAX_BODY_BYTES = 5 * 1024 * 1024
 export interface SendOptions {
   timeoutMs?: number
   maxBytes?: number
+  /** Aborting it stops the request: before the headers it fails, after them the body ends. */
+  signal?: AbortSignal
+  /** Called once the headers arrive and after every body chunk, with the response so far. */
+  onProgress?: (res: ApiResponse) => void
 }
 
 export async function sendRequest(
   req: ApiRequest,
-  { timeoutMs = REQUEST_TIMEOUT_MS, maxBytes = MAX_BODY_BYTES }: SendOptions = {},
+  {
+    timeoutMs = REQUEST_TIMEOUT_MS,
+    maxBytes = MAX_BODY_BYTES,
+    signal,
+    onProgress,
+  }: SendOptions = {},
 ): Promise<ApiResponse> {
   const start = performance.now()
   const duration = () => Math.round((performance.now() - start) * 100) / 100
   const controller = new AbortController()
+  const stop = () => {
+    controller.abort(new Error('Stopped'))
+  }
+  if (signal?.aborted) stop()
+  signal?.addEventListener('abort', stop, { once: true })
   const timer = setTimeout(() => {
-    controller.abort(new Error(`Timed out after ${timeoutMs}ms`))
+    controller.abort(new Error(`No response within ${timeoutMs}ms`))
   }, timeoutMs)
   try {
     const init: RequestInit = {
@@ -69,34 +86,47 @@ export async function sendRequest(
       res = await fetch(req.url, init)
     } catch (e) {
       return failure(req.url, reason(e, controller.signal, req.url), duration())
+    } finally {
+      clearTimeout(timer)
     }
     const headers: Record<string, string> = {}
     res.headers.forEach((v, k) => {
       headers[k] = v
     })
-    const { text, cut } = await readCapped(res, maxBytes)
-    return {
+    const head: ApiResponse = {
       status: res.status,
       statusText: res.statusText,
       headers,
-      body: text,
+      body: '',
       duration: duration(),
       url: res.url || req.url,
       redirected: res.redirected,
-      truncated: cut === 'error' && controller.signal.aborted ? 'timeout' : cut,
+      truncated: null,
+    }
+    onProgress?.(head)
+    const { text, cut } = await readCapped(res, maxBytes, body => {
+      onProgress?.({ ...head, body, duration: duration() })
+    })
+    return {
+      ...head,
+      body: text,
+      duration: duration(),
+      truncated: cut === 'error' && controller.signal.aborted ? 'stopped' : cut,
     }
   } finally {
-    clearTimeout(timer)
+    signal?.removeEventListener('abort', stop)
   }
 }
 
 /**
- * The body as text, at most `maxBytes` of it. A body that fails midway (the
- * timeout aborting an endless stream such as SSE) keeps what arrived.
+ * The body as text, at most `maxBytes` of it, reporting the text so far
+ * after every chunk. A body that fails midway (the user stopping an endless
+ * stream such as SSE) keeps what arrived.
  */
 async function readCapped(
   res: Response,
   maxBytes: number,
+  onText: (text: string) => void,
 ): Promise<{ text: string; cut: Truncation | null }> {
   if (!res.body) return { text: '', cut: null }
   const reader = res.body.getReader()
@@ -116,6 +146,7 @@ async function readCapped(
       }
       bytes += value.byteLength
       text += decoder.decode(value, { stream: true })
+      onText(text)
     }
   } catch {
     cut = 'error'

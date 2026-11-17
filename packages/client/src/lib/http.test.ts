@@ -23,6 +23,15 @@ function endless(chunks: string[], signal: AbortSignal): ReadableStream<Uint8Arr
   })
 }
 
+/** fetch that settles only when its signal aborts. */
+const hanging = (_url: unknown, init?: RequestInit) =>
+  new Promise<Response>((_, reject) => {
+    const signal = init!.signal!
+    // like fetch: an already aborted signal rejects at once
+    if (signal.aborted) reject(signal.reason as Error)
+    signal.addEventListener('abort', () => reject(signal.reason as Error))
+  })
+
 beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock)
   vi.stubGlobal('location', new URL('http://localhost:5173/.svelte-devtools/'))
@@ -100,18 +109,12 @@ describe('sendRequest', () => {
     expect((await sendRequest(req({ url: 'http://[' }))).statusText).toBe('Failed to fetch')
   })
 
-  it('gives up at the timeout and clears its timer', async () => {
+  it('gives up when no response arrives in time and clears its timer', async () => {
     vi.useFakeTimers()
-    fetchMock.mockImplementation(
-      (_url, init) =>
-        new Promise((_, reject) => {
-          const signal = init!.signal!
-          signal.addEventListener('abort', () => reject(signal.reason as Error))
-        }),
-    )
+    fetchMock.mockImplementation(hanging)
     const pending = sendRequest(req(), { timeoutMs: 50 })
     await vi.advanceTimersByTimeAsync(50)
-    expect((await pending).statusText).toBe('Timed out after 50ms')
+    expect((await pending).statusText).toBe('No response within 50ms')
 
     fetchMock.mockResolvedValue(new Response('ok'))
     await sendRequest(req())
@@ -119,18 +122,57 @@ describe('sendRequest', () => {
     expect(REQUEST_TIMEOUT_MS).toBe(30_000)
   })
 
-  it('keeps what a stream sent before the timeout', async () => {
+  it('stops before the headers when the caller aborts', async () => {
+    fetchMock.mockImplementation(hanging)
+    const stop = new AbortController()
+    const pending = sendRequest(req(), { signal: stop.signal })
+    stop.abort()
+    expect(await pending).toMatchObject({ status: 0, statusText: 'Stopped' })
+    // Already aborted: never waits.
+    expect((await sendRequest(req(), { signal: stop.signal })).statusText).toBe('Stopped')
+  })
+
+  it('streams the body past the header timeout, reporting progress, until stopped', async () => {
     vi.useFakeTimers()
+    let push!: (chunk: string) => void
     fetchMock.mockImplementation((_url, init) =>
-      Promise.resolve(new Response(endless(['data: 1\n\n', 'data: 2\n\n'], init!.signal!))),
+      Promise.resolve(
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(c) {
+              push = chunk => c.enqueue(new TextEncoder().encode(chunk))
+              init!.signal!.addEventListener('abort', () => c.error(init!.signal!.reason))
+            },
+          }),
+          { headers: { 'content-type': 'text/event-stream' } },
+        ),
+      ),
     )
-    const pending = sendRequest(req(), { timeoutMs: 50 })
-    await vi.advanceTimersByTimeAsync(50)
+    const progress: string[] = []
+    const stop = new AbortController()
+    const removed = vi.spyOn(stop.signal, 'removeEventListener')
+    const pending = sendRequest(req(), {
+      timeoutMs: 50,
+      signal: stop.signal,
+      onProgress: r => {
+        progress.push(r.body)
+      },
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    // The headers arrived: the timeout no longer applies.
+    expect(vi.getTimerCount()).toBe(0)
+    push('data: 1\n\n')
+    await vi.advanceTimersByTimeAsync(1000)
+    push('data: 2\n\n')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(progress).toEqual(['', 'data: 1\n\n', 'data: 1\n\ndata: 2\n\n'])
+    stop.abort()
     expect(await pending).toMatchObject({
       status: 200,
       body: 'data: 1\n\ndata: 2\n\n',
-      truncated: 'timeout',
+      truncated: 'stopped',
     })
+    expect(removed).toHaveBeenCalledWith('abort', expect.any(Function))
   })
 
   it('keeps what arrived when the body fails midway', async () => {
