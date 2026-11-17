@@ -13,16 +13,6 @@ const req = (over: Partial<ApiRequest> = {}): ApiRequest => ({
 
 const fetchMock = vi.fn<typeof fetch>()
 
-/** A body that sends `chunks`, then stays open until the request is aborted (SSE-like). */
-function endless(chunks: string[], signal: AbortSignal): ReadableStream<Uint8Array> {
-  return new ReadableStream({
-    start(c) {
-      for (const chunk of chunks) c.enqueue(new TextEncoder().encode(chunk))
-      signal.addEventListener('abort', () => c.error(signal.reason))
-    },
-  })
-}
-
 /** fetch that settles only when its signal aborts. */
 const hanging = (_url: unknown, init?: RequestInit) =>
   new Promise<Response>((_, reject) => {
@@ -193,13 +183,24 @@ describe('sendRequest', () => {
   })
 
   it('cuts the body at maxBytes and cancels the rest', async () => {
-    const controller = new AbortController()
-    fetchMock.mockResolvedValue(new Response(endless(['ab', 'cdef'], controller.signal)))
+    const cancel = vi.fn()
+    fetchMock.mockResolvedValue(
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(c) {
+            c.enqueue(new TextEncoder().encode('ab'))
+            c.enqueue(new TextEncoder().encode('cdef'))
+          },
+          cancel,
+        }),
+      ),
+    )
     expect(await sendRequest(req(), { maxBytes: 4 })).toMatchObject({
       body: 'abcd',
       size: 4,
       truncated: 'size',
     })
+    expect(cancel).toHaveBeenCalledOnce()
     // A source that throws on cancel does not fail the request.
     fetchMock.mockResolvedValue(
       new Response(
@@ -221,6 +222,29 @@ describe('sendRequest', () => {
       truncated: null,
     })
     expect(MAX_BODY_BYTES).toBe(5 * 1024 * 1024)
+  })
+
+  it('drops a character the cap splits instead of showing U+FFFD', async () => {
+    // '日本' is 6 bytes; the cap at 4 falls inside '本'
+    fetchMock.mockResolvedValue(new Response('日本'))
+    expect(await sendRequest(req(), { maxBytes: 4 })).toMatchObject({
+      body: '日',
+      size: 4,
+      truncated: 'size',
+    })
+  })
+
+  it('waits REQUEST_TIMEOUT_MS for the headers by default', async () => {
+    vi.useFakeTimers()
+    fetchMock.mockImplementation(hanging)
+    let settled = false
+    const pending = sendRequest(req()).finally(() => {
+      settled = true
+    })
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS - 1)
+    expect(settled).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+    expect((await pending).statusText).toBe(`No response within ${REQUEST_TIMEOUT_MS}ms`)
   })
 
   it('decodes multi-byte characters split across chunks', async () => {

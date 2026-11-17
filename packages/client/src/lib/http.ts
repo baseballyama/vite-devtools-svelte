@@ -3,9 +3,9 @@
  *
  * The DevTools UI is served by the app's own dev server, so a request from
  * here is same-origin with the app: the browser attaches the app's cookies
- * (httpOnly ones included) and an `Origin` that passes SvelteKit's CSRF
- * check, and `Set-Cookie` lands in the browser like it would for the app.
- * A cross-origin URL works only where its CORS policy allows it.
+ * (httpOnly ones included), and `Set-Cookie` lands in the browser like it
+ * would for the app. A cross-origin URL works only where its CORS policy
+ * allows it, and never carries the app's cookies.
  */
 
 export interface ApiRequest {
@@ -17,7 +17,7 @@ export interface ApiRequest {
 }
 
 export interface ApiResponse {
-  /** 0 when no response arrived; `statusText` then says why. */
+  /** 0 when no response arrived (network, CORS, timeout, stopped); `statusText` then says why. */
   status: number
   statusText: string
   headers: Record<string, string>
@@ -144,7 +144,8 @@ async function readCapped(
       const { done, value } = await reader.read()
       if (done) break
       if (bytes + value.byteLength > maxBytes) {
-        text += decoder.decode(value.subarray(0, maxBytes - bytes))
+        // `stream`: a character split by the cap stays pending, then dropped below.
+        text += decoder.decode(value.subarray(0, maxBytes - bytes), { stream: true })
         bytes = maxBytes
         cut = 'size'
         break
@@ -158,7 +159,8 @@ async function readCapped(
   }
   // Stop the rest of the transfer; a source that fails to cancel changes nothing here.
   if (cut === 'size') await reader.cancel().then(undefined, ignore)
-  return { text: text + decoder.decode(), bytes, cut }
+  // Flush only a body read to its end; a cut one ends at its last whole character.
+  return { text: cut === null ? text + decoder.decode() : text, bytes, cut }
 }
 
 function ignore(): void {}

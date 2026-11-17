@@ -356,6 +356,14 @@ export function createMockBackend(scale = 5000) {
       complete: r() < 0.9,
       file: x.files.find(f => f.type === 'endpoint')!.path,
     }))
+  // An endless server-sent-events endpoint (answered by vite.mock.config.ts) to try streaming.
+  endpoints.unshift({
+    route: 'api/stream',
+    path: '/api/stream',
+    url: `${MOCK_API_BASE}/api/stream`,
+    methods: ['GET', 'HEAD'],
+    file: 'src/routes/api/stream/+server.ts',
+  })
 
   let fps: { timestamp: number; fps: number }[] = []
   const profiles = () => {
