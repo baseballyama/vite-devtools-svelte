@@ -42,6 +42,8 @@ vi.mock('node:dns', async importOriginal => {
   return { ...real, default: { ...real, lookup }, lookup };
 });
 
+/** 64 MB of zeros, deflated to about 64 KB. */
+const deflateBomb = zlib.deflateRawSync(Buffer.alloc(64 * 1024 * 1024));
 const server = http.createServer((req, res) => {
   if (req.url === '/redirect') {
     res.writeHead(302, { location: '/elsewhere' });
@@ -64,6 +66,32 @@ const server = http.createServer((req, res) => {
   } else if (req.url === '/br') {
     res.writeHead(200, { 'content-encoding': 'br' });
     res.end(zlib.brotliCompressSync('<title>brotli</title>'));
+  } else if (req.url === '/deflate-raw') {
+    res.writeHead(200, { 'content-encoding': 'deflate' });
+    res.end(zlib.deflateRawSync('<title>raw</title>'));
+  } else if (req.url === '/gzip-then-br') {
+    // codings in the order applied: gzip first, then br
+    res.writeHead(200, { 'content-encoding': 'gzip, br' });
+    res.end(zlib.brotliCompressSync(zlib.gzipSync('<title>both</title>')));
+  } else if (req.url === '/empty-gzip') {
+    res.writeHead(404, { 'content-encoding': 'gzip', 'content-length': '0' });
+    res.end();
+  } else if (req.url === '/empty-deflate') {
+    res.writeHead(200, { 'content-encoding': 'deflate' });
+    res.end();
+  } else if (req.url === '/deflate-bomb') {
+    res.writeHead(200, { 'content-encoding': 'deflate' });
+    res.end(deflateBomb);
+  } else if (req.url === '/no-trailer') {
+    const zipped = zlib.gzipSync('<title>cut</title>');
+    res.writeHead(200, { 'content-encoding': 'gzip' });
+    res.end(zipped.subarray(0, -8));
+  } else if (req.url === '/compress') {
+    res.writeHead(200, { 'content-encoding': 'compress' });
+    res.end('compressed');
+  } else if (req.url === '/not-modified') {
+    res.writeHead(304, { 'content-encoding': 'gzip' });
+    res.end();
   } else if (req.url === '/bad-gzip') {
     res.writeHead(200, { 'content-encoding': 'gzip' });
     res.end('not gzip at all');
@@ -141,8 +169,35 @@ describe('transport.get', () => {
     ['brotli', '/br', '<title>brotli</title>'],
     ['deflate', '/deflate', '<title>deflated</title>'],
     ['x-gzip (any case and padding)', '/x-gzip', '<title>x-zipped</title>'],
+    ['raw deflate (no zlib header)', '/deflate-raw', '<title>raw</title>'],
+    ['gzip then brotli', '/gzip-then-br', '<title>both</title>'],
+    ['gzip missing its trailer', '/no-trailer', '<title>cut</title>'],
+    ['empty gzip', '/empty-gzip', ''],
+    ['empty deflate', '/empty-deflate', ''],
+    ['304 that claims gzip', '/not-modified', ''],
   ])('decompresses a %s body', async (_label, p, body) => {
     expect(await text(await transport.get(local(p)))).toBe(body);
+  });
+
+  it('inflates a body larger than its buffers in full when it is all read', async () => {
+    const res = await transport.get(local('/deflate-bomb'));
+    const { bytes, truncated } = await readCapped(res.body, 64 * 1024 * 1024);
+    expect(truncated).toBe(false);
+    expect(bytes.byteLength).toBe(64 * 1024 * 1024);
+  });
+
+  it('inflates only as far as the body is read', async () => {
+    const res = await transport.get(local('/deflate-bomb'));
+    expect(await readCapped(res.body, 1024 * 1024)).toMatchObject({ truncated: true });
+    await vi.waitFor(() => {
+      expect(res.body.destroyed).toBe(true);
+    });
+  });
+
+  it('refuses a coding it cannot undo instead of reading garbled bytes', async () => {
+    await expect(transport.get(local('/compress'))).rejects.toThrow(
+      'Unsupported content-encoding: compress',
+    );
   });
 
   it('fails the read of a body that does not decompress', async () => {
@@ -270,13 +325,23 @@ describe('OG preview over the network', () => {
 });
 
 describe('readCapped', () => {
-  it('reads a body up to the cap, destroying the rest', async () => {
-    const body = Readable.from([new Uint8Array([1, 2]), new Uint8Array([3, 4, 5])]);
-    expect(await readCapped(body, 4)).toEqual({
-      bytes: new Uint8Array([1, 2, 3, 4]),
+  it('reads a body up to the cap, and nothing after it', async () => {
+    let pulled = 0;
+    const body = Readable.from(
+      (function* () {
+        for (; pulled < 1000;) {
+          pulled++;
+          yield new Uint8Array([pulled, pulled]);
+        }
+      })(),
+    );
+    expect(await readCapped(body, 3)).toEqual({
+      bytes: new Uint8Array([1, 1, 2]),
       truncated: true,
     });
     expect(body.destroyed).toBe(true);
+    // only what the stream buffered ahead was pulled, not all 1000 chunks
+    expect(pulled).toBeLessThan(100);
   });
 
   it('reads a body of exactly the cap, and no body, whole', async () => {

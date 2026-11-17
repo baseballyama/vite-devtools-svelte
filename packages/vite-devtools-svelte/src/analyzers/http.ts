@@ -1,7 +1,7 @@
 import http from 'node:http';
 import https from 'node:https';
 import type { LookupFunction } from 'node:net';
-import { pipeline } from 'node:stream';
+import { PassThrough, pipeline, Writable } from 'node:stream';
 import type { Readable } from 'node:stream';
 import zlib from 'node:zlib';
 
@@ -32,20 +32,75 @@ export interface OutboundResponse {
   body: Readable;
 }
 
-type Decoder = () => zlib.Gunzip | zlib.Inflate | zlib.BrotliDecompress;
-
-/** Decoders for the `content-encoding`s a response may carry (servers send them unasked, too). */
-const DECODERS: Partial<Record<string, Decoder>> = {
-  gzip: () => zlib.createGunzip(),
-  'x-gzip': () => zlib.createGunzip(),
-  deflate: () => zlib.createInflate(),
-  br: () => zlib.createBrotliDecompress(),
+// Like browsers (and undici): a body cut short or missing its trailer still
+// yields what arrived, and an empty compressed body is an empty body.
+const ZLIB = { flush: zlib.constants.Z_SYNC_FLUSH, finishFlush: zlib.constants.Z_SYNC_FLUSH };
+const BROTLI = {
+  flush: zlib.constants.BROTLI_OPERATION_FLUSH,
+  finishFlush: zlib.constants.BROTLI_OPERATION_FLUSH,
 };
 
-function decoded(res: http.IncomingMessage): Readable {
-  const decoder = DECODERS[res.headers['content-encoding']?.trim().toLowerCase() ?? ''];
-  // `pipeline` passes a failure of either stream on to the decoder's reader.
-  return decoder ? pipeline(res, decoder(), ignore) : res;
+/** Undoes one content coding: the decoded stream of `source`; a failure of either reaches its reader. */
+type Decoder = (source: Readable) => Readable;
+
+/**
+ * `deflate` as servers really send it: zlib-wrapped as the spec says, or
+ * raw. The first byte tells them apart (a zlib header's low nibble is 8,
+ * the deflate method).
+ */
+const inflate: Decoder = source => {
+  const output = new PassThrough();
+  let inner: zlib.Inflate | zlib.InflateRaw | undefined;
+  const input = new Writable({
+    write(chunk: Buffer, _encoding, callback) {
+      if (!inner) {
+        inner =
+          (chunk[0]! & 0x0f) === 0x08 ? zlib.createInflate(ZLIB) : zlib.createInflateRaw(ZLIB);
+        // the reader stopping (or a bad stream) ends the input, and so the source
+        pipeline(inner, output, error => {
+          if (error) input.destroy(error);
+        });
+      }
+      // Takes the next chunk once this one is inflated, which waits while
+      // the reader is behind: a small body may inflate to a huge one.
+      inner.write(chunk, callback);
+    },
+    final(callback) {
+      if (inner) inner.end();
+      else output.end(); // an empty body
+      callback();
+    },
+  });
+  pipeline(source, input, error => {
+    if (error) output.destroy(error);
+  });
+  return output;
+};
+
+const DECODERS: Partial<Record<string, Decoder>> = {
+  gzip: source => pipeline(source, zlib.createGunzip(ZLIB), ignore),
+  'x-gzip': source => pipeline(source, zlib.createGunzip(ZLIB), ignore),
+  deflate: inflate,
+  br: source => pipeline(source, zlib.createBrotliDecompress(BROTLI), ignore),
+};
+
+/**
+ * The body decoded as `content-encoding` says (the codings undone last
+ * to first), or an error for a coding it cannot undo: the bytes as they
+ * are would only parse as a garbled page.
+ */
+function decoded(res: http.IncomingMessage): Readable | Error {
+  const codings = (res.headers['content-encoding'] ?? '')
+    .split(',')
+    .map(c => c.trim().toLowerCase())
+    .filter(c => c !== '' && c !== 'identity');
+  const decoders: Decoder[] = [];
+  for (const coding of codings.toReversed()) {
+    const decoder = DECODERS[coding];
+    if (!decoder) return new Error(`Unsupported content-encoding: ${coding}`);
+    decoders.push(decoder);
+  }
+  return decoders.reduce<Readable>((body, decode) => decode(body), res);
 }
 
 function ignore(): void {}
@@ -103,7 +158,11 @@ export const transport = {
       // Nothing here throws: a remote server controls the response, and a
       // throw in this event callback would take the dev server down.
       const req = client.get(url, options, res => {
-        resolve({ status: res.statusCode ?? 0, headers: res.headers, body: decoded(res) });
+        const body = decoded(res);
+        if (body instanceof Error) {
+          res.destroy();
+          reject(body);
+        } else resolve({ status: res.statusCode ?? 0, headers: res.headers, body });
       });
       // 101 Switching Protocols never becomes a response: without this the
       // request would wait for the timeout.
