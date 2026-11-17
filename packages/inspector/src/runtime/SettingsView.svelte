@@ -1,6 +1,7 @@
 <svelte:options css="injected" />
 
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import KeyInput from './KeyInput.svelte';
 	import { INSPECTOR_ICON_SVG } from './icon.js';
 
@@ -29,7 +30,19 @@
 	let { current, defaults, save, reset, file }: Props = $props();
 
 	const clone = (s: Settings): Settings => JSON.parse(JSON.stringify(s));
-	let form = $state(clone(current));
+	// writable, and starts over from `current` whenever that changes
+	let form = $derived.by(() => {
+		const f = $state(clone(current));
+		return f;
+	});
+	let next_id = 0;
+	// one id per "stop picking" row, so removing a row doesn't hand its input to the next one
+	let escape_ids = $derived.by(() => {
+		// new ids only when the form is replaced, not on every edit
+		const f = form;
+		const ids = $state(untrack(() => f.escapeKeys.map(() => next_id++)));
+		return ids;
+	});
 	let status = $state<{ ok: boolean; text: string } | null>(null);
 	let busy = $state(false);
 	const same = (a: Settings, b: Settings) => JSON.stringify(a) === JSON.stringify(b);
@@ -70,6 +83,16 @@
 
 	function set_escape(i: number, key: string) {
 		form.escapeKeys[i] = key;
+	}
+
+	function add_escape() {
+		form.escapeKeys.push('Escape');
+		escape_ids.push(next_id++);
+	}
+
+	function remove_escape(i: number) {
+		form.escapeKeys.splice(i, 1);
+		escape_ids.splice(i, 1);
 	}
 
 	const nav = [
@@ -135,7 +158,7 @@
 		<div class="sis-row">
 			<div class="sis-label"><span>Stop picking</span></div>
 			<div class="sis-keys">
-				{#each form.escapeKeys as key, i (i)}
+				{#each form.escapeKeys as key, i (escape_ids[i])}
 					<span class="sis-chip">
 						<KeyInput
 							mode="key"
@@ -148,12 +171,12 @@
 								type="button"
 								class="sis-remove"
 								aria-label={`Remove ${key}`}
-								onclick={() => form.escapeKeys.splice(i, 1)}>×</button
+								onclick={() => remove_escape(i)}>×</button
 							>
 						{/if}
 					</span>
 				{/each}
-				<button type="button" class="sis-add" onclick={() => form.escapeKeys.push('Escape')}
+				<button type="button" class="sis-add" onclick={add_escape}
 					>+ Add</button
 				>
 			</div>
@@ -190,7 +213,7 @@
 	</section>
 
 	<footer class="sis-footer">
-		<p class="sis-status" class:error={status && !status.ok} role="status">
+		<p class={['sis-status', { error: status && !status.ok }]} role="status">
 			{status?.text ?? (dirty ? 'Unsaved changes' : '')}
 		</p>
 		<button

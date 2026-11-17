@@ -55,8 +55,6 @@
 	function finish(next: string) {
 		recording = false;
 		held = [];
-		window.removeEventListener('keydown', keydown, true);
-		window.removeEventListener('keyup', keyup, true);
 		if (next) onchange(next);
 	}
 
@@ -87,15 +85,18 @@
 	function record() {
 		if (recording) return finish('');
 		recording = true;
-		window.addEventListener('keydown', keydown, true);
-		window.addEventListener('keyup', keyup, true);
 	}
 </script>
 
+<!-- capture while recording; Svelte removes them when recording stops or the input unmounts -->
+<svelte:window
+	onkeydowncapture={recording ? keydown : undefined}
+	onkeyupcapture={recording ? keyup : undefined}
+/>
+
 <button
 	type="button"
-	class="sis-key"
-	class:recording
+	class={['sis-key', { recording }]}
 	aria-label={`${label}: ${show(value)}. Click to record a new ${mode === 'combo' ? 'shortcut' : 'key'}`}
 	onclick={record}
 	onblur={() => recording && finish('')}
