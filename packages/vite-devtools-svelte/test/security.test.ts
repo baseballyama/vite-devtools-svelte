@@ -1,26 +1,26 @@
-import fs from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   assertOutboundUrl,
   isPrivateIP,
   resolveWithinRoot,
   validateExternalUrl,
-} from '../src/server/security.js'
+} from '../src/server/security.js';
 
-const PUBLIC_ANSWER = [{ address: '93.184.215.14', family: 4 }]
+const PUBLIC_ANSWER = [{ address: '93.184.215.14', family: 4 }];
 const lookup = vi.hoisted(() =>
   vi.fn<(host: string, options: object) => Promise<{ address: string; family: number }[]>>(),
-)
-vi.mock('node:dns/promises', () => ({ default: { lookup } }))
+);
+vi.mock('node:dns/promises', () => ({ default: { lookup } }));
 
 beforeEach(() => {
-  lookup.mockReset()
-  lookup.mockResolvedValue(PUBLIC_ANSWER)
-})
+  lookup.mockReset();
+  lookup.mockResolvedValue(PUBLIC_ANSWER);
+});
 
 // Addresses no outbound request may reach, by range. Boundaries of each
 // range are included so an off-by-one in a prefix length shows up.
@@ -76,7 +76,7 @@ const PRIVATE_IPS = [
   ['', 'empty'],
   ['not-an-ip', 'a name'],
   ['127.1', 'shorthand (not a literal net.isIP accepts)'],
-] as const
+] as const;
 
 const PUBLIC_IPS = [
   ['1.1.1.1', 'public'],
@@ -102,17 +102,17 @@ const PUBLIC_IPS = [
   ['::808:808', 'IPv4-compatible public'],
   ['64:ff9b::808:808', 'NAT64 of a public address'],
   ['2002:808:808::1', '6to4 of a public address'],
-] as const
+] as const;
 
 describe('isPrivateIP', () => {
   it.each(PRIVATE_IPS)('%s is private (%s)', ip => {
-    expect(isPrivateIP(ip)).toBe(true)
-  })
+    expect(isPrivateIP(ip)).toBe(true);
+  });
 
   it.each(PUBLIC_IPS)('%s is public (%s)', ip => {
-    expect(isPrivateIP(ip)).toBe(false)
-  })
-})
+    expect(isPrivateIP(ip)).toBe(false);
+  });
+});
 
 describe('validateExternalUrl', () => {
   it.each([
@@ -124,8 +124,8 @@ describe('validateExternalUrl', () => {
     ['data:text/html,x', /scheme/],
     ['gopher://example.com/', /scheme/],
   ])('rejects %j', (url, error) => {
-    expect(() => validateExternalUrl(url)).toThrow(error)
-  })
+    expect(() => validateExternalUrl(url)).toThrow(error);
+  });
 
   it.each([
     'http://localhost/',
@@ -136,8 +136,8 @@ describe('validateExternalUrl', () => {
     'http://db.internal:5432/',
     'http://metadata.google.internal/',
   ])('rejects the internal hostname %s', url => {
-    expect(() => validateExternalUrl(url)).toThrow(/internal hostname/)
-  })
+    expect(() => validateExternalUrl(url)).toThrow(/internal hostname/);
+  });
 
   // Literal addresses in every spelling the URL parser accepts.
   it.each([
@@ -161,8 +161,8 @@ describe('validateExternalUrl', () => {
     'http://[64:ff9b::a9fe:a9fe]/',
     'http://[2002:a9fe:a9fe::]/',
   ])('rejects the private address in %s', url => {
-    expect(() => validateExternalUrl(url)).toThrow(/private IP/)
-  })
+    expect(() => validateExternalUrl(url)).toThrow(/private IP/);
+  });
 
   it.each([
     'http://example.com',
@@ -175,26 +175,26 @@ describe('validateExternalUrl', () => {
     'http://localhost.example.com/',
     'http://internal.example.com/',
   ])('allows %s', url => {
-    expect(() => validateExternalUrl(url)).not.toThrow()
-  })
-})
+    expect(() => validateExternalUrl(url)).not.toThrow();
+  });
+});
 
 describe('assertOutboundUrl', () => {
   it('allows exactly the dev server origins it is given', async () => {
-    const allowedOrigins = ['http://localhost:5173']
+    const allowedOrigins = ['http://localhost:5173'];
     await expect(
       assertOutboundUrl('http://localhost:5173/api/hello', { allowedOrigins }),
-    ).resolves.toBeInstanceOf(URL)
+    ).resolves.toBeInstanceOf(URL);
     for (const url of [
       'http://localhost:6379/',
       'http://127.0.0.1:5173/',
       'https://localhost:5173/',
       'http://[::1]:5173/',
     ]) {
-      await expect(assertOutboundUrl(url, { allowedOrigins })).rejects.toThrow(/Blocked/)
+      await expect(assertOutboundUrl(url, { allowedOrigins })).rejects.toThrow(/Blocked/);
     }
-    expect(lookup).not.toHaveBeenCalled()
-  })
+    expect(lookup).not.toHaveBeenCalled();
+  });
 
   it.each([
     'http://[fd00::1]/',
@@ -205,9 +205,9 @@ describe('assertOutboundUrl', () => {
     'http://169.254.169.254/latest',
     'http://localhost./',
   ])('rejects the literal %s without a DNS lookup', async url => {
-    await expect(assertOutboundUrl(url)).rejects.toThrow(/Blocked/)
-    expect(lookup).not.toHaveBeenCalled()
-  })
+    await expect(assertOutboundUrl(url)).rejects.toThrow(/Blocked/);
+    expect(lookup).not.toHaveBeenCalled();
+  });
 
   it.each([
     [[{ address: '10.0.0.5', family: 4 }]],
@@ -221,48 +221,48 @@ describe('assertOutboundUrl', () => {
       ],
     ],
   ])('rejects a name that resolves to %j', async answer => {
-    lookup.mockResolvedValueOnce(answer)
+    lookup.mockResolvedValueOnce(answer);
     await expect(assertOutboundUrl('https://intranet.example.com/')).rejects.toThrow(
       /resolves to private/,
-    )
-    expect(lookup).toHaveBeenCalledWith('intranet.example.com', { all: true })
-  })
+    );
+    expect(lookup).toHaveBeenCalledWith('intranet.example.com', { all: true });
+  });
 
   it('rejects a name that does not resolve (fails closed)', async () => {
-    lookup.mockRejectedValueOnce(Object.assign(new Error('ENOTFOUND'), { code: 'ENOTFOUND' }))
-    await expect(assertOutboundUrl('https://nowhere.example/')).rejects.toThrow(/does not resolve/)
-  })
+    lookup.mockRejectedValueOnce(Object.assign(new Error('ENOTFOUND'), { code: 'ENOTFOUND' }));
+    await expect(assertOutboundUrl('https://nowhere.example/')).rejects.toThrow(/does not resolve/);
+  });
 
   it('accepts names and literals that resolve to public addresses', async () => {
-    await expect(assertOutboundUrl('https://example.com/')).resolves.toBeInstanceOf(URL)
-    await expect(assertOutboundUrl('https://example.com./')).resolves.toBeInstanceOf(URL)
-    expect(lookup).toHaveBeenLastCalledWith('example.com', { all: true })
-    await expect(assertOutboundUrl('http://8.8.8.8/')).resolves.toBeInstanceOf(URL)
-    expect(lookup).toHaveBeenCalledTimes(2)
-  })
+    await expect(assertOutboundUrl('https://example.com/')).resolves.toBeInstanceOf(URL);
+    await expect(assertOutboundUrl('https://example.com./')).resolves.toBeInstanceOf(URL);
+    expect(lookup).toHaveBeenLastCalledWith('example.com', { all: true });
+    await expect(assertOutboundUrl('http://8.8.8.8/')).resolves.toBeInstanceOf(URL);
+    expect(lookup).toHaveBeenCalledTimes(2);
+  });
 
   it('rejects bad schemes before anything else', async () => {
-    await expect(assertOutboundUrl('file:///etc/passwd')).rejects.toThrow(/scheme/)
-    await expect(assertOutboundUrl('nope')).rejects.toThrow(/Invalid URL/)
-  })
-})
+    await expect(assertOutboundUrl('file:///etc/passwd')).rejects.toThrow(/scheme/);
+    await expect(assertOutboundUrl('nope')).rejects.toThrow(/Invalid URL/);
+  });
+});
 
 describe('resolveWithinRoot', () => {
-  const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sdt-root-')))
-  const root = path.join(base, 'project')
-  const sibling = path.join(base, 'project-evil')
-  fs.mkdirSync(path.join(root, 'src'), { recursive: true })
-  fs.mkdirSync(sibling)
-  fs.writeFileSync(path.join(root, 'src/App.svelte'), '<h1>hi</h1>')
-  fs.writeFileSync(path.join(sibling, 'secret.txt'), 'secret')
-  fs.writeFileSync(path.join(base, 'outside.txt'), 'outside')
-  fs.symlinkSync(path.join(root, 'src/App.svelte'), path.join(root, 'inside-link'))
-  fs.symlinkSync(path.join(base, 'outside.txt'), path.join(root, 'escape-link'))
-  fs.symlinkSync(base, path.join(root, 'escape-dir'))
-  const linkedRoot = path.join(base, 'linked-root')
-  fs.symlinkSync(root, linkedRoot)
+  const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sdt-root-')));
+  const root = path.join(base, 'project');
+  const sibling = path.join(base, 'project-evil');
+  fs.mkdirSync(path.join(root, 'src'), { recursive: true });
+  fs.mkdirSync(sibling);
+  fs.writeFileSync(path.join(root, 'src/App.svelte'), '<h1>hi</h1>');
+  fs.writeFileSync(path.join(sibling, 'secret.txt'), 'secret');
+  fs.writeFileSync(path.join(base, 'outside.txt'), 'outside');
+  fs.symlinkSync(path.join(root, 'src/App.svelte'), path.join(root, 'inside-link'));
+  fs.symlinkSync(path.join(base, 'outside.txt'), path.join(root, 'escape-link'));
+  fs.symlinkSync(base, path.join(root, 'escape-dir'));
+  const linkedRoot = path.join(base, 'linked-root');
+  fs.symlinkSync(root, linkedRoot);
 
-  afterAll(() => fs.rmSync(base, { recursive: true, force: true }))
+  afterAll(() => fs.rmSync(base, { recursive: true, force: true }));
 
   it.each([
     ['src/App.svelte', 'src/App.svelte'],
@@ -270,17 +270,17 @@ describe('resolveWithinRoot', () => {
     ['inside-link', 'src/App.svelte'],
     ['.', ''],
   ])('resolves %j inside the root', (input, expected) => {
-    expect(resolveWithinRoot(root, input)).toBe(path.join(root, expected))
-  })
+    expect(resolveWithinRoot(root, input)).toBe(path.join(root, expected));
+  });
 
   it('accepts an absolute path inside the root', () => {
-    const file = path.join(root, 'src/App.svelte')
-    expect(resolveWithinRoot(root, file)).toBe(file)
-  })
+    const file = path.join(root, 'src/App.svelte');
+    expect(resolveWithinRoot(root, file)).toBe(file);
+  });
 
   it('works when the root itself is reached through a symlink', () => {
-    expect(resolveWithinRoot(linkedRoot, 'src/App.svelte')).toBe(path.join(root, 'src/App.svelte'))
-  })
+    expect(resolveWithinRoot(linkedRoot, 'src/App.svelte')).toBe(path.join(root, 'src/App.svelte'));
+  });
 
   it.each([
     ['../outside.txt', 'relative traversal'],
@@ -289,24 +289,24 @@ describe('resolveWithinRoot', () => {
     ['escape-link', 'a symlinked file pointing outside'],
     ['escape-dir/outside.txt', 'a symlinked directory pointing outside'],
   ])('forbids %j (%s)', input => {
-    expect(() => resolveWithinRoot(root, input)).toThrow(/Forbidden/)
-  })
+    expect(() => resolveWithinRoot(root, input)).toThrow(/Forbidden/);
+  });
 
   it('forbids absolute paths outside the root', () => {
-    expect(() => resolveWithinRoot(root, path.join(base, 'outside.txt'))).toThrow(/Forbidden/)
-    expect(() => resolveWithinRoot(root, path.join(sibling, 'secret.txt'))).toThrow(/Forbidden/)
-  })
+    expect(() => resolveWithinRoot(root, path.join(base, 'outside.txt'))).toThrow(/Forbidden/);
+    expect(() => resolveWithinRoot(root, path.join(sibling, 'secret.txt'))).toThrow(/Forbidden/);
+  });
 
   it('reports missing files without revealing whether they are outside', () => {
-    expect(() => resolveWithinRoot(root, 'src/missing.svelte')).toThrow('File not found')
-    expect(() => resolveWithinRoot(root, '../missing.txt')).toThrow('File not found')
-  })
+    expect(() => resolveWithinRoot(root, 'src/missing.svelte')).toThrow('File not found');
+    expect(() => resolveWithinRoot(root, '../missing.txt')).toThrow('File not found');
+  });
 
   it.each([[''], [undefined], [null], [42]])('rejects the non-path %j', input => {
-    expect(() => resolveWithinRoot(root, input as unknown as string)).toThrow('Invalid file path')
-  })
+    expect(() => resolveWithinRoot(root, input as unknown as string)).toThrow('Invalid file path');
+  });
 
   it('rejects a NUL byte', () => {
-    expect(() => resolveWithinRoot(root, 'src/App.svelte\0.txt')).toThrow('File not found')
-  })
-})
+    expect(() => resolveWithinRoot(root, 'src/App.svelte\0.txt')).toThrow('File not found');
+  });
+});

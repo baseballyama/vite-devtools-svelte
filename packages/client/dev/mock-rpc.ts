@@ -6,7 +6,7 @@
  *
  * Never bundled: only `dev/vite.mock.config.ts` imports it.
  */
-import { compile } from 'svelte/compiler'
+import { compile } from 'svelte/compiler';
 
 import type {
   ComponentInstance,
@@ -16,55 +16,55 @@ import type {
   RenderProfile,
   RouteInfo,
   StateChange,
-} from '../src/lib/types.js'
+} from '../src/lib/types.js';
 
 function rng(seed: number) {
   return () => {
     // oxlint-disable-next-line unicorn/prefer-math-trunc -- `| 0` is the int32 wrap mulberry32 relies on; Math.trunc would not wrap
-    seed = (seed + 0x6d2b79f5) | 0
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
 const WORDS =
   'app shell nav header footer sidebar card list item row table cell button icon avatar modal dialog form field input select toggle tabs tab panel chart graph legend tooltip menu dropdown badge toast banner hero grid feed post comment user profile settings billing invoice cart product price search filter sort pager editor preview upload'.split(
     ' ',
-  )
+  );
 
-export const MOCK_ASSET_BASE = '/__mock-static/'
+export const MOCK_ASSET_BASE = '/__mock-static/';
 /** Where the mock endpoints answer: the API playground fetches them from the browser. */
-export const MOCK_API_BASE = '/__mock-api'
+export const MOCK_API_BASE = '/__mock-api';
 
-const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /** Echo side-effect RPCs (open-in-editor, …) to the dev server terminal. */
 function log(...args: unknown[]): void {
   // oxlint-disable-next-line no-console -- the dev server terminal is this mock's only output for side-effect calls
-  console.log('[mock]', ...args)
+  console.log('[mock]', ...args);
 }
 
 export function createMockBackend(scale = 5000) {
-  const r = rng(42)
-  const pick = <T>(a: readonly T[]) => a.at(Math.floor(r() * a.length))!
-  const root = '/Users/dev/acme-store'
+  const r = rng(42);
+  const pick = <T>(a: readonly T[]) => a.at(Math.floor(r() * a.length))!;
+  const root = '/Users/dev/acme-store';
 
   // ---- component files & relations
-  const fileCount = Math.max(40, Math.round(scale / 4))
-  const files: { file: string; name: string }[] = []
-  const used = new Set<string>()
+  const fileCount = Math.max(40, Math.round(scale / 4));
+  const files: { file: string; name: string }[] = [];
+  const used = new Set<string>();
   for (let i = 0; files.length < fileCount; i++) {
-    const name = cap(pick(WORDS)) + cap(pick(WORDS)) + (i > WORDS.length * 3 ? i : '')
-    if (used.has(name)) continue
-    used.add(name)
+    const name = cap(pick(WORDS)) + cap(pick(WORDS)) + (i > WORDS.length * 3 ? i : '');
+    if (used.has(name)) continue;
+    used.add(name);
     const dir = pick([
       'lib/components',
       'lib/components/ui',
       'lib/features/' + pick(WORDS),
       'routes/(app)/' + pick(WORDS),
-    ])
-    files.push({ file: `src/${dir}/${name}.svelte`, name })
+    ]);
+    files.push({ file: `src/${dir}/${name}.svelte`, name });
   }
   const relations: ComponentRelation[] = files.map((f, i) => ({
     ...f,
@@ -72,33 +72,33 @@ export function createMockBackend(scale = 5000) {
       { length: Math.floor(r() * 6) },
       () => files.at(Math.min(files.length - 1, i + 1 + Math.floor(r() * 40)))!.file,
     ).filter((v, j, a) => a.indexOf(v) === j && v !== f.file),
-  }))
+  }));
 
   // ---- live instance tree (wide + deep), mutated on every poll
-  let nextId = 1
-  let live: ComponentInstance[] = []
+  let nextId = 1;
+  let live: ComponentInstance[] = [];
   const grow = (parentId: number | null, depth: number) => {
-    if (live.length >= scale) return
-    const id = nextId++
-    const f = depth === 0 ? { file: 'src/routes/+layout.svelte', name: 'Layout' } : pick(files)
-    live.push({ id, file: f.file, name: f.name, parentId, mounted: true })
+    if (live.length >= scale) return;
+    const id = nextId++;
+    const f = depth === 0 ? { file: 'src/routes/+layout.svelte', name: 'Layout' } : pick(files);
+    live.push({ id, file: f.file, name: f.name, parentId, mounted: true });
     const kids =
-      depth === 0 ? 8 : depth < 3 ? 2 + Math.floor(r() * 8) : depth < 14 ? Math.floor(r() * 4) : 0
-    for (let k = 0; k < kids; k++) grow(id, depth + 1)
-  }
-  while (live.length < scale) grow(null, 0)
+      depth === 0 ? 8 : depth < 3 ? 2 + Math.floor(r() * 8) : depth < 14 ? Math.floor(r() * 4) : 0;
+    for (let k = 0; k < kids; k++) grow(id, depth + 1);
+  };
+  while (live.length < scale) grow(null, 0);
 
   function churn() {
     // Unmount a few leaves, mount a few new ones under random parents.
-    const n = Math.max(1, Math.round(scale * 0.002))
-    const parents = new Set(live.map(c => c.parentId))
-    const leaves = live.filter(c => !parents.has(c.id))
-    const drop = new Set(Array.from({ length: n }, () => pick(leaves).id))
-    live = live.filter(c => !drop.has(c.id))
+    const n = Math.max(1, Math.round(scale * 0.002));
+    const parents = new Set(live.map(c => c.parentId));
+    const leaves = live.filter(c => !parents.has(c.id));
+    const drop = new Set(Array.from({ length: n }, () => pick(leaves).id));
+    live = live.filter(c => !drop.has(c.id));
     for (let i = 0; i < n; i++) {
-      const p = pick(live)
-      const f = pick(files)
-      live.push({ id: nextId++, file: f.file, name: f.name, parentId: p.id, mounted: true })
+      const p = pick(live);
+      const f = pick(files);
+      live.push({ id: nextId++, file: f.file, name: f.name, parentId: p.id, mounted: true });
     }
   }
 
@@ -123,14 +123,14 @@ export function createMockBackend(scale = 5000) {
         { type: 'layout-load-server', path: 'src/routes/+layout.server.ts' },
       ],
     },
-  ]
-  const routeCount = Math.max(30, Math.round(scale / 15))
-  const seen = new Set(['/'])
+  ];
+  const routeCount = Math.max(30, Math.round(scale / 15));
+  const seen = new Set(['/']);
   while (routes.length < routeCount) {
-    const depth = 1 + Math.floor(r() * 4)
-    const segs: string[] = []
+    const depth = 1 + Math.floor(r() * 4);
+    const segs: string[] = [];
     for (let d = 0; d < depth; d++) {
-      const x = r()
+      const x = r();
       segs.push(
         x < 0.15
           ? `[${pick(['id', 'slug', 'userId', 'lang'])}]`
@@ -139,28 +139,28 @@ export function createMockBackend(scale = 5000) {
             : x < 0.23
               ? '[...rest]'
               : pick(WORDS),
-      )
+      );
     }
-    const id = '/' + segs.join('/')
-    if (seen.has(id)) continue
-    seen.add(id)
-    const hasEndpoint = r() < 0.15
-    const hasPage = !hasEndpoint || r() < 0.3
+    const id = '/' + segs.join('/');
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const hasEndpoint = r() < 0.15;
+    const hasPage = !hasEndpoint || r() < 0.3;
     const params = segs
       .filter(s => s.startsWith('['))
       .map(s => ({
         name: s.slice(s.startsWith('[...') ? 4 : 1, -1),
         optional: false,
         rest: s.startsWith('[...'),
-      }))
-    const dir = `src/routes${id}`
-    const filesR: RouteInfo['files'] = []
-    if (hasPage) filesR.push({ type: 'page', path: `${dir}/+page.svelte` })
+      }));
+    const dir = `src/routes${id}`;
+    const filesR: RouteInfo['files'] = [];
+    if (hasPage) filesR.push({ type: 'page', path: `${dir}/+page.svelte` });
     if (hasPage && r() < 0.5)
-      filesR.push({ type: 'page-load-server', path: `${dir}/+page.server.ts` })
-    if (r() < 0.2) filesR.push({ type: 'layout', path: `${dir}/+layout.svelte` })
-    if (hasEndpoint) filesR.push({ type: 'endpoint', path: `${dir}/+server.ts` })
-    const path = '/' + segs.filter(s => !s.startsWith('(')).join('/')
+      filesR.push({ type: 'page-load-server', path: `${dir}/+page.server.ts` });
+    if (r() < 0.2) filesR.push({ type: 'layout', path: `${dir}/+layout.svelte` });
+    if (hasEndpoint) filesR.push({ type: 'endpoint', path: `${dir}/+server.ts` });
+    const path = '/' + segs.filter(s => !s.startsWith('(')).join('/');
     routes.push({
       id,
       path,
@@ -178,19 +178,19 @@ export function createMockBackend(scale = 5000) {
       hasLayoutLoad: false,
       params,
       files: filesR,
-    })
+    });
   }
 
   // ---- modules (with a few cycles)
-  const modCount = Math.max(200, Math.round(scale * 1.2))
-  const types: ModuleNode['type'][] = ['svelte', 'ts', 'ts', 'js', 'css', 'other']
-  const modules: ModuleNode[] = []
+  const modCount = Math.max(200, Math.round(scale * 1.2));
+  const types: ModuleNode['type'][] = ['svelte', 'ts', 'ts', 'js', 'css', 'other'];
+  const modules: ModuleNode[] = [];
   for (let i = 0; i < modCount; i++) {
-    const t = i < files.length ? 'svelte' : pick(types)
+    const t = i < files.length ? 'svelte' : pick(types);
     const id =
       i < files.length
         ? files.at(i)!.file
-        : `${pick(['src/lib', 'src/lib/stores', 'node_modules/.vite/deps', 'src/lib/utils'])}/${pick(WORDS)}-${i}.${t === 'other' ? 'json' : t}`
+        : `${pick(['src/lib', 'src/lib/stores', 'node_modules/.vite/deps', 'src/lib/utils'])}/${pick(WORDS)}-${i}.${t === 'other' ? 'json' : t}`;
     modules.push({
       id: '/' + id,
       file: `${root}/${id}`,
@@ -198,27 +198,27 @@ export function createMockBackend(scale = 5000) {
       imports: [],
       importedBy: [],
       size: Math.floor(200 + r() * r() * 90000),
-    })
+    });
   }
   for (const [i, m] of modules.entries()) {
-    const k = Math.floor(r() * 7)
+    const k = Math.floor(r() * 7);
     for (let j = 0; j < k; j++) {
-      const t = modules.at(Math.min(modules.length - 1, i + 1 + Math.floor(r() * 200)))!
-      if (t === m || m.imports.includes(t.id)) continue
-      m.imports.push(t.id)
-      t.importedBy.push(m.id)
+      const t = modules.at(Math.min(modules.length - 1, i + 1 + Math.floor(r() * 200)))!;
+      if (t === m || m.imports.includes(t.id)) continue;
+      m.imports.push(t.id);
+      t.importedBy.push(m.id);
     }
   }
-  const cycles: string[][] = []
+  const cycles: string[][] = [];
   for (let c = 0; c < 4; c++) {
     const a = pick(modules),
       b = pick(modules),
-      d = pick(modules)
-    a.imports.push(b.id)
-    b.imports.push(d.id)
-    d.imports.push(a.id)
-    a.isCyclic = b.isCyclic = d.isCyclic = true
-    cycles.push([a.id, b.id, d.id, a.id])
+      d = pick(modules);
+    a.imports.push(b.id);
+    b.imports.push(d.id);
+    d.imports.push(a.id);
+    a.isCyclic = b.isCyclic = d.isCyclic = true;
+    cycles.push([a.id, b.id, d.id, a.id]);
   }
 
   // ---- assets
@@ -230,10 +230,10 @@ export function createMockBackend(scale = 5000) {
     ['json', 'application/json'],
     ['txt', 'text/plain'],
     ['mp4', 'video/mp4'],
-  ] as const
+  ] as const;
   const assets = Array.from({ length: Math.max(40, Math.round(scale / 5)) }, (_, i) => {
-    const [ext, type] = pick(assetTypes)
-    const rel = `${pick(['images', 'images/products', 'fonts', 'icons', 'data', 'media'])}/${pick(WORDS)}-${i}.${ext}`
+    const [ext, type] = pick(assetTypes);
+    const rel = `${pick(['images', 'images/products', 'fonts', 'icons', 'data', 'media'])}/${pick(WORDS)}-${i}.${ext}`;
     return {
       name: rel.split('/').pop()!,
       path: `${root}/static/${rel}`,
@@ -242,22 +242,22 @@ export function createMockBackend(scale = 5000) {
       size: Math.floor(r() * r() * 2_000_000),
       type,
       mtime: Date.now() - Math.floor(r() * 9e9),
-    }
-  })
+    };
+  });
 
   // ---- reactive graph
-  const rnodes: ReactiveGraph['nodes'] = []
-  const redges: ReactiveGraph['edges'] = []
+  const rnodes: ReactiveGraph['nodes'] = [];
+  const redges: ReactiveGraph['edges'] = [];
   // MOCK_GRAPH_SCALE=N: grow the graph to ≥ N signals (e.g. 2500 to exercise
   // the Reactivity auto-pause above 2 000); default ≈ 60 components' worth.
-  const GRAPH_SCALE = Number(process.env.MOCK_GRAPH_SCALE) || 0
+  const GRAPH_SCALE = Number(process.env.MOCK_GRAPH_SCALE) || 0;
   for (let c = 0; GRAPH_SCALE ? rnodes.length < GRAPH_SCALE : c < Math.min(60, files.length); c++) {
-    const f = files.at(c % files.length)!
-    const lap = Math.floor(c / files.length)
-    const base = rnodes.length
-    const k = 2 + Math.floor(r() * 5)
+    const f = files.at(c % files.length)!;
+    const lap = Math.floor(c / files.length);
+    const base = rnodes.length;
+    const k = 2 + Math.floor(r() * 5);
     for (let j = 0; j < k; j++) {
-      const type = j === 0 ? 'state' : j < k - 1 ? pick(['state', 'derived'] as const) : 'effect'
+      const type = j === 0 ? 'state' : j < k - 1 ? pick(['state', 'derived'] as const) : 'effect';
       rnodes.push({
         id: lap ? `${f.name}~${lap}:${j}` : `${f.name}:${j}`,
         type,
@@ -268,23 +268,23 @@ export function createMockBackend(scale = 5000) {
         componentId: c + 1,
         componentFile: f.file,
         value: type === 'effect' ? undefined : Math.floor(r() * 100),
-      })
+      });
       if (j > 0)
         redges.push({
           from: rnodes.at(base + Math.floor(r() * j))!.id,
           to: rnodes.at(base + j)!.id,
-        })
+        });
     }
   }
 
   // ---- misc
   // Server-side ring with monotonically increasing `seq` (collector §6.4).
-  let timeline: (StateChange & { seq: number })[] = []
-  let seq = 0
-  const stateNodes = rnodes.filter(x => x.type === 'state')
-  const t0 = Date.now()
+  let timeline: (StateChange & { seq: number })[] = [];
+  let seq = 0;
+  const stateNodes = rnodes.filter(x => x.type === 'state');
+  const t0 = Date.now();
   for (let i = 0; i < 500; i++) {
-    const n = pick(stateNodes)
+    const n = pick(stateNodes);
     timeline.push({
       seq: ++seq,
       id: n.id,
@@ -296,7 +296,7 @@ export function createMockBackend(scale = 5000) {
           ? { items: [1, 2, 3], filter: pick(WORDS), nested: { open: r() < 0.5 } }
           : Math.floor(r() * 100),
       timestamp: t0 - (500 - i) * 120,
-    })
+    });
   }
   const warnings = Array.from({ length: 120 }, () => ({
     code: pick([
@@ -315,7 +315,7 @@ export function createMockBackend(scale = 5000) {
     file: pick(files).file,
     line: 1 + Math.floor(r() * 200),
     column: 1 + Math.floor(r() * 40),
-  }))
+  }));
   const errors = Array.from({ length: 24 }, () => ({
     message: pick([
       "TypeError: Cannot read properties of undefined (reading 'map')",
@@ -327,7 +327,7 @@ export function createMockBackend(scale = 5000) {
     stack:
       'at render (Cart.svelte:42:13)\n  at update (runtime.js:120:5)\n  at flush (scheduler.js:88:9)',
     timestamp: Date.now() - Math.floor(r() * 3e6),
-  }))
+  }));
   const loads = Array.from({ length: 300 }, () => ({
     route: pick(routes).id,
     file: 'src/routes/+page.server.ts',
@@ -335,17 +335,17 @@ export function createMockBackend(scale = 5000) {
     duration: r() * r() * 600,
     dataSize: Math.floor(r() * 80000),
     timestamp: Date.now() - Math.floor(r() * 6e5),
-  }))
+  }));
   const chunks = Array.from({ length: 120 }, (_, i) => {
-    const ext = pick(['js', 'js', 'js', 'css'])
+    const ext = pick(['js', 'js', 'js', 'css']);
     return {
       name: `${pick(WORDS)}-${i.toString(36)}.${ext}`,
       file: `_app/immutable/${ext === 'css' ? 'assets' : 'chunks'}/${pick(WORDS)}.${Math.floor(r() * 1e8).toString(36)}.${ext}`,
       size: Math.floor(r() * r() * 400000),
       modules: modules.slice(i * 3, i * 3 + 1 + Math.floor(r() * 30)).map(m => m.id),
       isEntry: i < 3,
-    }
-  })
+    };
+  });
   const endpoints = routes
     .filter(x => x.hasEndpoint)
     .map(x => ({
@@ -355,7 +355,7 @@ export function createMockBackend(scale = 5000) {
       methods: r() < 0.5 ? ['GET', 'HEAD'] : ['GET', 'HEAD', 'POST', 'DELETE'],
       complete: r() < 0.9,
       file: x.files.find(f => f.type === 'endpoint')!.path,
-    }))
+    }));
   // An endless server-sent-events endpoint (answered by vite.mock.config.ts) to try streaming.
   endpoints.unshift({
     route: 'api/stream',
@@ -364,15 +364,15 @@ export function createMockBackend(scale = 5000) {
     methods: ['GET', 'HEAD'],
     complete: true,
     file: 'src/routes/api/stream/+server.ts',
-  })
+  });
 
-  let fps: { timestamp: number; fps: number }[] = []
+  let fps: { timestamp: number; fps: number }[] = [];
   const profiles = () => {
-    const out: RenderProfile[] = []
+    const out: RenderProfile[] = [];
     for (const c of live) {
-      const h = (c.id * 2654435761) >>> 0
-      const renders = 1 + (h % 40) + Math.floor((Date.now() / 1000) % (1 + (h % 7)))
-      const avg = ((h >>> 8) % 1000) / 400
+      const h = (c.id * 2654435761) >>> 0;
+      const renders = 1 + (h % 40) + Math.floor((Date.now() / 1000) % (1 + (h % 7)));
+      const avg = ((h >>> 8) % 1000) / 400;
       out.push({
         componentId: c.id,
         file: c.file,
@@ -382,21 +382,21 @@ export function createMockBackend(scale = 5000) {
         totalRenderTime: renders * avg,
         lastRenderTime: avg,
         lastRenderAt: Date.now() - (h % 60000),
-      })
+      });
     }
-    return out
-  }
+    return out;
+  };
 
-  const SAMPLE = `<script lang="ts">\n  let { items = [] } = $props()\n  let query = $state('')\n  let open = $state(false)\n  const filtered = $derived(items.filter((i) => i.name.includes(query)))\n\n  $effect(() => {\n    if (open) console.log('opened with', filtered.length)\n  })\n</script>\n\n<div class="card">\n  <input bind:value={query} placeholder="Search" />\n  <button onclick={() => (open = !open)}>Toggle</button>\n  {#if open}\n    <ul>\n      {#each filtered as item (item.id)}\n        <li class:active={item.active}>{item.name}</li>\n      {/each}\n    </ul>\n  {/if}\n</div>\n\n<style>\n  .card {\n    padding: 12px;\n  }\n  .active {\n    color: tomato;\n  }\n</style>\n`
+  const SAMPLE = `<script lang="ts">\n  let { items = [] } = $props()\n  let query = $state('')\n  let open = $state(false)\n  const filtered = $derived(items.filter((i) => i.name.includes(query)))\n\n  $effect(() => {\n    if (open) console.log('opened with', filtered.length)\n  })\n</script>\n\n<div class="card">\n  <input bind:value={query} placeholder="Search" />\n  <button onclick={() => (open = !open)}>Toggle</button>\n  {#if open}\n    <ul>\n      {#each filtered as item (item.id)}\n        <li class:active={item.active}>{item.name}</li>\n      {/each}\n    </ul>\n  {/if}\n</div>\n\n<style>\n  .card {\n    padding: 12px;\n  }\n  .active {\n    color: tomato;\n  }\n</style>\n`;
 
   // Mirror the dev server's bounded buffers (src/collector.ts LIMITS, `tail`
   // = newest kept) so >cap apps reproduce the real truncation, including
   // subtrees whose ancestors fall outside the capture. MOCK_CAP=0 disables.
-  const CAP = Number(process.env.MOCK_CAP ?? 5000)
-  const capped = <T>(a: T[], n = CAP) => (n > 0 && a.length > n ? a.slice(-n) : a)
+  const CAP = Number(process.env.MOCK_CAP ?? 5000);
+  const capped = <T>(a: T[], n = CAP) => (n > 0 && a.length > n ? a.slice(-n) : a);
   // Live components: parents-first capture (instances are in registration
   // order, so the head keeps every ancestor of what it keeps).
-  const headCapped = <T>(a: T[], n = CAP) => (n > 0 && a.length > n ? a.slice(0, n) : a)
+  const headCapped = <T>(a: T[], n = CAP) => (n > 0 && a.length > n ? a.slice(0, n) : a);
 
   // Dataset counters (`get-versions`). The simulated app "runs" at most once
   // per second, driven by version polls: components churn, a state change is
@@ -409,13 +409,13 @@ export function createMockBackend(scale = 5000) {
     reactiveGraph: 0,
     errors: 0,
     fps: 0,
-  }
-  let lastTick = 0
+  };
+  let lastTick = 0;
   function tick() {
-    if (Date.now() - lastTick < 1000) return
-    lastTick = Date.now()
-    churn()
-    const n = pick(stateNodes)
+    if (Date.now() - lastTick < 1000) return;
+    lastTick = Date.now();
+    churn();
+    const n = pick(stateNodes);
     timeline.push({
       seq: ++seq,
       id: n.id,
@@ -424,21 +424,21 @@ export function createMockBackend(scale = 5000) {
       oldValue: Math.floor(r() * 100),
       newValue: Math.floor(r() * 100),
       timestamp: Date.now(),
-    })
-    if (timeline.length > 500) timeline = timeline.slice(-500)
-    versions.components++
-    versions.renderProfiles++
-    versions.stateTimeline++
-    versions.reactiveGraph++
-    versions.fps++
+    });
+    if (timeline.length > 500) timeline = timeline.slice(-500);
+    versions.components++;
+    versions.renderProfiles++;
+    versions.stateTimeline++;
+    versions.reactiveGraph++;
+    versions.fps++;
   }
-  const MOCK_EPOCH = 'mock-epoch-1'
+  const MOCK_EPOCH = 'mock-epoch-1';
   const info = (total: number, n = CAP) => ({
     captured: n > 0 ? Math.min(total, n) : total,
     total,
     truncated: n > 0 && total > n,
     policy: 'tail',
-  })
+  });
 
   const handlers: Record<string, (...args: any[]) => unknown> = {
     'svelte-devtools:get-versions': () => (tick(), { ...versions }),
@@ -448,11 +448,11 @@ export function createMockBackend(scale = 5000) {
       truncated: CAP > 0 && live.length > CAP,
     }),
     'svelte-devtools:get-state-timeline-delta': (args?: { since?: number }) => {
-      const since = args?.since
-      const oldest = timeline[0]?.seq ?? seq + 1
+      const since = args?.since;
+      const oldest = timeline[0]?.seq ?? seq + 1;
       if (since === undefined || since < oldest - 1 || since > seq)
-        return { cursor: seq, reset: true, changes: timeline }
-      return { cursor: seq, reset: false, changes: timeline.filter(e => e.seq > since) }
+        return { cursor: seq, reset: true, changes: timeline };
+      return { cursor: seq, reset: false, changes: timeline.filter(e => e.seq > since) };
     },
     'svelte-devtools:get-capture-info': () => ({
       liveComponents: info(live.length),
@@ -492,29 +492,29 @@ export function createMockBackend(scale = 5000) {
     // §6.7 A: scoped to one instance (its nodes + direct neighbours) or the
     // whole app within maxNodes / maxEdges, with totals and truncation.
     'svelte-devtools:get-reactive-graph': (args?: {
-      componentId?: number
-      maxNodes?: number
-      maxEdges?: number
+      componentId?: number;
+      maxNodes?: number;
+      maxEdges?: number;
     }) => {
-      const maxNodes = args?.maxNodes ?? 5000
-      const maxEdges = args?.maxEdges ?? 20000
-      const scope = args?.componentId ?? null
-      let pool = rnodes
-      let edgePool = redges
+      const maxNodes = args?.maxNodes ?? 5000;
+      const maxEdges = args?.maxEdges ?? 20000;
+      const scope = args?.componentId ?? null;
+      let pool = rnodes;
+      let edgePool = redges;
       if (scope !== null) {
-        const own = new Set(rnodes.filter(n => n.componentId === scope).map(n => n.id))
-        edgePool = redges.filter(e => own.has(e.from) || own.has(e.to))
-        const ids = new Set(own)
-        for (const e of edgePool) ids.add(e.from).add(e.to)
-        pool = rnodes.filter(n => ids.has(n.id))
+        const own = new Set(rnodes.filter(n => n.componentId === scope).map(n => n.id));
+        edgePool = redges.filter(e => own.has(e.from) || own.has(e.to));
+        const ids = new Set(own);
+        for (const e of edgePool) ids.add(e.from).add(e.to);
+        pool = rnodes.filter(n => ids.has(n.id));
       }
       const nodes = pool
         .slice(0, maxNodes)
         // oxlint-disable-next-line oxc/no-map-spread -- copy on purpose: `rnodes` is the persistent pool; sampled values must not leak into it
-        .map(n => (n.type === 'effect' || r() > 0.1 ? n : { ...n, value: Math.floor(r() * 100) }))
-      const kept = new Set(nodes.map(n => n.id))
-      const inside = edgePool.filter(e => kept.has(e.from) && kept.has(e.to))
-      const edges = inside.slice(0, maxEdges)
+        .map(n => (n.type === 'effect' || r() > 0.1 ? n : { ...n, value: Math.floor(r() * 100) }));
+      const kept = new Set(nodes.map(n => n.id));
+      const inside = edgePool.filter(e => kept.has(e.from) && kept.has(e.to));
+      const edges = inside.slice(0, maxEdges);
       return {
         nodes,
         edges,
@@ -525,25 +525,25 @@ export function createMockBackend(scale = 5000) {
         edgesOmitted: edgePool.length - edges.length,
         policy: scope === null ? 'global-head' : 'scoped',
         computedAt: Date.now(),
-      }
+      };
     },
     // §6.7 I: per-instance counters over a window, top-K + the rest as `other`.
     'svelte-devtools:get-reactive-summary': (args?: { topK?: number; windowMs?: number }) => {
-      const topK = args?.topK ?? 50
-      const windowMs = args?.windowMs ?? 10000
+      const topK = args?.topK ?? 50;
+      const windowMs = args?.windowMs ?? 10000;
       const byComponent = new Map<
         number,
         { file: string; state: number; derived: number; effect: number }
-      >()
+      >();
       for (const n of rnodes) {
         const c = byComponent.get(n.componentId) ?? {
           file: n.componentFile,
           state: 0,
           derived: 0,
           effect: 0,
-        }
-        if (n.type !== 'template') c[n.type]++
-        byComponent.set(n.componentId, c)
+        };
+        if (n.type !== 'template') c[n.type]++;
+        byComponent.set(n.componentId, c);
       }
       const all = [...byComponent].map(([componentId, c]) => ({
         componentId,
@@ -552,13 +552,13 @@ export function createMockBackend(scale = 5000) {
         changes: componentId % 7 === 0 ? 0 : Math.floor(r() * 40),
         renders: Math.floor(r() * 30),
         renderMs: Math.round(r() * 4000) / 100,
-      }))
-      const active = all.filter(x => x.changes > 0 || x.renders > 0)
-      active.sort((a, b) => b.changes - a.changes || b.renders - a.renders)
-      const rows = active.slice(0, topK)
-      const listed = new Set(rows.map(x => x.componentId))
-      const rest = all.filter(x => !listed.has(x.componentId))
-      const until = Date.now()
+      }));
+      const active = all.filter(x => x.changes > 0 || x.renders > 0);
+      active.sort((a, b) => b.changes - a.changes || b.renders - a.renders);
+      const rows = active.slice(0, topK);
+      const listed = new Set(rows.map(x => x.componentId));
+      const rest = all.filter(x => !listed.has(x.componentId));
+      const until = Date.now();
       return {
         epoch: MOCK_EPOCH,
         window: { ms: windowMs, since: until - windowMs, until, sampledActiveMs: windowMs },
@@ -572,7 +572,7 @@ export function createMockBackend(scale = 5000) {
         },
         truncated: active.length > rows.length,
         capabilities: { valueInspection: false, signalHistory: false, writeCause: false },
-      }
+      };
     },
     'svelte-devtools:get-load-profiles': () => capped(loads, CAP ? 200 : 0),
     'svelte-devtools:clear-load-profiles': () => ((loads.length = 0), versions.loadProfiles++),
@@ -592,14 +592,14 @@ export function createMockBackend(scale = 5000) {
         filename: file.split('/').pop(),
         generate: 'client',
         dev: false,
-      })
+      });
       return {
         source: SAMPLE,
         compiled: res.js.code,
         file,
         mappings: res.js.map.mappings,
         sources: res.js.map.sources,
-      }
+      };
     },
     'svelte-devtools:get-module-graph': () => ({ modules, cycles }),
     'svelte-devtools:get-og-preview': ({ url }: { url: string }) => ({
@@ -620,15 +620,15 @@ export function createMockBackend(scale = 5000) {
       timestamp: Date.now(),
     }),
     'svelte-devtools:get-fps': () => {
-      const now = Date.now()
-      const last = fps.at(-1)?.timestamp ?? now - 60000
+      const now = Date.now();
+      const last = fps.at(-1)?.timestamp ?? now - 60000;
       for (let t = last + 500; t <= now; t += 500)
         fps.push({
           timestamp: t,
           fps: Math.max(8, Math.min(120, Math.round(60 - (r() < 0.06 ? r() * 45 : r() * 4)))),
-        })
-      fps = fps.filter(s => s.timestamp > now - 120000)
-      return fps
+        });
+      fps = fps.filter(s => s.timestamp > now - 120000);
+      return fps;
     },
     'svelte-devtools:clear-fps': () => ((fps = []), versions.fps++),
     'svelte-devtools:open-in-editor': ({ file, line }: { file: string; line?: number }) =>
@@ -637,18 +637,18 @@ export function createMockBackend(scale = 5000) {
       log('set-active', client, active),
     'svelte-devtools:open-reactive-in-editor': ({ file, name }: { file: string; name: string }) =>
       log('open-reactive', file, name),
-  }
+  };
 
-  return handlers
+  return handlers;
 }
 
 /** Placeholder image served for every mock asset URL. */
 export const MOCK_ASSET_SVG =
-  '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"><rect width="100%" height="100%" fill="#ff3e00"/><text x="50%" y="55%" font-size="28" text-anchor="middle" fill="#fff" font-family="sans-serif">mock asset</text></svg>'
+  '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"><rect width="100%" height="100%" fill="#ff3e00"/><text x="50%" y="55%" font-size="28" text-anchor="middle" fill="#fff" font-family="sans-serif">mock asset</text></svg>';
 
 /** RPCs with side effects are `action`s on the devframe wire. */
 export function rpcType(name: string): 'query' | 'action' {
   return ['clear', 'open', 'send', 'set'].some(verb => name.includes(`:${verb}-`))
     ? 'action'
-    : 'query'
+    : 'query';
 }

@@ -1,25 +1,25 @@
 <script lang="ts">
-  let celsius = $state(0)
-  let fahrenheit = $derived((celsius * 9) / 5 + 32)
-  let kelvin = $derived(celsius + 273.15)
+  let celsius = $state(0);
+  let fahrenheit = $derived((celsius * 9) / 5 + 32);
+  let kelvin = $derived(celsius + 273.15);
 
   let description = $derived.by(() => {
-    if (celsius <= -40) return 'Extremely cold'
-    if (celsius <= 0) return 'Freezing'
-    if (celsius <= 15) return 'Cold'
-    if (celsius <= 25) return 'Comfortable'
-    if (celsius <= 35) return 'Warm'
-    return 'Hot'
-  })
+    if (celsius <= -40) return 'Extremely cold';
+    if (celsius <= 0) return 'Freezing';
+    if (celsius <= 15) return 'Cold';
+    if (celsius <= 25) return 'Comfortable';
+    if (celsius <= 35) return 'Warm';
+    return 'Hot';
+  });
 
-  let history = $state<number[]>([])
+  let history = $state<number[]>([]);
 
   $effect(() => {
     // Track every celsius change (but skip the initial 0)
     if (celsius !== 0 || history.length > 0) {
-      history = [...history.slice(-9), celsius]
+      history = [...history.slice(-9), celsius];
     }
-  })
+  });
 </script>
 
 <div class="converter">

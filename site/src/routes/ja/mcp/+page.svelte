@@ -1,19 +1,19 @@
 <script lang="ts">
   // Japanese quickstart for the MCP guide. The English page (/mcp) is the
   // source of truth: keep facts, limits and versions in step with it.
-  import { resolve } from '$app/paths'
+  import { resolve } from '$app/paths';
 
-  import CodeBlock from '#lib/CodeBlock.svelte'
-  import { mcpToolsJa } from '#lib/mcp-tools.ja.ts'
-  import { MCP_TOOL_COUNT } from '#lib/mcp-tools.ts'
+  import CodeBlock from '#lib/CodeBlock.svelte';
+  import { mcpToolsJa } from '#lib/mcp-tools.ja.ts';
+  import { MCP_TOOL_COUNT } from '#lib/mcp-tools.ts';
 
-  const groups = mcpToolsJa()
+  const groups = mcpToolsJa();
 
   const printedCode = `  svelte-devtools MCP ready — register with Claude Code:
-    claude mcp add --transport http svelte http://localhost:5173/__svelte-devtools/mcp --header x-svelte-devtools-token:<token>`
+    claude mcp add --transport http svelte http://localhost:5173/__svelte-devtools/mcp --header x-svelte-devtools-token:<token>`;
 
   const reRegisterCode = `claude mcp remove svelte
-claude mcp add --transport http svelte http://localhost:5173/__svelte-devtools/mcp --header x-svelte-devtools-token:<新しいトークン>`
+claude mcp add --transport http svelte http://localhost:5173/__svelte-devtools/mcp --header x-svelte-devtools-token:<新しいトークン>`;
 
   const mcpJsonCode = `{
   "mcpServers": {
@@ -23,21 +23,21 @@ claude mcp add --transport http svelte http://localhost:5173/__svelte-devtools/m
       "headers": { "x-svelte-devtools-token": "\${SVELTE_DEVTOOLS_TOKEN}" }
     }
   }
-}`
+}`;
 
   const envCode = `export SVELTE_DEVTOOLS_TOKEN=<表示された行のトークン>
-claude`
+claude`;
 
   const curlCode = `curl -s http://localhost:5173/__svelte-devtools/mcp \\
   -H 'content-type: application/json' \\
   -H 'accept: application/json, text/event-stream' \\
   -H 'x-svelte-devtools-token: <token>' \\
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'`
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'`;
 
   const promptCode = `/cart で税率を変えるとカートの合計がおかしい。
 svelte MCP サーバーを使って、活発なコンポーネントを探し、
 ReactivePriceChart のインスタンスを見て、grandTotal に影響しうる state と、
-税率を編集したときに何が変わったかを教えて。`
+税率を編集したときに何が変わったかを教えて。`;
 
   const sections = [
     { num: '01', title: 'これは何か', anchor: 'what' },
@@ -49,7 +49,7 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
     { num: '07', title: 'トラブルシューティング', anchor: 'troubleshooting' },
     { num: '08', title: 'セキュリティ', anchor: 'security' },
     { num: '09', title: 'バージョンと資料', anchor: 'versions' },
-  ]
+  ];
 
   const flow = [
     {
@@ -72,7 +72,7 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
       tool: 'get_capture_info',
       text: '上限で切られたデータから結論を出す前に、DevTools が保持している量とアプリが報告した量を確認します。total が null の場合は不明という意味です。',
     },
-  ]
+  ];
 </script>
 
 <svelte:head>

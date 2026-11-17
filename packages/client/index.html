@@ -8,22 +8,22 @@
       // Theme bootstrap — runs synchronously before stylesheet to prevent FOUC.
       // Stored: 'dark' | 'light' (explicit user override)
       // Otherwise: follow `prefers-color-scheme` and react to system changes.
-      ;(() => {
+      (() => {
         try {
-          const stored = localStorage.getItem('svelte-devtools-theme')
-          const valid = stored === 'dark' || stored === 'light' ? stored : null
+          const stored = localStorage.getItem('svelte-devtools-theme');
+          const valid = stored === 'dark' || stored === 'light' ? stored : null;
           const apply = () => {
-            const m = window.matchMedia('(prefers-color-scheme: dark)')
-            document.documentElement.dataset.theme = valid ?? (m.matches ? 'dark' : 'light')
-          }
-          apply()
+            const m = window.matchMedia('(prefers-color-scheme: dark)');
+            document.documentElement.dataset.theme = valid ?? (m.matches ? 'dark' : 'light');
+          };
+          apply();
           if (!valid) {
-            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', apply)
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', apply);
           }
         } catch {
-          document.documentElement.dataset.theme = 'dark'
+          document.documentElement.dataset.theme = 'dark';
         }
-      })()
+      })();
     </script>
     <style>
       * {

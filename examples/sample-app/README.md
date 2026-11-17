@@ -61,15 +61,15 @@ src/
 ## vite.config.ts
 
 ```ts
-import adapter from '@sveltejs/adapter-auto'
-import { sveltekit } from '@sveltejs/kit/vite'
-import { svelteDevtools } from '@sveltejs/vite-devtools-svelte'
-import { DevTools } from '@vitejs/devtools'
-import { defineConfig } from 'vite'
+import adapter from '@sveltejs/adapter-auto';
+import { sveltekit } from '@sveltejs/kit/vite';
+import { svelteDevtools } from '@sveltejs/vite-devtools-svelte';
+import { DevTools } from '@vitejs/devtools';
+import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [svelteDevtools(), DevTools(), sveltekit({ adapter: adapter() })],
-})
+});
 ```
 
 `svelteDevtools()` は `sveltekit()` より **前** に置く必要があります（Svelte コンパイラが走る前に runes ラッパを差し込むため）。

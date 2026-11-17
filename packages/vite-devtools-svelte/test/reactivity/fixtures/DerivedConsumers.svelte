@@ -1,19 +1,19 @@
 <script>
-  let count = $state(1)
-  const inIf = $derived(count > 0)
-  const inHead = $derived(`Count ${count}`)
-  const inText = $derived(count * 2)
-  const inEach = $derived([count, count + 1])
-  const inAttr = $derived(count % 2 === 0 ? 'even' : 'odd')
-  const inHandler = $derived(count * 10)
-  const inEffect = $derived(count * 3)
-  const neverRead = $derived(count * 4)
-  let seen = 0
+  let count = $state(1);
+  const inIf = $derived(count > 0);
+  const inHead = $derived(`Count ${count}`);
+  const inText = $derived(count * 2);
+  const inEach = $derived([count, count + 1]);
+  const inAttr = $derived(count % 2 === 0 ? 'even' : 'odd');
+  const inHandler = $derived(count * 10);
+  const inEffect = $derived(count * 3);
+  const neverRead = $derived(count * 4);
+  let seen = 0;
   $effect(() => {
-    seen = inEffect
-  })
+    seen = inEffect;
+  });
   export function bump() {
-    count++
+    count++;
   }
 </script>
 

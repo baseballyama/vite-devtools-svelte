@@ -1,7 +1,7 @@
 <script lang="ts">
   // The official Svelte mark, unchanged: paths and colours from
   // svelte-logo.svg in github.com/sveltejs/branding (commit 2af7bc7).
-  let { size = 24 }: { size?: number } = $props()
+  let { size = 24 }: { size?: number } = $props();
 </script>
 
 <svg

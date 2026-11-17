@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { resolve } from '$app/paths'
+  import { resolve } from '$app/paths';
 
-  import ReactivePriceChart from '#lib/components/ReactivePriceChart.svelte'
-  import { cart } from '#lib/stores/cart.svelte.ts'
+  import ReactivePriceChart from '#lib/components/ReactivePriceChart.svelte';
+  import { cart } from '#lib/stores/cart.svelte.ts';
 </script>
 
 <h1>カート</h1>

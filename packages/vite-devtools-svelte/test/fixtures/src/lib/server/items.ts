@@ -1,7 +1,7 @@
 export function GET() {
-  return new Response('[]')
+  return new Response('[]');
 }
 
 export function PUT() {
-  return new Response(null, { status: 204 })
+  return new Response(null, { status: 204 });
 }

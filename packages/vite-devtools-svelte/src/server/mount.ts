@@ -1,21 +1,21 @@
-import type { Server } from 'node:http'
-import type { AddressInfo } from 'node:net'
-import os from 'node:os'
+import type { Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import os from 'node:os';
 
-import type { DevframeDefinition } from 'devframe'
-import { initDevframe } from 'devframe/initiate'
-import type { DevframeInstance } from 'devframe/initiate'
-import type { ViteDevServer } from 'vite'
+import type { DevframeDefinition } from 'devframe';
+import { initDevframe } from 'devframe/initiate';
+import type { DevframeInstance } from 'devframe/initiate';
+import type { ViteDevServer } from 'vite';
 
-import { DEVFRAME_BASE } from './devframe.js'
+import { DEVFRAME_BASE } from './devframe.js';
 
-const WILDCARD = new Set(['0.0.0.0', '::'])
-const LOOPBACK = new Set(['127.0.0.1', '::1', 'localhost'])
+const WILDCARD = new Set(['0.0.0.0', '::']);
+const LOOPBACK = new Set(['127.0.0.1', '::1', 'localhost']);
 
 /** `address` as a URL host: `localhost` for loopback / wildcard bindings, IPv6 bracketed. */
 export function urlHost(address: string): string {
-  if (LOOPBACK.has(address) || WILDCARD.has(address)) return 'localhost'
-  return address.includes(':') ? `[${address}]` : address
+  if (LOOPBACK.has(address) || WILDCARD.has(address)) return 'localhost';
+  return address.includes(':') ? `[${address}]` : address;
 }
 
 /**
@@ -24,14 +24,14 @@ export function urlHost(address: string): string {
  * origins by default and rejects every other WS `Origin` unless listed.
  */
 function networkOrigins(address: AddressInfo, proto: string): string[] {
-  if (LOOPBACK.has(address.address)) return []
+  if (LOOPBACK.has(address.address)) return [];
   const hosts = WILDCARD.has(address.address)
     ? Object.values(os.networkInterfaces())
         .flat()
         .filter(i => i && !i.internal)
         .map(i => i!.address)
-    : [address.address]
-  return hosts.map(h => `${proto}://${urlHost(h)}:${address.port}`)
+    : [address.address];
+  return hosts.map(h => `${proto}://${urlHost(h)}:${address.port}`);
 }
 
 /**
@@ -47,21 +47,21 @@ export function mountStandalone(
   def: DevframeDefinition,
   { auth = true }: { auth?: boolean } = {},
 ): (() => Promise<void>) | undefined {
-  let instance: DevframeInstance | undefined
-  let closed = false
-  const httpServer = server.httpServer
+  let instance: DevframeInstance | undefined;
+  let closed = false;
+  const httpServer = server.httpServer;
 
   server.middlewares.use((req, res, next) => {
-    if (instance) return instance.nodeMiddleware(req, res, next)
+    if (instance) return instance.nodeMiddleware(req, res, next);
     if (req.url?.startsWith(DEVFRAME_BASE)) {
       // Not listening yet (or already closed): don't let the app's SPA
       // fallback answer for the DevTools.
-      res.statusCode = 503
-      res.end('Svelte DevTools is starting')
-      return
+      res.statusCode = 503;
+      res.end('Svelte DevTools is starting');
+      return;
     }
-    next()
-  })
+    next();
+  });
 
   if (!httpServer) {
     // Middleware mode: no server to share the upgrade with, so devframe
@@ -73,19 +73,19 @@ export function mountStandalone(
       sse: true,
       mcp: false,
       auth,
-    })
-    instance = created
+    });
+    instance = created;
     return async () => {
-      instance = undefined
-      await created.close().catch(() => {})
-    }
+      instance = undefined;
+      await created.close().catch(() => {});
+    };
   }
 
   httpServer.once('listening', () => {
-    const address = httpServer.address()
-    if (closed || !address || typeof address === 'string') return
-    const proto = server.config.server.https ? 'https' : 'http'
-    const local = `${proto}://localhost:${address.port}`
+    const address = httpServer.address();
+    if (closed || !address || typeof address === 'string') return;
+    const proto = server.config.server.https ? 'https' : 'http';
+    const local = `${proto}://localhost:${address.port}`;
     instance = initDevframe(def, {
       base: DEVFRAME_BASE,
       // Vite's https server is an HTTP/2 server with HTTP/1 fallback; it emits
@@ -97,15 +97,15 @@ export function mountStandalone(
       // SPA so opening it authenticates (the app root has no devframe client).
       origin: `${local}${DEVFRAME_BASE}`,
       allowedOrigins: networkOrigins(address, proto),
-    })
-    server.config.logger.info(`  ➜  Svelte DevTools: ${local}${DEVFRAME_BASE}`)
-  })
+    });
+    server.config.logger.info(`  ➜  Svelte DevTools: ${local}${DEVFRAME_BASE}`);
+  });
 
   httpServer.once('close', () => {
-    closed = true
-    const current = instance
-    instance = undefined
-    current?.close().catch(() => {})
-  })
-  return undefined
+    closed = true;
+    const current = instance;
+    instance = undefined;
+    current?.close().catch(() => {});
+  });
+  return undefined;
 }

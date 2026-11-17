@@ -1,11 +1,11 @@
 <script lang="ts" module>
-  let uid = 0
+  let uid = 0;
 </script>
 
 <script lang="ts" generics="T">
-  import { untrack, type Snippet } from 'svelte'
+  import { untrack, type Snippet } from 'svelte';
 
-  import type { RowState } from './types.js'
+  import type { RowState } from './types.js';
 
   /**
    * Fixed-row-height virtual list. Renders only the rows in view (+overscan),
@@ -14,20 +14,20 @@
    * follows keyboard focus like the browser devtools element tree.
    */
   interface Props {
-    items: readonly T[]
-    getKey: (item: T, index: number) => string
-    label: string
-    row: Snippet<[T, RowState]>
-    rowHeight?: number
-    selected?: string | null
-    role?: 'listbox' | 'tree'
-    overscan?: number
-    empty?: Snippet
-    onselect?: (item: T, index: number) => void
-    onactivate?: (item: T, index: number) => void
+    items: readonly T[];
+    getKey: (item: T, index: number) => string;
+    label: string;
+    row: Snippet<[T, RowState]>;
+    rowHeight?: number;
+    selected?: string | null;
+    role?: 'listbox' | 'tree';
+    overscan?: number;
+    empty?: Snippet;
+    onselect?: (item: T, index: number) => void;
+    onactivate?: (item: T, index: number) => void;
     /** Return true when the key was handled (skips default navigation). */
-    onrowkeydown?: (e: KeyboardEvent, item: T, index: number) => boolean
-    rowAttrs?: (item: T, index: number) => Record<string, string | number | boolean | undefined>
+    onrowkeydown?: (e: KeyboardEvent, item: T, index: number) => boolean;
+    rowAttrs?: (item: T, index: number) => Record<string, string | number | boolean | undefined>;
   }
 
   let {
@@ -44,134 +44,134 @@
     onactivate,
     onrowkeydown,
     rowAttrs,
-  }: Props = $props()
+  }: Props = $props();
 
-  const id = `vl${++uid}`
-  let viewport = $state<HTMLDivElement | null>(null)
-  let scrollTop = $state(0)
-  let height = $state(0)
+  const id = `vl${++uid}`;
+  let viewport = $state<HTMLDivElement | null>(null);
+  let scrollTop = $state(0);
+  let height = $state(0);
 
-  const total = $derived(items.length * rowHeight)
-  const start = $derived(Math.max(0, Math.floor(scrollTop / rowHeight) - overscan))
+  const total = $derived(items.length * rowHeight);
+  const start = $derived(Math.max(0, Math.floor(scrollTop / rowHeight) - overscan));
   const end = $derived(
     Math.min(items.length, Math.ceil((scrollTop + height) / rowHeight) + overscan),
-  )
-  const visible = $derived(items.slice(start, end))
-  const pageSize = $derived(Math.max(1, Math.floor(height / rowHeight) - 1))
+  );
+  const visible = $derived(items.slice(start, end));
+  const pageSize = $derived(Math.max(1, Math.floor(height / rowHeight) - 1));
 
   const selection = $derived.by(() => {
-    if (selected == null) return null
+    if (selected == null) return null;
     for (const [index, item] of items.entries())
-      if (getKey(item, index) === selected) return { index, item }
-    return null
-  })
-  const selectedIndex = $derived(selection?.index ?? -1)
+      if (getKey(item, index) === selected) return { index, item };
+    return null;
+  });
+  const selectedIndex = $derived(selection?.index ?? -1);
 
   $effect(() => {
-    const el = viewport
-    if (!el) return
+    const el = viewport;
+    if (!el) return;
     const ro = new ResizeObserver(() => {
-      height = el.clientHeight
-    })
-    ro.observe(el)
-    height = el.clientHeight
-    return () => ro.disconnect()
-  })
+      height = el.clientHeight;
+    });
+    ro.observe(el);
+    height = el.clientHeight;
+    return () => ro.disconnect();
+  });
 
   // Clamp scroll when the list shrinks (e.g. a filter narrows results).
   $effect(() => {
     if (viewport && scrollTop > Math.max(0, total - height)) {
-      viewport.scrollTop = Math.max(0, total - height)
+      viewport.scrollTop = Math.max(0, total - height);
     }
-  })
+  });
 
   // Keep the selection in view when the selected *key* changes (inspector
   // links, reveal). Live updates that only shift its index must not yank
   // a user who scrolled away back to the selection.
   $effect(() => {
-    const key = selected
-    if (key == null) return
+    const key = selected;
+    if (key == null) return;
     untrack(() => {
-      if (selectedIndex >= 0) scrollToIndex(selectedIndex)
-    })
-  })
+      if (selectedIndex >= 0) scrollToIndex(selectedIndex);
+    });
+  });
 
   function onscroll() {
-    if (viewport) scrollTop = viewport.scrollTop
+    if (viewport) scrollTop = viewport.scrollTop;
   }
 
   export function scrollToIndex(i: number, align: 'auto' | 'center' = 'auto') {
-    if (!viewport || i < 0) return
-    const top = i * rowHeight
+    if (!viewport || i < 0) return;
+    const top = i * rowHeight;
     if (align === 'center') {
-      viewport.scrollTop = Math.max(0, top - height / 2 + rowHeight / 2)
+      viewport.scrollTop = Math.max(0, top - height / 2 + rowHeight / 2);
     } else if (top < viewport.scrollTop) {
-      viewport.scrollTop = top
+      viewport.scrollTop = top;
     } else if (top + rowHeight > viewport.scrollTop + height) {
-      viewport.scrollTop = top + rowHeight - height
+      viewport.scrollTop = top + rowHeight - height;
     }
-    scrollTop = viewport.scrollTop
+    scrollTop = viewport.scrollTop;
   }
 
   export function focus() {
-    viewport?.focus({ preventScroll: true })
+    viewport?.focus({ preventScroll: true });
   }
 
   export function select(i: number) {
-    if (!items.length) return
-    const idx = Math.max(0, Math.min(items.length - 1, i))
-    const item = items[idx]!
-    selected = getKey(item, idx)
-    scrollToIndex(idx)
-    onselect?.(item, idx)
+    if (!items.length) return;
+    const idx = Math.max(0, Math.min(items.length - 1, i));
+    const item = items[idx]!;
+    selected = getKey(item, idx);
+    scrollToIndex(idx);
+    onselect?.(item, idx);
   }
 
   function onkeydown(e: KeyboardEvent) {
-    if (e.altKey || e.metaKey || e.ctrlKey) return
-    const sel = selection
-    const i = sel?.index ?? -1
+    if (e.altKey || e.metaKey || e.ctrlKey) return;
+    const sel = selection;
+    const i = sel?.index ?? -1;
     if (sel && onrowkeydown?.(e, sel.item, sel.index)) {
-      e.preventDefault()
-      return
+      e.preventDefault();
+      return;
     }
-    let next: number | null = null
+    let next: number | null = null;
     switch (e.key) {
       case 'ArrowDown':
       case 'j':
-        next = i < 0 ? 0 : i + 1
-        break
+        next = i < 0 ? 0 : i + 1;
+        break;
       case 'ArrowUp':
       case 'k':
-        next = i < 0 ? 0 : i - 1
-        break
+        next = i < 0 ? 0 : i - 1;
+        break;
       case 'Home':
-        next = 0
-        break
+        next = 0;
+        break;
       case 'End':
-        next = items.length - 1
-        break
+        next = items.length - 1;
+        break;
       case 'PageDown':
-        next = (i < 0 ? 0 : i) + pageSize
-        break
+        next = (i < 0 ? 0 : i) + pageSize;
+        break;
       case 'PageUp':
-        next = (i < 0 ? 0 : i) - pageSize
-        break
+        next = (i < 0 ? 0 : i) - pageSize;
+        break;
       case 'Enter':
         if (sel) {
-          e.preventDefault()
-          onactivate?.(sel.item, sel.index)
+          e.preventDefault();
+          onactivate?.(sel.item, sel.index);
         }
-        return
+        return;
       default:
-        return
+        return;
     }
-    e.preventDefault()
-    select(next)
+    e.preventDefault();
+    select(next);
   }
 
   function onrowclick(index: number) {
-    select(index)
-    focus()
+    select(index);
+    focus();
   }
 </script>
 

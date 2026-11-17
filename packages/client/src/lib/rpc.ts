@@ -1,7 +1,7 @@
-import { connectDevframe } from 'devframe/client'
-import type { DevframeConnectionStatus, DevframeRpcClient } from 'devframe/client'
+import { connectDevframe } from 'devframe/client';
+import type { DevframeConnectionStatus, DevframeRpcClient } from 'devframe/client';
 
-import { errorMessage } from './format.js'
+import { errorMessage } from './format.js';
 import type {
   RouteInfo,
   AssetInfo,
@@ -27,40 +27,40 @@ import type {
   StateTimelineDelta,
   DatasetVersions,
   LiveComponentsMeta,
-} from './types.js'
+} from './types.js';
 
 // The same SPA runs standalone (`/.svelte-devtools/` on the app's dev
 // server) and inside the Vite DevTools dock. `connectDevframe()` discovers
 // the backend through `./__connection.json` in both cases, so nothing here
 // is host-specific.
 
-const NAMESPACE = 'svelte-devtools'
+const NAMESPACE = 'svelte-devtools';
 
-export type ConnectionStatus = DevframeConnectionStatus
+export type ConnectionStatus = DevframeConnectionStatus;
 
 export interface ConnectionState {
-  status: ConnectionStatus
-  host: 'standalone' | 'vite-devtools' | 'unknown'
-  error?: string
+  status: ConnectionStatus;
+  host: 'standalone' | 'vite-devtools' | 'unknown';
+  error?: string;
 }
 
-const RECONNECT_MIN_DELAY = 500
-const RECONNECT_MAX_DELAY = 10_000
+const RECONNECT_MIN_DELAY = 500;
+const RECONNECT_MAX_DELAY = 10_000;
 
-let client: DevframeRpcClient | null = null
+let client: DevframeRpcClient | null = null;
 // In-flight connection, shared so concurrent first calls (e.g. a Promise.all
 // during mount) do not each open a socket.
-let connecting: Promise<DevframeRpcClient> | null = null
-let reconnectTimer: ReturnType<typeof setTimeout> | undefined
-let reconnectDelay = RECONNECT_MIN_DELAY
-let state: ConnectionState = { status: 'connecting', host: 'unknown' }
-const listeners = new Set<(s: ConnectionState) => void>()
+let connecting: Promise<DevframeRpcClient> | null = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+let reconnectDelay = RECONNECT_MIN_DELAY;
+let state: ConnectionState = { status: 'connecting', host: 'unknown' };
+const listeners = new Set<(s: ConnectionState) => void>();
 
 function setState(next: Partial<ConnectionState>): void {
-  state = { ...state, ...next }
-  if (next.status && next.status !== 'error') state.error = next.error
-  for (const listener of listeners) listener(state)
-  syncActivity()
+  state = { ...state, ...next };
+  if (next.status && next.status !== 'error') state.error = next.error;
+  for (const listener of listeners) listener(state);
+  syncActivity();
 }
 
 // --- Activity lease ---
@@ -68,46 +68,46 @@ function setState(next: Partial<ConnectionState>): void {
 // holds a lease (docs/devframe-migration.md §6.3). This tab holds one while
 // it is connected and visible, renewing well inside the server's 15 s TTL.
 
-const HEARTBEAT_INTERVAL = 5_000
+const HEARTBEAT_INTERVAL = 5_000;
 // Also loaded by unit tests outside a browser.
-const hasDocument = typeof document !== 'undefined'
-const CLIENT_ID = Math.random().toString(36).slice(2, 12)
-let heartbeat: ReturnType<typeof setInterval> | undefined
+const hasDocument = typeof document !== 'undefined';
+const CLIENT_ID = Math.random().toString(36).slice(2, 12);
+let heartbeat: ReturnType<typeof setInterval> | undefined;
 
 function sendActive(active: boolean): void {
-  const c = client
-  if (c?.status !== 'connected') return
+  const c = client;
+  if (c?.status !== 'connected') return;
   c.scope(NAMESPACE)
     .rpc.call('set-active', { client: CLIENT_ID, active })
-    .catch(() => {})
+    .catch(() => {});
 }
 
 function syncActivity(): void {
   const wanted =
-    state.status === 'connected' && hasDocument && document.visibilityState === 'visible'
+    state.status === 'connected' && hasDocument && document.visibilityState === 'visible';
   if (wanted && !heartbeat) {
-    sendActive(true)
-    heartbeat = setInterval(() => sendActive(true), HEARTBEAT_INTERVAL)
+    sendActive(true);
+    heartbeat = setInterval(() => sendActive(true), HEARTBEAT_INTERVAL);
   } else if (!wanted && heartbeat) {
-    clearInterval(heartbeat)
-    heartbeat = undefined
-    sendActive(false)
+    clearInterval(heartbeat);
+    heartbeat = undefined;
+    sendActive(false);
   }
 }
 
 if (hasDocument) {
-  document.addEventListener('visibilitychange', syncActivity)
+  document.addEventListener('visibilitychange', syncActivity);
   window.addEventListener('pagehide', () => {
-    if (heartbeat) clearInterval(heartbeat)
-    heartbeat = undefined
-    sendActive(false)
-  })
+    if (heartbeat) clearInterval(heartbeat);
+    heartbeat = undefined;
+    sendActive(false);
+  });
 }
 
 function detectHost(c: DevframeRpcClient): ConnectionState['host'] {
   // Vite DevTools serves every mounted devframe through its hub, which
   // advertises hub UI configs in the connection meta.
-  return c.connectionMeta?.configs ? 'vite-devtools' : 'standalone'
+  return c.connectionMeta?.configs ? 'vite-devtools' : 'standalone';
 }
 
 /**
@@ -117,84 +117,84 @@ function detectHost(c: DevframeRpcClient): ConnectionState['host'] {
  * token re-trusts the new connection without asking for a code again.
  */
 function scheduleReconnect(): void {
-  if (reconnectTimer) return
+  if (reconnectTimer) return;
   reconnectTimer = setTimeout(() => {
-    reconnectTimer = undefined
-    getClient().catch(() => {})
-  }, reconnectDelay)
-  reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX_DELAY)
+    reconnectTimer = undefined;
+    getClient().catch(() => {});
+  }, reconnectDelay);
+  reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX_DELAY);
 }
 
 function discard(c: DevframeRpcClient): void {
-  if (client !== c) return
-  client = null
+  if (client !== c) return;
+  client = null;
   try {
-    c.close?.()
+    c.close?.();
   } catch {
     /* already closed */
   }
 }
 
 async function getClient(): Promise<DevframeRpcClient> {
-  if (client) return client
-  if (connecting) return connecting
+  if (client) return client;
+  if (connecting) return connecting;
 
-  setState({ status: 'connecting' })
+  setState({ status: 'connecting' });
   // The shell renders its own code-entry gate; devframe's fallback
   // `window.prompt()` would block the main thread on every reconnect.
   connecting = connectDevframe({ simpleAuth: false })
     .then(c => {
-      client = c
-      setState({ status: c.status, host: detectHost(c) })
+      client = c;
+      setState({ status: c.status, host: detectHost(c) });
       c.events.on('connection:status', status => {
-        if (client !== c) return
-        if (status === 'connected') reconnectDelay = RECONNECT_MIN_DELAY
-        setState({ status, error: c.connectionError?.message })
+        if (client !== c) return;
+        if (status === 'connected') reconnectDelay = RECONNECT_MIN_DELAY;
+        setState({ status, error: c.connectionError?.message });
         if (status === 'disconnected' || status === 'error') {
-          discard(c)
-          scheduleReconnect()
+          discard(c);
+          scheduleReconnect();
         }
-      })
-      return c
+      });
+      return c;
     })
     .catch((e: unknown) => {
       // `__connection.json` unreachable (server down / restarting).
-      setState({ status: 'error', error: errorMessage(e) })
-      scheduleReconnect()
-      throw e
+      setState({ status: 'error', error: errorMessage(e) });
+      scheduleReconnect();
+      throw e;
     })
     .finally(() => {
-      connecting = null
-    })
-  return connecting
+      connecting = null;
+    });
+  return connecting;
 }
 
 async function call<T>(method: string, ...args: unknown[]): Promise<T> {
   try {
-    const c = await getClient()
+    const c = await getClient();
     // The scoped view prefixes `svelte-devtools:` and accepts our untyped ids.
-    return (await c.scope(NAMESPACE).rpc.call(method, ...args)) as T
+    return (await c.scope(NAMESPACE).rpc.call(method, ...args)) as T;
   } catch (e) {
     throw new Error(`RPC ${method} failed: ${errorMessage(e)}`, {
       cause: e,
-    })
+    });
   }
 }
 
 // --- Connection state (for the shell's connection / auth UI) ---
 
 export function getConnectionState(): ConnectionState {
-  return state
+  return state;
 }
 
 /** Subscribe to connection changes; returns an unsubscribe function. Starts connecting. */
 export function onConnectionState(cb: (s: ConnectionState) => void): () => void {
-  listeners.add(cb)
-  cb(state)
-  getClient().catch(() => {})
+  listeners.add(cb);
+  cb(state);
+  getClient().catch(() => {});
   return () => {
-    listeners.delete(cb)
-  }
+    listeners.delete(cb);
+  };
 }
 
 /**
@@ -203,44 +203,44 @@ export function onConnectionState(cb: (s: ConnectionState) => void): () => void 
  * pass `reissue: true` to rotate the code and get it printed again.
  */
 export async function requestAuthCode(options: { reissue?: boolean } = {}): Promise<void> {
-  const c = await getClient()
-  await c.requestAuthCode(options.reissue ? { reissue: true } : {})
+  const c = await getClient();
+  await c.requestAuthCode(options.reissue ? { reissue: true } : {});
 }
 
 /** Exchange the code printed in the terminal for a persisted token. */
 export async function submitAuthCode(code: string): Promise<boolean> {
-  const c = await getClient()
-  return c.requestTrustWithCode(code.trim())
+  const c = await getClient();
+  return c.requestTrustWithCode(code.trim());
 }
 
 // --- Project / static analysis ---
 
 export function getProject(): Promise<ProjectInfo> {
-  return call('get-project')
+  return call('get-project');
 }
 
 export function getRoutes(): Promise<RouteInfo[]> {
-  return call('get-routes')
+  return call('get-routes');
 }
 
 export function getAssets(): Promise<AssetInfo[]> {
-  return call('get-assets')
+  return call('get-assets');
 }
 
 export function getComponentRelations(): Promise<ComponentRelation[]> {
-  return call('get-component-relations')
+  return call('get-component-relations');
 }
 
 export function getLiveComponents(): Promise<ComponentInstance[]> {
-  return call('get-live-components')
+  return call('get-live-components');
 }
 
 export function getLiveComponentsMeta(): Promise<LiveComponentsMeta> {
-  return call('get-live-components-meta')
+  return call('get-live-components-meta');
 }
 
 export async function openInEditor(filePath: string, line?: number): Promise<void> {
-  await call('open-in-editor', { file: filePath, line: line && line > 0 ? line : undefined })
+  await call('open-in-editor', { file: filePath, line: line && line > 0 ? line : undefined });
 }
 
 export async function openReactiveInEditor(
@@ -248,7 +248,7 @@ export async function openReactiveInEditor(
   name: string,
   type: string,
 ): Promise<void> {
-  await call('open-reactive-in-editor', { file, name, type })
+  await call('open-reactive-in-editor', { file, name, type });
 }
 
 // --- Performance ---
@@ -259,35 +259,35 @@ export async function openReactiveInEditor(
  * caps. `total`/`truncated`/`stale` say what the answer covers (§6.7 A).
  */
 export function getReactiveGraph(req?: ReactiveGraphRequest): Promise<ReactiveGraphResult> {
-  return req ? call('get-reactive-graph', req) : call('get-reactive-graph')
+  return req ? call('get-reactive-graph', req) : call('get-reactive-graph');
 }
 
 /** Overview aggregate from runtime counters; never captures the graph (§6.7 I). */
 export function getReactiveSummary(req?: ReactiveSummaryRequest): Promise<ReactiveSummary> {
-  return req ? call('get-reactive-summary', req) : call('get-reactive-summary')
+  return req ? call('get-reactive-summary', req) : call('get-reactive-summary');
 }
 
 /** Captured vs reported counts, truncation and drop reasons per dataset (§6.7 B). */
 export function getCaptureInfo(): Promise<CaptureInfoMap> {
-  return call('get-capture-info')
+  return call('get-capture-info');
 }
 
 export function getRenderProfiles(): Promise<RenderProfile[]> {
-  return call('get-render-profiles')
+  return call('get-render-profiles');
 }
 
 export function getLoadProfiles(): Promise<LoadProfile[]> {
-  return call('get-load-profiles')
+  return call('get-load-profiles');
 }
 
 export async function clearLoadProfiles(): Promise<void> {
-  await call('clear-load-profiles')
+  await call('clear-load-profiles');
 }
 
 // --- Debug ---
 
 export function getStateTimeline(): Promise<StateChange[]> {
-  return call('get-state-timeline')
+  return call('get-state-timeline');
 }
 
 /**
@@ -295,66 +295,66 @@ export function getStateTimeline(): Promise<StateChange[]> {
  * replace the local list. Cheap to poll: answered from the server buffer.
  */
 export function getStateTimelineDelta(since?: number): Promise<StateTimelineDelta> {
-  return call('get-state-timeline-delta', { since })
+  return call('get-state-timeline-delta', { since });
 }
 
 /** Change counters per dataset; poll this and refetch only what moved. */
 export function getVersions(): Promise<DatasetVersions> {
-  return call('get-versions')
+  return call('get-versions');
 }
 
 export async function clearStateTimeline(): Promise<void> {
-  await call('clear-state-timeline')
+  await call('clear-state-timeline');
 }
 
 export function getApiEndpoints(): Promise<ApiEndpoint[]> {
-  return call('get-api-endpoints')
+  return call('get-api-endpoints');
 }
 
 export function getCompilerWarnings(): Promise<CompilerWarning[]> {
-  return call('get-compiler-warnings')
+  return call('get-compiler-warnings');
 }
 
 export function getRuntimeErrors(): Promise<RuntimeError[]> {
-  return call('get-runtime-errors')
+  return call('get-runtime-errors');
 }
 
 export async function clearErrors(): Promise<void> {
-  await call('clear-errors')
+  await call('clear-errors');
 }
 
 /** A `.svelte` file the Inspect panel can compile. */
 export interface SvelteFileEntry {
-  file: string
-  name: string
+  file: string;
+  name: string;
 }
 
 export function getSvelteFiles(): Promise<SvelteFileEntry[]> {
-  return call('get-svelte-files')
+  return call('get-svelte-files');
 }
 
 export function inspectFile(filePath: string): Promise<InspectResult> {
-  return call('inspect-file', { file: filePath })
+  return call('inspect-file', { file: filePath });
 }
 
 // --- Advanced ---
 
 export function getModuleGraph(): Promise<ModuleGraphData> {
-  return call('get-module-graph')
+  return call('get-module-graph');
 }
 
 export function getOGPreview(url: string): Promise<OGPreview> {
-  return call('get-og-preview', { url })
+  return call('get-og-preview', { url });
 }
 
 export function getBuildAnalysis(): Promise<BuildAnalysis> {
-  return call('get-build-analysis')
+  return call('get-build-analysis');
 }
 
 export function getFps(): Promise<FpsSample[]> {
-  return call('get-fps')
+  return call('get-fps');
 }
 
 export async function clearFps(): Promise<void> {
-  await call('clear-fps')
+  await call('clear-fps');
 }

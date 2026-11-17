@@ -8,9 +8,9 @@
  * `vi.mocked(rpc.getRoutes).mockResolvedValue([...])`. `resetFakeRpc()`
  * (run before each test) restores the defaults.
  */
-import { vi, type Mock } from 'vitest'
+import { vi, type Mock } from 'vitest';
 
-import type * as Real from '../lib/rpc.js'
+import type * as Real from '../lib/rpc.js';
 import type {
   BuildAnalysis,
   DatasetVersions,
@@ -21,13 +21,13 @@ import type {
   ProjectInfo,
   ReactiveGraphResult,
   ReactiveSummary,
-} from '../lib/types.js'
+} from '../lib/types.js';
 
-type RealRpc = typeof Real
+type RealRpc = typeof Real;
 type FnKey = {
-  [K in keyof RealRpc]: RealRpc[K] extends (...a: never[]) => unknown ? K : never
-}[keyof RealRpc]
-type ConnectionState = Real.ConnectionState
+  [K in keyof RealRpc]: RealRpc[K] extends (...a: never[]) => unknown ? K : never;
+}[keyof RealRpc];
+type ConnectionState = Real.ConnectionState;
 
 export const project: ProjectInfo = {
   name: 'demo-app',
@@ -39,7 +39,7 @@ export const project: ProjectInfo = {
   devDependencies: {},
   routesDir: 'src/routes',
   staticDir: 'static',
-}
+};
 
 export const emptyGraph: ReactiveGraphResult = {
   nodes: [],
@@ -51,7 +51,7 @@ export const emptyGraph: ReactiveGraphResult = {
   edgesOmitted: 0,
   computedAt: 0,
   policy: 'global-head',
-}
+};
 
 export const emptySummary: ReactiveSummary = {
   epoch: 'e1',
@@ -63,7 +63,7 @@ export const emptySummary: ReactiveSummary = {
   other: null,
   truncated: false,
   capabilities: { valueInspection: true, signalHistory: false, writeCause: false },
-}
+};
 
 export const versions: DatasetVersions = {
   components: 0,
@@ -73,25 +73,25 @@ export const versions: DatasetVersions = {
   reactiveGraph: 0,
   errors: 0,
   fps: 0,
-}
+};
 
-const liveMeta: LiveComponentsMeta = { total: 0, kept: 0, truncated: false, epochs: 1 }
-const moduleGraph: ModuleGraphData = { modules: [], cycles: [] }
-const build: BuildAnalysis = { chunks: [], totalSize: 0, timestamp: 0 }
-const og: OGPreview = { url: '', title: '', description: '', image: '', tags: [], issues: [] }
-const inspected: InspectResult = { source: '', compiled: '', file: '' }
+const liveMeta: LiveComponentsMeta = { total: 0, kept: 0, truncated: false, epochs: 1 };
+const moduleGraph: ModuleGraphData = { modules: [], cycles: [] };
+const build: BuildAnalysis = { chunks: [], totalSize: 0, timestamp: 0 };
+const og: OGPreview = { url: '', title: '', description: '', image: '', tags: [], issues: [] };
+const inspected: InspectResult = { source: '', compiled: '', file: '' };
 
-let connectionState: ConnectionState = { status: 'connected', host: 'standalone' }
-const connectionListeners = new Set<(s: ConnectionState) => void>()
+let connectionState: ConnectionState = { status: 'connected', host: 'standalone' };
+const connectionListeners = new Set<(s: ConnectionState) => void>();
 
 const defaults: { [K in FnKey]: RealRpc[K] } = {
   getConnectionState: () => connectionState,
   onConnectionState: cb => {
-    connectionListeners.add(cb)
-    cb(connectionState)
+    connectionListeners.add(cb);
+    cb(connectionState);
     return () => {
-      connectionListeners.delete(cb)
-    }
+      connectionListeners.delete(cb);
+    };
   },
   requestAuthCode: () => Promise.resolve(),
   submitAuthCode: () => Promise.resolve(true),
@@ -124,45 +124,45 @@ const defaults: { [K in FnKey]: RealRpc[K] } = {
   getBuildAnalysis: () => Promise.resolve(build),
   getFps: () => Promise.resolve([]),
   clearFps: () => Promise.resolve(),
-}
+};
 
 function fake<K extends FnKey>(key: K): Mock<RealRpc[K]> {
-  return vi.fn(defaults[key])
+  return vi.fn(defaults[key]);
 }
 
-export const getConnectionState = fake('getConnectionState')
-export const onConnectionState = fake('onConnectionState')
-export const requestAuthCode = fake('requestAuthCode')
-export const submitAuthCode = fake('submitAuthCode')
-export const getProject = fake('getProject')
-export const getRoutes = fake('getRoutes')
-export const getAssets = fake('getAssets')
-export const getComponentRelations = fake('getComponentRelations')
-export const getLiveComponents = fake('getLiveComponents')
-export const getLiveComponentsMeta = fake('getLiveComponentsMeta')
-export const openInEditor = fake('openInEditor')
-export const openReactiveInEditor = fake('openReactiveInEditor')
-export const getReactiveGraph = fake('getReactiveGraph')
-export const getReactiveSummary = fake('getReactiveSummary')
-export const getCaptureInfo = fake('getCaptureInfo')
-export const getRenderProfiles = fake('getRenderProfiles')
-export const getLoadProfiles = fake('getLoadProfiles')
-export const clearLoadProfiles = fake('clearLoadProfiles')
-export const getStateTimeline = fake('getStateTimeline')
-export const getStateTimelineDelta = fake('getStateTimelineDelta')
-export const getVersions = fake('getVersions')
-export const clearStateTimeline = fake('clearStateTimeline')
-export const getApiEndpoints = fake('getApiEndpoints')
-export const getCompilerWarnings = fake('getCompilerWarnings')
-export const getRuntimeErrors = fake('getRuntimeErrors')
-export const clearErrors = fake('clearErrors')
-export const getSvelteFiles = fake('getSvelteFiles')
-export const inspectFile = fake('inspectFile')
-export const getModuleGraph = fake('getModuleGraph')
-export const getOGPreview = fake('getOGPreview')
-export const getBuildAnalysis = fake('getBuildAnalysis')
-export const getFps = fake('getFps')
-export const clearFps = fake('clearFps')
+export const getConnectionState = fake('getConnectionState');
+export const onConnectionState = fake('onConnectionState');
+export const requestAuthCode = fake('requestAuthCode');
+export const submitAuthCode = fake('submitAuthCode');
+export const getProject = fake('getProject');
+export const getRoutes = fake('getRoutes');
+export const getAssets = fake('getAssets');
+export const getComponentRelations = fake('getComponentRelations');
+export const getLiveComponents = fake('getLiveComponents');
+export const getLiveComponentsMeta = fake('getLiveComponentsMeta');
+export const openInEditor = fake('openInEditor');
+export const openReactiveInEditor = fake('openReactiveInEditor');
+export const getReactiveGraph = fake('getReactiveGraph');
+export const getReactiveSummary = fake('getReactiveSummary');
+export const getCaptureInfo = fake('getCaptureInfo');
+export const getRenderProfiles = fake('getRenderProfiles');
+export const getLoadProfiles = fake('getLoadProfiles');
+export const clearLoadProfiles = fake('clearLoadProfiles');
+export const getStateTimeline = fake('getStateTimeline');
+export const getStateTimelineDelta = fake('getStateTimelineDelta');
+export const getVersions = fake('getVersions');
+export const clearStateTimeline = fake('clearStateTimeline');
+export const getApiEndpoints = fake('getApiEndpoints');
+export const getCompilerWarnings = fake('getCompilerWarnings');
+export const getRuntimeErrors = fake('getRuntimeErrors');
+export const clearErrors = fake('clearErrors');
+export const getSvelteFiles = fake('getSvelteFiles');
+export const inspectFile = fake('inspectFile');
+export const getModuleGraph = fake('getModuleGraph');
+export const getOGPreview = fake('getOGPreview');
+export const getBuildAnalysis = fake('getBuildAnalysis');
+export const getFps = fake('getFps');
+export const clearFps = fake('clearFps');
 
 const all: { [K in FnKey]: Mock<RealRpc[K]> } = {
   getConnectionState,
@@ -198,20 +198,20 @@ const all: { [K in FnKey]: Mock<RealRpc[K]> } = {
   getBuildAnalysis,
   getFps,
   clearFps,
-}
+};
 
 /** Push a connection state to every `onConnectionState` subscriber (the shell's gate). */
 export function emitConnection(next: ConnectionState): void {
-  connectionState = next
-  for (const listener of connectionListeners) listener(next)
+  connectionState = next;
+  for (const listener of connectionListeners) listener(next);
 }
 
 /** Restore every default implementation and clear recorded calls. */
 export function resetFakeRpc(): void {
   for (const key of Object.keys(all) as FnKey[]) {
-    const mock = all[key] as Mock<(...a: never[]) => unknown>
-    mock.mockReset()
-    mock.mockImplementation(defaults[key])
+    const mock = all[key] as Mock<(...a: never[]) => unknown>;
+    mock.mockReset();
+    mock.mockImplementation(defaults[key]);
   }
-  emitConnection({ status: 'connected', host: 'standalone' })
+  emitConnection({ status: 'connected', host: 'standalone' });
 }

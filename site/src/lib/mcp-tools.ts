@@ -3,19 +3,19 @@
 // limits in step with that file.
 
 export interface McpTool {
-  name: string
+  name: string;
   /** Input fields as `name?: type` (all optional unless marked). */
-  input: string
-  summary: string
+  input: string;
+  summary: string;
   /** Shown as a note under the summary. */
-  note?: string
+  note?: string;
 }
 
 export interface McpToolGroup {
-  id: string
-  title: string
-  intro: string
-  tools: McpTool[]
+  id: string;
+  title: string;
+  intro: string;
+  tools: McpTool[];
 }
 
 export const MCP_TOOL_GROUPS: McpToolGroup[] = [
@@ -166,6 +166,6 @@ export const MCP_TOOL_GROUPS: McpToolGroup[] = [
       },
     ],
   },
-]
+];
 
-export const MCP_TOOL_COUNT = MCP_TOOL_GROUPS.reduce((n, g) => n + g.tools.length, 0)
+export const MCP_TOOL_COUNT = MCP_TOOL_GROUPS.reduce((n, g) => n + g.tools.length, 0);

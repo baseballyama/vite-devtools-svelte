@@ -1,109 +1,109 @@
 <script lang="ts">
-  import Badge from '../components/Badge.svelte'
-  import Button from '../components/Button.svelte'
-  import CodePane from '../components/CodePane.svelte'
-  import EmptyState from '../components/EmptyState.svelte'
-  import Highlight from '../components/Highlight.svelte'
-  import Panel from '../components/Panel.svelte'
-  import ResourceEmpty from '../components/ResourceEmpty.svelte'
-  import SearchField from '../components/SearchField.svelte'
-  import SplitView from '../components/SplitView.svelte'
-  import type { CodePaneApi } from '../components/types.js'
-  import VirtualList from '../components/VirtualList.svelte'
-  import { errorMessage, shortPath } from '../lib/format.js'
-  import { highlightJS, highlightSvelte } from '../lib/highlight.js'
-  import { matcher } from '../lib/match.js'
-  import { resource } from '../lib/resource.svelte.js'
-  import { getSvelteFiles, inspectFile, openInEditor, type SvelteFileEntry } from '../lib/rpc.js'
-  import { parseLineMappings, type LineMaps } from '../lib/sourcemap.js'
-  import type { InspectResult } from '../lib/types.js'
+  import Badge from '../components/Badge.svelte';
+  import Button from '../components/Button.svelte';
+  import CodePane from '../components/CodePane.svelte';
+  import EmptyState from '../components/EmptyState.svelte';
+  import Highlight from '../components/Highlight.svelte';
+  import Panel from '../components/Panel.svelte';
+  import ResourceEmpty from '../components/ResourceEmpty.svelte';
+  import SearchField from '../components/SearchField.svelte';
+  import SplitView from '../components/SplitView.svelte';
+  import type { CodePaneApi } from '../components/types.js';
+  import VirtualList from '../components/VirtualList.svelte';
+  import { errorMessage, shortPath } from '../lib/format.js';
+  import { highlightJS, highlightSvelte } from '../lib/highlight.js';
+  import { matcher } from '../lib/match.js';
+  import { resource } from '../lib/resource.svelte.js';
+  import { getSvelteFiles, inspectFile, openInEditor, type SvelteFileEntry } from '../lib/rpc.js';
+  import { parseLineMappings, type LineMaps } from '../lib/sourcemap.js';
+  import type { InspectResult } from '../lib/types.js';
 
-  const LH = 18
+  const LH = 18;
 
-  const files = resource<SvelteFileEntry[]>(getSvelteFiles, { initial: [] })
+  const files = resource<SvelteFileEntry[]>(getSvelteFiles, { initial: [] });
 
-  let query = $state('')
-  let selected = $state<string | null>(null)
-  let result = $state.raw<InspectResult | null>(null)
-  let maps = $state.raw<LineMaps | null>(null)
-  let loading = $state(false)
-  let error = $state<string | null>(null)
+  let query = $state('');
+  let selected = $state<string | null>(null);
+  let result = $state.raw<InspectResult | null>(null);
+  let maps = $state.raw<LineMaps | null>(null);
+  let loading = $state(false);
+  let error = $state<string | null>(null);
 
-  let srcHl = $state(new Set<number>())
-  let outHl = $state(new Set<number>())
-  let origin = $state<'source' | 'compiled' | null>(null)
-  let srcTop = $state(0)
-  let outTop = $state(0)
-  let gutterH = $state(0)
-  let srcPane = $state<CodePaneApi | null>(null)
-  let outPane = $state<CodePaneApi | null>(null)
-  let codeWidth = $state(1000)
+  let srcHl = $state(new Set<number>());
+  let outHl = $state(new Set<number>());
+  let origin = $state<'source' | 'compiled' | null>(null);
+  let srcTop = $state(0);
+  let outTop = $state(0);
+  let gutterH = $state(0);
+  let srcPane = $state<CodePaneApi | null>(null);
+  let outPane = $state<CodePaneApi | null>(null);
+  let codeWidth = $state(1000);
 
   const rows = $derived.by(() => {
-    const m = matcher(query)
-    return m ? files.data.filter(f => m(f.name, f.file)) : files.data
-  })
+    const m = matcher(query);
+    return m ? files.data.filter(f => m(f.name, f.file)) : files.data;
+  });
 
-  const srcHtml = $derived(result ? highlightSvelte(result.source.split('\n')) : [])
-  const outHtml = $derived(result ? highlightJS(result.compiled.split('\n')) : [])
-  const stacked = $derived(codeWidth < 700)
+  const srcHtml = $derived(result ? highlightSvelte(result.source.split('\n')) : []);
+  const outHtml = $derived(result ? highlightJS(result.compiled.split('\n')) : []);
+  const stacked = $derived(codeWidth < 700);
 
-  let token = 0
+  let token = 0;
   async function load(file: string) {
-    const my = ++token
-    loading = true
-    error = null
-    srcHl = new Set()
-    outHl = new Set()
-    origin = null
+    const my = ++token;
+    loading = true;
+    error = null;
+    srcHl = new Set();
+    outHl = new Set();
+    origin = null;
     try {
-      const r = await inspectFile(file)
-      if (my !== token) return
-      result = r
-      maps = r.mappings ? parseLineMappings(r.mappings) : null
+      const r = await inspectFile(file);
+      if (my !== token) return;
+      result = r;
+      maps = r.mappings ? parseLineMappings(r.mappings) : null;
     } catch (e) {
-      if (my !== token) return
-      result = null
-      maps = null
-      error = errorMessage(e)
+      if (my !== token) return;
+      result = null;
+      maps = null;
+      error = errorMessage(e);
     } finally {
-      if (my === token) loading = false
+      if (my === token) loading = false;
     }
   }
 
   function clickSource(ln: number) {
-    origin = 'source'
-    srcHl = new Set([ln])
-    const m = maps?.sourceToCompiled.get(ln)
-    outHl = new Set(m ?? [])
-    if (m?.size) outPane?.scrollToLine(Math.min(...m))
+    origin = 'source';
+    srcHl = new Set([ln]);
+    const m = maps?.sourceToCompiled.get(ln);
+    outHl = new Set(m ?? []);
+    if (m?.size) outPane?.scrollToLine(Math.min(...m));
   }
 
   function clickCompiled(ln: number) {
-    origin = 'compiled'
-    outHl = new Set([ln])
-    const m = maps?.compiledToSource.get(ln)
-    srcHl = new Set(m ?? [])
-    if (m?.size) srcPane?.scrollToLine(Math.min(...m))
+    origin = 'compiled';
+    outHl = new Set([ln]);
+    const m = maps?.compiledToSource.get(ln);
+    srcHl = new Set(m ?? []);
+    if (m?.size) srcPane?.scrollToLine(Math.min(...m));
   }
 
   // Bezier connectors between linked lines, in gutter coordinates.
   const links = $derived.by(() => {
-    if (!maps || stacked) return []
-    const out: { a: number; b: number }[] = []
-    const from = origin === 'compiled' ? outHl : srcHl
+    if (!maps || stacked) return [];
+    const out: { a: number; b: number }[] = [];
+    const from = origin === 'compiled' ? outHl : srcHl;
     for (const ln of from) {
       const targets =
-        origin === 'compiled' ? maps.compiledToSource.get(ln) : maps.sourceToCompiled.get(ln)
+        origin === 'compiled' ? maps.compiledToSource.get(ln) : maps.sourceToCompiled.get(ln);
       for (const t of targets ?? []) {
-        const [s, c] = origin === 'compiled' ? [t, ln] : [ln, t]
-        out.push({ a: (s - 0.5) * LH - srcTop, b: (c - 0.5) * LH - outTop })
+        const [s, c] = origin === 'compiled' ? [t, ln] : [ln, t];
+        out.push({ a: (s - 0.5) * LH - srcTop, b: (c - 0.5) * LH - outTop });
       }
     }
     return out
       .filter(l => (l.a > -LH || l.b > -LH) && (l.a < gutterH + LH || l.b < gutterH + LH))
-      .slice(0, 200)
-  })
+      .slice(0, 200);
+  });
 </script>
 
 <Panel title="Compiled output" count={files.data.length}>

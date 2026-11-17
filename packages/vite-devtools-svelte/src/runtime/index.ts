@@ -2,11 +2,11 @@
 // JavaScript files next to this one (linted and formatted like any other
 // source) and are inlined as strings at build time.
 // oxlint-disable-next-line import/default -- `?raw` modules are resolved by Vite
-import runtimeSource from './client.js?raw'
+import runtimeSource from './client.js?raw';
 // oxlint-disable-next-line import/default -- `?raw` modules are resolved by Vite
-import wrapperSource from './wrapper.js?raw'
+import wrapperSource from './wrapper.js?raw';
 
-export { RESOLVED_RUNTIME_ID, RUNTIME_MODULE_ID, WRAPPER_MODULE_ID } from './ids.js'
+export { RESOLVED_RUNTIME_ID, RUNTIME_MODULE_ID, WRAPPER_MODULE_ID } from './ids.js';
 
 /**
  * Wrapper code for svelte/internal/client (`./wrapper.js`).
@@ -22,7 +22,7 @@ export { RESOLVED_RUNTIME_ID, RUNTIME_MODULE_ID, WRAPPER_MODULE_ID } from './ids
  * This single module replaces all post-compilation regex transforms
  * for reactive tracking, making the approach Svelte-compiler-output agnostic.
  */
-export const wrapperCode: string = wrapperSource
+export const wrapperCode: string = wrapperSource;
 
 /** The devtools runtime (`./client.js`), installed once as `window.__SVELTE_DEVTOOLS__`. */
-export const runtimeCode: string = runtimeSource
+export const runtimeCode: string = runtimeSource;

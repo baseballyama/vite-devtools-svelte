@@ -1,36 +1,36 @@
-import dns from 'node:dns/promises'
-import fs from 'node:fs'
-import net from 'node:net'
-import path from 'node:path'
+import dns from 'node:dns/promises';
+import fs from 'node:fs';
+import net from 'node:net';
+import path from 'node:path';
 
 /**
  * Validate that a URL does not target private/internal network addresses (SSRF prevention).
  * Allows only http/https schemes and blocks private IP ranges.
  */
 export function validateExternalUrl(urlStr: string): URL {
-  const parsed = parseUrl(urlStr)
+  const parsed = parseUrl(urlStr);
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    throw new Error(`Blocked URL scheme: ${parsed.protocol}`)
+    throw new Error(`Blocked URL scheme: ${parsed.protocol}`);
   }
-  const host = hostOf(parsed)
+  const host = hostOf(parsed);
   if (net.isIP(host)) {
-    if (isPrivateIP(host)) throw new Error(`Blocked: private IP address ${host}`)
+    if (isPrivateIP(host)) throw new Error(`Blocked: private IP address ${host}`);
   } else if (isInternalHostname(host)) {
-    throw new Error(`Blocked: internal hostname ${host}`)
+    throw new Error(`Blocked: internal hostname ${host}`);
   }
-  return parsed
+  return parsed;
 }
 
 function parseUrl(urlStr: string): URL {
   try {
-    return new URL(urlStr)
+    return new URL(urlStr);
   } catch {
-    throw new Error(`Invalid URL: ${urlStr}`)
+    throw new Error(`Invalid URL: ${urlStr}`);
   }
 }
 
 function stripBrackets(host: string): string {
-  return host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host
+  return host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
 }
 
 /**
@@ -38,8 +38,8 @@ function stripBrackets(host: string): string {
  * without the trailing dot of a fully qualified name (`localhost.`).
  */
 function hostOf(url: URL): string {
-  const host = stripBrackets(url.hostname).toLowerCase()
-  return host.endsWith('.') ? host.slice(0, -1) : host
+  const host = stripBrackets(url.hostname).toLowerCase();
+  return host.endsWith('.') ? host.slice(0, -1) : host;
 }
 
 function isInternalHostname(host: string): boolean {
@@ -48,7 +48,7 @@ function isInternalHostname(host: string): boolean {
     host.endsWith('.localhost') ||
     host.endsWith('.local') ||
     host.endsWith('.internal')
-  )
+  );
 }
 
 export interface OutboundUrlOptions {
@@ -56,7 +56,7 @@ export interface OutboundUrlOptions {
    * Origins that may be fetched even though they are local — the dev
    * server's own resolved URLs, so the OG preview can read the app's pages.
    */
-  allowedOrigins?: readonly string[]
+  allowedOrigins?: readonly string[];
 }
 
 /**
@@ -71,21 +71,21 @@ export async function assertOutboundUrl(
   urlStr: string,
   options: OutboundUrlOptions = {},
 ): Promise<URL> {
-  const parsed = parseUrl(urlStr)
-  if (options.allowedOrigins?.includes(parsed.origin)) return parsed
-  validateExternalUrl(urlStr)
-  const host = hostOf(parsed)
-  if (net.isIP(host)) return parsed
-  let addresses: { address: string }[]
+  const parsed = parseUrl(urlStr);
+  if (options.allowedOrigins?.includes(parsed.origin)) return parsed;
+  validateExternalUrl(urlStr);
+  const host = hostOf(parsed);
+  if (net.isIP(host)) return parsed;
+  let addresses: { address: string }[];
   try {
-    addresses = await dns.lookup(host, { all: true })
+    addresses = await dns.lookup(host, { all: true });
   } catch {
-    throw new Error(`Blocked: ${host} does not resolve`)
+    throw new Error(`Blocked: ${host} does not resolve`);
   }
   for (const { address } of addresses) {
-    if (isPrivateIP(address)) throw new Error(`Blocked: ${host} resolves to private address`)
+    if (isPrivateIP(address)) throw new Error(`Blocked: ${host} resolves to private address`);
   }
-  return parsed
+  return parsed;
 }
 
 /**
@@ -93,7 +93,7 @@ export async function assertOutboundUrl(
  * network, and ranges that are not globally routable (RFC 6890 special
  * purpose registries, plus multicast and broadcast).
  */
-const BLOCKED = new net.BlockList()
+const BLOCKED = new net.BlockList();
 for (const [prefix, bits] of [
   ['0.0.0.0', 8], // "this network"
   ['10.0.0.0', 8], // private
@@ -110,17 +110,17 @@ for (const [prefix, bits] of [
   ['224.0.0.0', 4], // multicast
   ['240.0.0.0', 4], // reserved, incl. 255.255.255.255 broadcast
 ] as const) {
-  BLOCKED.addSubnet(prefix, bits, 'ipv4')
+  BLOCKED.addSubnet(prefix, bits, 'ipv4');
   // IPv6 forms that embed an IPv4 address are judged by that address:
   // mapped (::ffff:a.b.c.d), compatible (::a.b.c.d, deprecated; its
   // 0.0.0.0/8 covers `::` and `::1`), NAT64 (64:ff9b::a.b.c.d) and 6to4
   // (2002:aabb:ccdd::/48).
   for (const embedding of ['::ffff:', '::', '64:ff9b::']) {
-    BLOCKED.addSubnet(embedding + prefix, 96 + bits, 'ipv6')
+    BLOCKED.addSubnet(embedding + prefix, 96 + bits, 'ipv6');
   }
-  const [a, b, c, d] = prefix.split('.').map(Number) as [number, number, number, number]
-  const sixToFour = `2002:${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}::`
-  BLOCKED.addSubnet(sixToFour, 16 + bits, 'ipv6')
+  const [a, b, c, d] = prefix.split('.').map(Number) as [number, number, number, number];
+  const sixToFour = `2002:${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}::`;
+  BLOCKED.addSubnet(sixToFour, 16 + bits, 'ipv6');
 }
 for (const [prefix, bits] of [
   ['100::', 64], // discard-only
@@ -130,7 +130,7 @@ for (const [prefix, bits] of [
   ['fec0::', 10], // site-local (deprecated)
   ['ff00::', 8], // multicast
 ] as const) {
-  BLOCKED.addSubnet(prefix, bits, 'ipv6')
+  BLOCKED.addSubnet(prefix, bits, 'ipv6');
 }
 
 /**
@@ -141,15 +141,15 @@ for (const [prefix, bits] of [
  * malformed value is never let through.
  */
 export function isPrivateIP(ip: string): boolean {
-  const host = stripBrackets(ip).toLowerCase()
-  const version = net.isIP(host)
-  return version === 0 || BLOCKED.check(host, version === 4 ? 'ipv4' : 'ipv6')
+  const host = stripBrackets(ip).toLowerCase();
+  const version = net.isIP(host);
+  return version === 0 || BLOCKED.check(host, version === 4 ? 'ipv4' : 'ipv6');
 }
 
 /** Whether `file` lies inside `dir` (`..foo/x` does; `dir` itself, `../x` and other drives do not). */
 export function isInside(dir: string, file: string): boolean {
-  const rel = path.relative(dir, file)
-  return rel !== '' && rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel)
+  const rel = path.relative(dir, file);
+  return rel !== '' && rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
 }
 
 /**
@@ -159,18 +159,18 @@ export function isInside(dir: string, file: string): boolean {
  */
 export function resolveWithinRoot(root: string, input: string): string {
   if (typeof input !== 'string' || input.length === 0) {
-    throw new Error('Invalid file path')
+    throw new Error('Invalid file path');
   }
-  const realRoot = fs.realpathSync(root)
-  const candidate = path.isAbsolute(input) ? input : path.resolve(root, input)
-  let real: string
+  const realRoot = fs.realpathSync(root);
+  const candidate = path.isAbsolute(input) ? input : path.resolve(root, input);
+  let real: string;
   try {
-    real = fs.realpathSync(candidate)
+    real = fs.realpathSync(candidate);
   } catch {
-    throw new Error('File not found')
+    throw new Error('File not found');
   }
   if (real !== realRoot && !isInside(realRoot, real)) {
-    throw new Error('Forbidden: path outside project root')
+    throw new Error('Forbidden: path outside project root');
   }
-  return real
+  return real;
 }

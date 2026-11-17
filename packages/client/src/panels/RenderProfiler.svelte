@@ -1,53 +1,53 @@
 <script lang="ts">
-  import Badge from '../components/Badge.svelte'
-  import Button from '../components/Button.svelte'
-  import CaptureNotice from '../components/CaptureNotice.svelte'
-  import DataTable from '../components/DataTable.svelte'
-  import Highlight from '../components/Highlight.svelte'
-  import Inspector from '../components/Inspector.svelte'
-  import LiveControls from '../components/LiveControls.svelte'
-  import Panel from '../components/Panel.svelte'
-  import ResourceEmpty from '../components/ResourceEmpty.svelte'
-  import SearchField from '../components/SearchField.svelte'
-  import Segmented from '../components/Segmented.svelte'
-  import SplitView from '../components/SplitView.svelte'
-  import StatList from '../components/StatList.svelte'
-  import type { Column, SortState, TableRowState } from '../components/types.js'
-  import { captureInfo } from '../lib/capture.svelte.js'
-  import { groupBy } from '../lib/collections.js'
-  import { formatMs, formatClock, shortPath } from '../lib/format.js'
-  import { matcher } from '../lib/match.js'
-  import { resource } from '../lib/resource.svelte.js'
-  import { getRenderProfiles, openInEditor } from '../lib/rpc.js'
-  import type { RenderProfile } from '../lib/types.js'
-  import { datasetVersion } from '../lib/versions.js'
+  import Badge from '../components/Badge.svelte';
+  import Button from '../components/Button.svelte';
+  import CaptureNotice from '../components/CaptureNotice.svelte';
+  import DataTable from '../components/DataTable.svelte';
+  import Highlight from '../components/Highlight.svelte';
+  import Inspector from '../components/Inspector.svelte';
+  import LiveControls from '../components/LiveControls.svelte';
+  import Panel from '../components/Panel.svelte';
+  import ResourceEmpty from '../components/ResourceEmpty.svelte';
+  import SearchField from '../components/SearchField.svelte';
+  import Segmented from '../components/Segmented.svelte';
+  import SplitView from '../components/SplitView.svelte';
+  import StatList from '../components/StatList.svelte';
+  import type { Column, SortState, TableRowState } from '../components/types.js';
+  import { captureInfo } from '../lib/capture.svelte.js';
+  import { groupBy } from '../lib/collections.js';
+  import { formatMs, formatClock, shortPath } from '../lib/format.js';
+  import { matcher } from '../lib/match.js';
+  import { resource } from '../lib/resource.svelte.js';
+  import { getRenderProfiles, openInEditor } from '../lib/rpc.js';
+  import type { RenderProfile } from '../lib/types.js';
+  import { datasetVersion } from '../lib/versions.js';
 
   const profiles = resource<RenderProfile[]>(getRenderProfiles, {
     initial: [],
     interval: 1000,
     version: datasetVersion('renderProfiles'),
-  })
+  });
 
-  const capture = captureInfo(1000)
+  const capture = captureInfo(1000);
 
   // Instances of the same component file can be folded together, which is
   // what you usually want in a big app (1 000 <Row> instances → one line).
-  let group = $state<'instance' | 'component'>('component')
-  let query = $state('')
-  let sort = $state<SortState | null>({ id: 'total', desc: true })
-  let selected = $state<string | null>(null)
+  let group = $state<'instance' | 'component'>('component');
+  let query = $state('');
+  let sort = $state<SortState | null>({ id: 'total', desc: true });
+  let selected = $state<string | null>(null);
 
   interface Row {
-    key: string
-    name: string
-    file: string
-    instances: number
-    initTime: number
-    renderCount: number
-    totalRenderTime: number
-    lastRenderTime: number
-    lastRenderAt: number
-    ids: number[]
+    key: string;
+    name: string;
+    file: string;
+    instances: number;
+    initTime: number;
+    renderCount: number;
+    totalRenderTime: number;
+    lastRenderTime: number;
+    lastRenderAt: number;
+    ids: number[];
   }
 
   function toRow(p: RenderProfile, key: string): Row {
@@ -62,45 +62,45 @@
       lastRenderTime: p.lastRenderTime,
       lastRenderAt: p.lastRenderAt,
       ids: [p.componentId],
-    }
+    };
   }
 
   /** Fold another instance of the same file into `r` (mutates the fresh row). */
   function merge(r: Row, p: RenderProfile): Row {
-    r.instances++
-    r.initTime += p.initTime
-    r.renderCount += p.renderCount
-    r.totalRenderTime += p.totalRenderTime
-    r.ids.push(p.componentId)
+    r.instances++;
+    r.initTime += p.initTime;
+    r.renderCount += p.renderCount;
+    r.totalRenderTime += p.totalRenderTime;
+    r.ids.push(p.componentId);
     if (p.lastRenderAt > r.lastRenderAt) {
-      r.lastRenderAt = p.lastRenderAt
-      r.lastRenderTime = p.lastRenderTime
+      r.lastRenderAt = p.lastRenderAt;
+      r.lastRenderTime = p.lastRenderTime;
     }
-    return r
+    return r;
   }
 
   const all = $derived.by<Row[]>(() => {
-    if (group === 'instance') return profiles.data.map(p => toRow(p, String(p.componentId)))
+    if (group === 'instance') return profiles.data.map(p => toRow(p, String(p.componentId)));
     return [...groupBy(profiles.data, p => p.file)].map(([file, [first, ...rest]]) =>
       rest.reduce(merge, toRow(first!, file)),
-    )
-  })
+    );
+  });
 
   const rows = $derived.by(() => {
-    const m = matcher(query)
-    return m ? all.filter(r => m(r.name, r.file)) : all
-  })
+    const m = matcher(query);
+    return m ? all.filter(r => m(r.name, r.file)) : all;
+  });
 
-  const maxTotal = $derived(all.reduce((m, r) => Math.max(m, r.totalRenderTime), 0.0001))
+  const maxTotal = $derived(all.reduce((m, r) => Math.max(m, r.totalRenderTime), 0.0001));
   const totals = $derived(
     all.reduce(
       (s, r) => ({ renders: s.renders + r.renderCount, time: s.time + r.totalRenderTime }),
       { renders: 0, time: 0 },
     ),
-  )
-  const current = $derived(selected ? (all.find(r => r.key === selected) ?? null) : null)
+  );
+  const current = $derived(selected ? (all.find(r => r.key === selected) ?? null) : null);
 
-  const avg = (r: Row) => (r.renderCount ? r.totalRenderTime / r.renderCount : 0)
+  const avg = (r: Row) => (r.renderCount ? r.totalRenderTime / r.renderCount : 0);
 
   const columns: Column<Row>[] = [
     {
@@ -152,11 +152,11 @@
       descFirst: true,
       sort: (a, b) => a.totalRenderTime - b.totalRenderTime,
     },
-  ]
+  ];
 
   /** Render time against the 16 ms frame budget. */
   function heat(ms: number) {
-    return ms >= 16 ? 'red' : ms >= 4 ? 'yellow' : null
+    return ms >= 16 ? 'red' : ms >= 4 ? 'yellow' : null;
   }
 </script>
 

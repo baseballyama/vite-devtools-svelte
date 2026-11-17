@@ -6,13 +6,13 @@
    */
   interface Props {
     /** Pre-escaped, highlighted HTML per line. */
-    html: string[]
-    title: string
-    highlighted: Set<number>
-    origin?: boolean
-    scrollTop?: number
-    lineHeight?: number
-    onlineclick?: (line: number) => void
+    html: string[];
+    title: string;
+    highlighted: Set<number>;
+    origin?: boolean;
+    scrollTop?: number;
+    lineHeight?: number;
+    onlineclick?: (line: number) => void;
   }
 
   let {
@@ -23,37 +23,37 @@
     scrollTop = $bindable(0),
     lineHeight = 18,
     onlineclick,
-  }: Props = $props()
+  }: Props = $props();
 
-  let viewport = $state<HTMLDivElement | null>(null)
-  let height = $state(0)
-  const overscan = 20
+  let viewport = $state<HTMLDivElement | null>(null);
+  let height = $state(0);
+  const overscan = 20;
 
-  const start = $derived(Math.max(0, Math.floor(scrollTop / lineHeight) - overscan))
+  const start = $derived(Math.max(0, Math.floor(scrollTop / lineHeight) - overscan));
   const end = $derived(
     Math.min(html.length, Math.ceil((scrollTop + height) / lineHeight) + overscan),
-  )
+  );
   /** 1-based numbers of the rendered (visible + overscan) lines. */
-  const lines = $derived(Array.from({ length: end - start }, (_, j) => start + j + 1))
-  const gutterCh = $derived(String(html.length).length + 1)
+  const lines = $derived(Array.from({ length: end - start }, (_, j) => start + j + 1));
+  const gutterCh = $derived(String(html.length).length + 1);
 
   export function scrollToLine(line: number) {
-    if (!viewport) return
-    const top = (line - 1) * lineHeight
+    if (!viewport) return;
+    const top = (line - 1) * lineHeight;
     if (top < viewport.scrollTop || top > viewport.scrollTop + height - lineHeight) {
-      viewport.scrollTo({ top: Math.max(0, top - height / 3), behavior: 'smooth' })
+      viewport.scrollTo({ top: Math.max(0, top - height / 3), behavior: 'smooth' });
     }
   }
 
   function onkeydown(e: KeyboardEvent) {
     // Arrow keys walk the highlighted line so mappings can be followed
     // without a mouse.
-    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
-    const cur = highlighted.size && origin ? Math.min(...highlighted) : 0
-    const next = Math.max(1, Math.min(html.length, cur + (e.key === 'ArrowDown' ? 1 : -1)))
-    e.preventDefault()
-    onlineclick?.(next)
-    scrollToLine(next)
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    const cur = highlighted.size && origin ? Math.min(...highlighted) : 0;
+    const next = Math.max(1, Math.min(html.length, cur + (e.key === 'ArrowDown' ? 1 : -1)));
+    e.preventDefault();
+    onlineclick?.(next);
+    scrollToLine(next);
   }
 </script>
 
