@@ -335,6 +335,8 @@ export interface ApiEndpoint {
    */
   url: string;
   methods: string[];
+  /** False when some exports could not be followed: `methods` may miss handlers. */
+  complete: boolean;
   file: string;
 }
 

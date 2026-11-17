@@ -7,6 +7,7 @@ import type { DevframeDefinition } from 'devframe';
 import { z } from 'zod';
 
 import { analyzeApiEndpoints } from '../analyzers/api.js';
+import type { ResolveFile } from '../analyzers/api.js';
 import { analyzeAssets } from '../analyzers/assets.js';
 import { analyzeBuild } from '../analyzers/build.js';
 import { analyzeComponents } from '../analyzers/components.js';
@@ -62,6 +63,11 @@ export interface SvelteDevtoolsHost {
     code: string;
     map?: { mappings?: string; sources?: string[] } | string | null;
   } | null>;
+  /**
+   * Resolve an import the way the app's server code does (aliases such as
+   * `$lib` included); absent without a server.
+   */
+  resolveFile?: ResolveFile;
   /** Origins the dev server itself is reachable at (the OG preview may call them). */
   serverOrigins: () => string[];
   /** Open `file[:line]` in the user's editor. */
@@ -187,7 +193,9 @@ export function createRpcFunctions(host: SvelteDevtoolsHost) {
     }),
     query('get-versions', () => ({ ...collector.versions })),
     action('clear-state-timeline', () => collector.clearStateTimeline()),
-    query('get-api-endpoints', () => analyzeApiEndpoints(routes(), host.publicBase())),
+    query('get-api-endpoints', () =>
+      analyzeApiEndpoints(routes(), host.publicBase(), host.resolveFile),
+    ),
     query('get-compiler-warnings', () => collector.compilerWarnings),
     query('get-runtime-errors', () => collector.runtimeErrors),
     action('clear-errors', () => collector.clearErrors()),

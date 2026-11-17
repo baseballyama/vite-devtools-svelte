@@ -128,6 +128,25 @@ describe('devframe host wiring', () => {
     expect((await call('inspect-file', { file: 'src/routes/+page.svelte' })).compiled).toBe('');
   });
 
+  it("API endpoints follow re-exports through the dev server's SSR resolver", async () => {
+    const items = path.join(FIXTURES, 'src/lib/server/items.ts');
+    // the fixture's only `export *` is the one under test
+    const resolveId = vi.fn().mockResolvedValue({ id: items, external: false });
+    const s = setup({ environments: { ssr: { pluginContainer: { resolveId } } } });
+    const call = await hub(s.plugins);
+    s.configure();
+    const endpoints = await call('get-api-endpoints');
+    expect(endpoints.find((e: { path: string }) => e.path === '/api/items')).toMatchObject({
+      url: '/app/api/items',
+      methods: ['GET', 'PUT', 'HEAD'],
+      complete: true,
+    });
+    expect(resolveId).toHaveBeenCalledWith(
+      '$lib/server/items',
+      path.join(FIXTURES, 'src/routes/api/items/+server.ts'),
+    );
+  });
+
   it('open-in-editor opens the root-resolved file at the line', async () => {
     const s = setup();
     s.configure();

@@ -5,6 +5,7 @@ import path from 'node:path';
 import { getRpcHandler } from 'devframe/rpc';
 import { describe, it, expect, vi } from 'vitest';
 
+import type { ResolveFile } from '../src/analyzers/api.js';
 import {
   createRpcFunctions,
   createSvelteDevframe,
@@ -87,10 +88,34 @@ describe('project analysis RPCs', () => {
 
   it('get-api-endpoints detects exported HTTP methods', async () => {
     const endpoints = await rpc.get('svelte-devtools:get-api-endpoints')!();
-    expect(endpoints.length).toBeGreaterThan(0);
-    for (const e of endpoints) expect(e.methods.length).toBeGreaterThan(0);
+    expect(endpoints.find((e: any) => e.path === '/api/hello')).toMatchObject({
+      methods: ['GET', 'POST', 'HEAD'],
+      complete: true,
+    });
     // the host's base reaches the endpoints' URLs
     for (const e of endpoints) expect(e.url).toBe(`/base${e.path}`);
+    // without the host's resolver, a `$lib` re-export cannot be followed
+    expect(endpoints.find((e: any) => e.path === '/api/items')).toMatchObject({
+      methods: [],
+      complete: false,
+    });
+  });
+
+  it("get-api-endpoints follows re-exports through the host's resolver", async () => {
+    const items = path.join(FIXTURES_DIR, 'src/lib/server/items.ts');
+    // the fixture's only `export *` is the one under test
+    const resolveFile = vi.fn<ResolveFile>().mockResolvedValue(items);
+    const endpoints = await rpcHandlers(createTestHost(FIXTURES_DIR, { resolveFile })).get(
+      'svelte-devtools:get-api-endpoints',
+    )!();
+    expect(endpoints.find((e: any) => e.path === '/api/items')).toMatchObject({
+      methods: ['GET', 'PUT', 'HEAD'],
+      complete: true,
+    });
+    expect(resolveFile).toHaveBeenCalledWith(
+      '$lib/server/items',
+      path.join(FIXTURES_DIR, 'src/routes/api/items/+server.ts'),
+    );
   });
 
   it('get-build-analysis is empty without build output', async () => {

@@ -85,7 +85,13 @@
     error: 'Connection failed midway; showing what arrived',
   };
 
-  const hasBody = $derived(method !== 'GET' && method !== 'HEAD');
+  /** The detected methods, or every method when detection is unsure. */
+  const methodOptions = $derived(
+    current?.complete && current.methods.length ? current.methods : METHODS,
+  );
+  /** The chosen method while it is still offered (a rescan may drop it), else the first. */
+  const sendMethod = $derived(methodOptions.includes(method) ? method : methodOptions[0]!);
+  const hasBody = $derived(sendMethod !== 'GET' && sendMethod !== 'HEAD');
 
   /** Characters of a streaming body shown while it arrives; the whole body shows once it ends. */
   const STREAM_TAIL = 64 * 1024;
@@ -149,7 +155,7 @@
     try {
       // `sendRequest` drops the body of GET and HEAD itself.
       const result = await sendRequest(
-        { url, method, headers: parsedHeaders.value, body },
+        { url, method: sendMethod, headers: parsedHeaders.value, body },
         {
           signal: controller.signal,
           // At most one repaint per frame: a fast stream sends many chunks a
@@ -283,9 +289,13 @@
           void send();
         }}
       >
-        <select class="select method" bind:value={method} aria-label="HTTP method">
-          {#each current?.methods.length ? current.methods : METHODS as m (m)}<option>{m}</option
-            >{/each}
+        <select
+          class="select method"
+          value={sendMethod}
+          onchange={e => (method = e.currentTarget.value)}
+          aria-label="HTTP method"
+        >
+          {#each methodOptions as m (m)}<option>{m}</option>{/each}
         </select>
         <input
           class="input url mono"
@@ -343,7 +353,7 @@
               aria-label="Request body"
               spellcheck="false"></textarea>
           {:else}
-            <p class="hint">{method} requests have no body.</p>
+            <p class="hint">{sendMethod} requests have no body.</p>
           {/if}
         {:else}
           <textarea
@@ -419,6 +429,10 @@
           <span class="methods">
             {#each e.methods.slice(0, 3) as m (m)}<Badge tone={methodTone(m)}>{m}</Badge>{/each}
             {#if e.methods.length > 3}<Badge>+{e.methods.length - 3}</Badge>{/if}
+            {#if !e.complete}<Badge
+                title="Some exports could not be followed (a module that does not resolve or parse, or a package): more methods may exist"
+                >?</Badge
+              >{/if}
           </span>
           <span class="truncate mono path"><Highlight text={e.path} {query} /></span>
         {/snippet}
