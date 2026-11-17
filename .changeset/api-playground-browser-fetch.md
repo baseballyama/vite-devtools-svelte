@@ -2,4 +2,6 @@
 '@sveltejs/vite-devtools-svelte': minor
 ---
 
-The API playground now sends requests from the browser instead of proxying them through the dev server. Requests to your app carry its cookies (httpOnly ones included), and `Set-Cookie` responses land in the browser, so endpoints behind a session can be tried directly. The app's own URLs work wherever the DevTools page is opened from (Docker, a reverse proxy, a tunnel, middleware mode); before, only the dev server's resolved URLs were allowed. Picking an endpoint fills its URL under `paths.base`. `GET` endpoints also list `HEAD`. Responses stream in as they arrive (SSE included), a Stop button ends a request, the 30 s timeout covers only the wait for the response headers, and bodies are cut at 5 MB. The `send-api-request` RPC is removed, and the playground's server-side outbound fetch with it. Cross-origin URLs now work only where their CORS policy allows it. For TypeScript users: the `ApiResponse` type is no longer exported, and `ApiEndpoint` gains `url`.
+- The API playground sends requests from the browser instead of the dev server, so they carry your app's cookies (httpOnly included) and work behind Docker, proxies and tunnels. Cross-origin URLs now need a CORS policy that allows them.
+- Responses stream in as they arrive (SSE included), with a Stop button. Bodies are cut at 5 MB.
+- Removed: the `send-api-request` RPC and the `ApiResponse` type. `ApiEndpoint` gains `url`.

@@ -244,6 +244,7 @@ describe('sendRequest', () => {
     await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS - 1)
     expect(settled).toBe(false)
     await vi.advanceTimersByTimeAsync(1)
+    expect(settled).toBe(true)
     expect((await pending).statusText).toBe(`No response within ${REQUEST_TIMEOUT_MS}ms`)
   })
 

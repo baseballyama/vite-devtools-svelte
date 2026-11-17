@@ -50,6 +50,8 @@
   let following = true
   let response = $state<ApiResponse | null>(null)
   let requestError = $state<string | null>(null)
+  /** The user stopped the request before any response arrived: not a failure. */
+  let stoppedEarly = $state(false)
 
   const rows = $derived.by(() => {
     const m = matcher(query)
@@ -89,11 +91,18 @@
   const STREAM_TAIL = 64 * 1024
   const streamingTail = $derived(sending && (response?.body.length ?? 0) > STREAM_TAIL)
 
+  /** The last `n` characters, never starting inside a surrogate pair. */
+  function tail(text: string, n: number): string {
+    const s = text.slice(-n)
+    const c = s.charCodeAt(0)
+    return c >= 0xdc00 && c <= 0xdfff ? s.slice(1) : s
+  }
+
   const pretty = $derived.by(() => {
     if (!response?.body) return ''
     // A body still arriving is shown as it comes (half a JSON document does
     // not parse), and only its end: each frame renders all of it again.
-    if (sending) return streamingTail ? response.body.slice(-STREAM_TAIL) : response.body
+    if (sending) return streamingTail ? tail(response.body, STREAM_TAIL) : response.body
     // `Headers` names are lowercase.
     const ct = response.headers['content-type'] ?? ''
     const first = response.body.trimStart()[0]
@@ -105,10 +114,21 @@
     return response.body
   })
 
+  /** Hands the view back from the request in flight, which then shows nothing. */
+  function abandon() {
+    generation++
+    inflight?.abort()
+    inflight = null
+    cancelAnimationFrame(frame)
+    frame = 0
+    progress = null
+    sending = false
+  }
+
   function pick(e: ApiEndpoint) {
     // A request still streaming belongs to the endpoint picked before.
-    generation++
-    stop()
+    abandon()
+    stoppedEarly = false
     selected = e.route
     method = e.methods[0] ?? 'GET'
     url = new URL(e.url, location.origin).href
@@ -120,6 +140,7 @@
     if (!url || 'error' in parsedHeaders || sending) return
     sending = true
     requestError = null
+    stoppedEarly = false
     response = null
     following = true
     const id = ++generation
@@ -143,22 +164,25 @@
         },
       )
       if (id !== generation) return
-      // Status 0: no response at all (network, CORS, timeout, stopped early).
-      if (result.status === 0) {
-        response = null
-        requestError = result.statusText
-      } else response = result
+      response = null
+      // Status 0: no response at all (network, CORS, timeout, or Stop).
+      if (result.status !== 0) response = result
+      else if (controller.signal.aborted) stoppedEarly = true
+      else requestError = result.statusText
     } catch (e) {
       if (id !== generation) return
       response = null
       requestError = errorMessage(e)
     } finally {
-      // A frame still pending would paint older progress over the result.
-      cancelAnimationFrame(frame)
-      frame = 0
-      progress = null
-      sending = false
-      if (inflight === controller) inflight = null
+      // An abandoned request no longer owns the view (`abandon` reset it).
+      if (id === generation) {
+        // A frame still pending would paint older progress over the result.
+        cancelAnimationFrame(frame)
+        frame = 0
+        progress = null
+        sending = false
+        inflight = null
+      }
     }
   }
 
@@ -168,9 +192,16 @@
 
   // Leaving the panel stops a request still in flight (an endless stream
   // would otherwise keep reading in the background).
-  $effect(() => () => {
-    inflight?.abort()
-    cancelAnimationFrame(frame)
+  $effect(() => abandon)
+
+  /**
+   * What a screen reader hears: the status when it arrives and the size once
+   * the body ends, not every repaint of the time and size counters.
+   */
+  const announcement = $derived.by(() => {
+    if (!response) return stoppedEarly ? 'Stopped before a response' : ''
+    const status = `${response.status} ${response.statusText}`.trim()
+    return sending ? `${status}, streaming` : `${status}, ${formatBytes(response.size)}`
   })
 
   /** Headers the browser sets itself and drops from a script's request (Fetch "forbidden" names). */
@@ -206,8 +237,9 @@
       : [],
   )
 
-  // Follow a streaming body while the view is at its end; a reader who
-  // scrolled up keeps their place.
+  // Follow a streaming body while the view is at its end. Scrolling up stops
+  // following; the text under a reader still moves while only the end of a
+  // long body is shown (see STREAM_TAIL), and settles once it ends.
   $effect(() => {
     if (!bodyEl || !sending || pretty === '') return
     if (following) bodyEl.scrollTop = bodyEl.scrollHeight
@@ -327,12 +359,15 @@
         {/if}
       </div>
 
+      <!-- Always present, so screen readers announce changes to it. -->
+      <p class="sr-only" aria-live="polite">{announcement}</p>
       <section class="res" aria-label="Response" aria-busy={sending}>
         {#if requestError}
           <EmptyState title="Request failed" error={requestError} />
+        {:else if stoppedEarly}
+          <EmptyState icon="stop" title="Stopped before a response" />
         {:else if response}
-          <!-- Announce the status line, not a body of up to 5 MB. -->
-          <header class="res-head" aria-live="polite">
+          <header class="res-head">
             <Badge tone={statusTone(response.status)}>{response.status} {response.statusText}</Badge
             >
             {#if sending}<Badge tone="blue">Streaming…</Badge>{/if}
@@ -350,8 +385,7 @@
             <p class="notes">
               {#if response.redirected}<span class="mono">Redirected to {response.url}</span>{/if}
               {#if response.truncated}<span>{TRUNCATION[response.truncated]}</span>{/if}
-              {#if streamingTail}<span
-                  >Showing the last {formatBytes(STREAM_TAIL)} while streaming; all of it once it ends</span
+              {#if streamingTail}<span>Showing the end while streaming; all of it once it ends</span
                 >{/if}
             </p>
           {/if}
