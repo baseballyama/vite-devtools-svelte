@@ -1,5 +1,6 @@
-import { getProduct, products } from '$lib/server/products'
 import { error } from '@sveltejs/kit'
+
+import { getProduct, products } from '#lib/server/products.ts'
 
 import type { PageServerLoad } from './$types'
 

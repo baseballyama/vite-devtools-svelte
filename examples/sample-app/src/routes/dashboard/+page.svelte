@@ -1,6 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths'
-  import HeavyList from '$lib/components/HeavyList.svelte'
+
+  import HeavyList from '#lib/components/HeavyList.svelte'
 
   import type { PageProps } from './$types'
 

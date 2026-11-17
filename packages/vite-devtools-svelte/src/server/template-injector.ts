@@ -9,7 +9,7 @@ import type { Plugin } from 'vite'
  * https://github.com/baseballyama/vite-devtools-repl/tree/main/sveltekit-transform-index-html-bypass
  *
  * As a stopgap, SvelteKit inlines `src/app.html` as a JS string literal inside
- * `.svelte-kit/generated/server/internal.js`:
+ * the dev server module it generates, `.svelte-kit/generated/dev/server.js`:
  *
  *     templates: {
  *       app: ({ head, body, ... }) => "<!doctype html>...<body>...</body>...",
@@ -27,16 +27,12 @@ import type { Plugin } from 'vite'
  * up in CI instead of as a missing dock in production.
  */
 
-export const SVELTEKIT_INTERNAL_SUFFIX = '.svelte-kit/generated/server/internal.js'
-
 /**
- * SvelteKit 3 writes the same `templates: { app: … }` server module to
- * `generated/dev/server.js` while serving (and `generated/build/server.js`
- * for builds, which this dev-only plugin never sees).
+ * The generated dev server module that holds the `templates: { app: … }`
+ * literal (`generated/build/server.js` is the build-time copy, which this
+ * dev-only plugin never sees).
  */
-export const SVELTEKIT3_DEV_SERVER_SUFFIX = '.svelte-kit/generated/dev/server.js'
-
-const GENERATED_SERVER_SUFFIXES = [SVELTEKIT_INTERNAL_SUFFIX, SVELTEKIT3_DEV_SERVER_SUFFIX]
+export const SVELTEKIT_DEV_SERVER_SUFFIX = '.svelte-kit/generated/dev/server.js'
 
 /** Marker that the `templates.app` literal in SvelteKit's generated server. */
 export const TEMPLATE_APP_MARKER = 'templates: {'
@@ -62,14 +58,14 @@ const INJECT_TAG = `<script type=\\"module\\" src=\\"${INJECT_SCRIPT_URL}\\"></s
 const BODY_CLOSE = '</body>'
 
 /**
- * Transform `.svelte-kit/generated/server/internal.js` to add the
+ * Transform `.svelte-kit/generated/dev/server.js` to add the
  * `@vitejs/devtools` inject script right before `</body>` inside the app
  * template literal. Exposed for unit testing.
  *
  * Returns the new source if a substitution was made, or `null` to signal
  * "nothing to do" (already injected, structural marker missing, etc.).
  */
-export function injectIntoSvelteKitInternal(code: string): string | null {
+export function injectIntoSvelteKitTemplate(code: string): string | null {
   // Cheap structural sanity check — bail if SvelteKit changed how it generates
   // the template object. The companion test asserts this branch is reachable.
   if (!code.includes(TEMPLATE_APP_MARKER)) return null
@@ -114,9 +110,9 @@ export function sveltekitTemplateInjector(isHosted: () => boolean): Plugin {
     apply: (_userConfig, env) => env.command === 'serve' && !env.isSsrBuild,
 
     transform(code, id) {
-      if (!GENERATED_SERVER_SUFFIXES.some(suffix => id.endsWith(suffix))) return null
+      if (!id.endsWith(SVELTEKIT_DEV_SERVER_SUFFIX)) return null
       if (!isHosted()) return null
-      const next = injectIntoSvelteKitInternal(code)
+      const next = injectIntoSvelteKitTemplate(code)
       return next === null ? null : { code: next, map: null }
     },
   }

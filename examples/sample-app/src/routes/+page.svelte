@@ -1,6 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths'
-  import FpsCanvas from '$lib/components/FpsCanvas.svelte'
+
+  import FpsCanvas from '#lib/components/FpsCanvas.svelte'
 </script>
 
 <section class="hero">

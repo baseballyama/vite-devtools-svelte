@@ -2,7 +2,7 @@
   "name": "test-fixture",
   "version": "1.0.0",
   "dependencies": {
-    "@sveltejs/kit": "^2.0.0",
+    "@sveltejs/kit": "^3.0.0",
     "svelte": "^5.0.0"
   },
   "devDependencies": {

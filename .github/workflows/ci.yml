@@ -153,8 +153,8 @@ jobs:
         run: pnpm build
 
       # The build does not type-check. The site has no svelte-check of its
-      # own; use the workspace's official svelte-check (installed in the Kit 2
-      # example; the site is on Kit 3) against the site's tsconfig, after
+      # own; use the workspace's official svelte-check (installed in the
+      # sample-app example) against the site's tsconfig, after
       # svelte-kit sync.
       - name: Site typecheck (svelte-check)
         run: |
@@ -243,7 +243,7 @@ jobs:
           grep -i '^content-security-policy:' <<< "$headers"
 
       # Same approach as the site typecheck: the workspace's svelte-check
-      # (from the Kit 2 example) against each app's tsconfig, after sync.
+      # (from the sample-app example) against each app's tsconfig, after sync.
       - name: Playground & strict-csp-app typecheck (svelte-check)
         # independent of the build/CSP step above: report both on one run
         if: ${{ !cancelled() }}
@@ -254,9 +254,8 @@ jobs:
           pnpm -C examples/sample-app exec svelte-check --workspace ../strict-csp-app --tsconfig ./tsconfig.json
 
   # Compatibility smoke tests (e2e/compat/README.md): the plugin in a plain
-  # Svelte + Vite app, the existing SvelteKit 2 sample and a SvelteKit 3
-  # fixture, each standalone and inside the Vite DevTools dock. One profile
-  # at a time; every step is bounded.
+  # Svelte + Vite app and a SvelteKit 3 fixture, each standalone and inside
+  # the Vite DevTools dock. One profile at a time; every step is bounded.
   compat:
     name: Compat (${{ matrix.profile }}, ${{ matrix.mode }})
     runs-on: ubuntu-latest
@@ -268,7 +267,7 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        profile: [plain-svelte, kit2, kit3]
+        profile: [plain-svelte, kit3]
         mode: [standalone, dock]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -359,7 +358,7 @@ jobs:
         if: always()
         run: git diff --exit-code -- pnpm-lock.yaml examples/ playground/ packages/
 
-  # Screenshots of the reactivity UI on the SvelteKit 2 sample with the real
+  # Screenshots of the reactivity UI on the SvelteKit sample app with the real
   # runtime (scripts/screenshots/reactivity.mjs). Images are scanned for
   # machine paths, codes and tokens before being written; a hit fails the
   # case instead of writing the image.
