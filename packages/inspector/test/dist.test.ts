@@ -17,7 +17,8 @@ afterAll(() => {
 });
 
 describe('the built package', () => {
-  it('serves the runtime copied next to the bundle', async () => {
+  // A full build (bundle + d.ts), next to the other packages' suites in CI.
+  it('serves the runtime copied next to the bundle', { timeout: 60_000 }, async () => {
     await build({
       root: packageDir,
       configFile: path.join(packageDir, 'vite.config.ts'),
