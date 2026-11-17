@@ -45,7 +45,7 @@
       <div class="tools">
         <a
           class="icon"
-          href="https://github.com/baseballyama/vite-devtools-svelte"
+          href="https://github.com/sveltejs/vite-devtools-svelte"
           rel="noreferrer noopener"
           target="_blank"
           aria-label="GitHub repository"

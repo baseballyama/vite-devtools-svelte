@@ -77,9 +77,9 @@ function mockBackend(scale: number): Plugin {
       id: 'svelte-devtools',
       name: 'Svelte DevTools (mock)',
       version: '0.0.0-mock',
-      packageName: 'vite-devtools-svelte',
+      packageName: '@sveltejs/vite-devtools-svelte',
       importMetaUrl: import.meta.url,
-      homepage: 'https://github.com/baseballyama/vite-devtools-svelte#readme',
+      homepage: 'https://github.com/sveltejs/vite-devtools-svelte#readme',
       description: 'Synthetic backend for developing the Svelte DevTools client',
       setup(ctx) {
         for (const [name, handler] of Object.entries(handlers)) {

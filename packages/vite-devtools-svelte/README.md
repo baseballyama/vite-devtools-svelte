@@ -29,35 +29,35 @@ Panel shots: captured from the UI in dev-mock mode with synthetic data, before t
 <details>
 <summary>Overview</summary>
 
-![Overview](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/ui-overview.png)
+![Overview](https://raw.githubusercontent.com/sveltejs/vite-devtools-svelte/main/docs/images/ui-overview.png)
 
 </details>
 
 <details>
 <summary>Components</summary>
 
-![Components](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/ui-components.png)
+![Components](https://raw.githubusercontent.com/sveltejs/vite-devtools-svelte/main/docs/images/ui-components.png)
 
 </details>
 
 <details>
 <summary>Routes</summary>
 
-![Routes](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/ui-routes.png)
+![Routes](https://raw.githubusercontent.com/sveltejs/vite-devtools-svelte/main/docs/images/ui-routes.png)
 
 </details>
 
 <details>
 <summary>Assets</summary>
 
-![Assets](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/ui-assets.png)
+![Assets](https://raw.githubusercontent.com/sveltejs/vite-devtools-svelte/main/docs/images/ui-assets.png)
 
 </details>
 
 <details>
 <summary>Render</summary>
 
-![Render](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/ui-profiler.png)
+![Render](https://raw.githubusercontent.com/sveltejs/vite-devtools-svelte/main/docs/images/ui-profiler.png)
 
 </details>
 
@@ -66,82 +66,82 @@ Panel shots: captured from the UI in dev-mock mode with synthetic data, before t
 
 Overview: what the counts cover and the most active components:
 
-![Reactivity overview](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/reactivity-overview.png)
+![Reactivity overview](https://raw.githubusercontent.com/sveltejs/vite-devtools-svelte/main/docs/images/reactivity-overview.png)
 
 One component (ReactivePriceChart) and the signals it is directly linked to; edges mean "can affect", not a recorded cause:
 
-![Reactivity, one component](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/reactivity-component.png)
+![Reactivity, one component](https://raw.githubusercontent.com/sveltejs/vite-devtools-svelte/main/docs/images/reactivity-component.png)
 
 $state signals by sampled changes in the timeline buffer:
 
-![Reactivity, states](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/reactivity-states.png)
+![Reactivity, states](https://raw.githubusercontent.com/sveltejs/vite-devtools-svelte/main/docs/images/reactivity-states.png)
 
 After the app page reloads, a selected component id may belong to another instance, and the panel says so:
 
-![Reactivity after a page reload](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/reactivity-epoch.png)
+![Reactivity after a page reload](https://raw.githubusercontent.com/sveltejs/vite-devtools-svelte/main/docs/images/reactivity-epoch.png)
 
 </details>
 
 <details>
 <summary>Frame rate</summary>
 
-![Frame rate](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/ui-fps.png)
+![Frame rate](https://raw.githubusercontent.com/sveltejs/vite-devtools-svelte/main/docs/images/ui-fps.png)
 
 </details>
 
 <details>
 <summary>Load functions</summary>
 
-![Load functions](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/ui-loads.png)
+![Load functions](https://raw.githubusercontent.com/sveltejs/vite-devtools-svelte/main/docs/images/ui-loads.png)
 
 </details>
 
 <details>
 <summary>State timeline</summary>
 
-![State timeline](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/ui-timeline.png)
+![State timeline](https://raw.githubusercontent.com/sveltejs/vite-devtools-svelte/main/docs/images/ui-timeline.png)
 
 </details>
 
 <details>
 <summary>API</summary>
 
-![API](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/ui-api.png)
+![API](https://raw.githubusercontent.com/sveltejs/vite-devtools-svelte/main/docs/images/ui-api.png)
 
 </details>
 
 <details>
 <summary>Problems</summary>
 
-![Problems](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/ui-errors.png)
+![Problems](https://raw.githubusercontent.com/sveltejs/vite-devtools-svelte/main/docs/images/ui-errors.png)
 
 </details>
 
 <details>
 <summary>Compiled output</summary>
 
-![Compiled output](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/ui-inspect.png)
+![Compiled output](https://raw.githubusercontent.com/sveltejs/vite-devtools-svelte/main/docs/images/ui-inspect.png)
 
 </details>
 
 <details>
 <summary>Modules</summary>
 
-![Modules](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/ui-modules.png)
+![Modules](https://raw.githubusercontent.com/sveltejs/vite-devtools-svelte/main/docs/images/ui-modules.png)
 
 </details>
 
 <details>
 <summary>Social preview</summary>
 
-![Social preview](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/ui-og.png)
+![Social preview](https://raw.githubusercontent.com/sveltejs/vite-devtools-svelte/main/docs/images/ui-og.png)
 
 </details>
 
 <details>
 <summary>Build</summary>
 
-![Build](https://raw.githubusercontent.com/baseballyama/vite-devtools-svelte/main/docs/images/ui-build.png)
+![Build](https://raw.githubusercontent.com/sveltejs/vite-devtools-svelte/main/docs/images/ui-build.png)
 
 </details>
 
@@ -155,7 +155,7 @@ After the app page reloads, a selected component id may belong to another instan
 ## Installation
 
 ```bash
-npm install -D vite-devtools-svelte
+npm install -D @sveltejs/vite-devtools-svelte
 # optional: show the panels inside the Vite DevTools dock
 npm install -D @vitejs/devtools
 ```
@@ -167,8 +167,8 @@ Register the plugin in your `vite.config.ts`. `svelteDevtools()` **must come bef
 ```ts
 // vite.config.ts
 import { sveltekit } from '@sveltejs/kit/vite'
+import { svelteDevtools } from '@sveltejs/vite-devtools-svelte'
 import { defineConfig } from 'vite'
-import { svelteDevtools } from 'vite-devtools-svelte'
 
 export default defineConfig({
   plugins: [
@@ -289,7 +289,7 @@ The endpoint is served wherever your Vite dev server listens. With the default (
 
 ### Skills
 
-Two Claude Code skills ship under `node_modules/vite-devtools-svelte/skills/`:
+Two Claude Code skills ship under `node_modules/@sveltejs/vite-devtools-svelte/skills/`:
 
 - `vite-devtools-svelte-perf-audit` — captures a baseline session, calls `list_performance_issues`, and presents the top issues for the user to triage.
 - `vite-devtools-svelte-perf-fix` — one issue per run: baseline → edit → after → `compare_sessions`, with `verdict` reported verbatim and an explicit revert path if the change regresses or has no effect.
@@ -300,7 +300,7 @@ To install for a given project:
 
 ```bash
 mkdir -p .claude/skills
-cp -r node_modules/vite-devtools-svelte/skills/* .claude/skills/
+cp -r node_modules/@sveltejs/vite-devtools-svelte/skills/* .claude/skills/
 ```
 
 ### Scope
@@ -324,8 +324,8 @@ Trusted-browser tokens are stored in your home directory (`~/.svelte-devtools/de
 
 ## Contributing
 
-Contributions are welcome! Please see the [repository](https://github.com/baseballyama/vite-devtools-svelte) for development setup and to open issues or pull requests.
+Contributions are welcome! Please see the [repository](https://github.com/sveltejs/vite-devtools-svelte) for development setup and to open issues or pull requests.
 
 ## License
 
-[MIT](https://github.com/baseballyama/vite-devtools-svelte/blob/main/LICENSE) © Yuichiro Yamashita
+[MIT](https://github.com/sveltejs/vite-devtools-svelte/blob/main/LICENSE) © Yuichiro Yamashita

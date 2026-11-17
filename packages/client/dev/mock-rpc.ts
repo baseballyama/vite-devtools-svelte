@@ -464,7 +464,7 @@ export function createMockBackend(scale = 5000) {
         svelte: '^5.56.8',
         vite: '^8.1.5',
         typescript: '^6.0.3',
-        'vite-devtools-svelte': 'workspace:*',
+        '@sveltejs/vite-devtools-svelte': 'workspace:*',
         vitest: '^4.1.10',
         playwright: '^1.63.0',
       },

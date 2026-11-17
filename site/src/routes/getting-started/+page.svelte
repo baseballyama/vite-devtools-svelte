@@ -3,9 +3,9 @@
 
   import CodeBlock from '#lib/CodeBlock.svelte'
 
-  const installCode = `npm install -D vite-devtools-svelte`
+  const installCode = `npm install -D @sveltejs/vite-devtools-svelte`
 
-  const configCode = `import { svelteDevtools } from 'vite-devtools-svelte'
+  const configCode = `import { svelteDevtools } from '@sveltejs/vite-devtools-svelte'
 import { sveltekit } from '@sveltejs/kit/vite'
 import { defineConfig } from 'vite'
 
@@ -20,7 +20,7 @@ export default defineConfig({
 
   const dockInstallCode = `npm install -D @vitejs/devtools`
 
-  const dockConfigCode = `import { svelteDevtools } from 'vite-devtools-svelte'
+  const dockConfigCode = `import { svelteDevtools } from '@sveltejs/vite-devtools-svelte'
 import { DevTools } from '@vitejs/devtools'
 import { sveltekit } from '@sveltejs/kit/vite'
 import { defineConfig } from 'vite'
@@ -195,7 +195,7 @@ export default defineConfig({
           </li>
           <li>
             <a
-              href="https://github.com/baseballyama/vite-devtools-svelte"
+              href="https://github.com/sveltejs/vite-devtools-svelte"
               target="_blank"
               rel="noreferrer noopener"
             >

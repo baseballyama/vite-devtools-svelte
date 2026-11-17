@@ -142,7 +142,7 @@ export function checkoutMeta(repo, label) {
         'svelte',
         '@sveltejs/kit',
         '@sveltejs/vite-plugin-svelte',
-        'vite-devtools-svelte',
+        '@sveltejs/vite-devtools-svelte',
       ].map(n => [n, pkgVersion(repo, n)]),
     ),
     dist: {

@@ -1,8 +1,8 @@
 import adapter from '@sveltejs/adapter-auto'
 import { sveltekit } from '@sveltejs/kit/vite'
+import { svelteDevtools } from '@sveltejs/vite-devtools-svelte'
 import { DevTools } from '@vitejs/devtools'
 import { defineConfig } from 'vite'
-import { svelteDevtools } from 'vite-devtools-svelte'
 import { svelteInspector } from 'vite-devtools-svelte-inspector'
 
 export default defineConfig({

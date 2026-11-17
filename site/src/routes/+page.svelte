@@ -6,7 +6,7 @@
   import { panels, taglineParts } from '#lib/panels.ts'
   import { image } from '#lib/paths.ts'
 
-  const repo = 'https://github.com/baseballyama/vite-devtools-svelte'
+  const repo = 'https://github.com/sveltejs/vite-devtools-svelte'
 
   const features = [
     {
