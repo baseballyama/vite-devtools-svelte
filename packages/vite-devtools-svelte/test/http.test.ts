@@ -5,11 +5,17 @@
  */
 import type * as DnsModule from 'node:dns';
 import http from 'node:http';
+import net from 'node:net';
 import type { AddressInfo } from 'node:net';
 
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { fetchWithTimeout, OUTBOUND_TIMEOUT_MS, transport } from '../src/analyzers/http.js';
+import {
+  fetchWithTimeout,
+  OUTBOUND_TIMEOUT_MS,
+  readCapped,
+  transport,
+} from '../src/analyzers/http.js';
 import { getOGPreview } from '../src/analyzers/og.js';
 import { outboundLookup, publicOnlyLookup } from '../src/server/security.js';
 
@@ -105,17 +111,33 @@ describe('transport.get', () => {
     await expect(transport.get('http://127.0.0.1:1/')).rejects.toThrow(/ECONNREFUSED/);
   });
 
-  it('rejects a status a Response cannot hold', async () => {
-    const odd = http.createServer((_req, res) => {
-      res.writeHead(999);
-      res.end();
+  it.each([
+    [
+      'a status text with DEL',
+      'HTTP/1.1 200 O\x7fK\r\nContent-Length: 0\r\n\r\n',
+      /Invalid statusText/,
+    ],
+    [
+      'a status a Response cannot hold',
+      'HTTP/1.1 999 X\r\nContent-Length: 0\r\n\r\n',
+      /Unsupported HTTP status 999/,
+    ],
+  ])('rejects (and does not throw out of the callback) on %s', async (_label, raw, reason) => {
+    // a raw socket: a real HTTP server would not send these
+    const evil = net.createServer(socket => {
+      socket.once('data', () => {
+        socket.end(Buffer.from(raw, 'latin1'));
+      });
     });
     await new Promise<void>(resolve => {
-      odd.listen(0, '127.0.0.1', resolve);
+      evil.listen(0, '127.0.0.1', resolve);
     });
-    const url = `http://127.0.0.1:${(odd.address() as AddressInfo).port}/`;
-    await expect(transport.get(url)).rejects.toThrow('Unsupported HTTP status 999');
-    odd.close();
+    const url = `http://127.0.0.1:${(evil.address() as AddressInfo).port}/`;
+    const error = await transport.get(url).catch((e: unknown) => e as Error);
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toMatch(/^Unreadable response: /);
+    expect((error as Error).message).toMatch(reason);
+    evil.close();
   });
 
   it('connects through the given lookup', async () => {
@@ -205,6 +227,47 @@ describe('OG preview against DNS rebinding', () => {
   it('still reads the dev server itself', async () => {
     const preview = await getOGPreview(local(), { allowedOrigins: [local().slice(0, -1)] });
     expect(preview.title).toBe('local');
+  });
+});
+
+describe('readCapped', () => {
+  it('reads a body up to the cap, cancelling the rest', async () => {
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>({
+      start(c) {
+        c.enqueue(new Uint8Array([1, 2]));
+        c.enqueue(new Uint8Array([3, 4, 5]));
+      },
+      cancel,
+    });
+    expect(await readCapped(new Response(body), 4)).toEqual({
+      bytes: new Uint8Array([1, 2, 3, 4]),
+      truncated: true,
+    });
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  it('reads a body of exactly the cap, and no body, whole', async () => {
+    expect(await readCapped(new Response(new Uint8Array([1, 2, 3, 4])), 4)).toEqual({
+      bytes: new Uint8Array([1, 2, 3, 4]),
+      truncated: false,
+    });
+    expect(await readCapped(new Response(null, { status: 204 }), 4)).toEqual({
+      bytes: new Uint8Array(),
+      truncated: false,
+    });
+  });
+
+  it('a source that fails to cancel does not fail the read', async () => {
+    const body = new ReadableStream<Uint8Array>({
+      start(c) {
+        c.enqueue(new Uint8Array([1, 2, 3]));
+      },
+      cancel() {
+        throw new Error('cannot cancel');
+      },
+    });
+    expect((await readCapped(new Response(body), 2)).truncated).toBe(true);
   });
 });
 

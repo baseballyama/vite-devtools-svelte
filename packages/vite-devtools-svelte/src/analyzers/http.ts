@@ -20,6 +20,61 @@ export interface OutboundInit {
 /** Statuses whose response has no body (the `Response` constructor refuses one). */
 const NULL_BODY = new Set([204, 205, 304]);
 
+/** A `node:http` response as a fetch `Response`; throws when it cannot be one. */
+function toResponse(res: http.IncomingMessage): Response {
+  const status = res.statusCode ?? 0;
+  // `Response` holds 200–599 only
+  if (status < 200 || status > 599) throw new RangeError(`Unsupported HTTP status ${status}`);
+  const headers = new Headers();
+  for (const [name, value] of Object.entries(res.headers)) {
+    for (const v of Array.isArray(value) ? value : [value ?? '']) headers.append(name, v);
+  }
+  const empty = NULL_BODY.has(status);
+  const response = new Response(
+    empty ? null : (Readable.toWeb(res) as ReadableStream<Uint8Array>),
+    { status, statusText: res.statusMessage, headers },
+  );
+  if (empty) res.resume();
+  return response;
+}
+
+/**
+ * At most `maxBytes` of a response body, and whether more was left
+ * (the rest is cancelled, not downloaded).
+ */
+export async function readCapped(
+  res: Response,
+  maxBytes: number,
+): Promise<{ bytes: Uint8Array; truncated: boolean }> {
+  if (!res.body) return { bytes: new Uint8Array(), truncated: false };
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- a stream is read chunk by chunk
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (size + value.byteLength > maxBytes) {
+      chunks.push(value.subarray(0, maxBytes - size));
+      await reader.cancel().then(undefined, () => {});
+      return { bytes: concat(chunks), truncated: true };
+    }
+    chunks.push(value);
+    size += value.byteLength;
+  }
+  return { bytes: concat(chunks), truncated: false };
+}
+
+function concat(chunks: Uint8Array[]): Uint8Array {
+  const out = new Uint8Array(chunks.reduce((n, c) => n + c.byteLength, 0));
+  let offset = 0;
+  for (const c of chunks) {
+    out.set(c, offset);
+    offset += c.byteLength;
+  }
+  return out;
+}
+
 /**
  * A GET over `node:http(s)`, answered as a fetch `Response`. Redirects are
  * never followed. Unlike the global `fetch`, it takes a `lookup`. An object,
@@ -38,21 +93,16 @@ export const transport = {
       };
       if (init.lookup) options.lookup = init.lookup;
       const req = client.get(url, options, res => {
-        const headers = new Headers();
-        for (const [name, value] of Object.entries(res.headers)) {
-          for (const v of Array.isArray(value) ? value : [value ?? '']) headers.append(name, v);
-        }
-        const status = res.statusCode ?? 0;
-        if (status < 200 || status > 599) {
-          // a status a `Response` cannot hold
+        // This runs in an event callback: anything thrown here would be an
+        // uncaught exception and take the dev server down. A remote server
+        // controls the input (a status text `Response` refuses, such as one
+        // containing DEL), so every failure becomes a rejection.
+        try {
+          resolve(toResponse(res));
+        } catch (e) {
           res.destroy();
-          reject(new RangeError(`Unsupported HTTP status ${status}`));
-          return;
+          reject(new Error(`Unreadable response: ${String(e)}`, { cause: e }));
         }
-        const empty = NULL_BODY.has(status);
-        if (empty) res.resume();
-        const body = empty ? null : (Readable.toWeb(res) as ReadableStream<Uint8Array>);
-        resolve(new Response(body, { status, statusText: res.statusMessage, headers }));
       });
       req.on('error', reject);
     });

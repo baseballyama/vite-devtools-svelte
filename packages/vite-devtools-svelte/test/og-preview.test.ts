@@ -9,7 +9,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 
 import { decodeEntities } from '../src/analyzers/html.js';
 import { transport } from '../src/analyzers/http.js';
-import { decodeBody, getOGPreview, parseMetaTags } from '../src/analyzers/og.js';
+import { decodeBody, getOGPreview, MAX_PAGE_BYTES, parseMetaTags } from '../src/analyzers/og.js';
 import { publicOnlyLookup } from '../src/server/security.js';
 import { createTestHost, rpcHandlers } from './helpers.js';
 
@@ -285,6 +285,14 @@ describe('getOGPreview', () => {
     expect(fetchMock).toHaveBeenCalledOnce();
     // a public page connects through the DNS guard (the transport never follows redirects)
     expect(fetchMock.mock.calls[0]![1]).toMatchObject({ lookup: publicOnlyLookup });
+  });
+
+  it('reads only the start of a page over the size cap', async () => {
+    const head = '<title>Big</title>';
+    serve(head + 'x'.repeat(MAX_PAGE_BYTES));
+    const r = await getOGPreview(PAGE);
+    expect(r.title).toBe('Big');
+    expect(r.issues).toContain('Page is larger than 5 MB; read its start only');
   });
 
   it('reports a redirect without location', async () => {

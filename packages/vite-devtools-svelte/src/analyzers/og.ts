@@ -2,7 +2,13 @@ import { assertOutboundUrl, outboundLookup } from '../server/security.js';
 import type { OutboundUrlOptions } from '../server/security.js';
 import type { OGPreview, OGTag } from '../types.js';
 import { HTML_WHITESPACE, collapseWhitespace, decodeEntities, htmlTags } from './html.js';
-import { fetchWithTimeout } from './http.js';
+import { fetchWithTimeout, readCapped } from './http.js';
+
+/**
+ * Most of a page read for its tags (they live in `<head>`). A larger or
+ * endless body is cut here instead of filling the dev server's memory.
+ */
+export const MAX_PAGE_BYTES = 5 * 1024 * 1024;
 
 /**
  * Meta tags with a `property` (or `name`) and a `content` attribute, in
@@ -119,14 +125,18 @@ export async function getOGPreview(
     const page = await fetchWithTimeout(
       url,
       { lookup: outboundLookup(url, options) },
-      async res => ({
-        status: res.status,
-        location: res.headers.get('location'),
-        html:
-          res.status >= 300 && res.status < 400
-            ? ''
-            : decodeBody(new Uint8Array(await res.arrayBuffer()), res.headers.get('content-type')),
-      }),
+      async res => {
+        const redirect = res.status >= 300 && res.status < 400;
+        const { bytes, truncated } = redirect
+          ? { bytes: new Uint8Array(), truncated: false }
+          : await readCapped(res, MAX_PAGE_BYTES);
+        return {
+          status: res.status,
+          location: res.headers.get('location'),
+          html: decodeBody(bytes, res.headers.get('content-type')),
+          truncated,
+        };
+      },
       timeoutMs,
     );
     if (page.status >= 300 && page.status < 400) {
@@ -134,6 +144,11 @@ export async function getOGPreview(
       return preview;
     }
     if (page.status >= 400) preview.issues.push(`Responded with HTTP ${page.status}`);
+    if (page.truncated) {
+      preview.issues.push(
+        `Page is larger than ${MAX_PAGE_BYTES / 1024 / 1024} MB; read its start only`,
+      );
+    }
     const html = page.html;
     preview.tags = parseMetaTags(html);
     const first = (property: string) => preview.tags.find(t => t.property === property)?.content;
