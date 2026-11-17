@@ -1,7 +1,7 @@
 declare module 'virtual:vite-devtools-svelte-inspector-options' {
   // An ambient module cannot `import` a relative path, so this takes the type through `import()`.
   // oxlint-disable-next-line typescript/consistent-type-imports
-  const options: Required<import('../public.d.ts').InspectorOptions>;
+  const options: Required<import('../types.js').InspectorOptions>;
   export default options;
 }
 

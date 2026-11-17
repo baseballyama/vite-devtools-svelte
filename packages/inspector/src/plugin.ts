@@ -1,18 +1,14 @@
-/** @import { InspectorOptions } from './public.js' */
-/** @import { Plugin } from 'vite' */
-
 import fs from 'node:fs';
 
 import { normalizePath } from 'vite';
+import type { Plugin } from 'vite';
 
 import { defaultInspectorOptions, parseEnvironmentOptions } from './options.js';
+import type { InspectorOptions } from './types.js';
 import { log } from './utils/log.js';
 
-/**
- * @param {string} url
- * @returns {string} url without query params or hash
- */
-function cleanUrl(url) {
+/** `url` without its query string or hash */
+function cleanUrl(url: string): string {
   const query = url.indexOf('?');
   const hash = url.indexOf('#');
   const end = Math.min(query === -1 ? url.length : query, hash === -1 ? url.length : hash);
@@ -22,7 +18,7 @@ function cleanUrl(url) {
 /** name of the inspector plugin that ships inside vite-plugin-svelte 7 */
 const BUILTIN_INSPECTOR_NAME = 'vite-plugin-svelte-inspector';
 
-function getInspectorPath() {
+function getInspectorPath(): string {
   // vite-devtools-svelte: the runtime sits next to this file instead of under
   // vite-plugin-svelte's `src/plugins/inspector/`.
   const pluginPath = normalizePath(import.meta.dirname);
@@ -30,19 +26,20 @@ function getInspectorPath() {
 }
 
 /**
- * vite-devtools-svelte: options come from the plugin argument instead of
- * vite-plugin-svelte's `inspector` option, and adding the plugin always enables
- * it (see `configResolved`).
+ * Svelte Inspector as a standalone Vite plugin.
  *
- * @param {Partial<InspectorOptions>} [options]
- * @returns {Plugin}
+ * It is always enabled once added (during `vite dev`), and it turns off the built-in
+ * inspector of vite-plugin-svelte so the two never run together. To turn it off, leave the
+ * plugin out.
+ *
+ * vite-devtools-svelte: options come from the plugin argument instead of
+ * vite-plugin-svelte's `inspector` option (see `configResolved`).
  */
-export function svelteInspector(options = {}) {
+export function svelteInspector(options: InspectorOptions = {}): Plugin {
   const inspectorPath = getInspectorPath();
   log.debug(`svelte inspector path: ${inspectorPath}`, null, 'inspector');
 
-  /** @type {InspectorOptions} */
-  let inspectorOptions;
+  let inspectorOptions: InspectorOptions | undefined;
 
   return {
     name: 'vite-devtools-svelte-inspector',
@@ -125,7 +122,7 @@ export function svelteInspector(options = {}) {
       },
       handler(code) {
         return {
-          code: `${code}\nimport('virtual:vite-devtools-svelte-inspector-path:load-inspector.js')`,
+          code: `${code}\nimport('virtual:vite-devtools-svelte-inspector-path:load-inspector.ts')`,
         };
       },
     },

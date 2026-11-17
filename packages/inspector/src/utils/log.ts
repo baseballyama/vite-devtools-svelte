@@ -5,11 +5,9 @@ import { createDebug } from 'obug';
 
 const prefix = 'vite-devtools-svelte';
 
-/**
- * @param {(...args: any[]) => void} logFn
- * @returns {(message: string, payload?: any, namespace?: string) => void}
- */
-function createLogger(logFn) {
+type LogFn = (message: string, payload?: unknown, namespace?: string) => void;
+
+function createLogger(logFn: (...args: unknown[]) => void): LogFn {
   return (message, payload, namespace) => {
     const text = `[${prefix}${namespace ? `:${namespace}` : ''}] ${message}`;
     if (payload) logFn(text, payload);
@@ -17,8 +15,7 @@ function createLogger(logFn) {
   };
 }
 
-export const log = {
-  /** @type {(message: string, payload?: any, namespace?: string) => void} */
+export const log: { debug: LogFn; warn: LogFn; error: LogFn } = {
   debug(message, payload, namespace) {
     const debug = createDebug(namespace ? `${prefix}:${namespace}` : prefix);
     if (!debug.enabled) return;

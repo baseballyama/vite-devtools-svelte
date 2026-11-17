@@ -2,9 +2,7 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
-    "types": [],
-    "allowJs": true,
-    "checkJs": true
+    "types": []
   },
-  "include": ["src/runtime/**/*.js", "src/runtime/**/*.ts", "src/runtime/**/*.svelte"]
+  "include": ["src/runtime/**/*.ts", "src/runtime/**/*.svelte"]
 }

@@ -4,16 +4,16 @@ import path from 'node:path';
 
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { createServer } from 'vite';
+import type { DevEnvironment, PluginOption, ViteDevServer } from 'vite';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { svelteInspector } from '../src/index.js';
+import type { InspectorOptions } from '../src/index.js';
 
 const OPTIONS_ID = 'virtual:vite-devtools-svelte-inspector-options';
 
-/** @type {import('vite').ViteDevServer[]} */
-const servers = [];
-/** @type {string[]} */
-const dirs = [];
+const servers: ViteDevServer[] = [];
+const dirs: string[] = [];
 
 afterEach(async () => {
   await Promise.all(servers.splice(0).map(server => server.close()));
@@ -21,11 +21,8 @@ afterEach(async () => {
   vi.unstubAllEnvs();
 });
 
-/**
- * @param {Parameters<typeof svelteInspector>[0]} [options]
- * @param {import('vite').PluginOption[]} [plugins] plugins added before the inspector
- */
-async function start(options, plugins = []) {
+/** `plugins` are added before the inspector. */
+async function start(options?: InspectorOptions, plugins: PluginOption[] = []) {
   const root = mkdtempSync(path.join(tmpdir(), 'vds-inspector-'));
   dirs.push(root);
   const server = await createServer({
@@ -39,8 +36,7 @@ async function start(options, plugins = []) {
   return server.environments.client;
 }
 
-/** @param {import('vite').DevEnvironment} env */
-async function loadOptions(env) {
+async function loadOptions(env: DevEnvironment): Promise<Record<string, unknown> | null> {
   const resolved = await env.pluginContainer.resolveId(OPTIONS_ID);
   if (!resolved) return null;
   const loaded = await env.pluginContainer.load(resolved.id);
@@ -110,10 +106,10 @@ describe('svelteInspector', () => {
   it('resolves runtime files next to the plugin and refuses path traversal', async () => {
     const env = await start();
     const resolved = await env.pluginContainer.resolveId(
-      'virtual:vite-devtools-svelte-inspector-path:load-inspector.js',
+      'virtual:vite-devtools-svelte-inspector-path:load-inspector.ts',
     );
     expect(resolved?.id).toBe(
-      path.resolve(import.meta.dirname, '../src/runtime/load-inspector.js').replaceAll('\\', '/'),
+      path.resolve(import.meta.dirname, '../src/runtime/load-inspector.ts').replaceAll('\\', '/'),
     );
     expect(
       await env.pluginContainer.resolveId(

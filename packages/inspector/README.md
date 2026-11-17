@@ -17,8 +17,9 @@ except for what a standalone plugin needs:
 - adding the plugin always enables it: `SVELTE_INSPECTOR_OPTIONS=true|false` does not toggle it (an options object and `SVELTE_INSPECTOR_TOGGLE` still apply)
 - it turns off vite-plugin-svelte's built-in inspector, so the two never mount at the same time
 - the plugin name and virtual module ids use the `vite-devtools-svelte-inspector` prefix, so they do not clash with the built-in inspector
-- `src/utils/log.js` is a reduced copy of upstream's logger
-- `src/public.d.ts` holds only `InspectorOptions` and the plugin's signature
+- the source is TypeScript and built to `dist/` (`pnpm -C packages/inspector build`); the browser runtime in `src/runtime/` is copied as-is and compiled by the app's own Vite
+- `src/utils/log.ts` is a reduced copy of upstream's logger
+- `src/types.ts` holds only `InspectorOptions`
 
 ## Setup
 
