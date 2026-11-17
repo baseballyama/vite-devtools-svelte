@@ -21,6 +21,7 @@
     }
   },
   "scripts": {
+    "check": "tsc -p tsconfig.node.json && svelte-check --tsconfig ./tsconfig.runtime.json",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
   },
@@ -29,8 +30,11 @@
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "@types/node": "^25.6.2",
     "@vitest/coverage-v8": "^5.0.5",
     "svelte": "^5.57.3",
+    "svelte-check": "^4.7.8",
+    "typescript": "^6.0.3",
     "vite": "^8.3.5",
     "vitest": "^5.1.0"
   },

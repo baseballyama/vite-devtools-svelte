@@ -9,7 +9,9 @@ vite-devtools-svelte (for example, jumping from a picked element to its node in 
 
 ## Differences from upstream
 
-The source under `src/` is a verbatim copy, except for what a standalone plugin needs:
+This package is the master copy of the inspector: it does not track upstream, and the source under
+`src/` follows this repository's formatting, lint and type-check rules. Behaviour matches upstream,
+except for what a standalone plugin needs:
 
 - options come from the plugin argument (`svelteInspector(options)`) instead of `vitePlugin.inspector` in `svelte.config.js`
 - adding the plugin always enables it: `SVELTE_INSPECTOR_OPTIONS=true|false` does not toggle it (an options object and `SVELTE_INSPECTOR_TOGGLE` still apply)
@@ -22,12 +24,12 @@ The source under `src/` is a verbatim copy, except for what a standalone plugin 
 
 ```js
 // vite.config.js
-import { sveltekit } from '@sveltejs/kit/vite'
-import { svelteInspector } from 'vite-devtools-svelte-inspector'
+import { sveltekit } from '@sveltejs/kit/vite';
+import { svelteInspector } from 'vite-devtools-svelte-inspector';
 
 export default {
   plugins: [sveltekit(), svelteInspector({ toggleKeyCombo: 'alt-x', showToggleButton: 'always' })],
-}
+};
 ```
 
 ## Upstream documentation

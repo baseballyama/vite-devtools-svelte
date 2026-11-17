@@ -2,8 +2,6 @@
 /** @import { Plugin } from 'vite' */
 
 import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { normalizePath } from 'vite';
 
@@ -15,7 +13,10 @@ import { log } from './utils/log.js';
  * @returns {string} url without query params or hash
  */
 function cleanUrl(url) {
-  return url.replace(/[?#].*$/s, '');
+  const query = url.indexOf('?');
+  const hash = url.indexOf('#');
+  const end = Math.min(query === -1 ? url.length : query, hash === -1 ? url.length : hash);
+  return url.slice(0, end);
 }
 
 /** name of the inspector plugin that ships inside vite-plugin-svelte 7 */
@@ -24,7 +25,7 @@ const BUILTIN_INSPECTOR_NAME = 'vite-plugin-svelte-inspector';
 function getInspectorPath() {
   // vite-devtools-svelte: the runtime sits next to this file instead of under
   // vite-plugin-svelte's `src/plugins/inspector/`.
-  const pluginPath = normalizePath(path.dirname(fileURLToPath(import.meta.url)));
+  const pluginPath = normalizePath(import.meta.dirname);
   return `${pluginPath}/runtime/`;
 }
 
@@ -62,10 +63,9 @@ export function svelteInspector(options = {}) {
         ...defaultInspectorOptions,
         ...options,
         ...(typeof environmentOptions === 'object' ? environmentOptions : {}),
-      };
-
-      inspectorOptions.__internal = {
-        base: config.base?.replace(/\/$/, '') || '',
+        __internal: {
+          base: config.base.endsWith('/') ? config.base.slice(0, -1) : config.base,
+        },
       };
 
       // vite-devtools-svelte: vite-plugin-svelte's built-in inspector would mount a
@@ -83,15 +83,14 @@ export function svelteInspector(options = {}) {
       filter: {
         id: /^virtual:vite-devtools-svelte-inspector-/,
       },
-      async handler(id) {
+      handler(id) {
         if (id === 'virtual:vite-devtools-svelte-inspector-options') {
           return id;
-        } else if (
-          id.startsWith('virtual:vite-devtools-svelte-inspector-path:') &&
-          !id.includes('..')
-        ) {
+        }
+        if (id.startsWith('virtual:vite-devtools-svelte-inspector-path:') && !id.includes('..')) {
           return id.replace('virtual:vite-devtools-svelte-inspector-path:', inspectorPath);
         }
+        return null;
       },
     },
     load: {
@@ -101,24 +100,26 @@ export function svelteInspector(options = {}) {
           exclude: [/style&lang\.css$/],
         },
       },
-      async handler(id) {
+      handler(id) {
         if (id === 'virtual:vite-devtools-svelte-inspector-options') {
           return `export default ${JSON.stringify(inspectorOptions ?? {})}`;
-        } else if (id.startsWith(inspectorPath)) {
+        }
+        if (id.startsWith(inspectorPath)) {
           // read file ourselves to avoid getting shut out by vites fs.allow check
           const file = cleanUrl(id);
           if (fs.existsSync(file)) {
-            return await fs.promises.readFile(file, 'utf-8');
-          } else {
-            log.error(`failed to find svelte-inspector: ${id}`, null, 'inspector');
+            return fs.promises.readFile(file, 'utf-8');
           }
+          log.error(`failed to find svelte-inspector: ${id}`, null, 'inspector');
         }
+        return null;
       },
     },
     transform: {
       // Vite+ projects install vite@npm:@voidzero-dev/vite-plus-core@latest which
       // changes the path from `vite/dist/client/client.mjs` to `vite/dist/vite/client/client.mjs`
-      // TODO: inject with transformIndexHtml when it works with SSR
+      // Injected here rather than through transformIndexHtml, which does not reach
+      // SSR-rendered pages.
       filter: {
         id: /(?:vite\/dist|vite\/dist\/vite|vite-plus-core\/dist\/vite)\/client\/client\.mjs(?:\?|$)/,
       },

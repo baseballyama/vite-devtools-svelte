@@ -15,8 +15,6 @@ export default defineConfig(
       'e2e/compat/kit3/**',
       // Fixture components are inputs to analyzers and compiler tests.
       'packages/vite-devtools-svelte/test/**/fixtures/**',
-      // Verbatim copy of vite-plugin-svelte's inspector: keep it diffable against upstream.
-      'packages/inspector/src/**',
       // oxlint covers scripts and modules (including `.svelte.ts`).
       '**/*.{js,mjs,cjs,ts,mts,cts}',
     ],

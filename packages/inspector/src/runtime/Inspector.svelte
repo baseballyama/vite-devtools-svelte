@@ -44,7 +44,9 @@
   <polygon points="0,0 15,40 40,20" stroke="#ff3e00" fill="#ff3e00"></polygon>
 </svg>
 `
-      .replace(/[\n\r\t\s]+/g, ' ')
+      .split('\n')
+      .map(line => line.trim())
+      .join(' ')
       .trim(),
   )}`;
 
@@ -74,7 +76,7 @@
     let candidate: Element | undefined = el;
 
     if (!include_self) {
-      candidate = (candidate?.parentNode as Element) ?? undefined;
+      candidate = candidate?.parentElement ?? undefined;
     }
 
     while (candidate) {
@@ -82,8 +84,9 @@
         return candidate;
       }
 
-      candidate = candidate.parentNode as Element;
+      candidate = candidate.parentElement ?? undefined;
     }
+    return undefined;
   }
 
   function find_selectable_child(el: Element) {
@@ -98,12 +101,13 @@
         return candidate;
       }
     } while (candidate);
+    return undefined;
   }
 
   function find_selectable_for_nav(key: string) {
     const el = active_el;
     if (!el) {
-      return find_selectable_child(document?.body);
+      return find_selectable_child(document.body);
     }
     switch (key) {
       case options.navKeys.parent:
@@ -121,7 +125,8 @@
 
   function is_selectable(el: Element | null): el is ElementWithMetadata {
     if (!el) return false;
-    const file = (el as ElementWithMetadata)?.__svelte_meta?.loc?.file;
+    // Only elements rendered by a Svelte component in dev mode carry `__svelte_meta`.
+    const file = (el as Element & { __svelte_meta?: Metadata }).__svelte_meta?.loc.file;
     if (!file || file.includes('node_modules/')) {
       return false; // no file or 3rd party
     }
@@ -182,7 +187,7 @@
 
     while ((entry = entry.parent ?? undefined)) {
       if (entry.type !== 'component') continue;
-      if (/(^|\/)(node_modules|\.svelte-kit)\//.test(entry.file)) continue;
+      if (is_dependency_or_generated(entry.file)) continue;
 
       stack.push({
         file: entry.file,
@@ -193,6 +198,12 @@
     }
 
     return stack;
+  }
+
+  function is_dependency_or_generated(file: string) {
+    return ['node_modules/', '.svelte-kit/'].some(
+      dir => file.startsWith(dir) || file.includes(`/${dir}`),
+    );
   }
 
   function on_contextmenu(e: Event) {
@@ -206,7 +217,7 @@
   }
 
   function send(loc: Loc) {
-    fetch(
+    void fetch(
       `${options.__internal.base}/__open-in-editor?file=${encodeURIComponent(
         `${loc.file}:${loc.line}:${loc.column + 1}`,
       )}`,
@@ -226,24 +237,27 @@
       case 'meta':
         return e.getModifierState(key.charAt(0).toUpperCase() + key.slice(1));
       default:
-        return key === e.code.replace(/^Key/, '').toLowerCase() || key === e.key.toLowerCase();
+        return (
+          key === (e.code.startsWith('Key') ? e.code.slice(3) : e.code).toLowerCase() ||
+          key === e.key.toLowerCase()
+        );
     }
   }
 
   function is_combo(e: KeyboardEvent) {
-    return toggle_combo?.every(k => is_active(k, e));
+    return toggle_combo.every(k => is_active(k, e));
   }
 
   function is_escape(e: KeyboardEvent) {
-    return escape_keys?.some(k => is_active(k, e));
+    return escape_keys.some(k => is_active(k, e));
   }
 
   function is_toggle(e: KeyboardEvent) {
-    return toggle_combo?.some(k => is_active(k, e));
+    return toggle_combo.some(k => is_active(k, e));
   }
 
   function is_nav(e: KeyboardEvent) {
-    return nav_keys?.some(k => is_active(k, e));
+    return nav_keys.some(k => is_active(k, e));
   }
 
   function is_open(e: KeyboardEvent) {
@@ -264,8 +278,13 @@
     e.stopImmediatePropagation();
   }
 
+  // Chrome's autofill dispatches keyboard events without a `key`.
+  function has_key(e: KeyboardEvent) {
+    return (e.key as string | undefined) != null;
+  }
+
   function keydown(e: KeyboardEvent) {
-    if (e.repeat || e.key == null || (!enabled && !is_toggle(e))) {
+    if (e.repeat || !has_key(e) || (!enabled && !is_toggle(e))) {
       return;
     }
     if (is_combo(e)) {
@@ -295,7 +314,7 @@
   }
 
   function keyup(e: KeyboardEvent) {
-    if (e.repeat || e.key == null || !enabled) {
+    if (e.repeat || !has_key(e) || !enabled) {
       return;
     }
     if (is_toggle(e)) {
@@ -316,11 +335,17 @@
   }
 
   function listeners(body: HTMLBodyElement, enabled: boolean) {
-    const l = enabled ? body.addEventListener : body.removeEventListener;
-    l('mousemove', mousemove);
-    l('mouseover', mouseover);
-    l('click', open_editor, true);
-    l('contextmenu', on_contextmenu, true);
+    if (enabled) {
+      body.addEventListener('mousemove', mousemove);
+      body.addEventListener('mouseover', mouseover);
+      body.addEventListener('click', open_editor, true);
+      body.addEventListener('contextmenu', on_contextmenu, true);
+    } else {
+      body.removeEventListener('mousemove', mousemove);
+      body.removeEventListener('mouseover', mouseover);
+      body.removeEventListener('click', open_editor, true);
+      body.removeEventListener('contextmenu', on_contextmenu, true);
+    }
   }
 
   function enable() {
@@ -391,11 +416,9 @@
     s.setAttribute('id', 'svelte-inspector-style');
     s.textContent = `:root { --svelte-inspector-icon: url(${icon})};`;
     document.head.append(s);
-    if (toggle_combo) {
-      document.body.addEventListener('keydown', keydown);
-      if (options.holdMode) {
-        document.body.addEventListener('keyup', keyup);
-      }
+    document.body.addEventListener('keydown', keydown);
+    if (options.holdMode) {
+      document.body.addEventListener('keyup', keyup);
     }
     document.addEventListener('visibilitychange', visibilityChange);
     document.documentElement.addEventListener('mouseleave', onLeave);
@@ -406,11 +429,9 @@
       if (s) {
         document.head.removeChild(s);
       }
-      if (toggle_combo) {
-        document.body.removeEventListener('keydown', keydown);
-        if (options.holdMode) {
-          document.body.removeEventListener('keyup', keyup);
-        }
+      document.body.removeEventListener('keydown', keydown);
+      if (options.holdMode) {
+        document.body.removeEventListener('keyup', keyup);
       }
       document.removeEventListener('visibilitychange', visibilityChange);
       document.documentElement.removeEventListener('mouseleave', onLeave);
@@ -420,7 +441,7 @@
 
 <svelte:window
   onclick={disable}
-  onkeydown={e => {
+  onkeydown={(e: KeyboardEvent) => {
     if (e.key === 'Escape') {
       disable();
     }
@@ -429,6 +450,7 @@
 
 {#if show_toggle}
   <button
+    type="button"
     id="svelte-inspector-toggle"
     class:enabled
     style={`background-image: var(--svelte-inspector-icon);${options.toggleButtonPos
@@ -449,7 +471,12 @@
     bind:offsetHeight={h}
   >
     {#if menu}
-      <button aria-label="close" class="svelte-inspector-button" {@attach node => node.focus()}>
+      <button
+        type="button"
+        aria-label="close"
+        class="svelte-inspector-button"
+        {@attach (node: HTMLButtonElement) => node.focus()}
+      >
         <span>close</span>
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -466,7 +493,7 @@
       <hr />
 
       <ul class="svelte-inspector-grid">
-        {#each menu.stack as item, i (item.file + item.line + i)}
+        {#each menu.stack as item, i (`${item.file}:${item.line}:${i}`)}
           <li>
             <button type="button" class="svelte-inspector-menu-row" onclick={() => send(item)}>
               <span class="svelte-inspector-tag">&lt;{item.tag}&gt;</span>

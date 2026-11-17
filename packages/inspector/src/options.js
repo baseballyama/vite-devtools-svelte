@@ -34,18 +34,17 @@ export function parseEnvironmentOptions(config) {
       const parsedType = typeof parsed;
       if (parsedType === 'boolean') {
         return parsed;
-      } else if (parsedType === 'object') {
+      }
+      if (parsedType === 'object') {
         if (Array.isArray(parsed)) {
-          throw new Error('invalid type, expected object map but got array');
+          throw new TypeError('invalid type, expected object map but got array');
         }
         const parsedKeys = Object.keys(parsed);
         const defaultKeys = Object.keys(defaultInspectorOptions);
         const unknownKeys = parsedKeys.filter(k => !defaultKeys.includes(k));
-        if (unknownKeys.length) {
+        if (unknownKeys.length > 0) {
           log.warn(
-            `[vite-plugin-svelte-inspector] ignoring unknown options in environment SVELTE_INSPECTOR_OPTIONS: ${unknownKeys.join(
-              ', ',
-            )}`,
+            `[vite-plugin-svelte-inspector] ignoring unknown options in environment SVELTE_INSPECTOR_OPTIONS: ${unknownKeys.join(', ')}`,
             null,
             'inspector',
           );
@@ -58,7 +57,7 @@ export function parseEnvironmentOptions(config) {
       }
     } catch (e) {
       config.logger.error(
-        `[vite-plugin-svelte-inspector] failed to parse inspector options from environment SVELTE_INSPECTOR_OPTIONS="${options}"\n${e}`,
+        `[vite-plugin-svelte-inspector] failed to parse inspector options from environment SVELTE_INSPECTOR_OPTIONS="${options}"\n${String(e)}`,
       );
     }
   } else if (toggle) {
