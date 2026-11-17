@@ -1,5 +1,3 @@
-import type { Plugin } from 'vite';
-
 // Copied from @sveltejs/vite-plugin-svelte/src/public.d.ts
 export interface InspectorOptions {
   /**
@@ -84,12 +82,3 @@ export interface InspectorOptions {
     base: string;
   };
 }
-
-/**
- * Svelte Inspector as a standalone Vite plugin.
- *
- * It is always enabled once added (during `vite dev`), and it turns off the built-in
- * inspector of vite-plugin-svelte so the two never run together. To turn it off, leave the
- * plugin out.
- */
-export function svelteInspector(options?: InspectorOptions): Plugin;
