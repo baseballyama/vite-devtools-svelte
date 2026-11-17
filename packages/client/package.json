@@ -6,12 +6,11 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
-    "check": "rsvelte-check --tsconfig ./tsconfig.app.json",
+    "check": "svelte-check --tsconfig ./tsconfig.app.json",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
-    "@rsvelte/svelte-check": "^0.5.32",
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@testing-library/svelte": "^5.4.2",
     "@testing-library/user-event": "^14.6.8",
@@ -21,6 +20,7 @@
     "fast-check": "^4.10.2",
     "happy-dom": "^21.0.4",
     "svelte": "^5.57.3",
+    "svelte-check": "^4.7.8",
     "typescript": "^6.0.3",
     "vite": "^8.3.5",
     "vitest": "^5.1.0"
