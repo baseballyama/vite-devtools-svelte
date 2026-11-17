@@ -263,15 +263,34 @@ describe('collectExports: export * from', () => {
     })
   })
 
-  it('does not look inside node_modules: a package may be CommonJS', async () => {
+  it.each([
+    ['a package', 'node_modules/cjs-pkg/index.js'],
+    ['a workspace package (resolved to its real path)', 'packages/handlers/index.cjs'],
+  ])('is incomplete when a star leads to CommonJS in %s', async (_label, file) => {
     const dir = project({
-      '+server.ts': "export * from 'cjs-pkg'\nexport const POST = h",
-      'node_modules/cjs-pkg/index.js': 'exports.GET = () => new Response()',
+      '+server.ts': "export * from 'pkg'\nexport const POST = h",
+      [file]: 'exports.GET = () => new Response()',
     })
-    const pkg = path.join(dir, 'node_modules/cjs-pkg/index.js')
+    const target = path.join(dir, file)
+    expect(
+      await collectExports(path.join(dir, '+server.ts'), () => Promise.resolve(target)),
+    ).toEqual({ names: new Set(['POST']), complete: false })
+  })
+
+  it('follows ESM in node_modules, and an empty endpoint is complete', async () => {
+    const dir = project({
+      '+server.ts': "export * from 'pkg'",
+      'node_modules/pkg/index.js': 'export const GET = h',
+      'empty/+server.ts': '',
+    })
+    const pkg = path.join(dir, 'node_modules/pkg/index.js')
     expect(await collectExports(path.join(dir, '+server.ts'), () => Promise.resolve(pkg))).toEqual({
-      names: new Set(['POST']),
-      complete: false,
+      names: new Set(['GET']),
+      complete: true,
+    })
+    expect(await collectExports(path.join(dir, 'empty/+server.ts'), resolveRelative)).toEqual({
+      names: new Set(),
+      complete: true,
     })
   })
 
@@ -330,7 +349,9 @@ describe('collectExports: export * from', () => {
     expect(moduleExports("export const a = 1, b = 2\nexport * from './c'", 'x.ts')).toEqual({
       names: new Set(['a', 'b']),
       stars: ['./c'],
+      esm: true,
     })
+    expect(moduleExports('exports.GET = 1', 'x.js')).toMatchObject({ esm: false })
   })
 })
 

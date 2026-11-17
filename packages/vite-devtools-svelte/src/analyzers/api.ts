@@ -13,6 +13,11 @@ const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'
 export interface ModuleExports {
   names: Set<string>
   stars: string[]
+  /**
+   * Whether the module has any `import` / `export`. One without may be
+   * CommonJS (`exports.GET = …`), whose exports no ESM parse sees.
+   */
+  esm: boolean
 }
 
 type Program = ReturnType<typeof parseSync>['program']
@@ -61,7 +66,7 @@ function bindingNames(pattern: Binding, out: Set<string>): void {
  */
 export function moduleExports(code: string, filename: string): ModuleExports | null {
   // The language (js / ts) follows the file extension.
-  const { program, errors } = parseSync(filename, code)
+  const { program, module, errors } = parseSync(filename, code)
   if (errors.length > 0) return null
   const names = new Set<string>()
   const stars: string[] = []
@@ -93,7 +98,7 @@ export function moduleExports(code: string, filename: string): ModuleExports | n
       names.add(exported.type === 'Literal' ? exported.value : exported.name)
     }
   }
-  return { names, stars }
+  return { names, stars, esm: module.hasModuleSyntax }
 }
 
 /** Resolve an import specifier from `importer` to a file, or null when it is not one. */
@@ -153,9 +158,8 @@ export const MAX_MODULE_BYTES = 2 * 1024 * 1024
 /**
  * Reads and parses each module once per analysis, however many endpoints
  * re-export it (a shared `$lib` barrel otherwise parses once per endpoint).
- * Null for a module that cannot be read or parsed, sits in `node_modules`
- * (a package may be CommonJS, whose exports no parse of ESM syntax sees),
- * or is over {@link MAX_MODULE_BYTES}.
+ * Null for a module that cannot be read or parsed, or is over
+ * {@link MAX_MODULE_BYTES}.
  */
 export type ModuleCache = Map<string, Promise<ModuleExports | null>>
 
@@ -169,7 +173,6 @@ function loadExports(module: string, cache: ModuleCache): Promise<ModuleExports 
 }
 
 async function readExports(module: string): Promise<ModuleExports | null> {
-  if (module.replaceAll('\\', '/').split('/').includes('node_modules')) return null
   try {
     if ((await fs.promises.stat(module)).size > MAX_MODULE_BYTES) return null
     return moduleExports(await fs.promises.readFile(module, 'utf-8'), module)
@@ -181,8 +184,9 @@ async function readExports(module: string): Promise<ModuleExports | null> {
 /**
  * The names `file` exports, following `export * from` through `resolve`.
  * `complete` is false when part of it could not be read: a module
- * {@link ModuleCache} has no exports for, a specifier that does not
- * resolve to a file, or a chain deeper than {@link MAX_DEPTH}.
+ * {@link ModuleCache} has no exports for, a re-exported module without
+ * ESM syntax (perhaps CommonJS), a specifier that does not resolve to a
+ * file, or a chain deeper than {@link MAX_DEPTH}.
  */
 export async function collectExports(
   file: string,
@@ -196,7 +200,9 @@ export async function collectExports(
     if (seen.has(module)) return
     seen.add(module)
     const exports = await loadExports(module, cache)
-    if (!exports) {
+    // `export *` from a module without ESM syntax: perhaps CommonJS, exports unknown.
+    // (The endpoint itself may be empty: it then exports nothing.)
+    if (!exports || (depth > 0 && !exports.esm)) {
       complete = false
       return
     }
