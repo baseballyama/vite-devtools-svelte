@@ -3,7 +3,7 @@
 // the one headless Chromium the other jobs already install.
 //
 //   node site/scripts/capture.mjs --out=<dir> [--build=site/build]
-//        [--before=https://baseballyama.github.io/vite-devtools-svelte]
+//        [--before=https://sveltejs.github.io/vite-devtools-svelte]
 //        [--reference=https://vite.dev]
 //
 // Prerequisites: `pnpm install --frozen-lockfile`, the site built for its
@@ -42,7 +42,7 @@ if (outArg === '') {
 }
 const outDir = path.resolve(outArg)
 const buildDir = path.resolve(repoRoot, arg('build', 'site/build'))
-const beforeUrl = arg('before', 'https://baseballyama.github.io/vite-devtools-svelte')
+const beforeUrl = arg('before', 'https://sveltejs.github.io/vite-devtools-svelte')
 const referenceUrl = arg('reference', 'https://vite.dev')
 const BASE = '/vite-devtools-svelte'
 const PAGES = [
