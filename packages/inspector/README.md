@@ -13,8 +13,8 @@ This package is the master copy of the inspector: it does not track upstream, an
 `src/` follows this repository's formatting, lint and type-check rules. Behaviour matches upstream,
 except for what a standalone plugin needs:
 
-- options come from the plugin argument (`svelteInspector(options)`) instead of `vitePlugin.inspector` in `svelte.config.js`
-- adding the plugin always enables it: `SVELTE_INSPECTOR_OPTIONS=true|false` does not toggle it (an options object and `SVELTE_INSPECTOR_TOGGLE` still apply)
+- options come from the plugin argument (`svelteInspector(options)`, which `svelteDevtools({ inspector })` passes on) instead of `vitePlugin.inspector` in `svelte.config.js`
+- adding the plugin always enables it (`svelteDevtools({ inspector: false })` leaves it out): `SVELTE_INSPECTOR_OPTIONS=true|false` does not toggle it (an options object and `SVELTE_INSPECTOR_TOGGLE` still apply)
 - it turns off vite-plugin-svelte's built-in inspector, so the two never mount at the same time
 - the plugin name and virtual module ids use the `vite-devtools-svelte-inspector` prefix, so they do not clash with the built-in inspector
 - the source is TypeScript and built to `dist/` (`pnpm -C packages/inspector build`); the browser runtime in `src/runtime/` is copied as-is and compiled by the app's own Vite
@@ -22,18 +22,50 @@ except for what a standalone plugin needs:
 - `src/utils/log.ts` is a reduced copy of upstream's logger
 - `src/types.ts` holds only `InspectorOptions`
 - it dispatches a `svelte-inspector:pick` event and marks its components with `Symbol.for('svelte.devtools.ignore')` (see [below](#events)); this part is new, not copied from upstream
+- with Vite DevTools in the Vite config, the inspector lives in its dock instead of the page (see [below](#in-the-vite-devtools-dock)); this part is new, not copied from upstream
 
 ## Setup
+
+This package is private and never published. It is not meant to be used on its own:
+`svelteDevtools()` from `@sveltejs/vite-devtools-svelte` adds it to the plugins it returns,
+and the plugin's build bundles it (plugin code into `dist/inspector/index.mjs`, the
+browser runtime into `dist/inspector/runtime/`). Configure it through the `inspector`
+option, or turn it off with `inspector: false`:
 
 ```js
 // vite.config.js
 import { sveltekit } from '@sveltejs/kit/vite';
-import { svelteInspector } from 'vite-devtools-svelte-inspector';
+import { svelteDevtools } from '@sveltejs/vite-devtools-svelte';
 
 export default {
-  plugins: [sveltekit(), svelteInspector({ toggleKeyCombo: 'alt-x', showToggleButton: 'always' })],
+  plugins: [
+    svelteDevtools({ inspector: { toggleKeyCombo: 'alt-x', showToggleButton: 'always' } }),
+    sveltekit(),
+  ],
 };
 ```
+
+## In the Vite DevTools dock
+
+When [Vite DevTools](https://devtools.vite.dev) (`@vitejs/devtools`) is in the Vite config, the inspector is added to its dock instead of injecting itself into the page:
+
+```js
+// vite.config.js
+import { sveltekit } from '@sveltejs/kit/vite';
+import { svelteDevtools } from '@sveltejs/vite-devtools-svelte';
+import { DevTools } from '@vitejs/devtools';
+
+export default {
+  plugins: [svelteDevtools(), DevTools(), sveltekit()],
+};
+```
+
+- **Svelte Inspector** on the dock bar turns the inspector on and off, as do the `toggleKeyCombo` and the **Toggle Svelte Inspector** command in the command palette; all of them stay in sync. The floating toggle button is not shown, so `showToggleButton` and `toggleButtonPos` don't apply.
+- Picked files open through Vite DevTools' `vite:core:open-in-editor` instead of the `/__open-in-editor` middleware.
+- **Svelte Inspector settings**, in the dock's **Svelte** group, edits your personal options: the shortcut, the keys used while picking (click one and press the key to record it), hold mode and styles. Saving writes the options that differ from the `inspector` options to `.env.local` as `SVELTE_INSPECTOR_OPTIONS`, and Vite restarts the dev server to apply them. **Reset to defaults** removes the variable again. If the shell or a `.env.[mode]` file also sets `SVELTE_INSPECTOR_OPTIONS`, the view says so, because that value wins over `.env.local`.
+- The inspector loads once the browser is authorized for Vite DevTools.
+
+The **Svelte** group (id `svelte`) is meant to be shared by Svelte tools: other plugins can add their dock entries to it with `groupId: 'svelte'`. Whichever plugin registers it first keeps its registration.
 
 ## Upstream documentation
 
@@ -55,7 +87,7 @@ SVELTE_INSPECTOR_OPTIONS='{"holdMode": false, "toggleButtonPos": "bottom-left"}'
 
 ```
 
-> Inspector options set on the environment take precedence over options passed to `svelteInspector()`. Unlike upstream, `SVELTE_INSPECTOR_OPTIONS=true|false` is ignored: the inspector is on whenever the plugin is added.
+> Inspector options set on the environment take precedence over the `inspector` options passed to `svelteDevtools()`. Unlike upstream, `SVELTE_INSPECTOR_OPTIONS=true|false` is ignored: use `svelteDevtools({ inspector: false })` to turn the inspector off.
 
 ### Plugin options
 

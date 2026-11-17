@@ -7,6 +7,7 @@ Svelte DevTools for Vite, built on [Devframe](https://devfra.me/). Provides 15 s
 ## Features
 
 - **Component Inspector** — View component hierarchy, props, state, and reactive values in real-time
+- **Svelte Inspector** — Hold `alt-x` in your app and click an element to open its source in your editor (a fork of vite-plugin-svelte's inspector, included and on by default)
 - **Reactivity** — A whole-app overview of the busiest components, then the current dependencies of one component's `$state`, `$derived` and `$effect` signals (signals created during component init and shared `.svelte.js/.ts` module state, plus a _markup_ node for reads from the template; edges are "can affect", not a recorded cause, and not the complete app graph)
 - **Render Profiler** — Track component render counts, render times, and identify bottlenecks
 - **Route Viewer** — Explore SvelteKit file-based routing structure with dynamic parameters
@@ -218,8 +219,18 @@ svelteDevtools({
   // Require the one-time code for the standalone DevTools (default: true).
   // In the Vite DevTools dock use DevTools({ clientAuth: false }) instead.
   clientAuth: true,
+  // The Svelte Inspector (default: true). Pass its options, or false to leave it out.
+  inspector: { toggleKeyCombo: 'alt-x', showToggleButton: 'active' },
 });
 ```
+
+### Svelte Inspector
+
+`svelteDevtools()` includes a fork of the [Svelte Inspector](https://github.com/sveltejs/vite-plugin-svelte/blob/main/docs/inspector.md) from `@sveltejs/vite-plugin-svelte`: hold the toggle key combo (`alt-x` by default) in your app and click an element to open its source in your editor. There is nothing else to install or register. While it is on, it turns off vite-plugin-svelte's built-in inspector, so the two never run together; `inspector: false` leaves it out (vite-plugin-svelte's own `inspector` option then applies again).
+
+`inspector` takes the same options as vite-plugin-svelte's inspector (`toggleKeyCombo`, `navKeys`, `openKey`, `openMenuKey`, `escapeKeys`, `holdMode`, `showToggleButton`, `toggleButtonPos`, `customStyles`). As upstream, `SVELTE_INSPECTOR_TOGGLE` and an options object in `SVELTE_INSPECTOR_OPTIONS` (shell or `.env` files) take precedence over them, for personal preferences; `SVELTE_INSPECTOR_OPTIONS=true|false` does not turn it on or off.
+
+With Vite DevTools in the Vite config, the inspector moves into its dock: **Svelte Inspector** on the dock bar (or the **Toggle Svelte Inspector** command) turns it on and off, and **Svelte Inspector settings** in the **Svelte** group edits your personal shortcut and keys, saved to `.env.local`.
 
 ## How It Works
 
@@ -376,6 +387,7 @@ matches across machines.
 │   │   │   ├── analyzers/      # Routes, components, assets, build, module graph, OG
 │   │   │   └── mcp/            # MCP server for AI agents
 │   │   └── test/               # Vitest: unit, reactivity (real Svelte), perf
+│   ├── inspector/              # Svelte Inspector fork (private), bundled into the plugin's dist/inspector
 │   └── client/                 # DevTools UI (Svelte 5 SPA), built into the plugin's dist/client
 ├── playground/                 # Demo SvelteKit app for development
 ├── examples/                   # One app per app shape (Svelte, Kit SSR/SPA/SSG/remote, …); `pnpm examples` starts all

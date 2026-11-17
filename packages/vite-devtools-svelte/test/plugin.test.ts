@@ -1,4 +1,5 @@
 import http from 'node:http';
+import path from 'node:path';
 
 import type { Plugin } from 'vite';
 import { describe, it, expect, vi } from 'vitest';
@@ -32,9 +33,19 @@ describe('svelteDevtools factory', () => {
       { name: 'vite-devtools-svelte:tracking', enforce: 'post', apply: 'serve' },
       { name: 'vite-devtools-svelte:load-profile', enforce: 'post', apply: 'serve' },
       { name: 'vite-devtools-svelte:warning-capture', enforce: 'post', apply: 'serve' },
+      { name: 'vite-devtools-svelte-inspector', enforce: 'pre', apply: 'serve' },
     ]);
   });
+
+  it('leaves the inspector out with `inspector: false`', () => {
+    const names = svelteDevtools({ inspector: false }).map(p => p.name);
+    expect(names).not.toContain('vite-devtools-svelte-inspector');
+    expect(names).toHaveLength(4);
+  });
 });
+
+// the bundled inspector runtime sits next to the module that declares it
+const SRC = new URL('../src', import.meta.url).pathname;
 
 // =====================================================================
 // Virtual Module Resolution (runtime + wrapper)
@@ -65,6 +76,7 @@ describe('mainPlugin virtual module resolution', () => {
     ['the wrapper (virtual \\0 id)', WRAPPER_MODULE_ID, null],
     ['another virtual module', '\0virtual:other', null],
     ['no importer (entry)', undefined, null],
+    ['the bundled inspector', path.join(SRC, 'inspector/runtime/Inspector.svelte'), null],
   ])('svelte/internal/client imported by %s → %s', (_, importer, expected) => {
     expect(callHook(getMainPlugin().resolveId, 'svelte/internal/client', importer)).toBe(expected);
   });

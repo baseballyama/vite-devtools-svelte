@@ -276,6 +276,12 @@ describe('trackingPlugin transform', () => {
     ['server-side rendering (component)', [COUNTER, '/app/src/A.svelte', { ssr: true }], {}, {}],
     ['server-side rendering (module)', [MODULE_CODE, '/app/a.svelte.ts', { ssr: true }], {}, {}],
     ['node_modules', [COUNTER, '/app/node_modules/lib/A.svelte'], {}, {}],
+    [
+      'the bundled inspector',
+      [COUNTER, new URL('../src/inspector/runtime/Inspector.svelte', import.meta.url).pathname],
+      {},
+      {},
+    ],
     ['componentTracking: false', [COUNTER, '/app/src/A.svelte'], { componentTracking: false }, {}],
     ['vite build', [COUNTER, '/app/src/A.svelte'], {}, { command: 'build' }],
     ['a plain module', ['export const x = 1', '/app/src/a.ts'], {}, {}],
