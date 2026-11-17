@@ -147,6 +147,7 @@ const row = (componentId: number, file: string, changes: number): ReactiveSummar
   changes,
   renders: 1,
   renderMs: 0.5,
+  lastActiveAt: componentId * 100,
 })
 
 describe('groupByFile', () => {
@@ -158,8 +159,18 @@ describe('groupByFile', () => {
       renders: 2,
       renderMs: 1,
       nodes: { state: 2, derived: 4, effect: 6 },
+      lastActiveAt: 300,
     })
     expect(g[0]!.instances.map(r => r.componentId)).toEqual([1, 3])
+  })
+
+  it('keeps the latest reported activity of a file, null when none reported it', () => {
+    const g = groupByFile([
+      { ...row(1, 'a.svelte', 1), lastActiveAt: null },
+      { ...row(2, 'a.svelte', 1), lastActiveAt: 50 },
+      { ...row(3, 'b.svelte', 1), lastActiveAt: null },
+    ])
+    expect(g.map(x => x.lastActiveAt)).toEqual([50, null])
   })
 })
 

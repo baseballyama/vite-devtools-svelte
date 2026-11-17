@@ -447,7 +447,7 @@ describe('RPC input validation', () => {
     ['get-reactive-graph', [{ maxNodes: 0 }]],
     ['get-reactive-graph', [{ maxEdges: -5 }]],
     ['get-reactive-summary', [{ topK: 0 }]],
-    ['get-reactive-summary', [{ windowMs: 1.5 }]],
+    ['get-reactive-summary', [{ topK: 1.5 }]],
     ['get-state-timeline-delta', [{ since: -1 }]],
     ['get-state-timeline-delta', [{ since: 0.5 }]],
     ['get-state-timeline-delta', [undefined]],

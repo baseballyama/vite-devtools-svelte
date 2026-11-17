@@ -89,7 +89,6 @@ const REQUIRED_TOOLS = [
 ]
 // Same markers as perf/check-prod-noop.mjs (kept in sync by hand).
 const PROD_MARKERS = [
-  '__SVELTE_DEVTOOLS__',
   'svelte-devtools:',
   'virtual:svelte-devtools',
   '__svelte_devtools_record_load',
@@ -1104,8 +1103,8 @@ async function main() {
   })
 }
 
-// Page-side probe (serialized by waitForFunction): a DevTools runtime global exists.
-const hasRuntime = () => Object.keys(window).some(k => /^__SVELTE_.*DEVTOOLS__$/.test(k))
+// Page-side probe (serialized by waitForFunction): the DevTools store exists.
+const hasRuntime = () => Symbol.for('vite-devtools-svelte') in window
 
 // T2 browser + the app's first view. Runs BEFORE any authorized MCP call:
 // those take the collector's 60 s MCP lease (plugin.ts) and would activate
@@ -1143,9 +1142,7 @@ async function openApp(getSrv) {
     if (f === page.mainFrame()) navigations++
   })
   const runtimeActive = () =>
-    page.evaluate(
-      () => window[Object.keys(window).find(k => /^__SVELTE_.*DEVTOOLS__$/.test(k))]?._active,
-    )
+    page.evaluate(() => window[Symbol.for('vite-devtools-svelte')]?._active)
   const app = {
     browser,
     ctx,
@@ -1189,12 +1186,12 @@ async function tier2(p, getSrv, restart, app) {
   let epochBefore = null
   await step('T2 get_reactive_summary: policy/coverage, rows + other = total', 25_000, async () => {
     const s = await poll(
-      () => tool(getSrv(), 'get_reactive_summary', { windowMs: 10_000 }),
+      () => tool(getSrv(), 'get_reactive_summary'),
       x => x && x.stale !== true && Array.isArray(x.rows),
       20_000,
     )
     // ReactiveSummary (types.ts); rows are active instances (top K), other = the rest (runtime.ts)
-    if (s.policy !== 'sampled-200ms' || s.coverage !== 'component-init')
+    if (s.policy !== 'per-flush' || s.coverage !== 'component-init')
       throw new Error(`policy ${s.policy} / coverage ${s.coverage}`)
     if ((s.components?.total ?? null) === null || (s.other ?? null) === null)
       throw new Error('total or other unknown (null)')
@@ -1272,11 +1269,11 @@ async function tier2(p, getSrv, restart, app) {
         `expected exactly 1 ${sc.state} entry ${JSON.stringify(sc.from)}->${JSON.stringify(sc.to)}; got ${brief(changes)}`,
       )
     // The collector answers a repeated summary request from its 1 s cache
-    // (PULL_FRESHNESS): one computed before the click (178, 194: sampledActiveMs
-    // 200, withActivity 0). Use only an answer computed after the click.
+    // (PULL_FRESHNESS): one computed before the click (178, 194: withActivity 0).
+    // Use only an answer computed after the click.
     const summary = await poll(
-      () => tool(getSrv(), 'get_reactive_summary', { windowMs: 10_000 }),
-      x => x && x.stale !== true && (x.window?.until ?? 0) >= clickedAt,
+      () => tool(getSrv(), 'get_reactive_summary'),
+      x => x && x.stale !== true && (x.computedAt ?? 0) >= clickedAt,
       5_000,
     ).catch(e => {
       throw new Error(`no summary computed after the click (${e.message})`)
@@ -1288,7 +1285,7 @@ async function tier2(p, getSrv, restart, app) {
           stale: summary?.stale ?? false,
           staleReason: summary?.staleReason ?? null,
           epoch: summary?.epoch ?? null,
-          window: summary?.window ?? null,
+          computedAt: summary?.computedAt ?? null,
           components: summary?.components ?? null,
           rows: (summary?.rows ?? [])
             .slice(0, 10)

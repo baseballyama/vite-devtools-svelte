@@ -1,107 +1,56 @@
 import fs from 'node:fs'
-import vm from 'node:vm'
+import path from 'node:path'
 
-// @ts-expect-error -- Svelte ships no types for its internal entry
-import * as original from 'svelte/internal/client'
+import * as devtools from 'svelte/internal/devtools'
 import { describe, it, expect } from 'vitest'
 
-import {
-  RUNTIME_MODULE_ID,
-  RESOLVED_RUNTIME_ID,
-  runtimeCode,
-  WRAPPER_MODULE_ID,
-  wrapperCode,
-} from '../src/runtime/index.js'
-// @ts-expect-error -- browser source without declarations (served as text)
-import * as wrapper from '../src/runtime/wrapper.js'
+import { HOOKS_FILE, HOOKS_MODULE_ID } from '../src/runtime/index.js'
 
-// Behaviour of the runtime and the wrapper is covered by test/perf (the
+// Behaviour of the runtime and the hooks is covered by test/perf (the
 // runtime in a fake browser) and test/reactivity (real Svelte components
-// through the wrapper). This file pins the module contract the plugin serves.
+// through the hooks). This file pins the module contract the plugin serves.
 
-describe('virtual module ids', () => {
-  it.each([
-    ['RUNTIME_MODULE_ID', RUNTIME_MODULE_ID, 'virtual:svelte-devtools-runtime'],
-    // `\0`: Rollup/Vite convention, so no other plugin tries to load them
-    ['RESOLVED_RUNTIME_ID', RESOLVED_RUNTIME_ID, '\0virtual:svelte-devtools-runtime'],
-    ['WRAPPER_MODULE_ID', WRAPPER_MODULE_ID, '\0svelte-devtools:wrapped-client'],
-  ])('%s', (_, actual, expected) => {
-    expect(actual).toBe(expected)
+describe('module ids', () => {
+  it('HOOKS_MODULE_ID', () => {
+    expect(HOOKS_MODULE_ID).toBe('virtual:svelte-devtools-hooks')
   })
 })
 
-describe('served sources', () => {
-  it.each([
-    ['runtime', runtimeCode, 'client.js'],
-    ['wrapper', wrapperCode, 'wrapper.js'],
-  ])('the %s text is its source file, verbatim', (_, code, file) => {
-    const source = fs.readFileSync(new URL(`../src/runtime/${file}`, import.meta.url), 'utf8')
-    expect(code).toBe(source)
-  })
+const RUNTIME_FILE = path.join(path.dirname(HOOKS_FILE), 'runtime.js')
 
-  it('the runtime is a self-contained script (no imports) that parses', () => {
-    // `import.meta` is only valid in modules; the runtime uses nothing else.
-    const script = runtimeCode.replaceAll('import.meta.hot', 'undefined')
-    expect(script).not.toMatch(/^\s*(import|export)\b/m)
-    expect(() => new vm.Script(script)).not.toThrow()
+describe('runtime file', () => {
+  it('imports nothing and exports only the store factory and the HMR wiring', async () => {
+    // the browser globals it uses come in through createStore(env)
+    const source = fs.readFileSync(RUNTIME_FILE, 'utf8')
+    expect(source).not.toMatch(/^\s*import\b/m)
+    const runtime = (await import(RUNTIME_FILE)) as Record<string, unknown>
+    expect(Object.keys(runtime).toSorted()).toEqual(['connectHot', 'createStore'])
   })
 })
 
-// The wrapper replaces `svelte/internal/client` for app code: every export the
-// compiled components may use must still be there, and anything it does not
-// override must be Svelte's own binding.
-describe('svelte/internal/client wrapper export surface', () => {
-  const originalNames = Object.keys(original)
-  const wrapperNames = Object.keys(wrapper)
-  const overridden = wrapperNames.filter(
-    name =>
-      (wrapper as Record<string, unknown>)[name] !== (original as Record<string, unknown>)[name],
-  )
+// The hooks are the only code that talks to Svelte: they import the runtime
+// next to them and only what svelte/internal/devtools exports.
+describe('hooks file', () => {
+  const source = fs.readFileSync(HOOKS_FILE, 'utf8')
+  const imports = [...source.matchAll(/^import\s+(?:\{([^}]*)\}\s+from\s+)?'([^']+)'/gm)]
 
-  it('re-exports every export of svelte/internal/client', () => {
-    expect(originalNames.filter(name => !wrapperNames.includes(name))).toEqual([])
-    expect(originalNames.length).toBeGreaterThan(100)
+  it('imports svelte/internal/devtools and the runtime next to it (a real file), and nothing else', () => {
+    // no virtual module: a dependency prebundle may carry the hooks
+    expect(imports.map(m => m[2])).toEqual(['svelte/internal/devtools', './runtime.js'])
   })
 
-  it('adds no export Svelte does not have (an override of a removed API)', () => {
-    expect(wrapperNames.filter(name => !originalNames.includes(name))).toEqual([])
+  it('uses only names svelte/internal/devtools exports (as functions)', () => {
+    const names = imports
+      .find(m => m[2] === 'svelte/internal/devtools')![1]!
+      .split(',')
+      .map(name => name.trim())
+      .filter(name => name !== '')
+    expect(names.length).toBeGreaterThan(5)
+    const exported = devtools as Record<string, unknown>
+    expect(names.filter(name => typeof exported[name] !== 'function')).toEqual([])
   })
 
-  it('overrides exactly the instrumented functions, with functions', () => {
-    expect(overridden.toSorted()).toEqual(
-      [
-        'await',
-        'boundary',
-        'component',
-        'deferred_template_effect',
-        'derived',
-        'each',
-        'if',
-        'key',
-        'pop',
-        'proxy',
-        'push',
-        'state',
-        'tag',
-        'tag_proxy',
-        'template_effect',
-        'user_effect',
-        'user_pre_effect',
-      ].toSorted(),
-    )
-    const kinds = (mod: object) =>
-      overridden.map(name => [name, typeof (mod as Record<string, unknown>)[name]])
-    const functions = overridden.map(name => [name, 'function'])
-    expect(kinds(wrapper)).toEqual(functions)
-    expect(kinds(original)).toEqual(functions)
-  })
-
-  it('without a devtools runtime (no window), overrides behave like Svelte', () => {
-    const s = wrapper.state(41)
-    expect(s.v).toBe(41)
-    expect(wrapper.tag(s, 'count')).toBe(s)
-    const p = wrapper.proxy({ a: [1, 2] })
-    expect(p).toEqual({ a: [1, 2] })
-    expect(wrapper.tag_proxy(p, 'items')).toBe(p)
+  it('exports nothing (a side-effect module the compiler imports)', () => {
+    expect(source).not.toMatch(/^export\b/m)
   })
 })

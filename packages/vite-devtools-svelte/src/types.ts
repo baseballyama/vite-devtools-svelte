@@ -171,7 +171,6 @@ export interface ReactiveGraphResult extends ReactiveGraph {
 /** `get-reactive-summary` arguments (§6.7 I). */
 export interface ReactiveSummaryRequest {
   topK?: number
-  windowMs?: number
 }
 
 /** One component instance in the overview, from runtime counters over all instances. */
@@ -186,21 +185,29 @@ export interface ReactiveSummaryRow {
   kind?: 'module'
   /** Tracked nodes registered for this instance, by type. */
   nodes: { state: number; derived: number; effect: number }
-  /** Sampled state changes in the window (≤ 1 per node per 200 ms tick); not a rate. */
+  /**
+   * State changes since the instance was registered (≤ 1 per node per Svelte
+   * flush), observed only while a DevTools client or MCP lease is active.
+   */
   changes: number
-  /** Renders in the window. */
+  /** Renders since the instance was registered. */
   renders: number
   renderMs: number
+  /** When the last change or render was recorded (ms since epoch); `null` = unknown. */
+  lastActiveAt: number | null
 }
 
 /**
- * Whole-app overview without capturing the graph (§6.7 I/J). `rows` + `other`
- * add up to `components` / the registered node counts; `null` = unknown.
+ * Whole-app overview without capturing the graph (§6.7 I/J): the live
+ * instances with their totals since each was registered (a destroyed instance
+ * leaves with its counters). `rows` + `other` add up to `components` / the
+ * registered node counts; `null` = unknown.
  */
 export interface ReactiveSummary {
   epoch: string | null
-  window: { ms: number; since: number; until: number; sampledActiveMs: number }
-  policy: 'sampled-200ms'
+  /** When the page computed this answer (ms since epoch); `null` for an empty fallback. */
+  computedAt: number | null
+  policy: 'per-flush'
   /**
    * Tracked: signals created during a component's init (and its later block
    * updates / effect runs) and while a `.svelte.js`/`.ts` module body runs
@@ -208,6 +215,7 @@ export interface ReactiveSummary {
    * created elsewhere (e.g. in an event handler) are not tracked.
    */
   coverage: 'component-init'
+  /** `withActivity`: live instances with any change or render since they were registered. */
   components: { total: number | null; withActivity: number }
   rows: ReactiveSummaryRow[]
   other: { components: number; nodes: number } | null
@@ -246,7 +254,7 @@ export interface CaptureInfo {
   /** Items reported before any cap; `null` = unknown. */
   total: number | null
   truncated: boolean
-  /** How the subset is chosen, e.g. 'tail', 'roots-first', 'sampled-200ms'. */
+  /** How the subset is chosen, e.g. 'tail', 'roots-first', 'per-flush'. */
   policy?: string
   dropped?: Array<{ reason: DropReason; count: number }>
   /** State values too large to snapshot (shown as a size summary). */

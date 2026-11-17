@@ -21,7 +21,6 @@ const viteBin = path.join(repo, 'playground/node_modules/vite/bin/vite.js')
 
 // Strings that only exist in code emitted by vite-devtools-svelte.
 const MARKERS = [
-  '__SVELTE_DEVTOOLS__',
   'svelte-devtools:',
   'virtual:svelte-devtools',
   '__svelte_devtools_record_load',
@@ -87,7 +86,7 @@ async function devMarkers() {
         })
       }
     }
-    // The wrapper/runtime are pulled in by compiled components on the client.
+    // The hooks/runtime are imported by compiled components on the client.
     const comp = await fetch(`${base}/src/lib/components/gen/C0000.svelte`).then(r => r.text())
     const found = MARKERS.filter(m => html.includes(m) || comp.includes(m))
     return found

@@ -23,14 +23,14 @@ export const MCP_TOOL_GROUPS: McpToolGroup[] = [
     id: 'reactivity',
     title: 'Reactivity (bounded)',
     intro:
-      'New in 0.4.0. Each answer says what it covers: window, sampling, caps, page load (epoch) and whether it is stale. Start here in large apps.',
+      'New in 0.4.0. Each answer says what it covers: coverage, sampling, caps, page load (epoch) and whether it is stale. Start here in large apps.',
     tools: [
       {
         name: 'get_reactive_summary',
-        input: 'topK?: 1–200, windowMs?: 1000–60000',
+        input: 'topK?: 1–200',
         summary:
-          'The busiest component instances from runtime counters over all instances, without capturing the graph: sampled state changes and renders in the window, `rows` + `other` adding up to the totals.',
-        note: 'Counts are sampled (at most one change per state per 200 ms), not rates. State created during component init and shared .svelte.js/.ts module state are tracked; module scopes are rows with kind "module". Answered from a cache for up to 1 s.',
+          'The busiest live component instances from runtime counters over all instances, without capturing the graph: state changes and renders since each instance mounted and when it was last active, `rows` + `other` adding up to the totals.',
+        note: 'Counts are totals (at most one change per state per Svelte flush), not rates; a destroyed instance leaves with its counts. State changes are observed only while a panel or an agent is watching. State created during component init and shared .svelte.js/.ts module state are tracked; module scopes are rows with kind "module". Answered from a cache for up to 1 s.',
       },
       {
         name: 'get_reactive_scope',

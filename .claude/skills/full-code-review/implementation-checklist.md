@@ -101,11 +101,11 @@ const safeFlags = userPattern.flags.replace(/[gy]/g, '')
 const regex = new RegExp(`^(?:${userPattern.source})$`, safeFlags)
 ```
 
-### runtime/client.js のセキュリティ観点
+### runtime/hooks.js / runtime/runtime.js のセキュリティ観点
 
-ユーザーアプリのブラウザコンテキストに注入される `runtime/client.js` は、特にレビューを厳しくする：
+ユーザーアプリのブラウザコンテキストに注入される `runtime/hooks.js` と `runtime/runtime.js` は、特にレビューを厳しくする：
 
-- `window` グローバルへの書き込みは `window.__SVELTE_DEVTOOLS__` 名前空間に集約されているか
+- グローバルへの書き込みは `globalThis[Symbol.for('vite-devtools-svelte')]`（列挙されない、ページに 1 つのストア）に集約されているか
 - `Object.prototype` / `Array.prototype` などビルトインを拡張していないか
 - `eval` / `new Function` を使っていないか
 - ユーザーコードから来るオブジェクトを `JSON.stringify` する時に循環参照を考慮しているか
@@ -136,21 +136,17 @@ transform(code, id) {
 
 ### resolveId / load の挙動
 
-仮想モジュール（`virtual:svelte-devtools/runtime` 等）を resolveId で intercept する場合、importer が `node_modules` 配下や Vite の internal モジュール（`\0` プレフィックス）からの import である時は intercept しない。これを忘れると `node_modules` 内のコードが書き換わって壊れる：
+仮想モジュール（`virtual:svelte-devtools-hooks`）を resolveId で intercept する場合、importer が `node_modules` 配下や Vite の internal モジュール（`\0` プレフィックス）からの import である時は intercept しない。これを忘れると `node_modules` 内のコードが書き換わって壊れる：
 
 ```ts
-resolveId(id, importer) {
-  if (
-    config?.command === 'serve' &&
-    componentTracking &&
-    id === 'svelte/internal/client' &&
-    importer &&
-    !importer.includes('node_modules') &&
-    !importer.startsWith('\0')
-  ) {
-    return WRAPPER_MODULE_ID
+async resolveId(id, importer) {
+  if (!serving()) return null
+  if (id === HOOKS_MODULE_ID) return HOOKS_FILE
+  // hooks.js はアプリ側の Svelte インスタンスを listen する
+  if (importer === HOOKS_FILE && id.startsWith('svelte/')) {
+    return this.resolve(id, path.join(root, 'index.html'), { skipSelf: true })
   }
-  return undefined
+  return null
 }
 ```
 
@@ -160,10 +156,10 @@ resolveId(id, importer) {
 
 `server.hot.send(name, data)` と `server.hot.on(name, handler)` はペアで存在する必要がある。新しいチャネルを追加する時は **両側を同時に追加** すること。
 
-| 役割                        | 送信側                                                              | 受信側                                                                    |
-| --------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| サーバー → クライアント要求 | `plugin.ts` の `server.hot.send('svelte-devtools:request-*')`       | `runtime/client.js` の `import.meta.hot?.on('svelte-devtools:request-*')` |
-| クライアント → サーバー報告 | `runtime/client.js` の `import.meta.hot?.send('svelte-devtools:*')` | `plugin.ts` の `server.hot.on('svelte-devtools:*')`                       |
+| 役割                        | 送信側                                                        | 受信側                                                                          |
+| --------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| サーバー → クライアント要求 | `plugin.ts` の `server.hot.send('svelte-devtools:request-*')` | `runtime/runtime.js` の `connectHot()` 内 `hot.on('svelte-devtools:request-*')` |
+| クライアント → サーバー報告 | `runtime/runtime.js` の `hot.send('svelte-devtools:*')`       | `plugin.ts` の `server.hot.on('svelte-devtools:*')`                             |
 
 レビュー時は、新しい `send` を見つけたら対応する `on` ハンドラが反対側に存在することを確認する。片側だけ追加されていると silent に動かない。
 
@@ -370,7 +366,7 @@ DevTools パネルでは **ポーリング (`setInterval(refresh, 500)`)** が�
 - 新規 RPC ハンドラ → `test/plugin.test.ts` に対応テスト
 - 新規 analyzer → `test/analyzers.test.ts` に対応テスト
 - 新規 transform → `test/transforms.test.ts` に対応テスト
-- runtime/client.js の変更 → `test/runtime.test.ts`
+- runtime/hooks.js / runtime.js の変更 → `test/runtime.test.ts`、`test/perf/`（runtime.js のストア）、`test/reactivity/`（実コンポーネント経由）
 - セキュリティ系（URL 検証、パス検証、XSS 防止）→ `test/security.test.ts` の負例テストを追加
 - middleware（`/__svelte-devtools/*` の Express 風ルート）→ `test/middleware.test.ts`
 
@@ -415,10 +411,10 @@ expect(items.find(i => i.id === target.id)).toBeDefined()
 ```ts
 export interface SvelteDevtoolsOptions {
   /**
-   * Enable component tracking via code injection.
+   * Require the one-time code before a browser can use the standalone DevTools.
    * @default true
    */
-  componentTracking?: boolean
+  clientAuth?: boolean
 
   /**
    * 新しいオプション（用途を明記）
@@ -506,7 +502,7 @@ if (fpsSamples.length > 1200) fpsSamples = fpsSamples.slice(-1200)
 【dev only】
 ✅ 新規プラグインフックに config.command === 'serve' のガードがあるか？
 ✅ resolveId の intercept が node_modules / \0 を除外しているか？
-✅ production バンドルに runtime / wrapper が混入しないか？
+✅ production バンドルに runtime / hooks が混入しないか？
 
 【HMR / RPC】
 ✅ 新規 server.hot.send に対応する on ハンドラがあるか（逆も同様）？

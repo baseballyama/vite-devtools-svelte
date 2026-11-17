@@ -13,7 +13,7 @@ PR を提出する前に、リポジトリ全体のコードオーナー視点�
 ```
 packages/vite-devtools-svelte/
   src/                    Vite プラグイン本体（plugin.ts / types.ts）
-  src/runtime/            ブラウザに注入されるコード（client.js / wrapper.js）と変換
+  src/runtime/            ブラウザに注入されるコード（hooks.js / runtime.js）と変換
   src/server/             dev server 側（collector / devframe RPC / mount / security）
   src/analyzers/ src/mcp/ 解析器と MCP サーバー
   test/                   vitest テスト（unit / reactivity / perf）
@@ -28,7 +28,7 @@ site/                     公開サイト（SvelteKit）
 主要な技術的特徴（レビュー時に必ず意識する）：
 
 - **デュアルトランスポート RPC**：Vite DevTools Kit の RPC を優先、失敗時は `/__svelte-devtools/rpc` HTTP fallback。新しい RPC を追加する時は **`getRpcHandlers()` 内に登録すれば両方に自動配線される**。
-- **仮想モジュール**：`virtual:svelte-devtools/runtime` と `svelte/internal/client` のラッパー。`resolveId` / `load` フックで処理。
+- **仮想モジュール**：`virtual:svelte-devtools-hooks`（hooks.js）。hooks.js は Svelte の devtools イベント（`svelte/internal/devtools`）を listen し、隣の runtime.js（ストア本体）を import する。コンパイラオプション `experimental.devtools` で全クライアントコンポーネントが先頭で import し、`index.html` にも注入する。`resolveId` フックで処理。
 - **HMR チャネル**：`server.hot.send` / `server.hot.on` でブラウザ↔サーバー間のリアルタイム送受信。送信側と受信側はペアで存在する必要がある。
 - **dev only**：プラグインは `config.command !== 'serve'` ではほぼ no-op。production ビルドを汚染してはいけない。
 
@@ -69,7 +69,7 @@ git log --oneline ${BASE_BRANCH}...HEAD
 変更ファイルを以下のカテゴリに分類する（`scripts/plan-review-chunks.mjs` と同じ規則）：
 
 - **plugin**: `packages/vite-devtools-svelte/src/` 配下
-- **runtime**: `packages/vite-devtools-svelte/src/runtime/`（client.js / wrapper.js）（browser-injected コードは独立してレビュー）
+- **runtime**: `packages/vite-devtools-svelte/src/runtime/`（hooks.js / runtime.js）（browser-injected コードは独立してレビュー）
 - **client**: `packages/client/` 配下
 - **tests**: `packages/vite-devtools-svelte/test/` 配下と `packages/client/src/**/*.test.ts`
 - **playground**: `playground/` 配下
@@ -283,7 +283,7 @@ Skill ツールを使って `security-review` を呼び出してください。
 - ユーザー入力由来のパスを `path.join` ではなく `path.resolve` で扱っているか（絶対パスがリテラルに連結されて壊れる罠）
 - `execFile` / `spawn` の引数にユーザー入力を直接渡していないか（コマンドインジェクション）
 - ユーザー入力 RegExp の `g`/`y` フラグを剥がしているか（`RegExp.test()` がステートフルになる罠）
-- 注入される runtime コード（runtime/client.js / runtime/wrapper.js） に XSS / プロトタイプ汚染リスクがないか
+- 注入される runtime コード（runtime/hooks.js / runtime/runtime.js） に XSS / プロトタイプ汚染リスクがないか
 ```
 
 ##### Agent 2: 実装レビュー（チャンクのカテゴリに応じて切り替え）
@@ -314,8 +314,8 @@ Vite プラグイン / runtime 実装のコードレビューを、以下の対�
 - 大量データを扱うバッファに長さ上限のキャッピングがあるか
 - Promise resolver の漏れ（タイムアウト時に `splice` で resolver 配列から取り除く）
 - Vite v8 の environments API への対応（moduleGraph 取得時のフォールバック）
-- runtime/client.js: postMessage / window グローバルへの書き込みが既存の `window.__SVELTE_DEVTOOLS__` 名前空間に集約されているか
-- runtime/client.js: 注入されるコードがユーザーのコードを破壊しないか（global 衝突、prototype 拡張禁止）
+- runtime/hooks.js / runtime.js: グローバルへの書き込みが `globalThis[Symbol.for('vite-devtools-svelte')]`（ページに 1 つのストア）に集約されているか
+- runtime/hooks.js / runtime.js: 注入されるコードがユーザーのコードを破壊しないか（global 衝突、prototype 拡張禁止）
 
 ## 出力フォーマット
 ファイルごとに指摘事項を報告。各指摘に **[Critical/Major/Minor]** [ファイル:行番号] [指摘内容] → [改善案] を含める。

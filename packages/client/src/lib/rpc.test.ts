@@ -382,20 +382,15 @@ describe('activity lease (heartbeat)', () => {
     expect(new Set(leaseCalls(c).map(a => a.client)).size).toBe(1)
   })
 
-  it('releases the lease when the tab is hidden and takes it again when visible', async () => {
+  it('keeps the lease while the tab is hidden (the app is used in another tab)', async () => {
     const c = fakeClient()
     connectDevframe.mockResolvedValue(c)
     const rpc = await load()
     rpc.onConnectionState(() => {})
     await settle()
     doc.visibilityState = 'hidden'
-    for (const l of listeners.visibilitychange) l()
-    expect(setActive(c)).toEqual([true, false])
-    await vi.advanceTimersByTimeAsync(20_000)
-    expect(setActive(c)).toEqual([true, false])
-    doc.visibilityState = 'visible'
-    for (const l of listeners.visibilitychange) l()
-    expect(setActive(c)).toEqual([true, false, true])
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(setActive(c)).toEqual([true, true, true])
   })
 
   it('releases the lease on pagehide', async () => {

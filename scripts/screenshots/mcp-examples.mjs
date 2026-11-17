@@ -304,7 +304,7 @@ try {
   await sleep(1500)
 
   // 1 — where is the activity?
-  await call('get_reactive_summary', { topK: 5, windowMs: 30_000 })
+  await call('get_reactive_summary', { topK: 5 })
   // 2 — instance ids with the page load they belong to.
   const live = await call('get_live_components', { includeMeta: true, limit: 50 })
   const chart = live?.components?.find(c => c.name === 'ReactivePriceChart')

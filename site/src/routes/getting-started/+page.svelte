@@ -30,8 +30,9 @@ export default defineConfig({
 })`
 
   const optionsCode = `svelteDevtools({
-  // Enable component lifecycle tracking (default: true)
-  componentTracking: true,
+  // Require the one-time code for the standalone DevTools (default: true).
+  // In the Vite DevTools dock use DevTools({ clientAuth: false }) instead.
+  clientAuth: true,
 })`
 
   const steps = [

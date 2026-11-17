@@ -151,9 +151,11 @@ describe('reactive pulls: replies that do not match', () => {
           changes: Number.NaN,
           renders: 5,
           renderMs: -1,
+          lastActiveAt: 'soon',
           kind: 'module',
         },
         'garbage',
+        { lastActiveAt: 1_700_000_000_000 },
       ],
     })
     expect((await summary).rows).toEqual([
@@ -164,6 +166,7 @@ describe('reactive pulls: replies that do not match', () => {
         changes: 0,
         renders: 5,
         renderMs: 0,
+        lastActiveAt: null,
         kind: 'module',
       },
       {
@@ -173,6 +176,16 @@ describe('reactive pulls: replies that do not match', () => {
         changes: 0,
         renders: 0,
         renderMs: 0,
+        lastActiveAt: null,
+      },
+      {
+        componentId: 0,
+        file: '',
+        nodes: { state: 0, derived: 0, effect: 0 },
+        changes: 0,
+        renders: 0,
+        renderMs: 0,
+        lastActiveAt: 1_700_000_000_000,
       },
     ])
   })

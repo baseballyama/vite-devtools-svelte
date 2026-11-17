@@ -54,7 +54,7 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
   const flow = [
     {
       tool: 'get_reactive_summary',
-      text: 'まず全体の活発さを見ます。グラフは取得しないので、大きなアプリでも回答は小さく収まります。回答には対象期間とサンプリングされた時間（sampledActiveMs）が含まれます。',
+      text: 'まず全体の活発さを見ます。グラフは取得しないので、大きなアプリでも回答は小さく収まります。回数は各インスタンスがマウントされてからの累計で、lastActiveAt が最後に動いた時刻を示します。',
     },
     {
       tool: 'get_live_components',
@@ -304,7 +304,7 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
               の中でだけ有効です。回答は最大 1 秒間キャッシュから返ることがあり、<code
                 >computedAt</code
               >
-              と <code>window.until</code> が計算時刻を示します。
+              が計算時刻を示します。
             </li>
           </ul>
           <p>非常に大きなアプリでの性能は計測していません。対応できる規模は約束していません。</p>
@@ -351,7 +351,6 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
             <div>
               <dt>コンポーネントやリアクティブノードが出てこない</dt>
               <dd>
-                <code>componentTracking</code> が <code>false</code> になっていないこと、
                 <code>vite.config.ts</code> でプラグインが <code>sveltekit()</code>
                 より前にあることを確認してください。
               </dd>

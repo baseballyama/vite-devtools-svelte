@@ -57,6 +57,7 @@ export function resolvePlugins(plugins: Plugin[], config: Record<string, unknown
     base: '/',
     plugins: [],
     logger: { warn: () => {} },
+    server: { fs: { allow: ['/test'] } },
     ...config,
   }
   for (const p of plugins) if (p.configResolved) callHook(p.configResolved, resolved)

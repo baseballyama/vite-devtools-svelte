@@ -11,33 +11,18 @@ import { analyzeRoutes } from './analyzers/routes.js'
 import { createMcpMiddleware, MCP_PATH } from './mcp/http.js'
 import { buildMcpServer } from './mcp/server.js'
 import { SessionStore } from './mcp/sessions.js'
-import {
-  RUNTIME_MODULE_ID,
-  RESOLVED_RUNTIME_ID,
-  runtimeCode,
-  WRAPPER_MODULE_ID,
-  wrapperCode,
-} from './runtime/index.js'
-import {
-  injectComponentTracking,
-  injectModuleTracking,
-  isSvelteModule,
-} from './runtime/transform.js'
+import { HOOKS_FILE, HOOKS_MODULE_ID } from './runtime/index.js'
+import { injectModuleTracking, isSvelteModule } from './runtime/transform.js'
 import { Collector } from './server/collector.js'
 import { captureCompilerWarnings } from './server/compiler-warnings.js'
 import { createSvelteDevframe, DEVFRAME_BASE } from './server/devframe.js'
 import type { SvelteDevtoolsHost } from './server/devframe.js'
-import { LOAD_RECORDER, profileLoad } from './server/load-profile.js'
+import { LOAD_RECORDER, loadProfileOf, profileLoad } from './server/load-profile.js'
 import { mountStandalone, urlHost } from './server/mount.js'
 import { sveltekitTemplateInjector } from './server/template-injector.js'
 import type { LoadProfile } from './types.js'
 
 export interface SvelteDevtoolsOptions {
-  /**
-   * Enable component tracking via code injection.
-   * @default true
-   */
-  componentTracking?: boolean
   /**
    * Require the one-time code before a browser can use the standalone
    * DevTools (`/.svelte-devtools/`). Set `false` to skip it on a trusted,
@@ -56,6 +41,29 @@ export interface SvelteDevtoolsOptions {
 
 /** Name of `@vitejs/devtools`' config plugin; its presence means the hub will call our `devtools.setup`. */
 const VITE_DEVTOOLS_PLUGIN = 'vite:devtools'
+
+/** vite-plugin-svelte's config plugin; its `api.options` are the resolved Svelte options. */
+const VITE_PLUGIN_SVELTE_CONFIG = 'vite-plugin-svelte:config'
+
+/**
+ * Lists the hooks in the compiler's `experimental.devtools`, in the options
+ * vite-plugin-svelte resolved (read when it compiles a component, including
+ * libraries it prebundles). vite-plugin-svelte has no documented way to add
+ * an entry yet.
+ */
+function addDevtoolsHooks(plugins: readonly Plugin[]): void {
+  const svelteConfig = plugins.find(p => p.name === VITE_PLUGIN_SVELTE_CONFIG)
+  const options = (
+    svelteConfig?.api as
+      | { options?: { compilerOptions?: { experimental?: { devtools?: string[] } } } }
+      | undefined
+  )?.options
+  if (!options) return
+  const compilerOptions = (options.compilerOptions ??= {})
+  const experimental = (compilerOptions.experimental ??= {})
+  const devtools = (experimental.devtools ??= [])
+  if (!devtools.includes(HOOKS_FILE)) devtools.push(HOOKS_FILE)
+}
 
 // Shared by every plugin instance in the process: a config-file restart
 // builds a *new* plugin instance for the new server, so only a process-wide
@@ -78,7 +86,7 @@ function collectModules(server: ViteDevServer): GraphModuleLike[] {
 }
 
 export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
-  const { componentTracking = true, clientAuth = true } = options
+  const { clientAuth = true } = options
 
   let config: ResolvedConfig
   let server: ViteDevServer | undefined
@@ -145,6 +153,16 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       config = resolvedConfig
       root = config.root
       hostedByViteDevtools = config.plugins.some(p => p.name === VITE_DEVTOOLS_PLUGIN)
+      // Only while developing, and not inside Vitest (which runs `serve`).
+      // vite-plugin-svelte resolved its options in its own `configResolved`
+      // (order 'pre').
+      if (serving() && !process.env['VITEST']) {
+        addDevtoolsHooks(config.plugins)
+        // Components import the hooks by path (/@fs/...). Installed by link
+        // or from outside the workspace, that path is not in fs.allow and
+        // the browser gets a 403 for every component.
+        config.server.fs.allow.push(path.dirname(HOOKS_FILE))
+      }
     },
 
     configureServer(devServer) {
@@ -220,26 +238,16 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       await Promise.all(doomed.map(m => m.dispose()))
     },
 
-    // Virtual module resolution: runtime + svelte/internal/client wrapper.
-    resolveId(id, importer) {
+    // Module resolution: the alias of the hooks file, and Svelte as the hooks
+    // import it.
+    async resolveId(id, importer) {
       if (!serving()) return null
-      if (id === RUNTIME_MODULE_ID) return RESOLVED_RUNTIME_ID
-      if (
-        componentTracking &&
-        id === 'svelte/internal/client' &&
-        importer &&
-        !importer.includes('node_modules') &&
-        !importer.startsWith('\0')
-      ) {
-        return WRAPPER_MODULE_ID
+      if (id === HOOKS_MODULE_ID) return HOOKS_FILE
+      // The hooks must listen to the app's Svelte instance, not one installed
+      // next to this package: resolve as if imported from the project root.
+      if (importer === HOOKS_FILE && id.startsWith('svelte/')) {
+        return this.resolve(id, path.join(root, 'index.html'), { skipSelf: true })
       }
-      return null
-    },
-
-    load(id) {
-      if (!serving()) return null
-      if (id === RESOLVED_RUNTIME_ID) return runtimeCode
-      if (id === WRAPPER_MODULE_ID) return wrapperCode
       return null
     },
 
@@ -247,7 +255,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     // 'pre': the tag is injected before Vite's own HTML processing, which
     // rewrites the inline module's bare `virtual:` import to a URL the browser
     // can load (as a normal-order hook, the browser requested
-    // 'virtual:svelte-devtools-runtime' itself and failed with a CORS error).
+    // 'virtual:svelte-devtools-hooks' itself and failed with a CORS error).
     transformIndexHtml: {
       order: 'pre',
       handler() {
@@ -256,7 +264,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
           {
             tag: 'script',
             attrs: { type: 'module' },
-            children: `import '${RUNTIME_MODULE_ID}'`,
+            children: `import '${HOOKS_MODULE_ID}'`,
             injectTo: 'head-prepend',
           },
         ]
@@ -275,27 +283,23 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     },
   }
 
-  // Minimal component tracking transform plugin.
-  // Only injects the file path before $.push() so the runtime wrapper knows
-  // which component file is being initialized. All reactive tracking (state,
-  // derived, proxy, effect) is handled by the svelte/internal/client wrapper.
+  // Svelte modules (`.svelte.js/.ts`) import the hooks first; components get
+  // the import from the compiler (see addDevtoolsHooks), which
+  // vite-plugin-svelte does not pass on to modules.
   const trackingPlugin: Plugin = {
     name: 'vite-devtools-svelte:tracking',
     enforce: 'post',
     apply: 'serve',
 
     transform(code, id, transformOptions) {
-      if (!componentTracking || !serving()) return null
+      if (!serving()) return null
       if (id.includes('node_modules')) return null
       // Client modules only: the runtime is browser code, and a server
       // render has no devtools to report to.
       if (transformOptions?.ssr) return null
       const [file = id] = id.split('?')
-      const modified = file.endsWith('.svelte')
-        ? injectComponentTracking(code, file)
-        : isSvelteModule(file)
-          ? injectModuleTracking(code, file)
-          : null
+      if (!isSvelteModule(file)) return null
+      const modified = injectModuleTracking(code)
       return modified === null ? null : { code: modified, map: null }
     },
   }
@@ -315,14 +319,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
         duration: number,
         dataSize: number,
       ) => {
-        collector.recordLoadProfile({
-          route,
-          file,
-          type,
-          duration: Math.round(duration * 100) / 100,
-          dataSize,
-          timestamp: Date.now(),
-        })
+        collector.recordLoadProfile(loadProfileOf({ route, file, type, duration, dataSize }))
       }
     },
 

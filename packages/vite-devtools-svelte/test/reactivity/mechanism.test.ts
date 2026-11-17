@@ -3,9 +3,10 @@ import { describe, it, expect, afterEach } from 'vitest'
 
 import Classes from './fixtures/Classes.svelte'
 import EachConst from './fixtures/EachConst.svelte'
+import EachState from './fixtures/EachState.svelte'
 import Effects from './fixtures/Effects.svelte'
 import Tree from './fixtures/Tree.svelte'
-import { render, instance, instances, graph, node, incoming, dt, poll } from './harness.js'
+import { render, instance, instances, graph, node, incoming, dt } from './harness.js'
 
 let cleanup: Array<() => void> = []
 afterEach(() => {
@@ -139,8 +140,29 @@ describe('node lifetime', () => {
     expect(graph(c.id).nodes.filter(n => n.type === 'derived')).toHaveLength(2)
     ;(r.app as any).removeFirst()
     flushSync()
-    poll() // the poll tick's sweep, without a graph request
+    // removed when Svelte destroys the item, without a poll or a graph request
     expect(dt()._nodeCounts.get(c.id).derived).toBe(1)
+  })
+
+  it("a destroyed {#each} item's states leave the store at once (effectDestroyed)", () => {
+    const r = mountIt(EachState)
+    const c = instance('EachState')
+    const ids = (): string[] =>
+      [...dt()._nodesByComponent.get(c.id)].toSorted((a: string, b: string) => a.localeCompare(b))
+    const before = ids()
+    // per item: the Counter's count ($state), doubled ($derived), the {@const}
+    expect(dt()._nodeCounts.get(c.id)).toEqual({ state: 1 + 3, derived: 3 * 2, effect: 0 })
+    ;(r.app as any).removeFirst()
+    flushSync()
+    expect(dt()._nodeCounts.get(c.id)).toEqual({ state: 1 + 2, derived: 2 * 2, effect: 0 })
+    const gone = before.filter(id => !ids().includes(id))
+    expect(gone).toHaveLength(3)
+    for (const id of gone) {
+      expect(dt()._reactiveNodes.has(id)).toBe(false)
+      expect(dt()._unseeded.has(id)).toBe(false)
+      expect(dt()._stateSnapshots.has(id)).toBe(false)
+    }
+    expect(graph(c.id).nodes.filter(n => n.name.startsWith('count'))).toHaveLength(2)
   })
 
   it('an effect re-created by its parent effect does not pile up', () => {
@@ -151,7 +173,6 @@ describe('node lifetime', () => {
       flushSync()
     }
     // effect_2 creates a nested effect per run; only the current one is live
-    poll()
     expect(graph(c.id).nodes.filter(n => n.type === 'effect')).toHaveLength(4)
     expect(dt()._nodeCounts.get(c.id).effect).toBe(4)
   })

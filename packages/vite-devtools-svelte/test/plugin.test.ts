@@ -1,16 +1,11 @@
 import http from 'node:http'
+import path from 'node:path'
 
 import type { Plugin } from 'vite'
-import { describe, it, expect, vi } from 'vitest'
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
 
 import { svelteDevtools } from '../src/plugin.js'
-import {
-  RUNTIME_MODULE_ID,
-  RESOLVED_RUNTIME_ID,
-  runtimeCode,
-  WRAPPER_MODULE_ID,
-  wrapperCode,
-} from '../src/runtime/index.js'
+import { HOOKS_FILE, HOOKS_MODULE_ID } from '../src/runtime/index.js'
 import { callHook, resolvePlugins } from './helpers.js'
 
 // =====================================================================
@@ -25,8 +20,8 @@ const shape = (p: Plugin) => ({
 
 describe('svelteDevtools factory', () => {
   it('returns the dev-only plugins in hook order', () => {
-    // main (pre) resolves the wrapper before vite-plugin-svelte compiles;
-    // the transforms (post) see compiled output.
+    // main (pre) resolves the runtime and the hooks; the transforms (post)
+    // run after Vite's own.
     expect(svelteDevtools().map(shape)).toEqual([
       { name: 'vite-devtools-svelte', enforce: 'pre', apply: 'serve' },
       { name: 'vite-devtools-svelte:tracking', enforce: 'post', apply: 'serve' },
@@ -38,58 +33,120 @@ describe('svelteDevtools factory', () => {
 })
 
 // =====================================================================
-// Virtual Module Resolution (runtime + wrapper)
+// Module Resolution (runtime + hooks)
 // =====================================================================
 
-function getMainPlugin(): Plugin {
-  const plugins = svelteDevtools()
+function getMainPlugin(options: Parameters<typeof svelteDevtools>[0] = {}): Plugin {
+  const plugins = svelteDevtools(options)
   const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
   resolvePlugins([plugin])
   return plugin
 }
 
-describe('mainPlugin virtual module resolution', () => {
-  it('resolves and loads the runtime virtual module', () => {
-    const plugin = getMainPlugin()
-    expect(callHook(plugin.resolveId, RUNTIME_MODULE_ID)).toBe(RESOLVED_RUNTIME_ID)
-    expect(callHook(plugin.load, RESOLVED_RUNTIME_ID)).toBe(runtimeCode)
-    expect(callHook(plugin.load, WRAPPER_MODULE_ID)).toBe(wrapperCode)
+// `this` of a resolveId call: records what is passed on to `this.resolve`.
+function resolveContext() {
+  const calls: unknown[][] = []
+  return {
+    calls,
+    ctx: {
+      resolve: (...args: unknown[]) => {
+        calls.push(args)
+        return Promise.resolve({ id: '/app/node_modules/svelte/src/internal/devtools/index.js' })
+      },
+    },
+  }
+}
+
+const resolveWith = (plugin: Plugin, id: string, importer?: string, ctx: object = {}) => {
+  const hook = plugin.resolveId as (...args: unknown[]) => unknown
+  return hook.call(ctx, id, importer)
+}
+
+describe('mainPlugin module resolution', () => {
+  it('resolves the hooks alias to the file on disk', async () => {
+    expect(await resolveWith(getMainPlugin(), HOOKS_MODULE_ID)).toBe(HOOKS_FILE)
+    expect(HOOKS_FILE.endsWith('/src/runtime/hooks.js')).toBe(true)
   })
 
-  it.each([
-    ['app component', '/test/src/lib/Counter.svelte', WRAPPER_MODULE_ID],
-    ['app Svelte module', '/test/src/lib/cart.svelte.ts', WRAPPER_MODULE_ID],
-    ['app module with a query', '/test/src/App.svelte?direct', WRAPPER_MODULE_ID],
-    ['a dependency (node_modules)', '/test/node_modules/svelte/src/index.js', null],
-    ['a nested dependency', '/test/node_modules/.pnpm/x/node_modules/lib/A.svelte', null],
-    // the wrapper itself imports the real module: redirecting it would loop
-    ['the wrapper (virtual \\0 id)', WRAPPER_MODULE_ID, null],
-    ['another virtual module', '\0virtual:other', null],
-    ['no importer (entry)', undefined, null],
-  ])('svelte/internal/client imported by %s → %s', (_, importer, expected) => {
-    expect(callHook(getMainPlugin().resolveId, 'svelte/internal/client', importer)).toBe(expected)
+  it("resolves Svelte imported by the hooks as the app's Svelte (from the project root)", async () => {
+    const { calls, ctx } = resolveContext()
+    const resolved = await resolveWith(getMainPlugin(), 'svelte/internal/devtools', HOOKS_FILE, ctx)
+    expect(resolved).toEqual({ id: '/app/node_modules/svelte/src/internal/devtools/index.js' })
+    expect(calls).toEqual([['svelte/internal/devtools', '/test/index.html', { skipSelf: true }]])
   })
 
   it.each([
     ['svelte', '/test/src/App.svelte'],
-    ['svelte/internal/server', '/test/src/App.svelte'],
-    ['svelte/internal/client/index.js', '/test/src/App.svelte'],
+    ['svelte/internal/client', '/test/src/App.svelte'],
+    ['svelte/internal/devtools', '/test/src/App.svelte'],
+    ['some-other-module', HOOKS_FILE],
     ['some-other-module', '/test/src/App.svelte'],
-  ])('defers %s to Vite', (id, importer) => {
-    expect(callHook(getMainPlugin().resolveId, id, importer)).toBeNull()
+  ])('defers %s imported by %s to Vite', async (id, importer) => {
+    expect(await resolveWith(getMainPlugin(), id, importer)).toBeNull()
+  })
+})
+
+// =====================================================================
+// Compiler option: experimental.devtools through vite-plugin-svelte
+// =====================================================================
+
+// The resolved options vite-plugin-svelte's config plugin exposes on its api.
+function withSvelte(
+  options: Parameters<typeof svelteDevtools>[0] = {},
+  svelteOptions: Record<string, any> = {},
+  command = 'serve',
+) {
+  const api = { options: svelteOptions }
+  const plugins = svelteDevtools(options)
+  resolvePlugins(plugins, { command, plugins: [{ name: 'vite-plugin-svelte:config', api }] })
+  return api.options
+}
+
+describe('experimental.devtools', () => {
+  // the suite itself runs under Vitest, where the option is not added
+  const vitest = process.env['VITEST']
+  beforeEach(() => {
+    delete process.env['VITEST']
+  })
+  afterEach(() => {
+    process.env['VITEST'] = vitest
   })
 
-  it('defers unknown ids to other loaders', () => {
-    expect(callHook(getMainPlugin().load, '/test/src/App.svelte')).toBeNull()
+  it("lists the hooks in vite-plugin-svelte's compiler options", () => {
+    expect(withSvelte().compilerOptions).toEqual({ experimental: { devtools: [HOOKS_FILE] } })
   })
 
-  it('does not redirect svelte/internal/client when componentTracking is disabled', () => {
-    const plugins = svelteDevtools({ componentTracking: false })
-    const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
-    resolvePlugins([plugin])
-    expect(callHook(plugin.resolveId, 'svelte/internal/client', '/test/src/A.svelte')).toBeNull()
-    // the runtime itself is still served (the dock works without tracking)
-    expect(callHook(plugin.resolveId, RUNTIME_MODULE_ID)).toBe(RESOLVED_RUNTIME_ID)
+  it('keeps the other experimental options and devtools plugins, once', () => {
+    const svelteOptions = {
+      compilerOptions: { dev: true, experimental: { async: true, devtools: ['other/runtime'] } },
+    }
+    withSvelte({}, svelteOptions)
+    // a second plugin instance (restart with an inline config) adds nothing
+    withSvelte({}, svelteOptions)
+    expect(svelteOptions.compilerOptions).toEqual({
+      dev: true,
+      experimental: { async: true, devtools: ['other/runtime', HOOKS_FILE] },
+    })
+  })
+
+  it('lets the dev server serve the hooks file (linked or outside the workspace)', () => {
+    const resolved = resolvePlugins(svelteDevtools(), {
+      plugins: [{ name: 'vite-plugin-svelte:config', api: { options: {} } }],
+    })
+    expect(resolved.server.fs.allow).toEqual(['/test', path.dirname(HOOKS_FILE)])
+  })
+
+  it('is not added when building', () => {
+    expect(withSvelte({}, {}, 'build').compilerOptions).toBeUndefined()
+  })
+
+  it('is not added inside Vitest', () => {
+    process.env['VITEST'] = 'true'
+    expect(withSvelte().compilerOptions).toBeUndefined()
+  })
+
+  it('does nothing without vite-plugin-svelte', () => {
+    expect(() => resolvePlugins(svelteDevtools())).not.toThrow()
   })
 })
 
@@ -103,20 +160,14 @@ describe('build command: every hook is inert', () => {
   const main = byName('vite-devtools-svelte')
 
   it.each([
-    ['resolveId(runtime)', () => callHook(main.resolveId, RUNTIME_MODULE_ID)],
-    [
-      'resolveId(svelte/internal/client)',
-      () => callHook(main.resolveId, 'svelte/internal/client', '/test/src/A.svelte'),
-    ],
-    ['load(runtime)', () => callHook(main.load, RESOLVED_RUNTIME_ID)],
-    ['load(wrapper)', () => callHook(main.load, WRAPPER_MODULE_ID)],
+    ['resolveId(hooks)', () => resolveWith(main, HOOKS_MODULE_ID)],
     [
       'tracking transform',
       () =>
         callHook(
           byName('vite-devtools-svelte:tracking').transform,
-          '\t$.push($$props, true, A);',
-          '/test/src/A.svelte',
+          'export const cart = $.proxy({})',
+          '/test/src/cart.svelte.ts',
         ),
     ],
     [
@@ -128,8 +179,8 @@ describe('build command: every hook is inert', () => {
           '/test/src/routes/+page.ts',
         ),
     ],
-  ])('%s → null', (_, run) => {
-    expect(run()).toBeNull()
+  ])('%s → null', async (_, run) => {
+    expect(await run()).toBeNull()
   })
 
   it('transformIndexHtml injects nothing', () => {
@@ -142,20 +193,21 @@ describe('build command: every hook is inert', () => {
 // =====================================================================
 
 describe('mainPlugin transformIndexHtml', () => {
-  it('should inject runtime script in serve mode', () => {
-    const plugins = svelteDevtools()
-    const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!
-    resolvePlugins([plugin])
-    const hook = plugin.transformIndexHtml as { order: string; handler: () => any }
+  it('injects the hooks (and through them the runtime) in serve mode', () => {
+    const hook = getMainPlugin().transformIndexHtml as {
+      order: string
+      handler: () => any
+    }
     // before Vite's HTML processing, which rewrites the inline bare import
     expect(hook.order).toBe('pre')
-    const result = hook.handler()
-    expect(Array.isArray(result)).toBe(true)
-    expect(result.length).toBe(1)
-    expect(result[0].tag).toBe('script')
-    expect(result[0].attrs.type).toBe('module')
-    expect(result[0].children).toContain(RUNTIME_MODULE_ID)
-    expect(result[0].injectTo).toBe('head-prepend')
+    expect(hook.handler()).toEqual([
+      {
+        tag: 'script',
+        attrs: { type: 'module' },
+        children: `import '${HOOKS_MODULE_ID}'`,
+        injectTo: 'head-prepend',
+      },
+    ])
   })
 })
 

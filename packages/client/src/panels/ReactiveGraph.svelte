@@ -65,7 +65,7 @@
   const POLL_MS = 5000
   /** The full graph stops auto-refreshing above this many nodes; refresh / resume still work. */
   const AUTO_PAUSE_ABOVE = 2000
-  const SUMMARY = { topK: 50, windowMs: 10000 } as const
+  const SUMMARY = { topK: 50 } as const
   const SUMMARY_POLL_MS = 2000
 
   type Tab = 'overview' | 'local' | 'full'

@@ -27,6 +27,8 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      - uses: ./.github/actions/svelte-branch
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -70,6 +72,8 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      - uses: ./.github/actions/svelte-branch
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -110,6 +114,8 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      - uses: ./.github/actions/svelte-branch
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -139,6 +145,8 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+
+      - uses: ./.github/actions/svelte-branch
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -199,6 +207,8 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      - uses: ./.github/actions/svelte-branch
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -214,7 +224,7 @@ jobs:
           NODE_ENV: production
         run: |
           pnpm exec vite build
-          if grep -RIn --include='*.js' --include='*.html' 'svelte-devtools-runtime\|svelte-devtools:wrapped-client' .svelte-kit/output build 2>/dev/null; then
+          if grep -RIn --include='*.js' --include='*.html' 'svelte-devtools-hooks' .svelte-kit/output build 2>/dev/null; then
             echo "::error::Devtools virtual modules leaked into production build"
             exit 1
           fi
@@ -285,6 +295,8 @@ jobs:
           node --version
           pnpm --version
 
+      - uses: ./.github/actions/svelte-branch
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -334,6 +346,8 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      - uses: ./.github/actions/svelte-branch
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -376,6 +390,8 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+
+      - uses: ./.github/actions/svelte-branch
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -442,6 +458,8 @@ jobs:
 
       - name: Tool versions
         run: node --version && pnpm --version && pnpm changeset --version
+
+      - uses: ./.github/actions/svelte-branch
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
