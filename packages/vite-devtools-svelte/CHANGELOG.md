@@ -1,5 +1,13 @@
 # vite-devtools-svelte
 
+## 0.8.0
+
+### Minor Changes
+
+- [#154](https://github.com/sveltejs/vite-devtools-svelte/pull/154) [`505d9b0`](https://github.com/sveltejs/vite-devtools-svelte/commit/505d9b0caf2f411d3ad41552b5e8e2d21d27e914) Thanks [@baseballyama](https://github.com/baseballyama)! - Drop SvelteKit 2 support. The optional `@sveltejs/kit` peer dependency is now `^3.0.0`, and the Vite DevTools dock is injected only into SvelteKit 3's generated dev server module (`.svelte-kit/generated/dev/server.js`); SvelteKit 2's `generated/server/internal.js` is no longer patched. Plain Svelte + Vite apps without SvelteKit keep working.
+
+- [#155](https://github.com/sveltejs/vite-devtools-svelte/pull/155) [`44c9905`](https://github.com/sveltejs/vite-devtools-svelte/commit/44c99055610dd4f6873b1ca8a9c6f1f19356e689) Thanks [@baseballyama](https://github.com/baseballyama)! - Publish under the `@sveltejs` scope as `@sveltejs/vite-devtools-svelte`. Install the new name and update imports: `import { svelteDevtools } from '@sveltejs/vite-devtools-svelte'`.
+
 ## 0.7.0
 
 ### Minor Changes
