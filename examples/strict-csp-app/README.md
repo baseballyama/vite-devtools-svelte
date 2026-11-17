@@ -30,7 +30,7 @@ pnpm -C examples/strict-csp-app dev
 
 - 当時（`@vitejs/devtools@0.2.0`）: `DevTools()` は `transformIndexHtml` で inject script を注入するが、SvelteKit dev は app.html を独自の SSR パイプラインで処理して `transformIndexHtml` を通さないため、ドックが出なかった。回避策として `+layout.svelte` で `import('@vitejs/devtools/client/inject')`（`browser` ガード付き）していた。
 - **現在（`@vitejs/devtools` >= 0.7.6）: `@vitejs/devtools/client/inject` は存在しない**（exports から削除）。回避策の import は production build を `"./client/inject" is not exported` で壊すため削除した。
-- 代わりに vite-devtools-svelte の `svelteDevtools()` が SvelteKit の生成テンプレートに `<script type="module" src="/__devtools/embedded.js">` を注入する（`packages/vite-devtools-svelte/src/server/template-injector.ts`）。同一 origin の静的 `src` なので `script-src 'self'` の strict CSP でも動く。
+- 代わりに SvelteKit（>= 3.3.0、[sveltejs/kit#17787](https://github.com/sveltejs/kit/pull/17787)）が dev 時にドックのローダーをページへ追加する。インラインスクリプトだが `kit.csp` の nonce が付くので、`script-src 'self'` の strict CSP でも動く。
 
 ### ✅ #51-3: `connect-src` の WS ポート
 
@@ -63,11 +63,11 @@ pnpm -C examples/strict-csp-app dev
 
 ## まとめ: どこに issue を切るべきか
 
-| #   | 振り分け先                                                                                                                      |
-| --- | ------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | 本リポジトリ（PR #55）                                                                                                          |
-| 2   | 対応済み — vite-devtools-svelte が SvelteKit テンプレートに `embedded.js` を注入（`client/inject` は devtools >= 0.7.6 で廃止） |
-| 3   | クローズ可（現バージョンで再現せず）                                                                                            |
-| 4   | upstream（`vitejs/devtools`） — UI が外部アイコンを実行時取得する件                                                             |
-| 5   | upstream（`vitejs/devtools`） — Vue feature flags の build config 件                                                            |
-| 6   | 再現待ち                                                                                                                        |
+| #   | 振り分け先                                                                                  |
+| --- | ------------------------------------------------------------------------------------------- |
+| 1   | 本リポジトリ（PR #55）                                                                      |
+| 2   | 対応済み — SvelteKit >= 3.3.0 がドックを追加（`client/inject` は devtools >= 0.7.6 で廃止） |
+| 3   | クローズ可（現バージョンで再現せず）                                                        |
+| 4   | upstream（`vitejs/devtools`） — UI が外部アイコンを実行時取得する件                         |
+| 5   | upstream（`vitejs/devtools`） — Vue feature flags の build config 件                        |
+| 6   | 再現待ち                                                                                    |

@@ -1,20 +1,17 @@
 # Compatibility profiles
 
-Smoke tests that run the plugin in three kinds of apps, each **standalone**
+Smoke tests that run the plugin in two kinds of apps, each **standalone**
 (the plugin serves `/.svelte-devtools/`) and **inside the Vite DevTools dock**
 (`@vitejs/devtools`). The profiles and their exact versions are listed in
 [`matrix.json`](./matrix.json).
 
-| Profile        | App                                                                            | Framework                   | Where                     |
-| -------------- | ------------------------------------------------------------------------------ | --------------------------- | ------------------------- |
-| `plain-svelte` | `examples/plain-svelte`                                                        | Svelte + Vite, no SvelteKit | pnpm workspace            |
-| `kit2`         | `examples/sample-app` (unchanged; standalone uses `vite.standalone.config.ts`) | SvelteKit 2                 | pnpm workspace            |
-| `kit3`         | `e2e/compat/kit3`                                                              | SvelteKit 3                 | **outside** the workspace |
+| Profile        | App                     | Framework                   | Where                     |
+| -------------- | ----------------------- | --------------------------- | ------------------------- |
+| `plain-svelte` | `examples/plain-svelte` | Svelte + Vite, no SvelteKit | pnpm workspace            |
+| `kit3`         | `e2e/compat/kit3`       | SvelteKit 3                 | **outside** the workspace |
 
-`e2e/compat/kit3` stays outside the workspace on purpose. SvelteKit 3 needs
-Svelte ≥ 5.57.1, and keeping it in its own install means the Kit 2 profile (`examples/sample-app`) keeps
-the versions it was tested with. It also installs the plugin from a packed
-tarball, the way users get it.
+`e2e/compat/kit3` stays outside the workspace on purpose: it installs the
+plugin from a packed tarball, the way users get it.
 
 This is a compatibility check, not a benchmark. The 50k-instance performance
 runs live under `perf/` and are opt-in.
@@ -52,8 +49,9 @@ modes switches with `SVELTE_DEVTOOLS_DOCK=1`.
     `get_routes` (SvelteKit: at least one route; plain Svelte: no routes),
     and `get_capture_info`;
   - a production build contains no devtools code;
-  - dock mode: the injected `/__devtools/embedded.js` is served (a
-    prerequisite only; it does not prove the dock UI works).
+  - dock mode: `/__devtools/embedded.js` is served (a prerequisite only; it
+    does not prove the dock UI works). On SvelteKit the page loads it through
+    SvelteKit's own dock loader.
 - **With one headless Chromium:**
   - first view: the app page is open, MCP `get_live_components` > 0, and
     `get_reactive_summary` has rows and is not stale;

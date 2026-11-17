@@ -81,7 +81,7 @@ export default defineConfig({
         </div>
         <div class="req">
           <dt>SvelteKit</dt>
-          <dd>2 or 3 — recommended for full feature set</dd>
+          <dd>3.3.0 or later — recommended for full feature set</dd>
         </div>
         <div class="req">
           <dt>@vitejs/devtools</dt>

@@ -253,10 +253,7 @@ jobs:
           pnpm -C examples/strict-csp-app exec svelte-kit sync
           pnpm -C examples/sample-app exec svelte-check --workspace ../strict-csp-app --tsconfig ./tsconfig.json
 
-  # Compatibility smoke tests (e2e/compat/README.md): the plugin in a plain
-  # Svelte + Vite app, the existing SvelteKit 2 sample and a SvelteKit 3
-  # fixture, each standalone and inside the Vite DevTools dock. One profile
-  # at a time; every step is bounded.
+  # compat smoke tests from e2e/compat/README.md, one profile at a time
   compat:
     name: Compat (${{ matrix.profile }}, ${{ matrix.mode }})
     runs-on: ubuntu-latest
@@ -268,7 +265,7 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        profile: [plain-svelte, kit2, kit3]
+        profile: [plain-svelte, kit3]
         mode: [standalone, dock]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

@@ -502,7 +502,7 @@ and what changed when I edited the tax rate.`
           </div>
           <div>
             <dt>Svelte</dt>
-            <dd>5 (runes mode); plain Svelte, SvelteKit 2 and Kit 3 are tested in CI</dd>
+            <dd>5 (runes mode); plain Svelte and SvelteKit 3 are tested in CI</dd>
           </div>
           <div>
             <dt>MCP</dt>
