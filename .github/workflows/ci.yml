@@ -121,11 +121,14 @@ jobs:
         run: pnpm -C packages/vite-devtools-svelte build
 
       # Coverage thresholds are enforced per package (vitest.config.ts).
-      - name: Run tests with coverage (plugin + client)
+      - name: Run tests with coverage (plugin + client + inspector)
         run: pnpm test:coverage
 
       - name: Build client UI
         run: pnpm build:client
+
+      - name: Build inspector
+        run: pnpm build:inspector
 
       # The published package: exports, files and types as consumers see them.
       - name: Package lint (publint + are-the-types-wrong)
