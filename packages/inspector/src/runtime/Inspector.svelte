@@ -31,17 +31,16 @@
 
   type StackItem = Loc & { tag: string };
 
-  /** set when a host (the Vite DevTools dock) controls the inspector */
-  interface Host {
+  interface Props {
     /** open `loc` in the editor */
-    openInEditor(loc: Loc): void;
+    openInEditor: (loc: Loc) => void;
     /** the inspector was enabled or disabled */
-    onenabledchange?(enabled: boolean): void;
-    /** events from the host's own ui, which the inspector must not handle */
-    ignore?(e: Event): boolean;
+    onenabledchange: (enabled: boolean) => void;
+    /** whether `e` comes from the dock's own ui, which the inspector must not handle */
+    ignore: (e: Event) => boolean;
   }
 
-  let { host }: { host?: Host } = $props();
+  let { openInEditor, onenabledchange, ignore }: Props = $props();
 
   const toggle_combo = options.toggleKeyCombo.toLowerCase().split('-');
   const escape_keys = options.escapeKeys.map(k => k.toLowerCase());
@@ -65,11 +64,6 @@
   let menu = $state<{ x: number; y: number; stack: Array<Loc & { tag: string }> } | null>(null);
 
   let hold_start_ts = $state<number | null>(null);
-
-  let show_toggle = $derived(
-    !host &&
-      (options.showToggleButton === 'always' || (options.showToggleButton === 'active' && enabled)),
-  );
 
   function mousemove(e: MouseEvent) {
     if (menu) return;
@@ -143,7 +137,7 @@
   }
 
   function mouseover(e: MouseEvent) {
-    if (menu || host?.ignore?.(e)) return;
+    if (menu || ignore(e)) return;
     const el = find_selectable_parent(e.target as ElementWithMetadata, true);
     activate(el, false);
   }
@@ -167,7 +161,7 @@
   }
 
   function open_editor(e: Event) {
-    if (menu || host?.ignore?.(e)) return;
+    if (menu || ignore(e)) return;
 
     if (active_el) {
       stop(e);
@@ -212,7 +206,7 @@
   }
 
   function on_contextmenu(e: Event) {
-    if (host?.ignore?.(e)) return;
+    if (ignore(e)) return;
     e.preventDefault();
 
     active_el ??= find_selectable_parent(e.target as Element);
@@ -230,15 +224,7 @@
         detail: { loc, stack },
       }),
     );
-    if (host) {
-      host.openInEditor(loc);
-    } else {
-      void fetch(
-        `${options.__internal.base}/__open-in-editor?file=${encodeURIComponent(
-          `${loc.file}:${loc.line}:${loc.column + 1}`,
-        )}`,
-      );
-    }
+    openInEditor(loc);
     has_opened = true;
     menu = null;
     if (options.holdMode && is_holding()) {
@@ -301,8 +287,8 @@
   }
 
   function keydown(e: KeyboardEvent) {
-    // typing in the host's own ui (e.g. the dock's command palette)
-    if (host?.ignore?.(e)) return;
+    // typing in the dock's own ui (e.g. its command palette)
+    if (ignore(e)) return;
     if (e.repeat || !has_key(e) || (!enabled && !is_toggle(e))) {
       return;
     }
@@ -376,7 +362,7 @@
     }
     listeners(b, enabled);
     activate_initial_el();
-    host?.onenabledchange?.(true);
+    onenabledchange(true);
   }
 
   function activate_initial_el() {
@@ -417,7 +403,7 @@
       active_el?.classList.remove('svelte-inspector-active-target');
     }
     active_el = undefined;
-    if (was_enabled) host?.onenabledchange?.(false);
+    if (was_enabled) onenabledchange(false);
   }
 
   function visibilityChange() {
@@ -470,20 +456,6 @@
     }
   }}
 />
-
-{#if show_toggle}
-  <button
-    type="button"
-    id="svelte-inspector-toggle"
-    class:enabled
-    style={`background-image: var(--svelte-inspector-icon);${options.toggleButtonPos
-      .split('-')
-      .map(p => `${p}: 8px;`)
-      .join('')}`}
-    onclick={() => toggle()}
-    aria-label={`${enabled ? 'disable' : 'enable'} svelte-inspector`}
-  ></button>
-{/if}
 
 {#if enabled && (menu || active_el)}
   <div
@@ -582,18 +554,6 @@
     /* row-gap: 4px; */
   }
 
-  #svelte-inspector-toggle {
-    border: 1px solid #ff3e00;
-    border-radius: 8px;
-    position: fixed;
-    height: 32px;
-    width: 32px;
-    background-color: white;
-    background-position: center;
-    background-repeat: no-repeat;
-    cursor: pointer;
-  }
-
   #svelte-inspector-announcer {
     position: absolute;
     left: 0px;
@@ -604,13 +564,6 @@
     white-space: nowrap;
     width: 1px;
     height: 1px;
-  }
-
-  #svelte-inspector-toggle:not(.enabled) {
-    filter: grayscale(1);
-  }
-  #svelte-inspector-toggle:hover {
-    background-color: #facece;
   }
 
   .svelte-inspector-tag {

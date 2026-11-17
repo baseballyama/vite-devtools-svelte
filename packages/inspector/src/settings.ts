@@ -1,16 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { OPTIONS_ENV_KEY } from './options.js';
 import { SETTINGS_FILE } from './runtime/settings-constants.js';
 import type { InspectorOptions } from './types.js';
 
-const ENV_KEY = 'SVELTE_INSPECTOR_OPTIONS';
+const setsKey = (line: string) =>
+  new RegExp(`^\\s*(export\\s+)?${OPTIONS_ENV_KEY}\\s*=`).test(line);
 
-const setsKey = (line: string) => new RegExp(`^\\s*(export\\s+)?${ENV_KEY}\\s*=`).test(line);
-
-type Settings = Required<
-  Omit<InspectorOptions, '__internal' | 'showToggleButton' | 'toggleButtonPos'>
->;
+type Settings = Required<Omit<InspectorOptions, '__internal'>>;
 
 /** `value` as a key setting, or throws a message naming `label` */
 function keySetting(value: unknown, label: string): string {
@@ -68,7 +66,7 @@ export function changedOptions(
 }
 
 /**
- * Set `SVELTE_INSPECTOR_OPTIONS` in `dir`'s .env.local, keeping other lines. `null` or `{}` removes
+ * Set `SVELTE_DEVTOOLS_INSPECTOR_OPTIONS` in `dir`'s .env.local, keeping other lines. `null` or `{}` removes
  * it, and the file if nothing else is left.
  * @returns the file written
  */
@@ -78,7 +76,7 @@ export function writeSettings(dir: string, options: Record<string, unknown> | nu
   const lines = existing === '' ? [] : existing.replace(/\r?\n$/, '').split(/\r?\n/);
   const kept = lines.filter(line => !setsKey(line));
   if (options && Object.keys(options).length > 0) {
-    kept.push(`${ENV_KEY}='${JSON.stringify(options)}'`);
+    kept.push(`${OPTIONS_ENV_KEY}='${JSON.stringify(options)}'`);
   }
   if (kept.length > 0) {
     fs.writeFileSync(file, `${kept.join('\n')}\n`);
@@ -90,7 +88,7 @@ export function writeSettings(dir: string, options: Record<string, unknown> | nu
 
 /**
  * The env files in `dir` that Vite loads after `.env.local` for `mode` and that also set
- * `SVELTE_INSPECTOR_OPTIONS`: their value wins over the saved settings.
+ * `SVELTE_DEVTOOLS_INSPECTOR_OPTIONS`: their value wins over the saved settings.
  */
 export function overridingEnvFiles(dir: string, mode: string): string[] {
   return [`.env.${mode}`, `.env.${mode}.local`].filter(name => {

@@ -57,10 +57,10 @@ export interface SvelteDevtoolsOptions {
   clientAuth?: boolean;
   /**
    * The Svelte Inspector: hold the toggle key combo (`alt-x` by default) and
-   * click an element to open its source in your editor. Pass options to
-   * configure it, or `false` to leave it out (vite-plugin-svelte's built-in
-   * inspector is then yours to enable). While it is on, it turns off
-   * vite-plugin-svelte's built-in inspector so the two never run together.
+   * click an element to open its source in your editor. It only runs in the
+   * Vite DevTools dock (`@vitejs/devtools`). Pass options to configure it, or
+   * `false` to leave it out. The dev server fails to start when vite-plugin-svelte's
+   * built-in inspector is enabled too: turn that one off.
    * @default true
    */
   inspector?: boolean | InspectorOptions;

@@ -12,6 +12,9 @@ import type { InspectorOptions } from '../src/index.js';
 
 const OPTIONS_ID = 'virtual:vite-devtools-svelte-inspector-options';
 
+/** what marks Vite DevTools (`@vitejs/devtools`) as installed */
+const VITE_DEVTOOLS = { name: 'vite:devtools' };
+
 const servers: ViteDevServer[] = [];
 const dirs: string[] = [];
 
@@ -92,36 +95,52 @@ describe('svelteInspector', () => {
     expect(await loadOptions(await start())).toMatchObject({ toggleKeyCombo: 'meta-i' });
   });
 
-  it("turns off vite-plugin-svelte's built-in inspector", async () => {
-    const env = await start({}, [svelte({ inspector: true })]);
+  it("lets its own variables win over vite-plugin-svelte's", async () => {
+    vi.stubEnv('SVELTE_INSPECTOR_OPTIONS', '{"holdMode":false,"openKey":"o"}');
+    vi.stubEnv('SVELTE_DEVTOOLS_INSPECTOR_OPTIONS', '{"openKey":"p"}');
+    expect(await loadOptions(await start())).toMatchObject({ holdMode: false, openKey: 'p' });
+    vi.stubEnv('SVELTE_DEVTOOLS_INSPECTOR_OPTIONS', '');
+    vi.stubEnv('SVELTE_DEVTOOLS_INSPECTOR_TOGGLE', 'meta-i');
+    expect(await loadOptions(await start())).toMatchObject({
+      toggleKeyCombo: 'meta-i',
+      openKey: 'o',
+    });
+  });
+
+  it('names the variables in the error when they switch the built-in inspector on', async () => {
+    vi.stubEnv('SVELTE_INSPECTOR_TOGGLE', 'meta-i');
+    await expect(start({}, [VITE_DEVTOOLS, svelte()])).rejects.toThrow(
+      /rename the variable to SVELTE_DEVTOOLS_INSPECTOR_OPTIONS or SVELTE_DEVTOOLS_INSPECTOR_TOGGLE/,
+    );
+  });
+
+  it("refuses to start in the dock when vite-plugin-svelte's built-in inspector is on", async () => {
+    await expect(start({}, [VITE_DEVTOOLS, svelte({ inspector: true })])).rejects.toThrow(
+      /vite-plugin-svelte's own inspector is enabled as well\. Turn that one off/,
+    );
+  });
+
+  it('starts in the dock when the built-in inspector is off', async () => {
+    const env = await start({}, [VITE_DEVTOOLS, svelte()]);
     const names = env.plugins.map(p => p.name);
     expect(names).toContain('vite-devtools-svelte-inspector');
     expect(names).not.toContain('vite-plugin-svelte-inspector');
   });
 
-  it('leaves the built-in inspector in place when this plugin is not added', async () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'vds-inspector-'));
-    dirs.push(root);
-    const server = await createServer({
-      root,
-      configFile: false,
-      logLevel: 'silent',
-      server: { middlewareMode: true, ws: false },
-      plugins: [svelte({ inspector: true })],
-    });
-    servers.push(server);
-    expect(server.environments.client.plugins.map(p => p.name)).toContain(
-      'vite-plugin-svelte-inspector',
-    );
+  it('leaves the built-in inspector alone without Vite DevTools, where this one does nothing', async () => {
+    const env = await start({}, [svelte({ inspector: true })]);
+    const names = env.plugins.map(p => p.name);
+    expect(names).toContain('vite-devtools-svelte-inspector');
+    expect(names).toContain('vite-plugin-svelte-inspector');
   });
 
   it('resolves runtime files next to the plugin and refuses path traversal', async () => {
     const env = await start();
     const resolved = await env.pluginContainer.resolveId(
-      'virtual:vite-devtools-svelte-inspector-path:load-inspector.ts',
+      'virtual:vite-devtools-svelte-inspector-path:devtools-action.ts',
     );
     expect(resolved?.id).toBe(
-      path.resolve(import.meta.dirname, '../src/runtime/load-inspector.ts').replaceAll('\\', '/'),
+      path.resolve(import.meta.dirname, '../src/runtime/devtools-action.ts').replaceAll('\\', '/'),
     );
     expect(
       await env.pluginContainer.resolveId(

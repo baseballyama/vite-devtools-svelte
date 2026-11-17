@@ -46,10 +46,10 @@ async function inspectorOptions(env: DevEnvironment) {
 const names = (env: DevEnvironment) => env.plugins.map(p => p.name);
 
 describe('the inspector inside svelteDevtools()', () => {
-  it("is on by default, in place of vite-plugin-svelte's built-in inspector", async () => {
+  it("is on by default, next to vite-plugin-svelte's built-in inspector", async () => {
     const env = await start();
     expect(names(env)).toContain('vite-devtools-svelte-inspector');
-    expect(names(env)).not.toContain('vite-plugin-svelte-inspector');
+    expect(names(env)).toContain('vite-plugin-svelte-inspector');
     expect(await inspectorOptions(env)).toMatchObject({ toggleKeyCombo: 'alt-x' });
   });
 
@@ -62,7 +62,7 @@ describe('the inspector inside svelteDevtools()', () => {
     });
   });
 
-  it('with `inspector: false`, leaves it out and the built-in inspector alone', async () => {
+  it('with `inspector: false`, leaves it out', async () => {
     const env = await start({ inspector: false });
     expect(names(env)).not.toContain('vite-devtools-svelte-inspector');
     expect(names(env)).toContain('vite-plugin-svelte-inspector');

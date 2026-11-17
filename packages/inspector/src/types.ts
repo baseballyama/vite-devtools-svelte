@@ -57,18 +57,6 @@ export interface InspectorOptions {
   holdMode?: boolean;
 
   /**
-   * when to show the toggle button. Not used in the Vite DevTools dock, which has its own toggle
-   * @default 'active'
-   */
-  showToggleButton?: 'always' | 'active' | 'never';
-
-  /**
-   * where to display the toggle button. Not used in the Vite DevTools dock, which has its own toggle
-   * @default 'top-right'
-   */
-  toggleButtonPos?: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
-
-  /**
    * inject custom styles when inspector is active
    */
   customStyles?: boolean;

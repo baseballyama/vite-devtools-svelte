@@ -39,7 +39,7 @@ describe('the built package', () => {
     });
     try {
       const env = server.environments.client;
-      for (const file of ['load-inspector.ts', 'Inspector.svelte']) {
+      for (const file of ['devtools-action.ts', 'Inspector.svelte']) {
         const resolved = await env.pluginContainer.resolveId(
           `virtual:vite-devtools-svelte-inspector-path:${file}`,
         );

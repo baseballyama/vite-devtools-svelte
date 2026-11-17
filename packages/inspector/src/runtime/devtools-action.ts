@@ -3,6 +3,9 @@ import { mount } from 'svelte';
 import options from 'virtual:vite-devtools-svelte-inspector-options';
 import Inspector from 'virtual:vite-devtools-svelte-inspector-path:Inspector.svelte';
 
+// devtools leave this component, what it renders and its state out of their panels
+(Inspector as unknown as Record<symbol, boolean>)[Symbol.for('svelte.devtools.ignore')] = true;
+
 interface Loc {
   file: string;
   line: number;
@@ -41,7 +44,7 @@ export default function setup(ctx: DockContext): void {
   target.setAttribute('id', 'svelte-inspector-host');
   document.documentElement.append(target);
 
-  const host = {
+  const props = {
     openInEditor(loc: Loc) {
       ctx.rpc
         .call('vite:core:open-in-editor', `${absolute(loc.file)}:${loc.line}:${loc.column + 1}`)
@@ -61,7 +64,7 @@ export default function setup(ctx: DockContext): void {
       if (ctx.current.isActive !== enabled) docks.setActionActive(id, enabled);
     },
   };
-  const inspector = mount(Inspector, { target, props: { host } }) as unknown as {
+  const inspector = mount(Inspector, { target, props }) as unknown as {
     enable(): void;
     disable(): void;
   };

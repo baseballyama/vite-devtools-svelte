@@ -220,7 +220,7 @@ svelteDevtools({
   // In the Vite DevTools dock use DevTools({ clientAuth: false }) instead.
   clientAuth: true,
   // The Svelte Inspector (default: true). Pass its options, or false to leave it out.
-  inspector: { toggleKeyCombo: 'alt-x', showToggleButton: 'active' },
+  inspector: { toggleKeyCombo: 'alt-x', holdMode: true },
 });
 ```
 
@@ -228,9 +228,9 @@ svelteDevtools({
 
 `svelteDevtools()`: hold the toggle key combo (`alt-x` by default) in your app and click an element to open its source in your editor.
 
-`inspector` takes the options (`toggleKeyCombo`, `navKeys`, `openKey`, `openMenuKey`, `escapeKeys`, `holdMode`, `showToggleButton`, `toggleButtonPos`, `customStyles`). 
+`inspector` takes the options (`toggleKeyCombo`, `navKeys`, `openKey`, `openMenuKey`, `escapeKeys`, `holdMode`, `customStyles`).
 
-`SVELTE_INSPECTOR_TOGGLE` and an options object in `SVELTE_INSPECTOR_OPTIONS` (shell or `.env` files) take precedence over them, for personal preferences;
+`SVELTE_DEVTOOLS_INSPECTOR_TOGGLE` and an options object in `SVELTE_DEVTOOLS_INSPECTOR_OPTIONS` (shell or `.env` files) take precedence over them, for personal preferences. vite-plugin-svelte's `SVELTE_INSPECTOR_TOGGLE` and `SVELTE_INSPECTOR_OPTIONS` are read too, with lower precedence.
 
 The Svelte Inspector settings in the DevTools Svelte group edits your personal shortcut and keys, saved to `.env.local`.
 

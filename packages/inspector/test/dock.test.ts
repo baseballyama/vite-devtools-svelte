@@ -17,6 +17,8 @@ beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vds-inspector-dock-'));
   delete process.env.SVELTE_INSPECTOR_OPTIONS;
   delete process.env.SVELTE_INSPECTOR_TOGGLE;
+  delete process.env.SVELTE_DEVTOOLS_INSPECTOR_OPTIONS;
+  delete process.env.SVELTE_DEVTOOLS_INSPECTOR_TOGGLE;
 });
 
 afterEach(() => {
@@ -33,17 +35,14 @@ const call = (hook: Plugin[keyof Plugin], ...args: unknown[]) =>
     ...args,
   );
 
-function setup(
-  options?: InspectorOptions,
-  { devtools = true, envDir = dir }: { devtools?: boolean; envDir?: string | false } = {},
-) {
+function setup(options?: InspectorOptions, { envDir = dir }: { envDir?: string | false } = {}) {
   const plugin = svelteInspector(options);
   call(plugin.configResolved, {
     mode: 'development',
     root: dir,
     envDir,
     base: '/',
-    plugins: devtools ? [{ name: 'vite:devtools' }, { name: 'vite:devtools:injection' }] : [],
+    plugins: [{ name: 'vite:devtools' }],
     logger: { warn() {}, error() {} },
   });
   return plugin;
@@ -93,18 +92,15 @@ const form = (options: Record<string, unknown>) => {
   return rest;
 };
 
-const injects = (plugin: Plugin) =>
-  call(plugin.transform, 'export {}', '/node_modules/vite/dist/client/client.mjs') !== null;
-
 const withDefaults = (patch: Record<string, unknown>) => ({
   ...structuredClone(defaultInspectorOptions),
   ...patch,
 });
 
-describe('with Vite DevTools', () => {
-  it('lives in the dock instead of injecting itself into the page', () => {
+describe('the dock', () => {
+  it('holds the inspector, which is never injected into the page', () => {
     const plugin = setup();
-    expect(injects(plugin)).toBe(false);
+    expect(plugin.transform).toBeUndefined();
 
     const { ctx, docks } = fakeDevtools();
     plugin.devtools.setup(ctx);
@@ -151,16 +147,6 @@ describe('with Vite DevTools', () => {
   });
 });
 
-describe('without Vite DevTools', () => {
-  it('injects itself into the page and adds nothing to a dock', () => {
-    const plugin = setup(undefined, { devtools: false });
-    expect(injects(plugin)).toBe(true);
-    const { ctx, docks } = fakeDevtools();
-    plugin.devtools.setup(ctx);
-    expect(docks).toEqual([]);
-  });
-});
-
 describe('settings view', () => {
   it('saves the options that differ from the plugin options to .env.local', async () => {
     const plugin = setup({ toggleKeyCombo: 'control-i' });
@@ -180,7 +166,7 @@ describe('settings view', () => {
       escapeKeys: ['Escape'],
     });
     expect(read()).toBe(
-      'SVELTE_INSPECTOR_OPTIONS=\'{"holdMode":false,"escapeKeys":["Escape"]}\'\n',
+      'SVELTE_DEVTOOLS_INSPECTOR_OPTIONS=\'{"holdMode":false,"escapeKeys":["Escape"]}\'\n',
     );
     expect(saved).toEqual({ ok: true, status: 'Saved to .env.local. Restarting…' });
 
@@ -202,7 +188,10 @@ describe('settings view', () => {
   });
 
   it('says when an env file of the mode overrides the saved settings', async () => {
-    fs.writeFileSync(path.join(dir, '.env.development'), "SVELTE_INSPECTOR_OPTIONS='{}'\n");
+    fs.writeFileSync(
+      path.join(dir, '.env.development'),
+      "SVELTE_DEVTOOLS_INSPECTOR_OPTIONS='{}'\n",
+    );
     const plugin = setup();
     const { ctx, actions } = fakeDevtools();
     plugin.devtools.setup(ctx);
@@ -211,7 +200,7 @@ describe('settings view', () => {
       toggleKeyCombo: 'meta-k',
     });
     expect(saved?.status).toContain(
-      'SVELTE_INSPECTOR_OPTIONS is also set in .env.development, which takes precedence.',
+      'SVELTE_DEVTOOLS_INSPECTOR_OPTIONS is also set in .env.development, which takes precedence.',
     );
   });
 
@@ -237,13 +226,32 @@ describe('settings view', () => {
     });
     expect((await servedOptions(setup())).toggleKeyCombo).toBe('meta-k');
   });
+
+  it("reads vite-plugin-svelte's variable but never writes it", async () => {
+    const upstream = 'SVELTE_INSPECTOR_OPTIONS=\'{"holdMode":false,"openKey":"o"}\'';
+    fs.writeFileSync(path.join(dir, '.env.local'), `${upstream}\n`);
+    const plugin = setup();
+    const { ctx, actions } = fakeDevtools();
+    plugin.devtools.setup(ctx);
+    const current = await servedOptions(plugin);
+    expect(current).toMatchObject({ holdMode: false, openKey: 'o' });
+    // "Reset to defaults" returns to it: the settings view cannot remove it
+    expect(current.__internal.defaults).toMatchObject({ holdMode: false, openKey: 'o' });
+
+    await actions.get('svelte:inspector:save-settings')?.({ ...form(current), openKey: 'p' });
+    expect(read()).toBe(`${upstream}\nSVELTE_DEVTOOLS_INSPECTOR_OPTIONS='{"openKey":"p"}'\n`);
+    // this inspector's own variable wins, option by option
+    expect(await servedOptions(setup())).toMatchObject({ holdMode: false, openKey: 'p' });
+
+    await actions.get('svelte:inspector:reset-settings')?.();
+    expect(read()).toBe(`${upstream}\n`);
+  });
 });
 
 describe('settings helpers', () => {
-  it('accepts the default options without the toggle button ones', () => {
-    const { showToggleButton: _, toggleButtonPos: __, ...expected } = defaultInspectorOptions;
+  it('accepts the default options', () => {
     expect(validateSettings(structuredClone(defaultInspectorOptions))).toEqual({
-      options: expected,
+      options: defaultInspectorOptions,
     });
   });
 
@@ -270,9 +278,12 @@ describe('settings helpers', () => {
   });
 
   it('keeps other variables in .env.local', () => {
-    fs.writeFileSync(path.join(dir, '.env.local'), 'A=1\nSVELTE_INSPECTOR_OPTIONS=old\nB=2\n');
+    fs.writeFileSync(
+      path.join(dir, '.env.local'),
+      'A=1\nSVELTE_DEVTOOLS_INSPECTOR_OPTIONS=old\nB=2\n',
+    );
     writeSettings(dir, { holdMode: false });
-    expect(read()).toBe('A=1\nB=2\nSVELTE_INSPECTOR_OPTIONS=\'{"holdMode":false}\'\n');
+    expect(read()).toBe('A=1\nB=2\nSVELTE_DEVTOOLS_INSPECTOR_OPTIONS=\'{"holdMode":false}\'\n');
     writeSettings(dir, null);
     expect(read()).toBe('A=1\nB=2\n');
   });

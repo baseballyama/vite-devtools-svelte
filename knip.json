@@ -13,7 +13,6 @@
     },
     "packages/inspector": {
       "entry": [
-        "src/runtime/load-inspector.ts",
         "src/runtime/devtools-action.ts",
         "src/runtime/settings-view.ts",
         "src/runtime/*.svelte",

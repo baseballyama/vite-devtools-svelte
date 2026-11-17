@@ -16,8 +16,8 @@ export function isInspectorRuntime(id: string): boolean {
 
 /**
  * Options of the Svelte Inspector, a fork of the one in `@sveltejs/vite-plugin-svelte`.
- * Environment variables (`SVELTE_INSPECTOR_OPTIONS` with an options object,
- * `SVELTE_INSPECTOR_TOGGLE`) take precedence over these.
+ * Environment variables (`SVELTE_DEVTOOLS_INSPECTOR_OPTIONS` with an options object,
+ * `SVELTE_DEVTOOLS_INSPECTOR_TOGGLE`) take precedence over these.
  */
 export interface InspectorOptions {
   /**
@@ -51,16 +51,6 @@ export interface InspectorOptions {
    * @default true
    */
   holdMode?: boolean;
-  /**
-   * When to show the toggle button.
-   * @default 'active'
-   */
-  showToggleButton?: 'always' | 'active' | 'never';
-  /**
-   * Where to show the toggle button.
-   * @default 'top-right'
-   */
-  toggleButtonPos?: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
   /**
    * Inject custom styles while the inspector is active.
    * @default true
