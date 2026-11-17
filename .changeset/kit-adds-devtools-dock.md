@@ -1,5 +1,5 @@
 ---
-'vite-devtools-svelte': minor
+'@sveltejs/vite-devtools-svelte': minor
 ---
 
 breaking: avoid injecting the DevTools dock automatically
