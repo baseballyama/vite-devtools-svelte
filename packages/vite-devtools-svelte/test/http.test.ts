@@ -114,7 +114,7 @@ describe('transport.get', () => {
   it.each([
     [
       'a status text with DEL',
-      'HTTP/1.1 200 O\x7fK\r\nContent-Length: 0\r\n\r\n',
+      'HTTP/1.1 200 O\u007FK\r\nContent-Length: 0\r\n\r\n',
       /Invalid statusText/,
     ],
     [

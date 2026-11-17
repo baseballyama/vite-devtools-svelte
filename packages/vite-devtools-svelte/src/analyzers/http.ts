@@ -47,22 +47,25 @@ export async function readCapped(
   maxBytes: number,
 ): Promise<{ bytes: Uint8Array; truncated: boolean }> {
   if (!res.body) return { bytes: new Uint8Array(), truncated: false };
-  const reader = res.body.getReader();
+  // Node's `Response` types its body loosely
+  const reader = (res.body as ReadableStream<Uint8Array>).getReader();
   const chunks: Uint8Array[] = [];
   let size = 0;
+  let truncated = false;
   for (;;) {
     // oxlint-disable-next-line eslint/no-await-in-loop -- a stream is read chunk by chunk
     const { done, value } = await reader.read();
     if (done) break;
     if (size + value.byteLength > maxBytes) {
       chunks.push(value.subarray(0, maxBytes - size));
-      await reader.cancel().then(undefined, () => {});
-      return { bytes: concat(chunks), truncated: true };
+      truncated = true;
+      break;
     }
     chunks.push(value);
     size += value.byteLength;
   }
-  return { bytes: concat(chunks), truncated: false };
+  if (truncated) await reader.cancel().then(undefined, () => {});
+  return { bytes: concat(chunks), truncated };
 }
 
 function concat(chunks: Uint8Array[]): Uint8Array {
