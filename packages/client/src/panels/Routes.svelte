@@ -1,64 +1,64 @@
 <script lang="ts">
-  import Badge from '../components/Badge.svelte'
-  import Button from '../components/Button.svelte'
-  import Highlight from '../components/Highlight.svelte'
-  import Inspector from '../components/Inspector.svelte'
-  import Panel from '../components/Panel.svelte'
-  import RefreshButton from '../components/RefreshButton.svelte'
-  import ResourceEmpty from '../components/ResourceEmpty.svelte'
-  import SearchField from '../components/SearchField.svelte'
-  import Segmented from '../components/Segmented.svelte'
-  import SplitView from '../components/SplitView.svelte'
-  import TreeView from '../components/TreeView.svelte'
-  import type { Tone } from '../components/types.js'
-  import { matcher } from '../lib/match.js'
-  import { resource } from '../lib/resource.svelte.js'
-  import { buildRouteTree, type RouteNode } from '../lib/route-tree.js'
-  import { getRoutes, openInEditor } from '../lib/rpc.js'
-  import { branchKeys } from '../lib/tree.js'
-  import type { RouteFile, RouteInfo } from '../lib/types.js'
+  import Badge from '../components/Badge.svelte';
+  import Button from '../components/Button.svelte';
+  import Highlight from '../components/Highlight.svelte';
+  import Inspector from '../components/Inspector.svelte';
+  import Panel from '../components/Panel.svelte';
+  import RefreshButton from '../components/RefreshButton.svelte';
+  import ResourceEmpty from '../components/ResourceEmpty.svelte';
+  import SearchField from '../components/SearchField.svelte';
+  import Segmented from '../components/Segmented.svelte';
+  import SplitView from '../components/SplitView.svelte';
+  import TreeView from '../components/TreeView.svelte';
+  import type { Tone } from '../components/types.js';
+  import { matcher } from '../lib/match.js';
+  import { resource } from '../lib/resource.svelte.js';
+  import { buildRouteTree, type RouteNode } from '../lib/route-tree.js';
+  import { getRoutes, openInEditor } from '../lib/rpc.js';
+  import { branchKeys } from '../lib/tree.js';
+  import type { RouteFile, RouteInfo } from '../lib/types.js';
 
-  const routes = resource<RouteInfo[]>(getRoutes, { initial: [] })
+  const routes = resource<RouteInfo[]>(getRoutes, { initial: [] });
 
-  const tree = $derived(buildRouteTree(routes.data))
-  const allBranches = () => branchKeys(tree.roots, { key: n => n.key, children: n => n.children })
+  const tree = $derived(buildRouteTree(routes.data));
+  const allBranches = () => branchKeys(tree.roots, { key: n => n.key, children: n => n.children });
 
-  let query = $state('')
-  let kind = $state<'all' | 'pages' | 'endpoints' | 'dynamic'>('all')
-  let expanded = $state(new Set<string>(['/']))
-  let selected = $state<string | null>(null)
-  let seeded = false
+  let query = $state('');
+  let kind = $state<'all' | 'pages' | 'endpoints' | 'dynamic'>('all');
+  let expanded = $state(new Set<string>(['/']));
+  let selected = $state<string | null>(null);
+  let seeded = false;
 
   $effect(() => {
-    if (seeded || routes.data.length === 0) return
-    seeded = true
+    if (seeded || routes.data.length === 0) return;
+    seeded = true;
     // Small apps: open everything. Large apps: first two levels.
     expanded =
       routes.data.length <= 60
         ? allBranches()
-        : new Set(['/', ...(tree.roots[0]?.children ?? []).map(c => c.key)])
-  })
+        : new Set(['/', ...(tree.roots[0]?.children ?? []).map(c => c.key)]);
+  });
 
   const KINDS = {
     pages: (r: RouteInfo) => r.hasPage,
     endpoints: (r: RouteInfo) => r.hasEndpoint,
     dynamic: (r: RouteInfo) => r.params.length > 0,
-  }
+  };
 
   const filter = $derived.by(() => {
-    const m = matcher(query)
-    const k = kind === 'all' ? null : KINDS[kind]
-    if (!m && !k) return null
-    return (n: RouteNode) => !!n.route && (!k || k(n.route)) && (!m || m(n.route.path, n.route.id))
-  })
+    const m = matcher(query);
+    const k = kind === 'all' ? null : KINDS[kind];
+    if (!m && !k) return null;
+    return (n: RouteNode) => !!n.route && (!k || k(n.route)) && (!m || m(n.route.path, n.route.id));
+  });
 
   const counts = $derived({
     pages: routes.data.filter(KINDS.pages).length,
     endpoints: routes.data.filter(KINDS.endpoints).length,
     dynamic: routes.data.filter(KINDS.dynamic).length,
-  })
+  });
 
-  const selectedRoute = $derived(selected ? (tree.byKey.get(selected)?.route ?? null) : null)
+  const selectedRoute = $derived(selected ? (tree.byKey.get(selected)?.route ?? null) : null);
 
   // Complete for every known type (checked by `satisfies`); a type a newer
   // server adds falls back to its raw name.
@@ -73,29 +73,29 @@
     error: '+error.svelte',
     'page-load-server': '+page.server',
     'layout-load-server': '+layout.server',
-  } satisfies Record<RouteFile['type'], string>
+  } satisfies Record<RouteFile['type'], string>;
 
   function fileTone(t: RouteFile['type']): Tone {
-    if (t === 'endpoint') return 'green'
-    if (t.includes('server')) return 'blue'
-    if (t.includes('layout')) return 'purple'
-    if (t === 'error') return 'red'
-    return 'accent'
+    if (t === 'endpoint') return 'green';
+    if (t.includes('server')) return 'blue';
+    if (t.includes('layout')) return 'purple';
+    if (t === 'error') return 'red';
+    return 'accent';
   }
 
   function segTone(seg: string) {
-    if (seg.startsWith('[...')) return 'rest'
-    if (seg.startsWith('[')) return 'param'
-    if (seg.startsWith('(')) return 'group'
-    return ''
+    if (seg.startsWith('[...')) return 'rest';
+    if (seg.startsWith('[')) return 'param';
+    if (seg.startsWith('(')) return 'group';
+    return '';
   }
 
   function canVisit(r: RouteInfo) {
-    return r.hasPage && r.params.length === 0
+    return r.hasPage && r.params.length === 0;
   }
 
   function visit(r: RouteInfo) {
-    window.open(new URL(r.path, location.origin).href, '_blank', 'noopener')
+    window.open(new URL(r.path, location.origin).href, '_blank', 'noopener');
   }
 
   function primaryFile(r: RouteInfo) {
@@ -103,11 +103,11 @@
       r.files.find(f => f.type === 'page') ??
       r.files.find(f => f.type === 'endpoint') ??
       r.files[0]
-    )?.path
+    )?.path;
   }
 
   function open(path: string | undefined) {
-    if (path) openInEditor(path).catch(() => {})
+    if (path) openInEditor(path).catch(() => {});
   }
 </script>
 

@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { resolve } from '$app/paths'
+  import { resolve } from '$app/paths';
 
   const posts = [
     { slug: 'hello-world', title: 'Hello World' },
     { slug: 'getting-started', title: 'Getting Started with Svelte DevTools' },
     { slug: 'advanced-features', title: 'Advanced Features' },
-  ]
+  ];
 </script>
 
 <svelte:head>

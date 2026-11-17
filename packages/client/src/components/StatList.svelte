@@ -1,11 +1,11 @@
 <script lang="ts">
-  import type { Stat } from './types.js'
+  import type { Stat } from './types.js';
 
   /**
    * Labelled figures as a `<dl>`: a framed row (`box`), a full-width row
    * under a header (`strip`) or tiles that wrap (`grid`, for inspectors).
    */
-  let { items, variant }: { items: Stat[]; variant: 'box' | 'strip' | 'grid' } = $props()
+  let { items, variant }: { items: Stat[]; variant: 'box' | 'strip' | 'grid' } = $props();
 </script>
 
 <dl class="stats {variant}">

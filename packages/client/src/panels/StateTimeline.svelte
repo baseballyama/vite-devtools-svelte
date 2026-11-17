@@ -1,41 +1,41 @@
 <script lang="ts">
-  import Badge from '../components/Badge.svelte'
-  import Button from '../components/Button.svelte'
-  import CaptureNotice from '../components/CaptureNotice.svelte'
-  import Highlight from '../components/Highlight.svelte'
-  import Inspector from '../components/Inspector.svelte'
-  import LiveControls from '../components/LiveControls.svelte'
-  import Panel from '../components/Panel.svelte'
-  import ResourceEmpty from '../components/ResourceEmpty.svelte'
-  import SearchField from '../components/SearchField.svelte'
-  import SplitView from '../components/SplitView.svelte'
-  import VirtualList from '../components/VirtualList.svelte'
-  import { captureInfo } from '../lib/capture.svelte.js'
-  import { componentName, formatClock, formatValue, prettyValue } from '../lib/format.js'
-  import { haystack, haystackMatcher } from '../lib/match.js'
-  import { baselineNotice } from '../lib/reactive.js'
-  import { resource } from '../lib/resource.svelte.js'
-  import { getStateTimelineDelta, clearStateTimeline, openReactiveInEditor } from '../lib/rpc.js'
-  import type { StateChange, StateTimelineEntry } from '../lib/types.js'
-  import { datasetVersion } from '../lib/versions.js'
+  import Badge from '../components/Badge.svelte';
+  import Button from '../components/Button.svelte';
+  import CaptureNotice from '../components/CaptureNotice.svelte';
+  import Highlight from '../components/Highlight.svelte';
+  import Inspector from '../components/Inspector.svelte';
+  import LiveControls from '../components/LiveControls.svelte';
+  import Panel from '../components/Panel.svelte';
+  import ResourceEmpty from '../components/ResourceEmpty.svelte';
+  import SearchField from '../components/SearchField.svelte';
+  import SplitView from '../components/SplitView.svelte';
+  import VirtualList from '../components/VirtualList.svelte';
+  import { captureInfo } from '../lib/capture.svelte.js';
+  import { componentName, formatClock, formatValue, prettyValue } from '../lib/format.js';
+  import { haystack, haystackMatcher } from '../lib/match.js';
+  import { baselineNotice } from '../lib/reactive.js';
+  import { resource } from '../lib/resource.svelte.js';
+  import { getStateTimelineDelta, clearStateTimeline, openReactiveInEditor } from '../lib/rpc.js';
+  import type { StateChange, StateTimelineEntry } from '../lib/types.js';
+  import { datasetVersion } from '../lib/versions.js';
 
   /** Mirrors the server buffer (docs/devframe-migration.md §6.4). */
-  const MAX_ENTRIES = 500
+  const MAX_ENTRIES = 500;
 
   // Cursor-based pulls: the server answers from its own buffer (never pulls
   // the app) and only sends entries after `cursor`; for a cursor it cannot
   // continue (a clear, an evicted page load, a restart) it answers with the
   // whole buffer and `reset`. The fetcher returns the same array when nothing
   // arrived, so the resource skips re-deriving without serialising the buffer.
-  let cursor: number | undefined
-  let buffer: StateTimelineEntry[] = []
+  let cursor: number | undefined;
+  let buffer: StateTimelineEntry[] = [];
 
   async function pull(): Promise<StateTimelineEntry[]> {
-    const d = await getStateTimelineDelta(cursor)
-    cursor = d.cursor
-    if (d.reset) buffer = d.changes.slice(-MAX_ENTRIES)
-    else if (d.changes.length) buffer = buffer.concat(d.changes).slice(-MAX_ENTRIES)
-    return buffer
+    const d = await getStateTimelineDelta(cursor);
+    cursor = d.cursor;
+    if (d.reset) buffer = d.changes.slice(-MAX_ENTRIES);
+    else if (d.changes.length) buffer = buffer.concat(d.changes).slice(-MAX_ENTRIES);
+    return buffer;
   }
 
   const timeline = resource<StateTimelineEntry[]>(pull, {
@@ -43,57 +43,57 @@
     interval: 1000,
     version: datasetVersion('stateTimeline'),
     equals: (a, b) => a === b,
-  })
+  });
 
-  const capture = captureInfo(1000)
-  const baseline = $derived(baselineNotice(capture.data.stateTimeline?.baseline))
-  let query = $state('')
-  let selected = $state<string | null>(null)
+  const capture = captureInfo(1000);
+  const baseline = $derived(baselineNotice(capture.data.stateTimeline?.baseline));
+  let query = $state('');
+  let selected = $state<string | null>(null);
 
   // Values are snapshots of up to 32 KB; stringify each entry once, not on
   // every keystroke and row render. Entries are immutable once received.
   interface Preview {
-    old: string
-    next: string
-    hay: string
+    old: string;
+    next: string;
+    hay: string;
   }
-  const previews = new WeakMap<StateChange, Preview>()
+  const previews = new WeakMap<StateChange, Preview>();
   function preview(c: StateChange): Preview {
-    let p = previews.get(c)
+    let p = previews.get(c);
     if (!p) {
       p = {
         old: c.oldValue === null ? '' : formatValue(c.oldValue, 40),
         next: formatValue(c.newValue, 80),
         hay: haystack(c.name, c.componentFile, formatValue(c.newValue, 200)),
-      }
-      previews.set(c, p)
+      };
+      previews.set(c, p);
     }
-    return p
+    return p;
   }
 
   /** Newest first, filtered. */
   const entries = $derived.by(() => {
-    const m = haystackMatcher(query)
-    const newest = timeline.data.toReversed()
-    return m ? newest.filter(c => m(preview(c).hay)) : newest
-  })
+    const m = haystackMatcher(query);
+    const newest = timeline.data.toReversed();
+    return m ? newest.filter(c => m(preview(c).hay)) : newest;
+  });
 
   // Keyed by the server's monotonically increasing `seq`, stable across
   // trims and resets of the buffer.
-  const keyOf = (c: StateTimelineEntry) => String(c.seq)
-  const current = $derived(selected ? (entries.find(c => keyOf(c) === selected) ?? null) : null)
-  const signals = $derived(new Set(timeline.data.map(c => c.id)).size)
+  const keyOf = (c: StateTimelineEntry) => String(c.seq);
+  const current = $derived(selected ? (entries.find(c => keyOf(c) === selected) ?? null) : null);
+  const signals = $derived(new Set(timeline.data.map(c => c.id)).size);
 
   async function clear() {
-    await clearStateTimeline().catch(() => {})
-    cursor = undefined
-    buffer = []
-    timeline.set(buffer)
-    selected = null
+    await clearStateTimeline().catch(() => {});
+    cursor = undefined;
+    buffer = [];
+    timeline.set(buffer);
+    selected = null;
   }
 
   function open(c: StateChange) {
-    openReactiveInEditor(c.componentFile, c.name, 'state').catch(() => {})
+    openReactiveInEditor(c.componentFile, c.name, 'state').catch(() => {});
   }
 </script>
 

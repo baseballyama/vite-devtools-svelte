@@ -1,18 +1,18 @@
 <script lang="ts">
-  import { cart } from '#lib/stores/cart.svelte.ts'
+  import { cart } from '#lib/stores/cart.svelte.ts';
 
-  let taxRate = $state(0.1)
-  let shippingFreeThreshold = $state(5000)
+  let taxRate = $state(0.1);
+  let shippingFreeThreshold = $state(5000);
 
-  const subtotal = $derived(cart.total)
-  const tax = $derived(Math.round(subtotal * taxRate))
-  const shipping = $derived(subtotal >= shippingFreeThreshold ? 0 : 500)
-  const grandTotal = $derived(subtotal + tax + shipping)
-  const remaining = $derived(Math.max(0, shippingFreeThreshold - subtotal))
+  const subtotal = $derived(cart.total);
+  const tax = $derived(Math.round(subtotal * taxRate));
+  const shipping = $derived(subtotal >= shippingFreeThreshold ? 0 : 500);
+  const grandTotal = $derived(subtotal + tax + shipping);
+  const remaining = $derived(Math.max(0, shippingFreeThreshold - subtotal));
 
   $effect(() => {
-    console.log('[ReactivePriceChart] grandTotal updated:', grandTotal)
-  })
+    console.log('[ReactivePriceChart] grandTotal updated:', grandTotal);
+  });
 </script>
 
 <div class="card">

@@ -1,10 +1,10 @@
 <script>
-  let items = $state([1, 2, 3])
+  let items = $state([1, 2, 3]);
   export function add() {
-    items.push(items.length + 1)
+    items.push(items.length + 1);
   }
   export function removeFirst() {
-    items.shift()
+    items.shift();
   }
 </script>
 

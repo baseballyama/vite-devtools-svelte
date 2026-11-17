@@ -1,35 +1,35 @@
 <script lang="ts">
-  let count = $state(0)
-  let step = $state(1)
+  let count = $state(0);
+  let step = $state(1);
 
-  let doubled = $derived(count * 2)
-  let isEven = $derived(count % 2 === 0)
-  let squared = $derived(count * count)
+  let doubled = $derived(count * 2);
+  let isEven = $derived(count % 2 === 0);
+  let squared = $derived(count * count);
 
   let label = $derived.by(() => {
-    if (count === 0) return 'Zero'
-    if (count > 0) return `Positive (${count})`
-    return `Negative (${count})`
-  })
+    if (count === 0) return 'Zero';
+    if (count > 0) return `Positive (${count})`;
+    return `Negative (${count})`;
+  });
 
-  let history = $state<number[]>([0])
+  let history = $state<number[]>([0]);
 
   $effect(() => {
     // Record count changes to history
     if (history[history.length - 1] !== count) {
-      history = [...history.slice(-19), count]
+      history = [...history.slice(-19), count];
     }
-  })
+  });
 
   function increment() {
-    count += step
+    count += step;
   }
   function decrement() {
-    count -= step
+    count -= step;
   }
   function reset() {
-    count = 0
-    history = [0]
+    count = 0;
+    history = [0];
   }
 </script>
 

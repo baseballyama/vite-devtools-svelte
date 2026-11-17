@@ -1,4 +1,4 @@
-import type { PageServerLoad } from './$types'
+import type { PageServerLoad } from './$types';
 
 const posts: Record<string, { title: string; content: string }> = {
   'hello-world': {
@@ -14,14 +14,14 @@ const posts: Record<string, { title: string; content: string }> = {
     content:
       'Explore advanced features like reactive graph visualization and performance profiling.',
   },
-}
+};
 
 export const load: PageServerLoad = ({ params }) => {
-  const post = posts[params.slug]
+  const post = posts[params.slug];
 
   if (!post) {
-    return { status: 404, title: 'Not Found', content: 'Post not found.' }
+    return { status: 404, title: 'Not Found', content: 'Post not found.' };
   }
 
-  return { ...post }
-}
+  return { ...post };
+};

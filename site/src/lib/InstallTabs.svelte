@@ -4,27 +4,27 @@
     { id: 'pnpm', cmd: 'pnpm add -D @sveltejs/vite-devtools-svelte' },
     { id: 'yarn', cmd: 'yarn add -D @sveltejs/vite-devtools-svelte' },
     { id: 'bun', cmd: 'bun add -d @sveltejs/vite-devtools-svelte' },
-  ]
-  let active = $state(0)
-  let copied = $state(false)
-  const tabs: HTMLButtonElement[] = []
+  ];
+  let active = $state(0);
+  let copied = $state(false);
+  const tabs: HTMLButtonElement[] = [];
 
   async function copy() {
     try {
-      await navigator.clipboard.writeText(managers[active].cmd)
-      copied = true
-      setTimeout(() => (copied = false), 1600)
+      await navigator.clipboard.writeText(managers[active].cmd);
+      copied = true;
+      setTimeout(() => (copied = false), 1600);
     } catch {
       /* clipboard unavailable — the command stays selectable */
     }
   }
 
   function onkeydown(e: KeyboardEvent) {
-    const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
-    if (!step) return
-    e.preventDefault()
-    active = (active + step + managers.length) % managers.length
-    tabs[active]?.focus()
+    const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+    if (!step) return;
+    e.preventDefault();
+    active = (active + step + managers.length) % managers.length;
+    tabs[active]?.focus();
   }
 </script>
 

@@ -1,6 +1,6 @@
 /// <reference types="@vitejs/devtools-kit" />
-import { DEVTOOLS_MOUNT_PATH } from '@vitejs/devtools-kit/constants'
-import type { Plugin } from 'vite'
+import { DEVTOOLS_MOUNT_PATH } from '@vitejs/devtools-kit/constants';
+import type { Plugin } from 'vite';
 
 /**
  * SvelteKit dev bypasses Vite's `transformIndexHtml`, so `@vitejs/devtools`'s
@@ -32,10 +32,10 @@ import type { Plugin } from 'vite'
  * literal (`generated/build/server.js` is the build-time copy, which this
  * dev-only plugin never sees).
  */
-export const SVELTEKIT_DEV_SERVER_SUFFIX = '.svelte-kit/generated/dev/server.js'
+export const SVELTEKIT_DEV_SERVER_SUFFIX = '.svelte-kit/generated/dev/server.js';
 
 /** Marker that the `templates.app` literal in SvelteKit's generated server. */
-export const TEMPLATE_APP_MARKER = 'templates: {'
+export const TEMPLATE_APP_MARKER = 'templates: {';
 
 /**
  * The dock bootstrap the Vite DevTools hub serves itself (`@vitejs/devtools`
@@ -45,9 +45,9 @@ export const TEMPLATE_APP_MARKER = 'templates: {'
  * HTML never goes through Vite's HTML processing, so a plain static `src` is
  * enough — and, unlike an inline loader, works under a strict `script-src 'self'`.
  */
-const INJECT_SCRIPT_URL = `${DEVTOOLS_MOUNT_PATH}embedded.js`
+const INJECT_SCRIPT_URL = `${DEVTOOLS_MOUNT_PATH}embedded.js`;
 /** The tag, escaped because we're editing a JS string literal. */
-const INJECT_TAG = `<script type=\\"module\\" src=\\"${INJECT_SCRIPT_URL}\\"></script>`
+const INJECT_TAG = `<script type=\\"module\\" src=\\"${INJECT_SCRIPT_URL}\\"></script>`;
 
 /**
  * `</body>` as it appears inside SvelteKit's generated string literal.
@@ -55,7 +55,7 @@ const INJECT_TAG = `<script type=\\"module\\" src=\\"${INJECT_SCRIPT_URL}\\"></s
  * `/` alone — only control characters and quotes are escaped. So the literal
  * substring we actually search for is plain `</body>`.
  */
-const BODY_CLOSE = '</body>'
+const BODY_CLOSE = '</body>';
 
 /**
  * Transform `.svelte-kit/generated/dev/server.js` to add the
@@ -68,29 +68,29 @@ const BODY_CLOSE = '</body>'
 export function injectIntoSvelteKitTemplate(code: string): string | null {
   // Cheap structural sanity check — bail if SvelteKit changed how it generates
   // the template object. The companion test asserts this branch is reachable.
-  if (!code.includes(TEMPLATE_APP_MARKER)) return null
-  if (!code.includes(BODY_CLOSE)) return null
+  if (!code.includes(TEMPLATE_APP_MARKER)) return null;
+  if (!code.includes(BODY_CLOSE)) return null;
 
   // Idempotence: don't double-inject across HMR re-runs.
-  if (code.includes(INJECT_SCRIPT_URL)) return null
+  if (code.includes(INJECT_SCRIPT_URL)) return null;
 
   // Only patch the literal that follows the `templates: {` marker, so a
   // future `</body>` mentioned in unrelated source code won't be touched.
-  const markerIdx = code.indexOf(TEMPLATE_APP_MARKER)
+  const markerIdx = code.indexOf(TEMPLATE_APP_MARKER);
   // SvelteKit emits the whole `app` template as one escaped string literal,
   // i.e. on one line. The document's own `</body>` is the last one on that
   // line: an earlier one sits in app.html's comments or inline-script strings
   // (`<!-- </body> -->`), where the tag would never load.
-  const appIdx = code.indexOf('app:', markerIdx)
-  const lineEnd = appIdx === -1 ? -1 : code.indexOf('\n', appIdx)
+  const appIdx = code.indexOf('app:', markerIdx);
+  const lineEnd = appIdx === -1 ? -1 : code.indexOf('\n', appIdx);
   const onAppLine =
-    appIdx === -1 ? -1 : code.lastIndexOf(BODY_CLOSE, lineEnd === -1 ? code.length : lineEnd)
+    appIdx === -1 ? -1 : code.lastIndexOf(BODY_CLOSE, lineEnd === -1 ? code.length : lineEnd);
   // An unexpected shape (no `app:` line holding `</body>`): the first
   // `</body>` after the marker, as before.
-  const bodyIdx = onAppLine > appIdx ? onAppLine : code.indexOf(BODY_CLOSE, markerIdx)
-  if (bodyIdx === -1) return null
+  const bodyIdx = onAppLine > appIdx ? onAppLine : code.indexOf(BODY_CLOSE, markerIdx);
+  if (bodyIdx === -1) return null;
 
-  return code.slice(0, bodyIdx) + INJECT_TAG + code.slice(bodyIdx)
+  return code.slice(0, bodyIdx) + INJECT_TAG + code.slice(bodyIdx);
 }
 
 /**
@@ -110,10 +110,10 @@ export function sveltekitTemplateInjector(isHosted: () => boolean): Plugin {
     apply: (_userConfig, env) => env.command === 'serve' && !env.isSsrBuild,
 
     transform(code, id) {
-      if (!id.endsWith(SVELTEKIT_DEV_SERVER_SUFFIX)) return null
-      if (!isHosted()) return null
-      const next = injectIntoSvelteKitTemplate(code)
-      return next === null ? null : { code: next, map: null }
+      if (!id.endsWith(SVELTEKIT_DEV_SERVER_SUFFIX)) return null;
+      if (!isHosted()) return null;
+      const next = injectIntoSvelteKitTemplate(code);
+      return next === null ? null : { code: next, map: null };
     },
-  }
+  };
 }

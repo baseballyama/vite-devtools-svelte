@@ -1,3 +1,3 @@
 export const load = ({ params }) => {
-  return { title: params.slug }
-}
+  return { title: params.slug };
+};

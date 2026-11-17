@@ -1,13 +1,13 @@
 <script lang="ts">
-  import Badge from '../components/Badge.svelte'
-  import Button from '../components/Button.svelte'
-  import EmptyState from '../components/EmptyState.svelte'
-  import Icon from '../components/Icon.svelte'
-  import Panel from '../components/Panel.svelte'
-  import { errorMessage } from '../lib/format.js'
-  import { resource } from '../lib/resource.svelte.js'
-  import { getOGPreview, getRoutes } from '../lib/rpc.js'
-  import type { OGPreview } from '../lib/types.js'
+  import Badge from '../components/Badge.svelte';
+  import Button from '../components/Button.svelte';
+  import EmptyState from '../components/EmptyState.svelte';
+  import Icon from '../components/Icon.svelte';
+  import Panel from '../components/Panel.svelte';
+  import { errorMessage } from '../lib/format.js';
+  import { resource } from '../lib/resource.svelte.js';
+  import { getOGPreview, getRoutes } from '../lib/rpc.js';
+  import type { OGPreview } from '../lib/types.js';
 
   const routes = resource(
     async () =>
@@ -15,42 +15,42 @@
     {
       initial: [] as string[],
     },
-  )
+  );
 
-  let path = $state('/')
-  let custom = $state('')
-  let loading = $state(false)
-  let preview = $state<OGPreview | null>(null)
-  let error = $state<string | null>(null)
+  let path = $state('/');
+  let custom = $state('');
+  let loading = $state(false);
+  let preview = $state<OGPreview | null>(null);
+  let error = $state<string | null>(null);
 
-  const target = $derived(custom.trim() || new URL(path, location.origin).href)
+  const target = $derived(custom.trim() || new URL(path, location.origin).href);
 
   async function run() {
-    loading = true
-    error = null
+    loading = true;
+    error = null;
     try {
-      preview = await getOGPreview(target)
+      preview = await getOGPreview(target);
     } catch (e) {
-      preview = null
-      error = errorMessage(e)
+      preview = null;
+      error = errorMessage(e);
     } finally {
-      loading = false
+      loading = false;
     }
   }
 
   const host = $derived.by(() => {
     try {
-      return new URL(preview?.url ?? target).host
+      return new URL(preview?.url ?? target).host;
     } catch {
-      return ''
+      return '';
     }
-  })
+  });
 
-  const cardTitle = $derived(preview?.title || 'Untitled page')
-  const cardDescription = $derived(preview?.description || 'No description')
+  const cardTitle = $derived(preview?.title || 'Untitled page');
+  const cardDescription = $derived(preview?.description || 'No description');
   const twitterCard = $derived(
     preview?.tags.find(t => t.property === 'twitter:card')?.content ?? 'summary',
-  )
+  );
 </script>
 
 <Panel title="Social preview" scroll>
@@ -58,8 +58,8 @@
     <form
       class="bar"
       onsubmit={e => {
-        e.preventDefault()
-        void run()
+        e.preventDefault();
+        void run();
       }}
     >
       <select class="select" bind:value={path} aria-label="Route" disabled={!!custom.trim()}>

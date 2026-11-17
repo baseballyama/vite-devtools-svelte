@@ -1,68 +1,68 @@
 <script lang="ts">
-  import Badge from '../components/Badge.svelte'
-  import Button from '../components/Button.svelte'
-  import LiveControls from '../components/LiveControls.svelte'
-  import Panel from '../components/Panel.svelte'
-  import ResourceEmpty from '../components/ResourceEmpty.svelte'
-  import Segmented from '../components/Segmented.svelte'
-  import StatList from '../components/StatList.svelte'
-  import type { Stat } from '../components/types.js'
-  import { resource } from '../lib/resource.svelte.js'
-  import { getFps, clearFps } from '../lib/rpc.js'
-  import type { FpsSample } from '../lib/types.js'
-  import { datasetVersion } from '../lib/versions.js'
+  import Badge from '../components/Badge.svelte';
+  import Button from '../components/Button.svelte';
+  import LiveControls from '../components/LiveControls.svelte';
+  import Panel from '../components/Panel.svelte';
+  import ResourceEmpty from '../components/ResourceEmpty.svelte';
+  import Segmented from '../components/Segmented.svelte';
+  import StatList from '../components/StatList.svelte';
+  import type { Stat } from '../components/types.js';
+  import { resource } from '../lib/resource.svelte.js';
+  import { getFps, clearFps } from '../lib/rpc.js';
+  import type { FpsSample } from '../lib/types.js';
+  import { datasetVersion } from '../lib/versions.js';
 
   const fps = resource<FpsSample[]>(getFps, {
     initial: [],
     interval: 500,
     version: datasetVersion('fps'),
-  })
+  });
 
-  const W = 1000
-  const H = 200
-  const MAX = 120
+  const W = 1000;
+  const H = 200;
+  const MAX = 120;
   /** Below this a frame rate counts as a drop. */
-  const DROP = 30
-  let windowSec = $state<'15' | '30' | '60'>('30')
-  let recording = $state(false)
-  let recordStart = $state(0)
-  let recordEnd = $state(0)
+  const DROP = 30;
+  let windowSec = $state<'15' | '30' | '60'>('30');
+  let recording = $state(false);
+  let recordStart = $state(0);
+  let recordEnd = $state(0);
 
   // Anchor the x-axis to the newest sample (not wall-clock) so a paused or
   // throttled stream does not scroll the chart into emptiness.
-  const latest = $derived(fps.data.at(-1)?.timestamp ?? Date.now())
-  const span = $derived(Number(windowSec) * 1000)
-  const visible = $derived(fps.data.filter(s => s.timestamp >= latest - span))
-  const current = $derived(fps.data.at(-1)?.fps ?? 0)
+  const latest = $derived(fps.data.at(-1)?.timestamp ?? Date.now());
+  const span = $derived(Number(windowSec) * 1000);
+  const visible = $derived(fps.data.filter(s => s.timestamp >= latest - span));
+  const current = $derived(fps.data.at(-1)?.fps ?? 0);
 
-  const x = (t: number) => ((t - (latest - span)) / span) * W
-  const y = (f: number) => H - (Math.min(f, MAX) / MAX) * H
+  const x = (t: number) => ((t - (latest - span)) / span) * W;
+  const y = (f: number) => H - (Math.min(f, MAX) / MAX) * H;
 
   const line = $derived(
     visible.length > 1
       ? 'M' + visible.map(s => `${x(s.timestamp).toFixed(1)},${y(s.fps).toFixed(1)}`).join('L')
       : '',
-  )
+  );
   const area = $derived(
     line
       ? `${line}L${x(visible.at(-1)!.timestamp).toFixed(1)},${H}L${x(visible[0]!.timestamp).toFixed(1)},${H}Z`
       : '',
-  )
-  const drops = $derived(visible.filter(s => s.fps < DROP))
+  );
+  const drops = $derived(visible.filter(s => s.fps < DROP));
 
   const recorded = $derived.by(() => {
-    if (!recordStart) return []
-    const end = recording ? Infinity : recordEnd
-    return fps.data.filter(s => s.timestamp >= recordStart && s.timestamp <= end)
-  })
+    if (!recordStart) return [];
+    const end = recording ? Infinity : recordEnd;
+    return fps.data.filter(s => s.timestamp >= recordStart && s.timestamp <= end);
+  });
 
   function summarize(src: FpsSample[]): { count: number; items: Stat[] } | null {
-    if (!src.length) return null
-    const sorted = src.map(s => s.fps).sort((a, b) => a - b)
-    const min = sorted[0]!
-    const p1 = sorted[Math.floor(sorted.length * 0.01)]!
-    const avg = Math.round(sorted.reduce((sum, f) => sum + f, 0) / sorted.length)
-    const drops = sorted.filter(f => f < DROP).length
+    if (!src.length) return null;
+    const sorted = src.map(s => s.fps).sort((a, b) => a - b);
+    const min = sorted[0]!;
+    const p1 = sorted[Math.floor(sorted.length * 0.01)]!;
+    const avg = Math.round(sorted.reduce((sum, f) => sum + f, 0) / sorted.length);
+    const drops = sorted.filter(f => f < DROP).length;
     return {
       count: sorted.length,
       items: [
@@ -72,38 +72,38 @@
         { label: 'Max', value: sorted.at(-1)! },
         { label: `Drops <${DROP}`, value: drops, tone: drops > 0 ? 'red' : null },
       ],
-    }
+    };
   }
 
-  const stats = $derived(summarize(visible))
-  const recStats = $derived(summarize(recorded))
+  const stats = $derived(summarize(visible));
+  const recStats = $derived(summarize(recorded));
   const region = $derived.by(() => {
-    if (!recordStart) return null
-    const x1 = Math.max(0, x(recordStart))
-    const x2 = Math.min(W, recording ? W : x(recordEnd))
-    return x2 > x1 ? { x: x1, w: x2 - x1 } : null
-  })
+    if (!recordStart) return null;
+    const x1 = Math.max(0, x(recordStart));
+    const x2 = Math.min(W, recording ? W : x(recordEnd));
+    return x2 > x1 ? { x: x1, w: x2 - x1 } : null;
+  });
 
   function tone(f: number) {
-    return f >= 55 ? 'green' : f >= DROP ? 'yellow' : 'red'
+    return f >= 55 ? 'green' : f >= DROP ? 'yellow' : 'red';
   }
 
   function toggleRecord() {
     if (recording) {
-      recording = false
-      recordEnd = latest
+      recording = false;
+      recordEnd = latest;
     } else {
-      recording = true
-      recordStart = latest
-      recordEnd = 0
+      recording = true;
+      recordStart = latest;
+      recordEnd = 0;
     }
   }
 
   async function clear() {
-    await clearFps().catch(() => {})
-    fps.set([])
-    recording = false
-    recordStart = recordEnd = 0
+    await clearFps().catch(() => {});
+    fps.set([]);
+    recording = false;
+    recordStart = recordEnd = 0;
   }
 </script>
 

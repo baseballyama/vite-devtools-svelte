@@ -1,11 +1,11 @@
 <script lang="ts">
-  import Header from '#lib/components/Header.svelte'
+  import Header from '#lib/components/Header.svelte';
 
-  import '../app.css'
+  import '../app.css';
 
-  import type { LayoutProps } from './$types'
+  import type { LayoutProps } from './$types';
 
-  let { children }: LayoutProps = $props()
+  let { children }: LayoutProps = $props();
 </script>
 
 <Header />

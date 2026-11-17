@@ -1,34 +1,34 @@
 <script lang="ts">
-  import Badge from '../components/Badge.svelte'
-  import Button from '../components/Button.svelte'
-  import DataTable from '../components/DataTable.svelte'
-  import Highlight from '../components/Highlight.svelte'
-  import Icon from '../components/Icon.svelte'
-  import Inspector from '../components/Inspector.svelte'
-  import Panel from '../components/Panel.svelte'
-  import RefreshButton from '../components/RefreshButton.svelte'
-  import ResourceEmpty from '../components/ResourceEmpty.svelte'
-  import SearchField from '../components/SearchField.svelte'
-  import Segmented from '../components/Segmented.svelte'
-  import SplitView from '../components/SplitView.svelte'
-  import type { Column, SortState, TableRowState, Tone } from '../components/types.js'
-  import { countBy } from '../lib/collections.js'
-  import { basename, formatBytes } from '../lib/format.js'
-  import { kindOptions } from '../lib/kind-options.js'
-  import { matcher } from '../lib/match.js'
-  import { resource } from '../lib/resource.svelte.js'
-  import { getModuleGraph, openInEditor } from '../lib/rpc.js'
-  import type { ModuleGraphData, ModuleNode } from '../lib/types.js'
+  import Badge from '../components/Badge.svelte';
+  import Button from '../components/Button.svelte';
+  import DataTable from '../components/DataTable.svelte';
+  import Highlight from '../components/Highlight.svelte';
+  import Icon from '../components/Icon.svelte';
+  import Inspector from '../components/Inspector.svelte';
+  import Panel from '../components/Panel.svelte';
+  import RefreshButton from '../components/RefreshButton.svelte';
+  import ResourceEmpty from '../components/ResourceEmpty.svelte';
+  import SearchField from '../components/SearchField.svelte';
+  import Segmented from '../components/Segmented.svelte';
+  import SplitView from '../components/SplitView.svelte';
+  import type { Column, SortState, TableRowState, Tone } from '../components/types.js';
+  import { countBy } from '../lib/collections.js';
+  import { basename, formatBytes } from '../lib/format.js';
+  import { kindOptions } from '../lib/kind-options.js';
+  import { matcher } from '../lib/match.js';
+  import { resource } from '../lib/resource.svelte.js';
+  import { getModuleGraph, openInEditor } from '../lib/rpc.js';
+  import type { ModuleGraphData, ModuleNode } from '../lib/types.js';
 
-  const graph = resource<ModuleGraphData>(getModuleGraph, { initial: { modules: [], cycles: [] } })
+  const graph = resource<ModuleGraphData>(getModuleGraph, { initial: { modules: [], cycles: [] } });
 
-  let query = $state('')
-  let type = $state<'all' | ModuleNode['type']>('all')
-  let cyclicOnly = $state(false)
-  let sort = $state<SortState | null>({ id: 'size', desc: true })
-  let selected = $state<string | null>(null)
+  let query = $state('');
+  let type = $state<'all' | ModuleNode['type']>('all');
+  let cyclicOnly = $state(false);
+  let sort = $state<SortState | null>({ id: 'size', desc: true });
+  let selected = $state<string | null>(null);
 
-  const byId = $derived(new Map(graph.data.modules.map(m => [m.id, m])))
+  const byId = $derived(new Map(graph.data.modules.map(m => [m.id, m])));
 
   const typeOptions = $derived(
     kindOptions(
@@ -37,21 +37,21 @@
       type,
       t => (t === 'svelte' ? 'Svelte' : t.toUpperCase()),
     ),
-  )
+  );
 
   const rows = $derived.by(() => {
-    const m = matcher(query)
+    const m = matcher(query);
     return graph.data.modules.filter(
       mod =>
         (type === 'all' || mod.type === type) && (!cyclicOnly || mod.isCyclic) && (!m || m(mod.id)),
-    )
-  })
+    );
+  });
 
-  const maxSize = $derived(graph.data.modules.reduce((m, x) => Math.max(m, x.size ?? 0), 1))
-  const current = $derived(selected ? (byId.get(selected) ?? null) : null)
+  const maxSize = $derived(graph.data.modules.reduce((m, x) => Math.max(m, x.size ?? 0), 1));
+  const current = $derived(selected ? (byId.get(selected) ?? null) : null);
   const currentCycles = $derived(
     current ? graph.data.cycles.filter(c => c.includes(current.id)) : [],
-  )
+  );
 
   const tones: Record<ModuleNode['type'], Tone> = {
     svelte: 'accent',
@@ -59,7 +59,7 @@
     js: 'yellow',
     css: 'purple',
     other: 'neutral',
-  }
+  };
 
   const columns: Column<ModuleNode>[] = [
     {
@@ -93,21 +93,21 @@
       descFirst: true,
       sort: (a, b) => (a.size ?? 0) - (b.size ?? 0),
     },
-  ]
+  ];
 
   function select(id: string) {
-    if (!byId.has(id)) return
+    if (!byId.has(id)) return;
     // Make sure the target is visible under the current filters.
     if (!rows.some(m => m.id === id)) {
-      query = ''
-      type = 'all'
-      cyclicOnly = false
+      query = '';
+      type = 'all';
+      cyclicOnly = false;
     }
-    selected = id
+    selected = id;
   }
 
   function open(m: ModuleNode) {
-    openInEditor(m.file).catch(() => {})
+    openInEditor(m.file).catch(() => {});
   }
 </script>
 

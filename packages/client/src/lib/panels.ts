@@ -2,27 +2,27 @@
  * Panel registry — single source of truth for navigation, the command
  * palette and the router. Panels are code-split and loaded on first visit.
  */
-import type { Component } from 'svelte'
+import type { Component } from 'svelte';
 
-import type { IconName } from './icons.js'
+import type { IconName } from './icons.js';
 
-export type PanelGroup = 'app' | 'perf' | 'tools'
+export type PanelGroup = 'app' | 'perf' | 'tools';
 
 export interface PanelDef {
-  id: string
-  label: string
-  icon: IconName
-  group: PanelGroup
-  description: string
-  keywords?: string
-  load: () => Promise<{ default: Component }>
+  id: string;
+  label: string;
+  icon: IconName;
+  group: PanelGroup;
+  description: string;
+  keywords?: string;
+  load: () => Promise<{ default: Component }>;
 }
 
 export const groupLabels: Record<PanelGroup, string> = {
   app: 'App',
   perf: 'Performance',
   tools: 'Tools',
-}
+};
 
 export const panels = [
   {
@@ -159,10 +159,10 @@ export const panels = [
     keywords: 'og meta seo twitter',
     load: () => import('../panels/OGPreview.svelte'),
   },
-] as const satisfies readonly PanelDef[]
+] as const satisfies readonly PanelDef[];
 
-export type PanelId = (typeof panels)[number]['id']
+export type PanelId = (typeof panels)[number]['id'];
 
 export function panelById(id: string): PanelDef {
-  return panels.find(p => p.id === id) ?? panels[0]
+  return panels.find(p => p.id === id) ?? panels[0];
 }

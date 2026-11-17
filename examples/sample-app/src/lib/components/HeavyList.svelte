@@ -1,6 +1,6 @@
 <script lang="ts">
-  let size = $state(200)
-  let query = $state('')
+  let size = $state(200);
+  let query = $state('');
 
   const items = $derived(
     Array.from({ length: size }, (_, i) => ({
@@ -8,11 +8,11 @@
       label: `Item #${i.toString().padStart(4, '0')}`,
       hue: (i * 13) % 360,
     })),
-  )
+  );
 
   const filtered = $derived(
     query ? items.filter(it => it.label.toLowerCase().includes(query.toLowerCase())) : items,
-  )
+  );
 </script>
 
 <div class="card">

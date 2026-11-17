@@ -8,17 +8,17 @@
  * - Async queries wait up to 5 s: panels are lazy imports, which are slow
  *   to transform under coverage instrumentation on a busy machine.
  */
-import { configure } from '@testing-library/svelte'
-import { beforeEach, vi } from 'vitest'
+import { configure } from '@testing-library/svelte';
+import { beforeEach, vi } from 'vitest';
 
-import { resetFakeRpc } from './fake-rpc.js'
+import { resetFakeRpc } from './fake-rpc.js';
 
-vi.mock('../lib/rpc.js', () => import('./fake-rpc.js'))
+vi.mock('../lib/rpc.js', () => import('./fake-rpc.js'));
 
-configure({ asyncUtilTimeout: 5000 })
+configure({ asyncUtilTimeout: 5000 });
 
 beforeEach(() => {
-  resetFakeRpc()
-  localStorage.clear()
-  history.replaceState(null, '', '/')
-})
+  resetFakeRpc();
+  localStorage.clear();
+  history.replaceState(null, '', '/');
+});
