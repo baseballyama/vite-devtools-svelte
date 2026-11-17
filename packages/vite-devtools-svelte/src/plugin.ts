@@ -4,6 +4,7 @@ import path from 'node:path'
 import { launchEditor } from 'devframe/utils/launch-editor'
 import type { Plugin, ResolvedConfig, ViteDevServer } from 'vite'
 
+import { serverResolver } from './analyzers/api.js'
 import { analyzeComponents } from './analyzers/components.js'
 import type { GraphModuleLike } from './analyzers/module-graph.js'
 import { analyzeProject } from './analyzers/project.js'
@@ -120,6 +121,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     publicBase: () => config?.base ?? '/',
     modules: () => (server ? collectModules(server) : []),
     transformRequest: file => (server ? server.transformRequest(file) : Promise.resolve(null)),
+    resolveFile: serverResolver(() => server),
     serverOrigins: () => {
       const urls = server?.resolvedUrls
       if (!urls) return []

@@ -332,6 +332,8 @@ export interface ApiEndpoint {
   /** `path` under the dev server's base: what to request from the app's origin. */
   url: string
   methods: string[]
+  /** False when some exports could not be followed: `methods` may miss handlers. */
+  complete: boolean
   file: string
 }
 

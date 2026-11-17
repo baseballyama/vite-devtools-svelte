@@ -9,7 +9,14 @@ import path from 'node:path'
  */
 import { describe, it, expect, vi, afterEach, afterAll } from 'vitest'
 
-import { analyzeApiEndpoints, exportedNames } from '../src/analyzers/api.js'
+import {
+  analyzeApiEndpoints,
+  collectExports,
+  moduleExports,
+  resolveRelative,
+  serverResolver,
+} from '../src/analyzers/api.js'
+import type { ResolveFile } from '../src/analyzers/api.js'
 import { fetchWithTimeout, OUTBOUND_TIMEOUT_MS } from '../src/analyzers/http.js'
 import type { RouteInfo } from '../src/types.js'
 
@@ -45,6 +52,21 @@ function endpointRoute(code: string | null, ext = 'ts'): RouteInfo {
 
 const ALL = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
 
+/** Write `files` (relative path → code) into a fresh directory; returns its path. */
+function project(files: Record<string, string>): string {
+  const dir = path.join(tmp, `p${n++}`)
+  for (const [rel, code] of Object.entries(files)) {
+    fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true })
+    fs.writeFileSync(path.join(dir, rel), code)
+  }
+  return dir
+}
+
+async function methodsOf(code: string, ext = 'ts') {
+  const [endpoint] = await analyzeApiEndpoints([endpointRoute(code, ext)])
+  return endpoint!
+}
+
 describe('analyzeApiEndpoints: exported methods', () => {
   it.each<[label: string, code: string, methods: string[]]>([
     // SvelteKit answers HEAD with the GET handler
@@ -72,6 +94,17 @@ describe('analyzeApiEndpoints: exported methods', () => {
     ],
     ['fallback answers every method', 'export const fallback = h', ALL],
     ['fallback with GET', 'export const GET = h\nexport async function fallback() {}', ALL],
+    // destructuring, in every pattern form
+    ['object destructuring', 'export const { GET } = handlers', ['GET', 'HEAD']],
+    ['renamed in the pattern', 'export const { a: POST, b: PUT = h } = handlers', ['POST', 'PUT']],
+    ['object rest', 'export const { a, ...DELETE } = handlers', ['DELETE']],
+    ['nested pattern', 'export const { a: { PATCH } } = handlers', ['PATCH']],
+    [
+      'array destructuring',
+      'export const [GET, , POST = h, ...OPTIONS] = handlers',
+      ['GET', 'POST', 'HEAD', 'OPTIONS'],
+    ],
+    ['class', 'export class PUT {}', ['PUT']],
     // false positives of the old substring match
     ['prefix name', 'export const GETTER = 1\nexport function POSTED() {}', []],
     ['commented out', '// export function GET() {}\n/* export const POST = 1 */', []],
@@ -79,53 +112,152 @@ describe('analyzeApiEndpoints: exported methods', () => {
     ['lowercase', 'export function get() {}', []],
     ['not exported', 'function GET() {}', []],
     ['default export', 'export default function GET() {}', []],
-    ['destructuring', 'export const { GET } = handlers', []],
-    ['export star is unknown', "export * from './handlers'", []],
+    ['namespace re-export', "export * as GET from './handlers'", ['GET', 'HEAD']],
+    ['namespace re-export, string name', "export * as 'PUT' from './handlers'", ['PUT']],
     ['empty file', '', []],
-    ['syntax error', 'export function GET( {', []],
-  ])('%s', (_label, code, methods) => {
-    const [endpoint] = analyzeApiEndpoints([endpointRoute(code)])
-    expect(endpoint!.methods).toEqual(methods)
+  ])('%s', async (_label, code, methods) => {
+    expect(await methodsOf(code)).toMatchObject({ methods, complete: true })
   })
 
-  it('parses .js endpoints as JavaScript', () => {
-    const [js] = analyzeApiEndpoints([endpointRoute('export async function GET() {}', 'js')])
-    expect(js!.methods).toEqual(['GET', 'HEAD'])
+  it('parses .js endpoints as JavaScript', async () => {
+    expect((await methodsOf('export async function GET() {}', 'js')).methods).toEqual([
+      'GET',
+      'HEAD',
+    ])
     // TS-only syntax is not JavaScript
-    const [bad] = analyzeApiEndpoints([endpointRoute('export const GET: number = 1', 'js')])
-    expect(bad!.methods).toEqual([])
+    expect(await methodsOf('export const GET: number = 1', 'js')).toMatchObject({
+      methods: [],
+      complete: false,
+    })
   })
 
-  it('reports an unreadable endpoint with no methods instead of throwing', () => {
+  it('reports unparsable and unreadable endpoints as incomplete instead of throwing', async () => {
+    expect(await methodsOf('export function GET( {')).toMatchObject({
+      methods: [],
+      complete: false,
+    })
     const route = endpointRoute(null)
-    expect(analyzeApiEndpoints([route])).toEqual([
+    expect(await analyzeApiEndpoints([route])).toEqual([
       {
         route: route.id,
         path: route.path,
         url: route.path,
         methods: [],
+        complete: false,
         file: route.files[0]!.path,
       },
     ])
   })
 
-  it('puts the URL under the dev server base', () => {
+  it('puts the URL under the dev server base', async () => {
     const route = { ...endpointRoute('export const GET = h'), path: '/api/items/:id' }
     for (const base of ['/app/', '/app']) {
-      const [endpoint] = analyzeApiEndpoints([route], base)
+      const [endpoint] = await analyzeApiEndpoints([route], base)
       expect(endpoint).toMatchObject({ path: '/api/items/:id', url: '/app/api/items/:id' })
     }
-    expect(analyzeApiEndpoints([route])[0]!.url).toBe('/api/items/:id')
+    expect((await analyzeApiEndpoints([route]))[0]!.url).toBe('/api/items/:id')
   })
 
-  it('skips routes without an endpoint file', () => {
+  it('skips routes without an endpoint file', async () => {
     const route = endpointRoute('export const GET = 1')
-    expect(analyzeApiEndpoints([{ ...route, files: [{ type: 'page', path: 'x' }] }])).toEqual([])
+    expect(await analyzeApiEndpoints([{ ...route, files: [{ type: 'page', path: 'x' }] }])).toEqual(
+      [],
+    )
   })
 
-  it('exportedNames returns null for unparsable code', () => {
-    expect(exportedNames('export {', 'x.ts')).toBeNull()
-    expect(exportedNames('export const a = 1, b = 2', 'x.ts')).toEqual(new Set(['a', 'b']))
+  it('uses the given resolver for export *', async () => {
+    const dir = project({ 'lib/handlers.ts': 'export const POST = h' })
+    const route = endpointRoute("export * from '$lib/handlers'")
+    const resolve = vi.fn<ResolveFile>(() => Promise.resolve(path.join(dir, 'lib/handlers.ts')))
+    const [endpoint] = await analyzeApiEndpoints([route], '/', resolve)
+    expect(endpoint).toMatchObject({ methods: ['POST'], complete: true })
+    expect(resolve).toHaveBeenCalledWith('$lib/handlers', route.files[0]!.path)
+  })
+})
+
+describe('collectExports: export * from', () => {
+  it('follows stars through relative modules, recursively', async () => {
+    const dir = project({
+      '+server.ts': "export * from './a'\nexport const GET = h",
+      'a.ts': "export * from './b.js'\nexport const POST = h",
+      'b.ts': "export * from '../shared/index.js'",
+      // '../shared/index.js' resolves to the TypeScript source
+      '../shared/index.ts': 'export function DELETE() {}',
+    })
+    const result = await collectExports(path.join(dir, '+server.ts'), resolveRelative)
+    expect(result).toEqual({ names: new Set(['GET', 'POST', 'DELETE']), complete: true })
+  })
+
+  it('survives cycles', async () => {
+    const dir = project({
+      'a.ts': "export * from './b'\nexport const GET = h",
+      'b.ts': "export * from './a'\nexport const POST = h",
+    })
+    expect(await collectExports(path.join(dir, 'a.ts'), resolveRelative)).toEqual({
+      names: new Set(['GET', 'POST']),
+      complete: true,
+    })
+  })
+
+  it.each([
+    ['a package', "export * from 'handlers-pkg'"],
+    ['an alias without a resolver', "export * from '$lib/handlers'"],
+    ['a missing file', "export * from './missing'"],
+    ['an unparsable module', "export * from './broken'"],
+  ])('is incomplete when a star leads to %s, keeping what it knows', async (_label, star) => {
+    const dir = project({
+      '+server.ts': `${star}\nexport const GET = h`,
+      'broken.ts': 'export {',
+    })
+    expect(await collectExports(path.join(dir, '+server.ts'), resolveRelative)).toEqual({
+      names: new Set(['GET']),
+      complete: false,
+    })
+  })
+
+  it('gives up on a chain deeper than it follows', async () => {
+    const files: Record<string, string> = {}
+    for (let i = 0; i < 10; i++) files[`m${i}.ts`] = `export * from './m${i + 1}'`
+    files['m10.ts'] = 'export const GET = h'
+    const dir = project(files)
+    expect(await collectExports(path.join(dir, 'm0.ts'), resolveRelative)).toEqual({
+      names: new Set(),
+      complete: false,
+    })
+  })
+
+  it('resolveRelative finds index files and ignores directories', async () => {
+    const dir = project({ 'lib/index.js': '', 'dir.ts/x.ts': '' })
+    const importer = path.join(dir, 'x.ts')
+    expect(await resolveRelative('./lib', importer)).toBe(path.join(dir, 'lib/index.js'))
+    expect(await resolveRelative('./dir', importer)).toBeNull()
+  })
+
+  it('serverResolver asks the dev server, and only for files', async () => {
+    const dir = project({ 'x.ts': '' })
+    const answers: Record<string, { id: string; external: boolean } | null> = {
+      '$lib/a': { id: '/abs/real.ts', external: false },
+      ext: { id: '/abs/ext.js', external: true },
+      virtual: { id: '\0virtual', external: false },
+      none: null,
+    }
+    const resolveId = vi.fn((id: string) => Promise.resolve(answers[id]))
+    const holder: { server?: { pluginContainer: { resolveId: typeof resolveId } } } = {}
+    const resolve = serverResolver(() => holder.server as never)
+    // No server yet: relative resolution.
+    expect(await resolve('./x', path.join(dir, 'y.ts'))).toBe(path.join(dir, 'x.ts'))
+    holder.server = { pluginContainer: { resolveId } }
+    expect(await resolve('$lib/a', '/abs/+server.ts')).toBe('/abs/real.ts')
+    expect(resolveId).toHaveBeenCalledWith('$lib/a', '/abs/+server.ts', { ssr: true })
+    for (const id of ['ext', 'virtual', 'none']) expect(await resolve(id, '/abs/i.ts')).toBeNull()
+  })
+
+  it('moduleExports returns null for unparsable code', () => {
+    expect(moduleExports('export {', 'x.ts')).toBeNull()
+    expect(moduleExports("export const a = 1, b = 2\nexport * from './c'", 'x.ts')).toEqual({
+      names: new Set(['a', 'b']),
+      stars: ['./c'],
+    })
   })
 })
 

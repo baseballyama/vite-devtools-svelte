@@ -178,7 +178,8 @@
         }}
       >
         <select class="select method" bind:value={method} aria-label="HTTP method">
-          {#each current?.methods.length ? current.methods : METHODS as m (m)}<option>{m}</option
+          {#each current?.complete && current.methods.length ? current.methods : METHODS as m (m)}<option
+              >{m}</option
             >{/each}
         </select>
         <input
@@ -301,6 +302,11 @@
           <span class="methods">
             {#each e.methods.slice(0, 3) as m (m)}<Badge tone={methodTone(m)}>{m}</Badge>{/each}
             {#if e.methods.length > 3}<Badge>+{e.methods.length - 3}</Badge>{/if}
+            {#if !e.complete}<span
+                class="unknown"
+                title="Some exports could not be followed (export * from a package, or an unreadable file): more methods may exist"
+                ><Badge>?</Badge></span
+              >{/if}
           </span>
           <span class="truncate mono path"><Highlight text={e.path} {query} /></span>
         {/snippet}

@@ -353,6 +353,7 @@ export function createMockBackend(scale = 5000) {
       path: x.path,
       url: MOCK_API_BASE + x.path,
       methods: r() < 0.5 ? ['GET', 'HEAD'] : ['GET', 'HEAD', 'POST', 'DELETE'],
+      complete: r() < 0.9,
       file: x.files.find(f => f.type === 'endpoint')!.path,
     }))
 

@@ -17,6 +17,7 @@ const endpoints: ApiEndpoint[] = [
     path: '/api/users',
     url: '/app/api/users',
     methods: ['GET', 'POST'],
+    complete: true,
     file: 'src/routes/api/users/+server.ts',
   },
   {
@@ -24,6 +25,7 @@ const endpoints: ApiEndpoint[] = [
     path: '/api/items/:id',
     url: '/app/api/items/:id',
     methods: ['GET', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    complete: true,
     file: 'src/routes/api/items/[id]/+server.ts',
   },
   {
@@ -31,6 +33,8 @@ const endpoints: ApiEndpoint[] = [
     path: '/api/ping',
     url: '/app/api/ping',
     methods: ['HEAD'],
+    // an `export *` that could not be followed
+    complete: false,
     file: 'src/routes/api/ping/+server.ts',
   },
 ]
@@ -173,6 +177,17 @@ describe('ApiPlayground', () => {
     expect(within(res).getByText('x-id')).toBeTruthy()
     // JSON is pretty-printed.
     expect(res.querySelector('pre')!.textContent).toBe('{\n  "a": 1\n}')
+  })
+
+  it("offers every method when the endpoint's exports are only partly known", async () => {
+    const { user, list } = await setup()
+    const ping = within(list).getAllByRole('option')[2]!
+    expect(within(ping).getByText('?')).toBeTruthy()
+    expect(within(list).getAllByText('?')).toHaveLength(1)
+    await user.click(ping)
+    const method = screen.getByRole<HTMLSelectElement>('combobox', { name: 'HTTP method' })
+    expect(method.value).toBe('HEAD')
+    expect(within(method).getAllByRole('option')).toHaveLength(7)
   })
 
   it('opens the handler file in the editor', async () => {
