@@ -232,7 +232,7 @@ describe('collectExports: export * from', () => {
 
   it('keeps going when the resolver throws, marking the star unknown', async () => {
     const dir = project({ '+server.ts': "export * from 'x'\nexport const GET = h" })
-    const resolve: ResolveFile = () => Promise.reject(new Error('plugin failed'))
+    const resolve = vi.fn<ResolveFile>(() => Promise.reject(new Error('plugin failed')))
     expect(await collectExports(path.join(dir, '+server.ts'), resolve)).toEqual({
       names: new Set(['GET']),
       complete: false,
