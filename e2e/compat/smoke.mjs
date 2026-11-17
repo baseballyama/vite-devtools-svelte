@@ -658,7 +658,11 @@ async function clickInDock(page, target) {
     await nudgeDock(page);
     try {
       const position = await unobscuredPoint(target);
-      await target.click({ timeout: 2_500, ...(position ? { position } : {}) });
+      const at = position ? { position } : {};
+      // the nudge can leave the pointer on a neighbouring entry, whose tooltip then takes the press
+      await target.hover({ timeout: 2_500, ...at });
+      await sleep(350);
+      await target.click({ timeout: 2_500, ...at });
       return;
     } catch (e) {
       last = e;
