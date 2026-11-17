@@ -50,7 +50,7 @@
         "dock": "vite.config.ts"
       },
       "versions": {
-        "@sveltejs/kit": "3.1.1",
+        "@sveltejs/kit": "3.3.0",
         "svelte": "5.57.3",
         "vite": "8.3.5",
         "@sveltejs/vite-plugin-svelte": "7.3.1",
@@ -89,17 +89,17 @@
   "existingUnchanged": [
     {
       "dir": "examples/sample-app",
-      "kit": "3.1.1",
+      "kit": "3.3.0",
       "note": "Demo app used for the reactivity screenshots and MCP examples (scripts/screenshots); vite.standalone.config.ts serves the standalone mode. Not a compat profile."
     },
     {
       "dir": "examples/strict-csp-app",
-      "kit": "3.1.1",
+      "kit": "3.3.0",
       "note": "Existing strict-CSP example, not a compat profile. Built and type-checked in the CI job \"Playground production build\"."
     },
     {
       "dir": "playground",
-      "kit": "3.1.1",
+      "kit": "3.3.0",
       "note": "Built and type-checked in the CI job \"Playground production build\"."
     }
   ]

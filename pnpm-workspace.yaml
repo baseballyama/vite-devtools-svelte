@@ -11,6 +11,7 @@ minimumReleaseAgeExclude:
   - '@vitejs/devtools-rolldown'
   - 'devframe'
   - '@devframes/*'
+  - '@sveltejs/kit@3.3.0'
 
 # pnpm >= 11 reads settings only from this file (not package.json "pnpm").
 allowBuilds:
