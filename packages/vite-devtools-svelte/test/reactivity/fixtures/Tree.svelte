@@ -1,16 +1,16 @@
 <script>
-  import Child from './Child.svelte'
-  import Thrower from './Thrower.svelte'
-  let rows = $state([1])
-  let show = $state(false)
-  let broken = $state(false)
-  let kind = $state('a')
+  import Child from './Child.svelte';
+  import Thrower from './Thrower.svelte';
+  let rows = $state([1]);
+  let show = $state(false);
+  let broken = $state(false);
+  let kind = $state('a');
   export const api = {
     addRow: () => rows.push(rows.length + 1),
     toggle: () => (show = !show),
     break: () => (broken = true),
     reverse: () => rows.reverse(),
-  }
+  };
 </script>
 
 <Child label="direct" />

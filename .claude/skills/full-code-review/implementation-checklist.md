@@ -16,30 +16,30 @@ OG プレビューや API プレイグラウンドのように、ユーザー入
 ```ts
 // ✅ plugin.ts の validateExternalUrl が参考実装
 function validateExternalUrl(urlStr: string): void {
-  let parsed: URL
+  let parsed: URL;
   try {
-    parsed = new URL(urlStr)
+    parsed = new URL(urlStr);
   } catch {
-    throw new Error(`Invalid URL: ${urlStr}`)
+    throw new Error(`Invalid URL: ${urlStr}`);
   }
 
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    throw new Error(`Blocked URL scheme: ${parsed.protocol}`)
+    throw new Error(`Blocked URL scheme: ${parsed.protocol}`);
   }
 
-  const hostname = parsed.hostname
+  const hostname = parsed.hostname;
   if (hostname === '::1' || hostname === '[::1]') {
-    throw new Error('Blocked: loopback address')
+    throw new Error('Blocked: loopback address');
   }
 
   if (net.isIP(hostname)) {
     if (isPrivateIP(hostname)) {
-      throw new Error(`Blocked: private IP address ${hostname}`)
+      throw new Error(`Blocked: private IP address ${hostname}`);
     }
   } else {
-    const lower = hostname.toLowerCase()
+    const lower = hostname.toLowerCase();
     if (lower === 'localhost' || lower.endsWith('.local') || lower.endsWith('.internal')) {
-      throw new Error(`Blocked: internal hostname ${hostname}`)
+      throw new Error(`Blocked: internal hostname ${hostname}`);
     }
   }
 }
@@ -55,12 +55,12 @@ function validateExternalUrl(urlStr: string): void {
 
 ```ts
 // ✅ symlink を辿って実パスでチェック
-const realStaticDir = fs.realpathSync(projectInfo.staticDir)
-const realPath = fs.realpathSync(resolvedPath)
+const realStaticDir = fs.realpathSync(projectInfo.staticDir);
+const realPath = fs.realpathSync(resolvedPath);
 if (!realPath.startsWith(realStaticDir + path.sep) && realPath !== realStaticDir) {
-  res.statusCode = 403
-  res.end('Forbidden')
-  return
+  res.statusCode = 403;
+  res.end('Forbidden');
+  return;
 }
 ```
 
@@ -72,11 +72,11 @@ if (!realPath.startsWith(realStaticDir + path.sep) && realPath !== realStaticDir
 
 ```ts
 // ❌ 絶対パスが連結されて壊れる
-path.join(process.cwd(), '/custom/path') // → '/Users/xxx/project/custom/path'
+path.join(process.cwd(), '/custom/path'); // → '/Users/xxx/project/custom/path'
 
 // ✅ 絶対パスはそのまま、相対パスは cwd 基準で解決
-path.resolve(process.cwd(), '/custom/path') // → '/custom/path'
-path.resolve(process.cwd(), 'relative') // → '/Users/xxx/project/relative'
+path.resolve(process.cwd(), '/custom/path'); // → '/custom/path'
+path.resolve(process.cwd(), 'relative'); // → '/Users/xxx/project/relative'
 ```
 
 ### コマンドインジェクション防御
@@ -85,7 +85,7 @@ path.resolve(process.cwd(), 'relative') // → '/Users/xxx/project/relative'
 
 ```ts
 // ✅ execFile + 配列引数
-execFile('code', ['--goto', `${resolved}:${line}`])
+execFile('code', ['--goto', `${resolved}:${line}`]);
 
 // ❌ exec / shell 経由
 // exec(`code --goto ${userInput}`)
@@ -97,8 +97,8 @@ execFile('code', ['--goto', `${resolved}:${line}`])
 
 ```ts
 // ✅ ステートフルにするフラグだけ剥がす
-const safeFlags = userPattern.flags.replace(/[gy]/g, '')
-const regex = new RegExp(`^(?:${userPattern.source})$`, safeFlags)
+const safeFlags = userPattern.flags.replace(/[gy]/g, '');
+const regex = new RegExp(`^(?:${userPattern.source})$`, safeFlags);
 ```
 
 ### runtime/client.js のセキュリティ観点
@@ -174,23 +174,23 @@ resolveId(id, importer) {
 ```ts
 // ✅ 正しいパターン
 return new Promise<T>(resolve => {
-  let resolved = false
+  let resolved = false;
   const resolver = (data: T) => {
     if (!resolved) {
-      resolved = true
-      clearTimeout(timeout)
-      resolve(data)
+      resolved = true;
+      clearTimeout(timeout);
+      resolve(data);
     }
-  }
+  };
   const timeout = setTimeout(() => {
-    resolved = true
+    resolved = true;
     // タイムアウト時に resolver を配列から取り除く
-    const idx = resolvers.indexOf(resolver)
-    if (idx !== -1) resolvers.splice(idx, 1)
-    resolve(fallback)
-  }, 1000)
-  resolvers.push(resolver)
-})
+    const idx = resolvers.indexOf(resolver);
+    if (idx !== -1) resolvers.splice(idx, 1);
+    resolve(fallback);
+  }, 1000);
+  resolvers.push(resolver);
+});
 ```
 
 新規の resolver パターンを追加する時は、必ずタイムアウト時の取り除きが入っているか確認。
@@ -203,8 +203,8 @@ return new Promise<T>(resolve => {
 
 ```ts
 // ✅ 一定数を超えたら古い方から捨てる
-fpsSamples.push(data)
-if (fpsSamples.length > 1200) fpsSamples = fpsSamples.slice(-1200)
+fpsSamples.push(data);
+if (fpsSamples.length > 1200) fpsSamples = fpsSamples.slice(-1200);
 ```
 
 無制限に push するとメモリリークになる。**`Infinity` をキャパシティに使わない**。
@@ -234,13 +234,13 @@ if (fpsSamples.length > 1200) fpsSamples = fpsSamples.slice(-1200)
 ```ts
 // ❌ ループ内で find / filter（O(n²)）
 for (const created of createdItems) {
-  const original = originalItems.find(o => o.name === created.name)
+  const original = originalItems.find(o => o.name === created.name);
 }
 
 // ✅ 事前に Map を構築（O(n)）
-const byName = new Map(originalItems.map(o => [o.name, o]))
+const byName = new Map(originalItems.map(o => [o.name, o]));
 for (const created of createdItems) {
-  const original = byName.get(created.name)
+  const original = byName.get(created.name);
 }
 ```
 
@@ -264,7 +264,7 @@ for (const route of routes) {
 
 // ❌ N+1: ループ内で fs / fetch / RPC
 for (const file of files) {
-  const content = await fs.promises.readFile(file) // I/O が毎回発生
+  const content = await fs.promises.readFile(file); // I/O が毎回発生
 }
 ```
 
@@ -280,17 +280,17 @@ for (const file of files) {
 <script lang="ts">
   // ❌ 初期化処理を $effect に置くと依存変化で再実行される
   $effect(() => {
-    fetchData()
-  })
+    fetchData();
+  });
 
   // ✅ 初期化はトップレベル
-  fetchData()
+  fetchData();
 
   // ✅ 依存変化で再実行したい処理だけ $effect
   $effect(() => {
-    const ctx = canvas.getContext('2d')
-    ctx.fillStyle = color
-  })
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = color;
+  });
 </script>
 ```
 
@@ -301,9 +301,9 @@ for (const file of files) {
 ```svelte
 <script lang="ts">
   $effect(() => {
-    const id = setInterval(refresh, 500)
-    return () => clearInterval(id) // ← 必須
-  })
+    const id = setInterval(refresh, 500);
+    return () => clearInterval(id); // ← 必須
+  });
 </script>
 ```
 
@@ -314,13 +314,13 @@ DevTools パネルでは **ポーリング (`setInterval(refresh, 500)`)** が�
 ```svelte
 <script lang="ts">
   // ❌ $effect で代入
-  let displayed = $state<Item[]>([])
+  let displayed = $state<Item[]>([]);
   $effect(() => {
-    displayed = items.filter(i => i.visible)
-  })
+    displayed = items.filter(i => i.visible);
+  });
 
   // ✅ $derived
-  const displayed = $derived(items.filter(i => i.visible))
+  const displayed = $derived(items.filter(i => i.visible));
 </script>
 ```
 
@@ -393,11 +393,11 @@ DevTools パネルでは **ポーリング (`setInterval(refresh, 500)`)** が�
 ```ts
 // ❌ コメントと矛盾
 // 削除されていないことを確認
-expect(items.find(i => i.id === target.id)).toBeUndefined()
+expect(items.find(i => i.id === target.id)).toBeUndefined();
 
 // ✅ 整合
 // 削除されていないことを確認
-expect(items.find(i => i.id === target.id)).toBeDefined()
+expect(items.find(i => i.id === target.id)).toBeDefined();
 ```
 
 ---
@@ -418,13 +418,13 @@ export interface SvelteDevtoolsOptions {
    * Enable component tracking via code injection.
    * @default true
    */
-  componentTracking?: boolean
+  componentTracking?: boolean;
 
   /**
    * 新しいオプション（用途を明記）
    * @default <デフォルト>
    */
-  newOption?: boolean
+  newOption?: boolean;
 }
 ```
 
@@ -482,12 +482,12 @@ export interface SvelteDevtoolsOptions {
 ```ts
 // ❌ WHAT（不要）
 // FPS samples を 1200 件まで保持
-if (fpsSamples.length > 1200) fpsSamples = fpsSamples.slice(-1200)
+if (fpsSamples.length > 1200) fpsSamples = fpsSamples.slice(-1200);
 
 // ✅ WHY（背景があるなら書く）
 // dev セッションが長時間続いてもメモリリークにならないよう、最後の N 件のみ保持。
 // 1200 件 = 0.5 秒間隔で 10 分相当。UI チャートの可視範囲もこの程度。
-if (fpsSamples.length > 1200) fpsSamples = fpsSamples.slice(-1200)
+if (fpsSamples.length > 1200) fpsSamples = fpsSamples.slice(-1200);
 ```
 
 ---

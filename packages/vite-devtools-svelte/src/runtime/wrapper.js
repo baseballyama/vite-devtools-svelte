@@ -1,18 +1,18 @@
-import * as __svelte_original from 'svelte/internal/client'
-export * from 'svelte/internal/client'
+import * as __svelte_original from 'svelte/internal/client';
+export * from 'svelte/internal/client';
 
 function __dt() {
-  return typeof window === 'undefined' ? null : window.__SVELTE_DEVTOOLS__
+  return typeof window === 'undefined' ? null : window.__SVELTE_DEVTOOLS__;
 }
 
 // Component ID stack (parallel to runtime._stack but local to wrapper)
-const __idStack = []
+const __idStack = [];
 function __currentId() {
-  return __idStack.length > 0 ? __idStack.at(-1) : null
+  return __idStack.length > 0 ? __idStack.at(-1) : null;
 }
 
 // Tracks the most recently created signal for type determination in tag()
-const __pendingSignal = { ref: null, type: null }
+const __pendingSignal = { ref: null, type: null };
 
 // Component context -> devtools id. A component created later
 // by a block update ({#each}/{#if} after mount) runs outside its parent's
@@ -28,20 +28,20 @@ const __pendingSignal = { ref: null, type: null }
 // so the reactive graph can name the component of any effect it reaches.
 // Weak map: no leak, no Svelte state touched.
 function __parentFromContext() {
-  const dt = __dt()
-  const effect = __svelte_original.active_effect
-  const ctx = effect ? effect.ctx : null
-  return dt && ctx && dt._idByContext ? dt._idByContext.get(ctx) : undefined
+  const dt = __dt();
+  const effect = __svelte_original.active_effect;
+  const ctx = effect ? effect.ctx : null;
+  return dt && ctx && dt._idByContext ? dt._idByContext.get(ctx) : undefined;
 }
 
 // Owner of a signal/effect created right now: the component whose init (or
 // wrapped block callback) is running, else — outside init, e.g. an effect
 // created while another effect runs — the component of the active effect.
 function __owner() {
-  const cid = __currentId()
-  if (cid !== null) return cid
-  const fromContext = __parentFromContext()
-  return fromContext === undefined ? null : fromContext
+  const cid = __currentId();
+  if (cid !== null) return cid;
+  const fromContext = __parentFromContext();
+  return fromContext === undefined ? null : fromContext;
 }
 
 // --- Component Lifecycle ---
@@ -59,60 +59,60 @@ export function push() {
   //    later {#each}/{#if}/{#key} update (see Block Attribution below);
   // 2. else the context-derived owner, for re-creation paths the wrapper
   //    does not wrap (snippet, svelte:element, ...).
-  let parentHint = null
+  let parentHint = null;
   try {
-    parentHint = __currentId()
+    parentHint = __currentId();
   } catch {}
   if (parentHint === null) {
     try {
-      parentHint = __parentFromContext()
+      parentHint = __parentFromContext();
     } catch {}
   }
-  const result = __svelte_original.push.apply(null, arguments)
+  const result = __svelte_original.push.apply(null, arguments);
   try {
-    const dt = __dt()
+    const dt = __dt();
     if (dt) {
-      const file = dt._pendingFile ?? 'Unknown'
-      dt._pendingFile = null
-      dt._pendingParent = parentHint
-      const id = dt.register(file)
-      __idStack.push(id)
-      dt.startInit(id)
+      const file = dt._pendingFile ?? 'Unknown';
+      dt._pendingFile = null;
+      dt._pendingParent = parentHint;
+      const id = dt.register(file);
+      __idStack.push(id);
+      dt.startInit(id);
       try {
         __svelte_original.user_effect(() => {
           try {
-            const own = __svelte_original.active_effect
-            if (own?.ctx) dt._idByContext.set(own.ctx, id)
-            if (own) dt.setComponentEffect(id, own)
+            const own = __svelte_original.active_effect;
+            if (own?.ctx) dt._idByContext.set(own.ctx, id);
+            if (own) dt.setComponentEffect(id, own);
           } catch {}
           return () => {
             try {
-              dt.unmount(id)
+              dt.unmount(id);
             } catch {}
-          }
-        })
+          };
+        });
       } catch {}
     }
   } catch {}
-  return result
+  return result;
 }
 
 export function pop() {
   // Capture devtools errors but ALWAYS forward to the original pop so the
   // Svelte component stack stays balanced.
   try {
-    const dt = __dt()
+    const dt = __dt();
     if (dt && __idStack.length > 0) {
-      const id = __idStack.pop()
+      const id = __idStack.pop();
       try {
-        dt.endInit(id)
+        dt.endInit(id);
       } catch {}
       try {
-        dt.registered(id)
+        dt.registered(id);
       } catch {}
     }
   } catch {}
-  return __svelte_original.pop.apply(null, arguments)
+  return __svelte_original.pop.apply(null, arguments);
 }
 
 // --- Signal Creation (type markers) ---
@@ -121,56 +121,56 @@ export function pop() {
 // the compiler (dev) emits right after it.
 function __marking(original, type) {
   return function () {
-    const signal = original.apply(null, arguments)
-    __pendingSignal.ref = signal
-    __pendingSignal.type = type
-    return signal
-  }
+    const signal = original.apply(null, arguments);
+    __pendingSignal.ref = signal;
+    __pendingSignal.type = type;
+    return signal;
+  };
 }
 
-export const state = __marking(__svelte_original.state, 'state')
-export const derived = __marking(__svelte_original.derived, 'derived')
-export const proxy = __marking(__svelte_original.proxy, 'proxy')
+export const state = __marking(__svelte_original.state, 'state');
+export const derived = __marking(__svelte_original.derived, 'derived');
+export const proxy = __marking(__svelte_original.proxy, 'proxy');
 
 // --- Signal Tagging (Svelte dev mode) ---
 
 export function tag(signal, name) {
-  const result = __svelte_original.tag.apply(null, arguments)
+  const result = __svelte_original.tag.apply(null, arguments);
   try {
-    const dt = __dt()
-    const cid = __owner()
-    const type = __pendingSignal.ref === signal ? __pendingSignal.type : 'state'
+    const dt = __dt();
+    const cid = __owner();
+    const type = __pendingSignal.ref === signal ? __pendingSignal.type : 'state';
     if (dt && cid !== null) {
-      const owner = __svelte_original.active_effect
+      const owner = __svelte_original.active_effect;
       if (type === 'derived') {
-        dt.trackDerived(signal, name, cid, owner)
+        dt.trackDerived(signal, name, cid, owner);
       } else {
-        dt.trackState(signal, name, cid, owner)
+        dt.trackState(signal, name, cid, owner);
       }
     } else if (dt?._moduleFile) {
       // created while a .svelte.js/.ts module body runs (shared state)
-      dt.trackModuleSignal(type === 'derived' ? 'derived' : 'state', signal, name)
+      dt.trackModuleSignal(type === 'derived' ? 'derived' : 'state', signal, name);
     }
-    __pendingSignal.ref = null
-    __pendingSignal.type = null
+    __pendingSignal.ref = null;
+    __pendingSignal.type = null;
   } catch {}
-  return result
+  return result;
 }
 
 export function tag_proxy(value, name) {
-  const result = __svelte_original.tag_proxy.apply(null, arguments)
+  const result = __svelte_original.tag_proxy.apply(null, arguments);
   try {
-    const dt = __dt()
-    const cid = __owner()
+    const dt = __dt();
+    const cid = __owner();
     if (dt && cid !== null) {
-      dt.trackProxy(value, name, cid, __svelte_original.active_effect)
+      dt.trackProxy(value, name, cid, __svelte_original.active_effect);
     } else if (dt?._moduleFile) {
-      dt.trackModuleSignal('proxy', value, name)
+      dt.trackModuleSignal('proxy', value, name);
     }
-    __pendingSignal.ref = null
-    __pendingSignal.type = null
+    __pendingSignal.ref = null;
+    __pendingSignal.type = null;
   } catch {}
-  return result
+  return result;
 }
 
 // --- Effect Tracking ---
@@ -184,46 +184,46 @@ export function tag_proxy(value, name) {
 // this, arguments and the return value (teardown) unchanged.
 
 function __trackUserEffect(original, kind, args) {
-  let cid = null
-  let dt = null
-  let fn = null
+  let cid = null;
+  let dt = null;
+  let fn = null;
   try {
-    dt = __dt()
-    fn = args[0]
-    if (dt && typeof fn === 'function') cid = __owner()
+    dt = __dt();
+    fn = args[0];
+    if (dt && typeof fn === 'function') cid = __owner();
   } catch {}
-  if (cid === null) return original.apply(null, args)
-  let nodeId = null
-  let bound = false
-  const wrapped = Array.prototype.slice.call(args)
+  if (cid === null) return original.apply(null, args);
+  let nodeId = null;
+  let bound = false;
+  const wrapped = Array.prototype.slice.call(args);
   wrapped[0] = function () {
     if (!bound) {
-      bound = true
+      bound = true;
       try {
-        dt.bindEffect(nodeId, __svelte_original.active_effect)
+        dt.bindEffect(nodeId, __svelte_original.active_effect);
       } catch {}
     }
-    return fn.apply(this, arguments)
-  }
+    return fn.apply(this, arguments);
+  };
   try {
-    nodeId = dt.trackUserEffect(kind, cid, __svelte_original.active_effect)
+    nodeId = dt.trackUserEffect(kind, cid, __svelte_original.active_effect);
   } catch {}
-  const result = original.apply(null, wrapped)
+  const result = original.apply(null, wrapped);
   if (result && !bound) {
-    bound = true
+    bound = true;
     try {
-      dt.bindEffect(nodeId, result)
+      dt.bindEffect(nodeId, result);
     } catch {}
   }
-  return result
+  return result;
 }
 
 export function user_effect() {
-  return __trackUserEffect(__svelte_original.user_effect, 'effect', arguments)
+  return __trackUserEffect(__svelte_original.user_effect, 'effect', arguments);
 }
 
 export function user_pre_effect() {
-  return __trackUserEffect(__svelte_original.user_pre_effect, 'effect_pre', arguments)
+  return __trackUserEffect(__svelte_original.user_pre_effect, 'effect_pre', arguments);
 }
 
 // --- Render Profiling ---
@@ -238,30 +238,30 @@ export function user_pre_effect() {
 // effects of the same component, so durations are pooled per microtask and
 // recorded once per flush: recordRender() +1, recordRenderTime() the sum.
 
-const __pendingRenderDurations = new Map()
-let __renderFlushScheduled = false
+const __pendingRenderDurations = new Map();
+let __renderFlushScheduled = false;
 
 function __flushRenderDurations() {
-  __renderFlushScheduled = false
-  const dt = __dt()
+  __renderFlushScheduled = false;
+  const dt = __dt();
   if (dt) {
     for (const [cid, duration] of __pendingRenderDurations) {
       try {
-        dt.recordRender(cid)
+        dt.recordRender(cid);
       } catch {}
       try {
-        dt.recordRenderTime(cid, duration)
+        dt.recordRenderTime(cid, duration);
       } catch {}
     }
   }
-  __pendingRenderDurations.clear()
+  __pendingRenderDurations.clear();
 }
 
 function __recordRenderDuration(cid, duration) {
-  __pendingRenderDurations.set(cid, (__pendingRenderDurations.get(cid) ?? 0) + duration)
+  __pendingRenderDurations.set(cid, (__pendingRenderDurations.get(cid) ?? 0) + duration);
   if (!__renderFlushScheduled) {
-    __renderFlushScheduled = true
-    queueMicrotask(__flushRenderDurations)
+    __renderFlushScheduled = true;
+    queueMicrotask(__flushRenderDurations);
   }
 }
 
@@ -270,45 +270,45 @@ function __recordRenderDuration(cid, duration) {
 // __idStack at effect-creation time. User exceptions propagate untouched;
 // only the args are built inside try so the original is called exactly once.
 function __wrapTemplateEffect(args) {
-  const cid = __owner()
-  const fn = args[0]
-  if (cid === null || typeof fn !== 'function') return args
-  const wrapped = Array.prototype.slice.call(args)
-  let initialRun = true
+  const cid = __owner();
+  const fn = args[0];
+  if (cid === null || typeof fn !== 'function') return args;
+  const wrapped = Array.prototype.slice.call(args);
+  let initialRun = true;
   wrapped[0] = function () {
     if (initialRun) {
-      initialRun = false
-      return fn.apply(this, arguments)
+      initialRun = false;
+      return fn.apply(this, arguments);
     }
-    const start = performance.now()
+    const start = performance.now();
     try {
-      return fn.apply(this, arguments)
+      return fn.apply(this, arguments);
     } finally {
       try {
-        __recordRenderDuration(cid, performance.now() - start)
+        __recordRenderDuration(cid, performance.now() - start);
       } catch {}
     }
-  }
-  return wrapped
+  };
+  return wrapped;
 }
 
 // `original` called with the arguments rewritten by `wrapArgs`, or with the
 // original arguments when rewriting fails.
 function __withArgs(original, wrapArgs) {
   return function () {
-    let args = arguments
+    let args = arguments;
     try {
-      args = wrapArgs(arguments)
+      args = wrapArgs(arguments);
     } catch {}
-    return original.apply(null, args)
-  }
+    return original.apply(null, args);
+  };
 }
 
-export const template_effect = __withArgs(__svelte_original.template_effect, __wrapTemplateEffect)
+export const template_effect = __withArgs(__svelte_original.template_effect, __wrapTemplateEffect);
 export const deferred_template_effect = __withArgs(
   __svelte_original.deferred_template_effect,
   __wrapTemplateEffect,
-)
+);
 
 // --- Block Attribution ---
 //
@@ -330,48 +330,48 @@ export const deferred_template_effect = __withArgs(
 // above it are dropped as aborted inits (registered, never mounted).
 function __wrapBlockFn(fn, cid) {
   return function () {
-    let depth = -1
+    let depth = -1;
     try {
-      depth = __idStack.length
-      __idStack.push(cid)
+      depth = __idStack.length;
+      __idStack.push(cid);
     } catch {}
     try {
-      return fn.apply(this, arguments)
+      return fn.apply(this, arguments);
     } finally {
       if (depth !== -1) {
         try {
           if (__idStack.length > depth + 1) {
-            const dt = __dt()
-            const aborted = __idStack.slice(depth + 1)
+            const dt = __dt();
+            const aborted = __idStack.slice(depth + 1);
             for (let i = aborted.length - 1; i >= 0; i--) {
               try {
-                if (dt) dt.abortInit(aborted[i])
+                if (dt) dt.abortInit(aborted[i]);
               } catch {}
             }
           }
-          __idStack.length = depth
+          __idStack.length = depth;
         } catch {}
       }
     }
-  }
+  };
 }
 
 function __wrapBlock(args) {
-  const cid = __owner()
-  if (cid === null) return args
-  const wrapped = Array.prototype.slice.call(args)
+  const cid = __owner();
+  if (cid === null) return args;
+  const wrapped = Array.prototype.slice.call(args);
   for (let i = 0; i < wrapped.length; i++) {
-    if (typeof wrapped[i] === 'function') wrapped[i] = __wrapBlockFn(wrapped[i], cid)
+    if (typeof wrapped[i] === 'function') wrapped[i] = __wrapBlockFn(wrapped[i], cid);
   }
-  return wrapped
+  return wrapped;
 }
 
-export const each = __withArgs(__svelte_original.each, __wrapBlock)
-export const key = __withArgs(__svelte_original.key, __wrapBlock)
-export const component = __withArgs(__svelte_original.component, __wrapBlock)
-export const boundary = __withArgs(__svelte_original.boundary, __wrapBlock)
+export const each = __withArgs(__svelte_original.each, __wrapBlock);
+export const key = __withArgs(__svelte_original.key, __wrapBlock);
+export const component = __withArgs(__svelte_original.component, __wrapBlock);
+export const boundary = __withArgs(__svelte_original.boundary, __wrapBlock);
 // 'if' and 'await' are reserved words: exported via aliases.
-const __if_block = __withArgs(__svelte_original.if, __wrapBlock)
-const __await_block = __withArgs(__svelte_original.await, __wrapBlock)
+const __if_block = __withArgs(__svelte_original.if, __wrapBlock);
+const __await_block = __withArgs(__svelte_original.await, __wrapBlock);
 
-export { __if_block as if, __await_block as await }
+export { __if_block as if, __await_block as await };

@@ -3,51 +3,51 @@
   follow (e2e/reactivity.mjs checks it through MCP).
 -->
 <script lang="ts">
-  import { page } from '$app/state'
-  import { untrack } from 'svelte'
-  import { SvelteMap } from 'svelte/reactivity'
+  import { page } from '$app/state';
+  import { untrack } from 'svelte';
+  import { SvelteMap } from 'svelte/reactivity';
 
-  import Broken from '#lib/lab/Broken.svelte'
-  import Panel from '#lib/lab/Panel.svelte'
-  import Row from '#lib/lab/Row.svelte'
-  import { inventory, prefs } from '#lib/lab/store.svelte.js'
+  import Broken from '#lib/lab/Broken.svelte';
+  import Panel from '#lib/lab/Panel.svelte';
+  import Row from '#lib/lab/Row.svelte';
+  import { inventory, prefs } from '#lib/lab/store.svelte.js';
 
-  import type { PageProps } from './$types'
+  import type { PageProps } from './$types';
 
-  let { data }: PageProps = $props()
+  let { data }: PageProps = $props();
 
   // seeded once from the load data (later navigations keep the items)
-  const seed = untrack(() => data.seed)
-  if (inventory.items.length === 0) for (const name of seed) inventory.add(name)
+  const seed = untrack(() => data.seed);
+  if (inventory.items.length === 0) for (const name of seed) inventory.add(name);
 
-  let query = $state('')
-  let showPanel = $state(true)
-  let fail = $state(false)
-  let tab = $state<'a' | 'b'>('a')
-  const tags = new SvelteMap<string, number>()
+  let query = $state('');
+  let showPanel = $state(true);
+  let fail = $state(false);
+  let tab = $state<'a' | 'b'>('a');
+  const tags = new SvelteMap<string, number>();
 
-  const visible = $derived(inventory.items.filter(item => item.name.includes(query)))
+  const visible = $derived(inventory.items.filter(item => item.name.includes(query)));
   const { count, pieces } = $derived({
     count: visible.length,
     pieces: visible.reduce((sum, item) => sum + item.qty, 0),
-  })
-  const summary = $derived.by(() => `${count} items / ${pieces} pcs`)
-  const path = $derived(page.url.pathname)
+  });
+  const summary = $derived.by(() => `${count} items / ${pieces} pcs`);
+  const path = $derived(page.url.pathname);
   // read by nothing on purpose: reported as an orphan derived
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- the orphan e2e/reactivity.mjs expects
-  const unusedOnPurpose = $derived(query.length * 2)
-  let promise = $state(Promise.resolve(seed.length))
+  const unusedOnPurpose = $derived(query.length * 2);
+  let promise = $state(Promise.resolve(seed.length));
   // write-only: the $effect below exists to read `pieces` (the pieces -> $effect
   // edge e2e/reactivity.mjs checks)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- see above
-  let renders = 0
+  let renders = 0;
 
   $effect(() => {
-    renders += pieces
-  })
+    renders += pieces;
+  });
   $effect.pre(() => {
-    document.title = summary
-  })
+    document.title = summary;
+  });
 </script>
 
 <h1>{summary}</h1>

@@ -1,7 +1,7 @@
 export class Counter {
-  count = $state(0)
-  doubled = $derived(this.count * 2)
+  count = $state(0);
+  doubled = $derived(this.count * 2);
   inc() {
-    this.count++
+    this.count++;
   }
 }

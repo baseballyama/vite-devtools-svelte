@@ -1,46 +1,46 @@
 <script lang="ts">
-  import { tick } from 'svelte'
+  import { tick } from 'svelte';
 
-  import { digitsOf } from '../lib/chars.js'
-  import { connection } from '../lib/connection.svelte.js'
-  import { hashOtp, router } from '../lib/router.svelte.js'
-  import Button from './Button.svelte'
-  import Icon from './Icon.svelte'
+  import { digitsOf } from '../lib/chars.js';
+  import { connection } from '../lib/connection.svelte.js';
+  import { hashOtp, router } from '../lib/router.svelte.js';
+  import Button from './Button.svelte';
+  import Icon from './Icon.svelte';
 
   /**
    * Connection UX: a blocking card when the dev server needs the one-time
    * code (standalone devframe auth), and a slim banner while the connection
    * is down. Nothing renders while connected.
    */
-  let code = $state('')
-  const digits = $derived(digitsOf(code))
-  let busy = $state(false)
-  let failed = $state(false)
-  let requested = $state(false)
-  let input = $state<HTMLInputElement | null>(null)
+  let code = $state('');
+  const digits = $derived(digitsOf(code));
+  let busy = $state(false);
+  let failed = $state(false);
+  let requested = $state(false);
+  let input = $state<HTMLInputElement | null>(null);
 
-  const status = $derived(connection.state.status)
+  const status = $derived(connection.state.status);
 
   // Avoid flashing the banner on the first sub-second connect.
-  let showDown = $state(false)
+  let showDown = $state(false);
   $effect(() => {
     if (status === 'connected' || status === 'unauthorized') {
-      showDown = false
-      return
+      showDown = false;
+      return;
     }
-    const id = setTimeout(() => (showDown = true), status === 'connecting' ? 1200 : 0)
-    return () => clearTimeout(id)
-  })
+    const id = setTimeout(() => (showDown = true), status === 'connecting' ? 1200 : 0);
+    return () => clearTimeout(id);
+  });
 
   $effect(() => {
     if (status === 'unauthorized') {
-      void tick().then(() => input?.focus())
+      void tick().then(() => input?.focus());
       if (!requested) {
-        requested = true
-        connection.requestCode().catch(() => {})
+        requested = true;
+        connection.requestCode().catch(() => {});
       }
     }
-  })
+  });
 
   // A magic link (`#devframe_otp=<code>`) opened in this same document —
   // pasted into the address bar or followed from a same-page link — only
@@ -48,45 +48,45 @@
   // While the gate is open, consume it through the public submit path,
   // once per code, and take the code out of the URL (back to the panel).
   // eslint-disable-next-line svelte/prefer-svelte-reactivity -- consumed-code bookkeeping, read only in the hash handler and never rendered: intentionally non-reactive
-  const linkCodes = new Set<string>()
+  const linkCodes = new Set<string>();
   $effect(() => {
-    if (status !== 'unauthorized' || !connection.canAuth) return
+    if (status !== 'unauthorized' || !connection.canAuth) return;
     const onHash = () => {
-      const c = hashOtp(location.hash)
-      if (c === null) return
+      const c = hashOtp(location.hash);
+      if (c === null) return;
       history.replaceState(
         history.state,
         '',
         `${location.pathname}${location.search}#/${router.current}`,
-      )
-      if (linkCodes.has(c) || busy) return
-      linkCodes.add(c)
-      code = c
-      void verify(c)
-    }
-    window.addEventListener('hashchange', onHash)
-    return () => window.removeEventListener('hashchange', onHash)
-  })
+      );
+      if (linkCodes.has(c) || busy) return;
+      linkCodes.add(c);
+      code = c;
+      void verify(c);
+    };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  });
 
   async function submit(e: SubmitEvent) {
-    e.preventDefault()
-    if (digits.length < 6 || busy) return
-    await verify(digits)
+    e.preventDefault();
+    if (digits.length < 6 || busy) return;
+    await verify(digits);
   }
 
   async function verify(c: string) {
-    busy = true
-    failed = false
+    busy = true;
+    failed = false;
     try {
-      failed = !(await connection.submitCode(c))
+      failed = !(await connection.submitCode(c));
     } catch {
-      failed = true
+      failed = true;
     } finally {
-      busy = false
+      busy = false;
     }
     if (failed) {
-      code = ''
-      input?.focus()
+      code = '';
+      input?.focus();
     }
   }
 </script>

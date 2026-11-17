@@ -1,11 +1,11 @@
-import fs from 'node:fs'
+import fs from 'node:fs';
 
-import { parseSync } from 'vite'
+import { parseSync } from 'vite';
 
-import type { ApiEndpoint, RouteInfo } from '../types.js'
+import type { ApiEndpoint, RouteInfo } from '../types.js';
 
 /** The request handlers a SvelteKit `+server` file may export, in display order. */
-const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as const
+const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as const;
 
 /**
  * Names a `+server` module exports. Parsed, not substring-matched: the old
@@ -15,22 +15,22 @@ const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'
  */
 export function exportedNames(code: string, filename: string): Set<string> | null {
   // The language (js / ts) follows the file extension.
-  const { program, errors } = parseSync(filename, code)
-  if (errors.length > 0) return null
-  const names = new Set<string>()
+  const { program, errors } = parseSync(filename, code);
+  if (errors.length > 0) return null;
+  const names = new Set<string>();
   for (const node of program.body) {
-    if (node.type !== 'ExportNamedDeclaration') continue
-    const decl = node.declaration
-    if (decl?.type === 'FunctionDeclaration' && decl.id) names.add(decl.id.name)
+    if (node.type !== 'ExportNamedDeclaration') continue;
+    const decl = node.declaration;
+    if (decl?.type === 'FunctionDeclaration' && decl.id) names.add(decl.id.name);
     else if (decl?.type === 'VariableDeclaration') {
-      for (const d of decl.declarations) if (d.id.type === 'Identifier') names.add(d.id.name)
+      for (const d of decl.declarations) if (d.id.type === 'Identifier') names.add(d.id.name);
     }
     for (const spec of node.specifiers) {
-      const exported = spec.exported
-      names.add(exported.type === 'Literal' ? exported.value : exported.name)
+      const exported = spec.exported;
+      names.add(exported.type === 'Literal' ? exported.value : exported.name);
     }
   }
-  return names
+  return names;
 }
 
 /**
@@ -41,29 +41,29 @@ export function exportedNames(code: string, filename: string): Set<string> | nul
  * `base` (SvelteKit's `paths.base`), the path the app actually serves.
  */
 export function analyzeApiEndpoints(routes: RouteInfo[], base = '/'): ApiEndpoint[] {
-  const prefix = base.endsWith('/') ? base.slice(0, -1) : base
-  const endpoints: ApiEndpoint[] = []
+  const prefix = base.endsWith('/') ? base.slice(0, -1) : base;
+  const endpoints: ApiEndpoint[] = [];
   for (const route of routes) {
-    const serverFile = route.files.find(f => f.type === 'endpoint')
-    if (!serverFile) continue
-    let names: Set<string> | null = null
+    const serverFile = route.files.find(f => f.type === 'endpoint');
+    if (!serverFile) continue;
+    let names: Set<string> | null = null;
     try {
-      const code = fs.readFileSync(serverFile.path, 'utf-8')
-      names = exportedNames(code, serverFile.path)
+      const code = fs.readFileSync(serverFile.path, 'utf-8');
+      names = exportedNames(code, serverFile.path);
     } catch {
       /* file vanished or is unreadable */
     }
-    const has = (name: string) => names?.has(name) === true
+    const has = (name: string) => names?.has(name) === true;
     const methods: string[] = has('fallback')
       ? [...HTTP_METHODS]
-      : HTTP_METHODS.filter(m => has(m) || (m === 'HEAD' && has('GET')))
+      : HTTP_METHODS.filter(m => has(m) || (m === 'HEAD' && has('GET')));
     endpoints.push({
       route: route.id,
       path: route.path,
       url: prefix + route.path,
       methods,
       file: serverFile.path,
-    })
+    });
   }
-  return endpoints
+  return endpoints;
 }

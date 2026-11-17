@@ -1,99 +1,103 @@
 <script lang="ts">
-  import Badge from '../components/Badge.svelte'
-  import Button from '../components/Button.svelte'
-  import CaptureNotice from '../components/CaptureNotice.svelte'
-  import Highlight from '../components/Highlight.svelte'
-  import Icon from '../components/Icon.svelte'
-  import Inspector from '../components/Inspector.svelte'
-  import LiveControls from '../components/LiveControls.svelte'
-  import Panel from '../components/Panel.svelte'
-  import ResourceEmpty from '../components/ResourceEmpty.svelte'
-  import SearchField from '../components/SearchField.svelte'
-  import Segmented from '../components/Segmented.svelte'
-  import SplitView from '../components/SplitView.svelte'
-  import VirtualList from '../components/VirtualList.svelte'
-  import { captureInfo } from '../lib/capture.svelte.js'
-  import { countBy, uniqueKeys } from '../lib/collections.js'
-  import { formatClock, shortPath } from '../lib/format.js'
-  import { matcher } from '../lib/match.js'
-  import { resource } from '../lib/resource.svelte.js'
-  import { getCompilerWarnings, getRuntimeErrors, clearErrors, openInEditor } from '../lib/rpc.js'
-  import type { CompilerWarning, RuntimeError } from '../lib/types.js'
-  import { datasetVersion } from '../lib/versions.js'
+  import Badge from '../components/Badge.svelte';
+  import Button from '../components/Button.svelte';
+  import CaptureNotice from '../components/CaptureNotice.svelte';
+  import Highlight from '../components/Highlight.svelte';
+  import Icon from '../components/Icon.svelte';
+  import Inspector from '../components/Inspector.svelte';
+  import LiveControls from '../components/LiveControls.svelte';
+  import Panel from '../components/Panel.svelte';
+  import ResourceEmpty from '../components/ResourceEmpty.svelte';
+  import SearchField from '../components/SearchField.svelte';
+  import Segmented from '../components/Segmented.svelte';
+  import SplitView from '../components/SplitView.svelte';
+  import VirtualList from '../components/VirtualList.svelte';
+  import { captureInfo } from '../lib/capture.svelte.js';
+  import { countBy, uniqueKeys } from '../lib/collections.js';
+  import { formatClock, shortPath } from '../lib/format.js';
+  import { matcher } from '../lib/match.js';
+  import { resource } from '../lib/resource.svelte.js';
+  import { getCompilerWarnings, getRuntimeErrors, clearErrors, openInEditor } from '../lib/rpc.js';
+  import type { CompilerWarning, RuntimeError } from '../lib/types.js';
+  import { datasetVersion } from '../lib/versions.js';
 
   interface Problem {
-    key: string
-    kind: 'error' | 'warning'
-    message: string
-    code?: string
-    file?: string
-    line?: number
-    column?: number
-    stack?: string
-    timestamp?: number
+    key: string;
+    kind: 'error' | 'warning';
+    message: string;
+    code?: string;
+    file?: string;
+    line?: number;
+    column?: number;
+    stack?: string;
+    timestamp?: number;
   }
 
   const problems = resource(
     async () => {
-      const [warnings, errors] = await Promise.all([getCompilerWarnings(), getRuntimeErrors()])
-      return { warnings, errors }
+      const [warnings, errors] = await Promise.all([getCompilerWarnings(), getRuntimeErrors()]);
+      return { warnings, errors };
     },
     {
       initial: { warnings: [] as CompilerWarning[], errors: [] as RuntimeError[] },
       interval: 3000,
       version: datasetVersion('errors'),
     },
-  )
+  );
 
-  const capture = captureInfo(3000)
-  let kind = $state<'all' | 'error' | 'warning'>('all')
-  let query = $state('')
-  let selected = $state<string | null>(null)
+  const capture = captureInfo(3000);
+  let kind = $state<'all' | 'error' | 'warning'>('all');
+  let query = $state('');
+  let selected = $state<string | null>(null);
 
   // Keys must survive polls: an index into the newest-first list would move
   // the selection to another problem whenever a new error arrives.
   const all = $derived.by<Problem[]>(() => {
-    const { errors, warnings } = problems.data
-    const errorKeys = uniqueKeys(errors, e => `e:${e.timestamp}`)
+    const { errors, warnings } = problems.data;
+    const errorKeys = uniqueKeys(errors, e => `e:${e.timestamp}`);
     const warningKeys = uniqueKeys(
       warnings,
       w => `w:${w.file}:${w.line ?? 0}:${w.column ?? 0}:${w.code}`,
-    )
+    );
     const errs = errors
       .map<Problem>((e, i) => ({ ...e, key: errorKeys[i]!, kind: 'error' }))
-      .reverse()
-    const warns = warnings.map<Problem>((w, i) => ({ ...w, key: warningKeys[i]!, kind: 'warning' }))
-    return [...errs, ...warns]
-  })
+      .reverse();
+    const warns = warnings.map<Problem>((w, i) => ({
+      ...w,
+      key: warningKeys[i]!,
+      kind: 'warning',
+    }));
+    return [...errs, ...warns];
+  });
 
   const rows = $derived.by(() => {
-    const m = matcher(query)
+    const m = matcher(query);
     return all.filter(
       p => (kind === 'all' || p.kind === kind) && (!m || m(p.message, p.code, p.file)),
-    )
-  })
+    );
+  });
 
-  const current = $derived(selected ? (all.find(p => p.key === selected) ?? null) : null)
+  const current = $derived(selected ? (all.find(p => p.key === selected) ?? null) : null);
 
   // Most frequent warning codes — a quick way to triage a noisy project.
   const topCodes = $derived(
     [...countBy(problems.data.warnings, w => w.code)].sort((a, b) => b[1] - a[1]).slice(0, 4),
-  )
+  );
 
   function open(p: Problem) {
-    if (p.file) openInEditor(p.file, p.line).catch(() => {})
+    if (p.file) openInEditor(p.file, p.line).catch(() => {});
   }
 
   async function clear() {
-    await clearErrors().catch(() => {})
-    problems.set({ warnings: [], errors: [] })
-    selected = null
+    await clearErrors().catch(() => {});
+    problems.set({ warnings: [], errors: [] });
+    selected = null;
   }
 
   const loc = (p: Problem) =>
     p.file
       ? `${shortPath(p.file, 3)}${p.line ? `:${p.line}` : ''}${p.column ? `:${p.column}` : ''}`
-      : ''
+      : '';
 </script>
 
 <Panel title="Problems" count={all.length}>

@@ -1,11 +1,11 @@
-import { products } from '#lib/server/products.ts'
+import { products } from '#lib/server/products.ts';
 
-import type { RequestHandler } from './$types'
+import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = () => {
-  const totalStock = products.reduce((s, p) => s + p.stock, 0)
-  const totalValue = products.reduce((s, p) => s + p.stock * p.price, 0)
-  const lowStockSku = products.filter(p => p.stock <= 8).length
+  const totalStock = products.reduce((s, p) => s + p.stock, 0);
+  const totalValue = products.reduce((s, p) => s + p.stock * p.price, 0);
+  const lowStockSku = products.filter(p => p.stock <= 8).length;
 
   return Response.json({
     totalSku: products.length,
@@ -13,5 +13,5 @@ export const GET: RequestHandler = () => {
     totalValue,
     lowStockSku,
     avgPrice: Math.round(products.reduce((s, p) => s + p.price, 0) / products.length),
-  })
-}
+  });
+};

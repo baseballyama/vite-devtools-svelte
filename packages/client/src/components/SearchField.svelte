@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Icon from './Icon.svelte'
+  import Icon from './Icon.svelte';
 
   /** Panel search box. `/` from anywhere in the panel focuses it (see App). */
   let {
@@ -7,21 +7,21 @@
     placeholder = 'Filter…',
     label = 'Filter',
     count = null,
-  }: { value?: string; placeholder?: string; label?: string; count?: number | null } = $props()
+  }: { value?: string; placeholder?: string; label?: string; count?: number | null } = $props();
 
-  let input = $state<HTMLInputElement | null>(null)
+  let input = $state<HTMLInputElement | null>(null);
 
   function onkeydown(e: KeyboardEvent) {
     if (e.key === 'Escape' && value) {
-      e.stopPropagation()
-      value = ''
+      e.stopPropagation();
+      value = '';
     } else if (e.key === 'ArrowDown') {
       // Hand focus to the first list in the panel for keyboard-only flows.
-      const panel = input?.closest('section')
-      const list = panel?.querySelector<HTMLElement>('[role="listbox"],[role="tree"]')
+      const panel = input?.closest('section');
+      const list = panel?.querySelector<HTMLElement>('[role="listbox"],[role="tree"]');
       if (list) {
-        e.preventDefault()
-        list.focus()
+        e.preventDefault();
+        list.focus();
       }
     }
   }

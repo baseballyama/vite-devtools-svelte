@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { MAX_BODY_BYTES, REQUEST_TIMEOUT_MS, sendRequest } from './http.js'
-import type { ApiRequest } from './http.js'
+import { MAX_BODY_BYTES, REQUEST_TIMEOUT_MS, sendRequest } from './http.js';
+import type { ApiRequest } from './http.js';
 
 const req = (over: Partial<ApiRequest> = {}): ApiRequest => ({
   url: 'http://localhost:5173/api',
@@ -9,41 +9,41 @@ const req = (over: Partial<ApiRequest> = {}): ApiRequest => ({
   headers: {},
   body: '',
   ...over,
-})
+});
 
-const fetchMock = vi.fn<typeof fetch>()
+const fetchMock = vi.fn<typeof fetch>();
 
 /** fetch that settles only when its signal aborts. */
 const hanging = (_url: unknown, init?: RequestInit) =>
   new Promise<Response>((_, reject) => {
-    const signal = init!.signal!
+    const signal = init!.signal!;
     // like fetch: an already aborted signal rejects at once
-    if (signal.aborted) reject(signal.reason as Error)
-    signal.addEventListener('abort', () => reject(signal.reason as Error))
-  })
+    if (signal.aborted) reject(signal.reason as Error);
+    signal.addEventListener('abort', () => reject(signal.reason as Error));
+  });
 
 beforeEach(() => {
-  vi.stubGlobal('fetch', fetchMock)
-  vi.stubGlobal('location', new URL('http://localhost:5173/.svelte-devtools/'))
-})
+  vi.stubGlobal('fetch', fetchMock);
+  vi.stubGlobal('location', new URL('http://localhost:5173/.svelte-devtools/'));
+});
 afterEach(() => {
-  fetchMock.mockReset()
-  vi.unstubAllGlobals()
-  vi.useRealTimers()
-})
+  fetchMock.mockReset();
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
 
 describe('sendRequest', () => {
   it('sends method, headers and body and reports the whole response', async () => {
     fetchMock.mockResolvedValue(
       new Response('{"a":1}', { status: 201, statusText: 'Created', headers: { 'x-a': '1' } }),
-    )
-    const res = await sendRequest(req({ method: 'POST', headers: { 'x-b': '2' }, body: 'hi' }))
-    const [url, init] = fetchMock.mock.calls[0]!
-    expect(url).toBe('http://localhost:5173/api')
-    expect(init).toMatchObject({ method: 'POST', headers: { 'x-b': '2' }, body: 'hi' })
+    );
+    const res = await sendRequest(req({ method: 'POST', headers: { 'x-b': '2' }, body: 'hi' }));
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe('http://localhost:5173/api');
+    expect(init).toMatchObject({ method: 'POST', headers: { 'x-b': '2' }, body: 'hi' });
     // The browser's defaults stand: same-origin cookies, redirects followed.
-    expect(init).not.toHaveProperty('credentials')
-    expect(init).not.toHaveProperty('redirect')
+    expect(init).not.toHaveProperty('credentials');
+    expect(init).not.toHaveProperty('redirect');
     expect(res).toMatchObject({
       status: 201,
       statusText: 'Created',
@@ -51,213 +51,213 @@ describe('sendRequest', () => {
       url: 'http://localhost:5173/api',
       redirected: false,
       truncated: null,
-    })
-    expect(res.headers['x-a']).toBe('1')
-    expect(res.duration).toBeGreaterThanOrEqual(0)
-  })
+    });
+    expect(res.headers['x-a']).toBe('1');
+    expect(res.duration).toBeGreaterThanOrEqual(0);
+  });
 
   it.each(['GET', 'HEAD'])('drops the body of %s', async method => {
-    fetchMock.mockResolvedValue(new Response(null, { status: 204 }))
-    const res = await sendRequest(req({ method, body: 'ignored' }))
-    expect(fetchMock.mock.calls[0]![1]).not.toHaveProperty('body')
-    expect(res).toMatchObject({ status: 204, body: '', truncated: null })
-  })
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+    const res = await sendRequest(req({ method, body: 'ignored' }));
+    expect(fetchMock.mock.calls[0]![1]).not.toHaveProperty('body');
+    expect(res).toMatchObject({ status: 204, body: '', truncated: null });
+  });
 
   it('reports the URL that answered after a redirect', async () => {
-    const answered = new Response('login')
+    const answered = new Response('login');
     Object.defineProperties(answered, {
       url: { value: 'http://localhost:5173/login' },
       redirected: { value: true },
-    })
-    fetchMock.mockResolvedValue(answered)
+    });
+    fetchMock.mockResolvedValue(answered);
     expect(await sendRequest(req())).toMatchObject({
       url: 'http://localhost:5173/login',
       redirected: true,
-    })
-  })
+    });
+  });
 
   it('turns a failed fetch into status 0 with the reason', async () => {
-    fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'))
-    fetchMock.mockRejectedValueOnce('plain')
+    fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    fetchMock.mockRejectedValueOnce('plain');
     expect(await sendRequest(req())).toMatchObject({
       status: 0,
       statusText: 'Failed to fetch',
       headers: {},
       body: '',
       truncated: null,
-    })
-    expect((await sendRequest(req())).statusText).toBe('plain')
-  })
+    });
+    expect((await sendRequest(req())).statusText).toBe('plain');
+  });
 
   it('points at CORS when a cross-origin request fails', async () => {
-    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
     expect((await sendRequest(req({ url: 'https://api.example.com/x' }))).statusText).toBe(
       'Failed to fetch (a cross-origin URL answers only if its CORS policy allows this origin)',
-    )
+    );
     // Relative URLs resolve against the page; unparsable ones get no hint.
-    expect((await sendRequest(req({ url: '/api' }))).statusText).toBe('Failed to fetch')
-    expect((await sendRequest(req({ url: 'http://[' }))).statusText).toBe('Failed to fetch')
-  })
+    expect((await sendRequest(req({ url: '/api' }))).statusText).toBe('Failed to fetch');
+    expect((await sendRequest(req({ url: 'http://[' }))).statusText).toBe('Failed to fetch');
+  });
 
   it('gives up when no response arrives in time and clears its timer', async () => {
-    vi.useFakeTimers()
-    fetchMock.mockImplementation(hanging)
-    const pending = sendRequest(req(), { timeoutMs: 50 })
-    await vi.advanceTimersByTimeAsync(50)
-    expect((await pending).statusText).toBe('No response within 50ms')
+    vi.useFakeTimers();
+    fetchMock.mockImplementation(hanging);
+    const pending = sendRequest(req(), { timeoutMs: 50 });
+    await vi.advanceTimersByTimeAsync(50);
+    expect((await pending).statusText).toBe('No response within 50ms');
 
-    fetchMock.mockResolvedValue(new Response('ok'))
-    await sendRequest(req())
-    expect(vi.getTimerCount()).toBe(0)
-    expect(REQUEST_TIMEOUT_MS).toBe(30_000)
-  })
+    fetchMock.mockResolvedValue(new Response('ok'));
+    await sendRequest(req());
+    expect(vi.getTimerCount()).toBe(0);
+    expect(REQUEST_TIMEOUT_MS).toBe(30_000);
+  });
 
   it('stops before the headers when the caller aborts', async () => {
-    fetchMock.mockImplementation(hanging)
-    const stop = new AbortController()
-    const pending = sendRequest(req(), { signal: stop.signal })
-    stop.abort()
-    expect(await pending).toMatchObject({ status: 0, statusText: 'Stopped' })
+    fetchMock.mockImplementation(hanging);
+    const stop = new AbortController();
+    const pending = sendRequest(req(), { signal: stop.signal });
+    stop.abort();
+    expect(await pending).toMatchObject({ status: 0, statusText: 'Stopped' });
     // Already aborted: never waits.
-    expect((await sendRequest(req(), { signal: stop.signal })).statusText).toBe('Stopped')
-  })
+    expect((await sendRequest(req(), { signal: stop.signal })).statusText).toBe('Stopped');
+  });
 
   it('streams the body past the header timeout, reporting progress, until stopped', async () => {
-    vi.useFakeTimers()
-    let push!: (chunk: string) => void
+    vi.useFakeTimers();
+    let push!: (chunk: string) => void;
     fetchMock.mockImplementation((_url, init) =>
       Promise.resolve(
         new Response(
           new ReadableStream<Uint8Array>({
             start(c) {
-              push = chunk => c.enqueue(new TextEncoder().encode(chunk))
-              init!.signal!.addEventListener('abort', () => c.error(init!.signal!.reason))
+              push = chunk => c.enqueue(new TextEncoder().encode(chunk));
+              init!.signal!.addEventListener('abort', () => c.error(init!.signal!.reason));
             },
           }),
           { headers: { 'content-type': 'text/event-stream' } },
         ),
       ),
-    )
-    const progress: string[] = []
-    const sizes: number[] = []
-    const stop = new AbortController()
-    const removed = vi.spyOn(stop.signal, 'removeEventListener')
+    );
+    const progress: string[] = [];
+    const sizes: number[] = [];
+    const stop = new AbortController();
+    const removed = vi.spyOn(stop.signal, 'removeEventListener');
     const pending = sendRequest(req(), {
       timeoutMs: 50,
       signal: stop.signal,
       onProgress: r => {
-        progress.push(r.body)
-        sizes.push(r.size)
+        progress.push(r.body);
+        sizes.push(r.size);
       },
-    })
-    await vi.advanceTimersByTimeAsync(0)
+    });
+    await vi.advanceTimersByTimeAsync(0);
     // The headers arrived: the timeout no longer applies.
-    expect(vi.getTimerCount()).toBe(0)
-    push('data: 1\n\n')
-    await vi.advanceTimersByTimeAsync(1000)
-    push('data: 2\n\n')
-    await vi.advanceTimersByTimeAsync(0)
-    expect(progress).toEqual(['', 'data: 1\n\n', 'data: 1\n\ndata: 2\n\n'])
-    expect(sizes).toEqual([0, 9, 18])
-    stop.abort()
+    expect(vi.getTimerCount()).toBe(0);
+    push('data: 1\n\n');
+    await vi.advanceTimersByTimeAsync(1000);
+    push('data: 2\n\n');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(progress).toEqual(['', 'data: 1\n\n', 'data: 1\n\ndata: 2\n\n']);
+    expect(sizes).toEqual([0, 9, 18]);
+    stop.abort();
     expect(await pending).toMatchObject({
       status: 200,
       body: 'data: 1\n\ndata: 2\n\n',
       truncated: 'stopped',
-    })
-    expect(removed).toHaveBeenCalledWith('abort', expect.any(Function))
-  })
+    });
+    expect(removed).toHaveBeenCalledWith('abort', expect.any(Function));
+  });
 
   it('keeps what arrived when the body fails midway', async () => {
     const body = new ReadableStream<Uint8Array>({
       start(c) {
-        c.enqueue(new TextEncoder().encode('part'))
+        c.enqueue(new TextEncoder().encode('part'));
       },
       // asked for more once 'part' is read
       pull(c) {
-        c.error(new Error('reset'))
+        c.error(new Error('reset'));
       },
-    })
-    fetchMock.mockResolvedValue(new Response(body))
-    expect(await sendRequest(req())).toMatchObject({ body: 'part', truncated: 'error' })
-  })
+    });
+    fetchMock.mockResolvedValue(new Response(body));
+    expect(await sendRequest(req())).toMatchObject({ body: 'part', truncated: 'error' });
+  });
 
   it('cuts the body at maxBytes and cancels the rest', async () => {
-    const cancel = vi.fn()
+    const cancel = vi.fn();
     fetchMock.mockResolvedValue(
       new Response(
         new ReadableStream<Uint8Array>({
           start(c) {
-            c.enqueue(new TextEncoder().encode('ab'))
-            c.enqueue(new TextEncoder().encode('cdef'))
+            c.enqueue(new TextEncoder().encode('ab'));
+            c.enqueue(new TextEncoder().encode('cdef'));
           },
           cancel,
         }),
       ),
-    )
+    );
     expect(await sendRequest(req(), { maxBytes: 4 })).toMatchObject({
       body: 'abcd',
       size: 4,
       truncated: 'size',
-    })
-    expect(cancel).toHaveBeenCalledOnce()
+    });
+    expect(cancel).toHaveBeenCalledOnce();
     // A source that throws on cancel does not fail the request.
     fetchMock.mockResolvedValue(
       new Response(
         new ReadableStream({
           start(c) {
-            c.enqueue(new TextEncoder().encode('abcdef'))
+            c.enqueue(new TextEncoder().encode('abcdef'));
           },
           cancel() {
-            throw new Error('cannot cancel')
+            throw new Error('cannot cancel');
           },
         }),
       ),
-    )
-    expect(await sendRequest(req(), { maxBytes: 4 })).toMatchObject({ truncated: 'size' })
+    );
+    expect(await sendRequest(req(), { maxBytes: 4 })).toMatchObject({ truncated: 'size' });
     // A body of exactly maxBytes is whole.
-    fetchMock.mockResolvedValue(new Response('abcd'))
+    fetchMock.mockResolvedValue(new Response('abcd'));
     expect(await sendRequest(req(), { maxBytes: 4 })).toMatchObject({
       body: 'abcd',
       truncated: null,
-    })
-    expect(MAX_BODY_BYTES).toBe(5 * 1024 * 1024)
-  })
+    });
+    expect(MAX_BODY_BYTES).toBe(5 * 1024 * 1024);
+  });
 
   it('drops a character the cap splits instead of showing U+FFFD', async () => {
     // '日本' is 6 bytes; the cap at 4 falls inside '本'
-    fetchMock.mockResolvedValue(new Response('日本'))
+    fetchMock.mockResolvedValue(new Response('日本'));
     expect(await sendRequest(req(), { maxBytes: 4 })).toMatchObject({
       body: '日',
       size: 4,
       truncated: 'size',
-    })
-  })
+    });
+  });
 
   it('waits REQUEST_TIMEOUT_MS for the headers by default', async () => {
-    vi.useFakeTimers()
-    fetchMock.mockImplementation(hanging)
-    let settled = false
+    vi.useFakeTimers();
+    fetchMock.mockImplementation(hanging);
+    let settled = false;
     const pending = sendRequest(req()).finally(() => {
-      settled = true
-    })
-    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS - 1)
-    expect(settled).toBe(false)
-    await vi.advanceTimersByTimeAsync(1)
-    expect(settled).toBe(true)
-    expect((await pending).statusText).toBe(`No response within ${REQUEST_TIMEOUT_MS}ms`)
-  })
+      settled = true;
+    });
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS - 1);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(settled).toBe(true);
+    expect((await pending).statusText).toBe(`No response within ${REQUEST_TIMEOUT_MS}ms`);
+  });
 
   it('decodes multi-byte characters split across chunks', async () => {
-    const bytes = new TextEncoder().encode('日本')
+    const bytes = new TextEncoder().encode('日本');
     const body = new ReadableStream<Uint8Array>({
       start(c) {
-        c.enqueue(bytes.subarray(0, 2))
-        c.enqueue(bytes.subarray(2))
-        c.close()
+        c.enqueue(bytes.subarray(0, 2));
+        c.enqueue(bytes.subarray(2));
+        c.close();
       },
-    })
-    fetchMock.mockResolvedValue(new Response(body))
-    expect((await sendRequest(req())).body).toBe('日本')
-  })
-})
+    });
+    fetchMock.mockResolvedValue(new Response(body));
+    expect((await sendRequest(req())).body).toBe('日本');
+  });
+});

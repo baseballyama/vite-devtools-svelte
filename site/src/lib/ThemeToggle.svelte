@@ -1,17 +1,17 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { onMount } from 'svelte';
 
-  let theme = $state<'dark' | 'light'>('dark')
+  let theme = $state<'dark' | 'light'>('dark');
 
   onMount(() => {
-    const current = document.documentElement.dataset.theme
-    theme = current === 'light' ? 'light' : 'dark'
-  })
+    const current = document.documentElement.dataset.theme;
+    theme = current === 'light' ? 'light' : 'dark';
+  });
 
   function toggle() {
-    theme = theme === 'dark' ? 'light' : 'dark'
-    document.documentElement.dataset.theme = theme
-    localStorage.setItem('theme', theme)
+    theme = theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem('theme', theme);
   }
 </script>
 

@@ -1,10 +1,10 @@
 export interface Product {
-  id: string
-  name: string
-  price: number
-  category: 'coffee' | 'tea' | 'sweets'
-  stock: number
-  description: string
+  id: string;
+  name: string;
+  price: number;
+  category: 'coffee' | 'tea' | 'sweets';
+  stock: number;
+  description: string;
 }
 
 export const products: Product[] = [
@@ -64,8 +64,8 @@ export const products: Product[] = [
     stock: 20,
     description: 'バターと蜂蜜の香り、定番の貝形焼き菓子。',
   },
-]
+];
 
 export function getProduct(id: string): Product | undefined {
-  return products.find(p => p.id === id)
+  return products.find(p => p.id === id);
 }

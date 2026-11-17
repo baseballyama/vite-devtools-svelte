@@ -1,9 +1,9 @@
 <script lang="ts">
-  import type { Snippet } from 'svelte'
+  import type { Snippet } from 'svelte';
 
-  import type { IconName } from '../lib/icons.js'
-  import type { Resource } from '../lib/resource.svelte.js'
-  import EmptyState from './EmptyState.svelte'
+  import type { IconName } from '../lib/icons.js';
+  import type { Resource } from '../lib/resource.svelte.js';
+  import EmptyState from './EmptyState.svelte';
 
   /**
    * The empty state of a view fed by a resource: still loading, a failed
@@ -20,15 +20,15 @@
     noMatch = 'Nothing matches',
     children,
   }: {
-    res: Pick<Resource<unknown>, 'loading' | 'error'>
-    total: number
-    loading: string
-    failed: string
-    icon: IconName
-    title: string
-    noMatch?: string
-    children?: Snippet
-  } = $props()
+    res: Pick<Resource<unknown>, 'loading' | 'error'>;
+    total: number;
+    loading: string;
+    failed: string;
+    icon: IconName;
+    title: string;
+    noMatch?: string;
+    children?: Snippet;
+  } = $props();
 </script>
 
 {#if total > 0}

@@ -1,3 +1,3 @@
 export function load() {
-  return { seed: ['alpha', 'beta'] }
+  return { seed: ['alpha', 'beta'] };
 }

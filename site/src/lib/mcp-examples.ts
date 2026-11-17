@@ -3,15 +3,15 @@
 // are cut (marked `shortened`). Do not edit by hand.
 
 export interface McpExample {
-  id: string
-  tool: string
-  arguments: Record<string, unknown>
-  response: unknown
-  shortened?: boolean
+  id: string;
+  tool: string;
+  arguments: Record<string, unknown>;
+  response: unknown;
+  shortened?: boolean;
 }
 
 export const MCP_EXAMPLES_SOURCE =
-  'Recorded by scripts/screenshots/mcp-examples.mjs in CI run 37204003993 (linux x64, Node v22.23.3) at commit 533928b (the PR #85 merge ref), with the 0.4.0 code before the version bump (package version 0.3.0 at capture), on examples/sample-app, a synthetic demo app. Absolute paths are shown as <project> / <repo>, and arrays longer than 4 are cut where marked; no value was changed.'
+  'Recorded by scripts/screenshots/mcp-examples.mjs in CI run 37204003993 (linux x64, Node v22.23.3) at commit 533928b (the PR #85 merge ref), with the 0.4.0 code before the version bump (package version 0.3.0 at capture), on examples/sample-app, a synthetic demo app. Absolute paths are shown as <project> / <repo>, and arrays longer than 4 are cut where marked; no value was changed.';
 
 export const MCP_EXAMPLES: McpExample[] = [
   {
@@ -414,4 +414,4 @@ export const MCP_EXAMPLES: McpExample[] = [
       },
     },
   },
-]
+];

@@ -1,58 +1,58 @@
 <script lang="ts">
-  import Badge from '../components/Badge.svelte'
-  import Button from '../components/Button.svelte'
-  import DataTable from '../components/DataTable.svelte'
-  import EmptyState from '../components/EmptyState.svelte'
-  import Highlight from '../components/Highlight.svelte'
-  import Inspector from '../components/Inspector.svelte'
-  import Panel from '../components/Panel.svelte'
-  import RefreshButton from '../components/RefreshButton.svelte'
-  import ResourceEmpty from '../components/ResourceEmpty.svelte'
-  import SearchField from '../components/SearchField.svelte'
-  import Segmented from '../components/Segmented.svelte'
-  import SplitView from '../components/SplitView.svelte'
-  import StatList from '../components/StatList.svelte'
-  import type { Column, SortState, TableRowState, Tone } from '../components/types.js'
-  import { formatBytes, basename } from '../lib/format.js'
-  import { matcher } from '../lib/match.js'
-  import { resource } from '../lib/resource.svelte.js'
-  import { getBuildAnalysis } from '../lib/rpc.js'
-  import type { BuildAnalysis, BuildChunk } from '../lib/types.js'
+  import Badge from '../components/Badge.svelte';
+  import Button from '../components/Button.svelte';
+  import DataTable from '../components/DataTable.svelte';
+  import EmptyState from '../components/EmptyState.svelte';
+  import Highlight from '../components/Highlight.svelte';
+  import Inspector from '../components/Inspector.svelte';
+  import Panel from '../components/Panel.svelte';
+  import RefreshButton from '../components/RefreshButton.svelte';
+  import ResourceEmpty from '../components/ResourceEmpty.svelte';
+  import SearchField from '../components/SearchField.svelte';
+  import Segmented from '../components/Segmented.svelte';
+  import SplitView from '../components/SplitView.svelte';
+  import StatList from '../components/StatList.svelte';
+  import type { Column, SortState, TableRowState, Tone } from '../components/types.js';
+  import { formatBytes, basename } from '../lib/format.js';
+  import { matcher } from '../lib/match.js';
+  import { resource } from '../lib/resource.svelte.js';
+  import { getBuildAnalysis } from '../lib/rpc.js';
+  import type { BuildAnalysis, BuildChunk } from '../lib/types.js';
 
-  const build = resource<BuildAnalysis | null>(getBuildAnalysis, { initial: null })
+  const build = resource<BuildAnalysis | null>(getBuildAnalysis, { initial: null });
 
-  let query = $state('')
-  let kind = $state<'all' | 'js' | 'css' | 'other'>('all')
-  let sort = $state<SortState | null>({ id: 'size', desc: true })
-  let selected = $state<string | null>(null)
+  let query = $state('');
+  let kind = $state<'all' | 'js' | 'css' | 'other'>('all');
+  let sort = $state<SortState | null>({ id: 'size', desc: true });
+  let selected = $state<string | null>(null);
 
-  const ext = (c: BuildChunk) => c.file.split('.').pop() ?? ''
+  const ext = (c: BuildChunk) => c.file.split('.').pop() ?? '';
   const kindOf = (c: BuildChunk) =>
-    ext(c) === 'js' || ext(c) === 'mjs' ? 'js' : ext(c) === 'css' ? 'css' : 'other'
-  const tones: Record<string, Tone> = { js: 'yellow', css: 'purple', other: 'neutral' }
+    ext(c) === 'js' || ext(c) === 'mjs' ? 'js' : ext(c) === 'css' ? 'css' : 'other';
+  const tones: Record<string, Tone> = { js: 'yellow', css: 'purple', other: 'neutral' };
 
-  const chunks = $derived(build.data?.chunks ?? [])
+  const chunks = $derived(build.data?.chunks ?? []);
   const rows = $derived.by(() => {
-    const m = matcher(query)
-    return chunks.filter(c => (kind === 'all' || kindOf(c) === kind) && (!m || m(c.file, c.name)))
-  })
-  const total = $derived(build.data?.totalSize ?? 0)
-  const share = (c: BuildChunk) => (total ? ((c.size / total) * 100).toFixed(1) : '0')
-  const maxSize = $derived(chunks.reduce((m, c) => Math.max(m, c.size), 1))
-  const current = $derived(selected ? (chunks.find(c => c.file === selected) ?? null) : null)
+    const m = matcher(query);
+    return chunks.filter(c => (kind === 'all' || kindOf(c) === kind) && (!m || m(c.file, c.name)));
+  });
+  const total = $derived(build.data?.totalSize ?? 0);
+  const share = (c: BuildChunk) => (total ? ((c.size / total) * 100).toFixed(1) : '0');
+  const maxSize = $derived(chunks.reduce((m, c) => Math.max(m, c.size), 1));
+  const current = $derived(selected ? (chunks.find(c => c.file === selected) ?? null) : null);
 
   const byKind = $derived.by(() => {
     const k = {
       js: { count: 0, size: 0 },
       css: { count: 0, size: 0 },
       other: { count: 0, size: 0 },
-    }
+    };
     for (const c of chunks) {
-      k[kindOf(c)].count++
-      k[kindOf(c)].size += c.size
+      k[kindOf(c)].count++;
+      k[kindOf(c)].size += c.size;
     }
-    return k
-  })
+    return k;
+  });
 
   const columns: Column<BuildChunk>[] = [
     {
@@ -78,7 +78,7 @@
       descFirst: true,
       sort: (a, b) => a.size - b.size,
     },
-  ]
+  ];
 </script>
 
 <Panel title="Build" count={chunks.length}>

@@ -1,5 +1,5 @@
 <script>
-  export let data
+  export let data;
 </script>
 
 <h1>{data.title}</h1>

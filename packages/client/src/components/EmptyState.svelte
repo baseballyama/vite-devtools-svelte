@@ -1,8 +1,8 @@
 <script lang="ts">
-  import type { Snippet } from 'svelte'
+  import type { Snippet } from 'svelte';
 
-  import type { IconName } from '../lib/icons.js'
-  import Icon from './Icon.svelte'
+  import type { IconName } from '../lib/icons.js';
+  import Icon from './Icon.svelte';
 
   /**
    * Placeholder for an empty, loading or failed view. With `error` (the
@@ -17,15 +17,15 @@
     announce = true,
     children,
   }: {
-    icon?: IconName
-    title: string
-    error?: string | null
-    announce?: boolean
-    children?: Snippet
-  } = $props()
+    icon?: IconName;
+    title: string;
+    error?: string | null;
+    announce?: boolean;
+    children?: Snippet;
+  } = $props();
 
-  const failed = $derived(error != null)
-  const ico = $derived(failed ? 'errors' : icon)
+  const failed = $derived(error != null);
+  const ico = $derived(failed ? 'errors' : icon);
 </script>
 
 <div class="empty" class:failed role={failed ? 'alert' : announce ? 'status' : undefined}>

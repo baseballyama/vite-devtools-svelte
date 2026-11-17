@@ -1,19 +1,19 @@
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
-import adapter from '@sveltejs/adapter-static'
-import { sveltekit } from '@sveltejs/kit/vite'
-import { defineConfig } from 'vite'
+import adapter from '@sveltejs/adapter-static';
+import { sveltekit } from '@sveltejs/kit/vite';
+import { defineConfig } from 'vite';
 
 const pkg = JSON.parse(
   readFileSync(
     resolve(import.meta.dirname, '../packages/vite-devtools-svelte/package.json'),
     'utf-8',
   ),
-) as { version: string }
+) as { version: string };
 
-const dev = process.env.NODE_ENV !== 'production'
-const base = process.env.BASE_PATH ?? (dev ? '' : '/vite-devtools-svelte')
+const dev = process.env.NODE_ENV !== 'production';
+const base = process.env.BASE_PATH ?? (dev ? '' : '/vite-devtools-svelte');
 
 export default defineConfig({
   plugins: [
@@ -42,4 +42,4 @@ export default defineConfig({
       allow: ['..'],
     },
   },
-})
+});

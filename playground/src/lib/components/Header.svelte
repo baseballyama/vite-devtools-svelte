@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { resolve } from '$app/paths'
-  import { page } from '$app/state'
+  import { resolve } from '$app/paths';
+  import { page } from '$app/state';
 
-  const isDev = import.meta.env.DEV
+  const isDev = import.meta.env.DEV;
 </script>
 
 <header>

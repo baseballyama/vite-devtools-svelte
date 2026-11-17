@@ -1,11 +1,11 @@
-import { products } from '#lib/server/products.ts'
+import { products } from '#lib/server/products.ts';
 
-import type { PageServerLoad } from './$types'
+import type { PageServerLoad } from './$types';
 
 const sleep = (ms: number) =>
   new Promise(r => {
-    setTimeout(r, ms)
-  })
+    setTimeout(r, ms);
+  });
 
 export const load: PageServerLoad = async () => {
   // 並列 load — Load Profiler のウォーターフォール確認
@@ -17,13 +17,13 @@ export const load: PageServerLoad = async () => {
     })),
     sleep(200).then(() => products.filter(p => p.stock <= 8)),
     sleep(160).then(() => {
-      const map = new Map<string, number>()
+      const map = new Map<string, number>();
       for (const p of products) {
-        map.set(p.category, (map.get(p.category) ?? 0) + 1)
+        map.set(p.category, (map.get(p.category) ?? 0) + 1);
       }
-      return [...map.entries()].map(([category, count]) => ({ category, count }))
+      return [...map.entries()].map(([category, count]) => ({ category, count }));
     }),
-  ])
+  ]);
 
-  return { stats, lowStock, byCategory }
-}
+  return { stats, lowStock, byCategory };
+};

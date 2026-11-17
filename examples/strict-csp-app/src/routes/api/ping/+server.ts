@@ -1,3 +1,3 @@
-import type { RequestHandler } from './$types'
+import type { RequestHandler } from './$types';
 
-export const GET: RequestHandler = () => Response.json({ ok: true, t: Date.now() })
+export const GET: RequestHandler = () => Response.json({ ok: true, t: Date.now() });

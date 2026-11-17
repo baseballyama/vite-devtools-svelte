@@ -1,5 +1,5 @@
-import { svelte } from '@sveltejs/vite-plugin-svelte'
-import { defineConfig } from 'vitest/config'
+import { svelte } from '@sveltejs/vite-plugin-svelte';
+import { defineConfig } from 'vitest/config';
 
 // The DevTools UI only ever runs in the browser: compile `.svelte` /
 // `.svelte.ts` (and `.svelte.test.ts`) for the client and resolve Svelte's
@@ -70,4 +70,4 @@ export default defineConfig({
       },
     },
   },
-})
+});

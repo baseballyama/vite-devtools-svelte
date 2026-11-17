@@ -19,56 +19,56 @@
 // Usage: node perf/generate-large-app.mjs [--components=800] [--routes=300]
 //        [--assets=1500] [--out=playground/.temp/large-app]
 
-import { spawnSync } from 'node:child_process'
-import fs from 'node:fs'
-import path from 'node:path'
+import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 
-const repoRoot = path.resolve(import.meta.dirname, '..')
+const repoRoot = path.resolve(import.meta.dirname, '..');
 
 export const DEFAULTS = {
   components: 800,
   routes: 300,
   assets: 1500,
   out: path.join(repoRoot, 'playground/.temp/large-app'),
-}
+};
 
 function parseArgs(argv) {
-  const opts = { ...DEFAULTS }
+  const opts = { ...DEFAULTS };
   for (const arg of argv) {
-    const m = /^--([^=]+)=(.*)$/.exec(arg)
-    if (!m) continue
-    const [, key, value] = m
-    if (!(key in opts)) throw new Error(`Unknown option --${key}`)
-    opts[key] = key === 'out' ? path.resolve(value) : Number(value)
+    const m = /^--([^=]+)=(.*)$/.exec(arg);
+    if (!m) continue;
+    const [, key, value] = m;
+    if (!(key in opts)) throw new Error(`Unknown option --${key}`);
+    opts[key] = key === 'out' ? path.resolve(value) : Number(value);
   }
-  return opts
+  return opts;
 }
 
 // Small deterministic PRNG so every run produces byte-identical output.
 function mulberry32(seed) {
   return () => {
     /* oxlint-disable unicorn/prefer-math-trunc -- int32 wrap-around, Math.trunc would change the sequence */
-    seed |= 0
-    seed = (seed + 0x6d2b79f5) | 0
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
     /* oxlint-enable unicorn/prefer-math-trunc */
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
 function write(file, content) {
-  fs.mkdirSync(path.dirname(file), { recursive: true })
-  fs.writeFileSync(file, content)
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, content);
 }
 
-const pad = n => String(n).padStart(4, '0')
+const pad = n => String(n).padStart(4, '0');
 
 function componentSource(i, imports) {
-  const importLines = imports.map(j => `  import C${pad(j)} from './C${pad(j)}.svelte'`).join('\n')
+  const importLines = imports.map(j => `  import C${pad(j)} from './C${pad(j)}.svelte'`).join('\n');
   // Children are only rendered when `depth > 0` so the static import graph can
   // be dense without exploding the runtime instance count on route pages.
-  const children = imports.map(j => `    <C${pad(j)} depth={depth - 1} />`).join('\n')
+  const children = imports.map(j => `    <C${pad(j)} depth={depth - 1} />`).join('\n');
   return `<script lang="ts">
 ${importLines}
   let { depth = 0 }: { depth?: number } = $props()
@@ -88,30 +88,30 @@ ${importLines}
 ${children}
   {/if}
 </section>
-`
+`;
 }
 
 function routeSegments(i, rand) {
   // Mix of static, nested, dynamic, optional, rest and grouped segments.
-  const kind = i % 10
-  const base = `section-${Math.floor(i / 10)}`
+  const kind = i % 10;
+  const base = `section-${Math.floor(i / 10)}`;
   switch (kind) {
     case 0:
-      return [base]
+      return [base];
     case 1:
-      return [base, `page-${i}`]
+      return [base, `page-${i}`];
     case 2:
-      return [base, `[id]`, `item-${i}`]
+      return [base, `[id]`, `item-${i}`];
     case 3:
-      return [`(group-${i % 3})`, base, `g-${i}`]
+      return [`(group-${i % 3})`, base, `g-${i}`];
     case 4:
-      return [base, `[[lang]]`, `opt-${i}`]
+      return [base, `[[lang]]`, `opt-${i}`];
     case 5:
-      return [base, `rest-${i}`, `[...path]`]
+      return [base, `rest-${i}`, `[...path]`];
     case 6:
-      return [base, `[slug=integer]`, `m-${i}`]
+      return [base, `[slug=integer]`, `m-${i}`];
     default:
-      return [base, `deep-${Math.floor(rand() * 5)}`, `leaf-${i}`]
+      return [base, `deep-${Math.floor(rand() * 5)}`, `leaf-${i}`];
   }
 }
 
@@ -123,27 +123,27 @@ function routeSegments(i, rand) {
 // B/F pairs whose fixture sources differ, so the two shapes never mix.
 function kitMajor(dir) {
   for (let d = path.resolve(dir); ; d = path.dirname(d)) {
-    const file = path.join(d, 'node_modules/@sveltejs/kit/package.json')
+    const file = path.join(d, 'node_modules/@sveltejs/kit/package.json');
     if (fs.existsSync(file)) {
-      const { version } = JSON.parse(fs.readFileSync(file, 'utf8'))
-      const major = Number(version.split('.')[0])
-      if (!Number.isInteger(major)) throw new Error(`unexpected @sveltejs/kit version ${version}`)
-      return major
+      const { version } = JSON.parse(fs.readFileSync(file, 'utf8'));
+      const major = Number(version.split('.')[0]);
+      if (!Number.isInteger(major)) throw new Error(`unexpected @sveltejs/kit version ${version}`);
+      return major;
     }
-    if (path.dirname(d) === d) throw new Error(`@sveltejs/kit not found from ${dir}`)
+    if (path.dirname(d) === d) throw new Error(`@sveltejs/kit not found from ${dir}`);
   }
 }
 
 // Fixture shape for the Kit that resolves from `dir`.
 export function kitShape(dir) {
-  return kitMajor(dir) >= 3 ? 'kit3' : 'kit2'
+  return kitMajor(dir) >= 3 ? 'kit3' : 'kit2';
 }
 
 // Shape of an existing fixture in `out` (null: none), to detect one generated
 // for another Kit major.
 export function fixtureShape(out) {
-  if (!fs.existsSync(path.join(out, 'package.json'))) return null
-  return fs.existsSync(path.join(out, 'svelte.config.js')) ? 'kit2' : 'kit3'
+  if (!fs.existsSync(path.join(out, 'package.json'))) return null;
+  return fs.existsSync(path.join(out, 'svelte.config.js')) ? 'kit2' : 'kit3';
 }
 
 // Files under playground/.temp resolve playground/tsconfig.json, which extends
@@ -151,29 +151,29 @@ export function fixtureShape(out) {
 // Kit 3: node_modules/$app/tsconfig.json) — absent in a fresh checkout.
 // Generate it (gitignored) the same way a normal dev flow does.
 export function ensurePlaygroundSync(repo = repoRoot) {
-  const playground = path.join(repo, 'playground')
+  const playground = path.join(repo, 'playground');
   const generated =
     kitShape(playground) === 'kit3'
       ? 'node_modules/$app/tsconfig.json'
-      : '.svelte-kit/tsconfig.json'
-  if (fs.existsSync(path.join(playground, generated))) return false
+      : '.svelte-kit/tsconfig.json';
+  if (fs.existsSync(path.join(playground, generated))) return false;
   const res = spawnSync(
     process.execPath,
     [path.join(playground, 'node_modules/@sveltejs/kit/svelte-kit.js'), 'sync'],
     { cwd: playground, stdio: 'inherit' },
-  )
+  );
   // Kit 3's sync loads playground/vite.config.ts, so the plugin must be built.
   if (res.status !== 0)
-    throw new Error('svelte-kit sync failed in playground/ (is the plugin built? pnpm build)')
-  return true
+    throw new Error('svelte-kit sync failed in playground/ (is the plugin built? pnpm build)');
+  return true;
 }
 
 export function generate(opts = DEFAULTS) {
-  const rand = mulberry32(0x5eed)
-  const out = opts.out
-  const shape = kitShape(out)
-  const lib = shape === 'kit3' ? '#lib' : '$lib'
-  fs.rmSync(out, { recursive: true, force: true })
+  const rand = mulberry32(0x5eed);
+  const out = opts.out;
+  const shape = kitShape(out);
+  const lib = shape === 'kit3' ? '#lib' : '$lib';
+  fs.rmSync(out, { recursive: true, force: true });
 
   write(
     path.join(out, 'package.json'),
@@ -198,7 +198,7 @@ export function generate(opts = DEFAULTS) {
       null,
       2,
     ) + '\n',
-  )
+  );
 
   // PERF_DEVTOOLS=0 runs the identical app without the plugin so the bench can
   // compute the instrumentation overhead (ROADMAP target: < 5 %).
@@ -218,7 +218,7 @@ export default defineConfig({
   logLevel: process.env.PERF_LOG_LEVEL ?? 'warn',
 })
 `,
-  )
+  );
 
   write(
     path.join(out, 'tsconfig.json'),
@@ -232,7 +232,7 @@ export default defineConfig({
       null,
       2,
     ) + '\n',
-  )
+  );
 
   if (shape === 'kit2') {
     write(
@@ -240,7 +240,7 @@ export default defineConfig({
       `/** @type {import('@sveltejs/kit').Config} */
 export default { kit: {} }
 `,
-    )
+    );
   }
 
   write(
@@ -257,7 +257,7 @@ export default { kit: {} }
   </body>
 </html>
 `,
-  )
+  );
 
   // Kit 3 reads every matcher from one `src/params` module (`export const
   // params`, each returning the value or undefined); Kit 2 from one file per
@@ -271,7 +271,7 @@ export const params = defineParams({
   integer: (param) => (/^\\d+$/.test(param) ? param : undefined),
 })
 `,
-    )
+    );
   } else {
     write(
       path.join(out, 'src/params/integer.ts'),
@@ -279,19 +279,19 @@ export const params = defineParams({
   return /^\\d+$/.test(param)
 }
 `,
-    )
+    );
   }
 
   // --- generated components with a sparse DAG import graph (j > i only) ---
-  const compDir = path.join(out, 'src/lib/components/gen')
+  const compDir = path.join(out, 'src/lib/components/gen');
   for (let i = 0; i < opts.components; i++) {
-    const imports = []
-    const fanOut = i % 5 === 0 ? 3 : 1
+    const imports = [];
+    const fanOut = i % 5 === 0 ? 3 : 1;
     for (let k = 0; k < fanOut; k++) {
-      const j = i + 1 + Math.floor(rand() * 20)
-      if (j < opts.components && !imports.includes(j)) imports.push(j)
+      const j = i + 1 + Math.floor(rand() * 20);
+      if (j < opts.components && !imports.includes(j)) imports.push(j);
     }
-    write(path.join(compDir, `C${pad(i)}.svelte`), componentSource(i, imports))
+    write(path.join(compDir, `C${pad(i)}.svelte`), componentSource(i, imports));
   }
 
   // --- bench components ---
@@ -317,7 +317,7 @@ export const params = defineParams({
   <span>{note.tags.length}</span>
 </div>
 `,
-  )
+  );
 
   write(
     path.join(out, 'src/lib/bench/Tree.svelte'),
@@ -337,7 +337,7 @@ export const params = defineParams({
   {/if}
 </div>
 `,
-  )
+  );
 
   write(
     path.join(out, 'src/routes/+layout.svelte'),
@@ -348,7 +348,7 @@ export const params = defineParams({
 <nav><a href="/">home</a> <a href="/bench">bench</a></nav>
 {@render children()}
 `,
-  )
+  );
 
   write(
     path.join(out, 'src/routes/+page.svelte'),
@@ -359,7 +359,7 @@ export const params = defineParams({
 <h1>perf large app</h1>
 <C0000 depth={3} />
 `,
-  )
+  );
 
   // /bench is driven from Playwright through window.__bench; nothing mounts
   // until asked so the bench can time mount/unmount precisely.
@@ -455,13 +455,13 @@ export const params = defineParams({
   <Row {row} bind:this={() => rowRefs[i], (v) => (rowRefs[i] = v)} />
 {/each}
 `,
-  )
+  );
 
   // --- routes ---
   for (let i = 0; i < opts.routes; i++) {
-    const segs = routeSegments(i, rand)
-    const dir = path.join(out, 'src/routes', ...segs)
-    const comp = i % opts.components
+    const segs = routeSegments(i, rand);
+    const dir = path.join(out, 'src/routes', ...segs);
+    const comp = i % opts.components;
     write(
       path.join(dir, '+page.svelte'),
       `<script lang="ts">
@@ -477,7 +477,7 @@ export const params = defineParams({
 <C depth={1} />
 <pre>{JSON.stringify(data ?? {})}</pre>
 `,
-    )
+    );
     if (i % 4 === 0) {
       write(
         path.join(dir, '+page.ts'),
@@ -485,7 +485,7 @@ export const params = defineParams({
   return { route: ${i}, items: Array.from({ length: ${(i % 20) + 1} }, (_, k) => k) }
 }
 `,
-      )
+      );
     }
     if (i % 25 === 0) {
       write(
@@ -498,41 +498,41 @@ export async function POST({ request }) {
   return json({ echo: await request.text() })
 }
 `,
-      )
+      );
     }
   }
 
   // --- static assets ---
-  const exts = ['svg', 'json', 'txt', 'css', 'png']
+  const exts = ['svg', 'json', 'txt', 'css', 'png'];
   for (let i = 0; i < opts.assets; i++) {
-    const ext = exts[i % exts.length]
-    const dir = path.join(out, 'static', `group-${i % 15}`, `sub-${Math.floor(i / 100)}`)
-    const file = path.join(dir, `asset-${pad(i)}.${ext}`)
-    let content
+    const ext = exts[i % exts.length];
+    const dir = path.join(out, 'static', `group-${i % 15}`, `sub-${Math.floor(i / 100)}`);
+    const file = path.join(dir, `asset-${pad(i)}.${ext}`);
+    let content;
     if (ext === 'svg') {
-      content = `<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="${(i % 8) + 1}" height="8"/></svg>\n`
+      content = `<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="${(i % 8) + 1}" height="8"/></svg>\n`;
     } else if (ext === 'json') {
-      content = JSON.stringify({ i }) + '\n'
+      content = JSON.stringify({ i }) + '\n';
     } else if (ext === 'png') {
       // 1x1 transparent PNG
       content = Buffer.from(
         'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
         'base64',
-      )
+      );
     } else {
-      content = `asset ${i}\n`.repeat((i % 50) + 1)
+      content = `asset ${i}\n`.repeat((i % 50) + 1);
     }
-    write(file, content)
+    write(file, content);
   }
 
-  return { out, shape, ...opts }
+  return { out, shape, ...opts };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
-  const opts = parseArgs(process.argv.slice(2))
-  const t0 = performance.now()
-  const res = generate(opts)
+  const opts = parseArgs(process.argv.slice(2));
+  const t0 = performance.now();
+  const res = generate(opts);
   console.log(
     `large app → ${path.relative(repoRoot, res.out)} (components=${res.components} routes=${res.routes} assets=${res.assets}) in ${Math.round(performance.now() - t0)} ms`,
-  )
+  );
 }
