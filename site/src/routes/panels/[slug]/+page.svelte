@@ -1,16 +1,16 @@
 <script lang="ts">
-  import { resolve } from '$app/paths'
+  import { resolve } from '$app/paths';
 
-  import { panels, taglineParts, taglineText } from '#lib/panels.ts'
-  import { image } from '#lib/paths.ts'
+  import { panels, taglineParts, taglineText } from '#lib/panels.ts';
+  import { image } from '#lib/paths.ts';
 
-  import type { PageProps } from './$types'
+  import type { PageProps } from './$types';
 
-  let { data }: PageProps = $props()
-  let panel = $derived(data.panel)
-  let prev = $derived(data.prev)
-  let next = $derived(data.next)
-  let panelIndex = $derived(panels.findIndex(p => p.slug === panel.slug))
+  let { data }: PageProps = $props();
+  let panel = $derived(data.panel);
+  let prev = $derived(data.prev);
+  let next = $derived(data.next);
+  let panelIndex = $derived(panels.findIndex(p => p.slug === panel.slug));
 </script>
 
 <svelte:head>

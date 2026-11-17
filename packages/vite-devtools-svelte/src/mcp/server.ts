@@ -1,5 +1,5 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { z } from 'zod'
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { z } from 'zod';
 
 import type {
   RenderProfile,
@@ -16,54 +16,54 @@ import type {
   ReactiveSummary,
   ReactiveSummaryRequest,
   StateTimelineDelta,
-} from '../types.js'
-import { listPerformanceIssues, summarizeReactiveProblems } from './issues.js'
-import type { SessionStore } from './sessions.js'
-import { isSessionId } from './sessions.js'
-import { avg, avgRenderTime, max, min, round } from './stats.js'
+} from '../types.js';
+import { listPerformanceIssues, summarizeReactiveProblems } from './issues.js';
+import type { SessionStore } from './sessions.js';
+import { isSessionId } from './sessions.js';
+import { avg, avgRenderTime, max, min, round } from './stats.js';
 
 export interface McpDeps {
-  getProject: () => ProjectInfo
-  getRoutes: () => RouteInfo[]
+  getProject: () => ProjectInfo;
+  getRoutes: () => RouteInfo[];
   /** The served page load's components with its epoch, read together. */
-  getLiveSnapshot: () => { epoch: string | null; total: number; components: ComponentInstance[] }
-  getComponentRelations: () => ComponentRelation[]
-  getRenderProfiles: () => RenderProfile[]
+  getLiveSnapshot: () => { epoch: string | null; total: number; components: ComponentInstance[] };
+  getComponentRelations: () => ComponentRelation[];
+  getRenderProfiles: () => RenderProfile[];
   /** Resolves with the current reactive graph after refreshing from the browser. */
-  getReactiveGraph: () => Promise<ReactiveGraph>
-  getLoadProfiles: () => LoadProfile[]
-  getFpsSamples: () => FpsSample[]
-  sessions: SessionStore
+  getReactiveGraph: () => Promise<ReactiveGraph>;
+  getLoadProfiles: () => LoadProfile[];
+  getFpsSamples: () => FpsSample[];
+  sessions: SessionStore;
   // Bounded reactivity tools (docs/devframe-migration.md §6.7).
-  getReactiveSummary: (req: ReactiveSummaryRequest) => Promise<ReactiveSummary>
-  getReactiveScope: (req: ReactiveGraphRequest) => Promise<ReactiveGraphResult>
-  getStateTimelineDelta: (since?: number) => StateTimelineDelta
-  getCaptureInfo: () => CaptureInfoMap
+  getReactiveSummary: (req: ReactiveSummaryRequest) => Promise<ReactiveSummary>;
+  getReactiveScope: (req: ReactiveGraphRequest) => Promise<ReactiveGraphResult>;
+  getStateTimelineDelta: (since?: number) => StateTimelineDelta;
+  getCaptureInfo: () => CaptureInfoMap;
 }
 
 /** Most timeline entries one `get_state_timeline` call returns. */
-export const MCP_TIMELINE_LIMIT = 500
+export const MCP_TIMELINE_LIMIT = 500;
 /** Default / largest JSON size of one old/new value in `get_state_timeline` output. */
-const MCP_VALUE_CHARS = { default: 2048, max: 32768 } as const
+const MCP_VALUE_CHARS = { default: 2048, max: 32768 } as const;
 
 /** A state value for MCP output: as is when small, otherwise a size summary. */
 function capValue(value: unknown, maxChars: number): unknown {
-  let json: string | undefined
+  let json: string | undefined;
   try {
-    json = JSON.stringify(value)
+    json = JSON.stringify(value);
   } catch {
-    return { omitted: 'not serializable' }
+    return { omitted: 'not serializable' };
   }
-  if (json === undefined || json.length <= maxChars) return value
+  if (json === undefined || json.length <= maxChars) return value;
   return {
     omitted: 'too large',
     chars: json.length,
     preview: json.slice(0, Math.min(200, maxChars)),
-  }
+  };
 }
 
 /** Session ids as issued by `start_session`; anything else is rejected before the store. */
-const sessionId = z.string().max(64).refine(isSessionId, 'not a session id')
+const sessionId = z.string().max(64).refine(isSessionId, 'not a session id');
 
 /** A tool answer: `value` as pretty JSON (strings as is). */
 function text(value: unknown) {
@@ -74,16 +74,16 @@ function text(value: unknown) {
         text: typeof value === 'string' ? value : JSON.stringify(value, null, 2),
       },
     ],
-  }
+  };
 }
 
-const error = (message: string) => ({ ...text(message), isError: true })
+const error = (message: string) => ({ ...text(message), isError: true });
 
 export function buildMcpServer(deps: McpDeps): McpServer {
   const server = new McpServer({
     name: 'vite-devtools-svelte',
     version: '0.1.0',
-  })
+  });
 
   // --- read tools: issue surface ---
 
@@ -112,10 +112,10 @@ export function buildMcpServer(deps: McpDeps): McpServer {
           fpsSamples: deps.getFpsSamples(),
         },
         thresholds,
-      )
-      return text({ count: issues.length, issues })
+      );
+      return text({ count: issues.length, issues });
     },
-  )
+  );
 
   server.registerTool(
     'get_component_hotspots',
@@ -138,10 +138,10 @@ export function buildMcpServer(deps: McpDeps): McpServer {
           lastRenderAt: p.lastRenderAt,
         }))
         .toSorted((a, b) => b.totalRenderTimeMs - a.totalRenderTimeMs)
-        .slice(0, topN)
-      return text(list)
+        .slice(0, topN);
+      return text(list);
     },
-  )
+  );
 
   server.registerTool(
     'get_reactive_graph_problems',
@@ -153,7 +153,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     },
     async ({ effectMaxDeps }) =>
       text(summarizeReactiveProblems(await deps.getReactiveGraph(), { effectMaxDeps })),
-  )
+  );
 
   server.registerTool(
     'get_load_waterfall',
@@ -164,15 +164,15 @@ export function buildMcpServer(deps: McpDeps): McpServer {
       inputSchema: { route: z.string().optional() },
     },
     ({ route }) => {
-      const profiles = deps.getLoadProfiles().filter(p => !route || p.route === route)
-      const byRoute = new Map<string, LoadProfile[]>()
+      const profiles = deps.getLoadProfiles().filter(p => !route || p.route === route);
+      const byRoute = new Map<string, LoadProfile[]>();
       for (const p of profiles) {
-        const group = byRoute.get(p.route)
-        if (group) group.push(p)
-        else byRoute.set(p.route, [p])
+        const group = byRoute.get(p.route);
+        if (group) group.push(p);
+        else byRoute.set(p.route, [p]);
       }
       const groups = [...byRoute].map(([r, ps]) => {
-        const durations = ps.map(p => p.duration)
+        const durations = ps.map(p => p.duration);
         return {
           route: r,
           file: ps[0]?.file,
@@ -181,11 +181,11 @@ export function buildMcpServer(deps: McpDeps): McpServer {
           maxDuration: round(max(durations, 0)),
           totalDataBytes: ps.reduce((s, p) => s + p.dataSize, 0),
           samples: ps,
-        }
-      })
-      return text(groups.toSorted((a, b) => b.avgDuration - a.avgDuration))
+        };
+      });
+      return text(groups.toSorted((a, b) => b.avgDuration - a.avgDuration));
     },
-  )
+  );
 
   server.registerTool(
     'get_fps_drops',
@@ -198,9 +198,9 @@ export function buildMcpServer(deps: McpDeps): McpServer {
       },
     },
     ({ threshold = 40, sinceMs }) => {
-      const cutoff = sinceMs === undefined ? -Infinity : Date.now() - sinceMs
-      const samples = deps.getFpsSamples().filter(s => s.timestamp >= cutoff)
-      const drops = samples.filter(s => s.fps < threshold)
+      const cutoff = sinceMs === undefined ? -Infinity : Date.now() - sinceMs;
+      const samples = deps.getFpsSamples().filter(s => s.timestamp >= cutoff);
+      const drops = samples.filter(s => s.fps < threshold);
       return text({
         threshold,
         sampleCount: samples.length,
@@ -210,9 +210,9 @@ export function buildMcpServer(deps: McpDeps): McpServer {
           null,
         ),
         drops,
-      })
+      });
     },
-  )
+  );
 
   server.registerTool(
     'get_render_profile',
@@ -237,10 +237,10 @@ export function buildMcpServer(deps: McpDeps): McpServer {
           lastRenderAt: p.lastRenderAt,
           totalRenderTimeMs: round(p.totalRenderTime),
           avgRenderTimeMs: round(avgRenderTime(p)),
-        }))
-      return text(matches)
+        }));
+      return text(matches);
     },
-  )
+  );
 
   // --- context tools ---
 
@@ -252,7 +252,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
       inputSchema: {},
     },
     () => text(deps.getProject()),
-  )
+  );
 
   server.registerTool(
     'get_routes',
@@ -262,7 +262,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
       inputSchema: {},
     },
     () => text(deps.getRoutes()),
-  )
+  );
 
   server.registerTool(
     'get_live_components',
@@ -276,19 +276,19 @@ export function buildMcpServer(deps: McpDeps): McpServer {
       },
     },
     ({ includeMeta, limit }) => {
-      const snap = deps.getLiveSnapshot()
+      const snap = deps.getLiveSnapshot();
       // Unchanged default: the bare array older clients expect (`limit` only when given).
-      if (!includeMeta) return text(snap.components.slice(0, limit))
-      const cap = limit ?? 1000
+      if (!includeMeta) return text(snap.components.slice(0, limit));
+      const cap = limit ?? 1000;
       return text({
         epoch: snap.epoch,
         total: snap.total,
         captured: snap.components.length,
         truncated: snap.total > snap.components.length || snap.components.length > cap,
         components: snap.components.slice(0, cap),
-      })
+      });
     },
-  )
+  );
 
   server.registerTool(
     'get_component_relations',
@@ -298,7 +298,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
       inputSchema: {},
     },
     () => text(deps.getComponentRelations()),
-  )
+  );
 
   // --- bounded reactivity tools (read only; every answer says what it covers) ---
 
@@ -314,7 +314,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
       },
     },
     async ({ topK, windowMs }) => text(await deps.getReactiveSummary({ topK, windowMs })),
-  )
+  );
 
   server.registerTool(
     'get_reactive_scope',
@@ -331,11 +331,13 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     },
     async ({ componentId, epoch, maxNodes, maxEdges }) => {
       if (componentId !== undefined && epoch === undefined) {
-        return error('componentId requires epoch (from get_live_components with includeMeta: true)')
+        return error(
+          'componentId requires epoch (from get_live_components with includeMeta: true)',
+        );
       }
-      return text(await deps.getReactiveScope({ componentId, epoch, maxNodes, maxEdges }))
+      return text(await deps.getReactiveScope({ componentId, epoch, maxNodes, maxEdges }));
     },
-  )
+  );
 
   server.registerTool(
     'get_state_timeline',
@@ -350,18 +352,18 @@ export function buildMcpServer(deps: McpDeps): McpServer {
       },
     },
     ({ since, limit = 100, maxValueChars = MCP_VALUE_CHARS.default }) => {
-      const delta = deps.getStateTimelineDelta(since)
-      const omitted = Math.max(0, delta.changes.length - limit)
+      const delta = deps.getStateTimelineDelta(since);
+      const omitted = Math.max(0, delta.changes.length - limit);
       // Copies: the entries are the collector's stored timeline, never mutate them.
       // oxlint-disable-next-line oxc/no-map-spread -- copy-on-write of shared state is the point
       const changes = delta.changes.slice(omitted).map(c => ({
         ...c,
         oldValue: capValue(c.oldValue, maxValueChars),
         newValue: capValue(c.newValue, maxValueChars),
-      }))
-      return text({ ...delta, changes, omitted, maxValueChars })
+      }));
+      return text({ ...delta, changes, omitted, maxValueChars });
     },
-  )
+  );
 
   server.registerTool(
     'get_capture_info',
@@ -372,7 +374,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
       inputSchema: {},
     },
     () => text(deps.getCaptureInfo()),
-  )
+  );
 
   // --- session tools ---
 
@@ -388,10 +390,10 @@ export function buildMcpServer(deps: McpDeps): McpServer {
       },
     },
     ({ label, persist = false }) => {
-      const rec = deps.sessions.start(label, persist)
-      return text({ id: rec.id, label: rec.label, startedAt: rec.startedAt, persist: rec.persist })
+      const rec = deps.sessions.start(label, persist);
+      return text({ id: rec.id, label: rec.label, startedAt: rec.startedAt, persist: rec.persist });
     },
-  )
+  );
 
   server.registerTool(
     'end_session',
@@ -404,7 +406,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
       },
     },
     ({ keep = 'memory' }) => {
-      const rec = deps.sessions.end(keep)
+      const rec = deps.sessions.end(keep);
       return text({
         id: rec.id,
         label: rec.label,
@@ -413,9 +415,9 @@ export function buildMcpServer(deps: McpDeps): McpServer {
         keep,
         // From the record: a discarded session is no longer in the store.
         delta: deps.sessions.deltaOf(rec),
-      })
+      });
     },
-  )
+  );
 
   server.registerTool(
     'compare_sessions',
@@ -426,7 +428,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
       inputSchema: { a: sessionId, b: sessionId },
     },
     ({ a, b }) => text(deps.sessions.compare(a, b)),
-  )
+  );
 
   server.registerTool(
     'list_sessions',
@@ -436,7 +438,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
       inputSchema: {},
     },
     () => text(deps.sessions.list()),
-  )
+  );
 
   server.registerTool(
     'load_session',
@@ -446,12 +448,12 @@ export function buildMcpServer(deps: McpDeps): McpServer {
       inputSchema: { id: sessionId },
     },
     ({ id }) => {
-      const rec = deps.sessions.get(id)
-      if (!rec) return error(`Session not found: ${id}`)
-      const delta = rec.endedAt === undefined ? null : deps.sessions.deltaOf(rec)
-      return text({ ...rec, delta })
+      const rec = deps.sessions.get(id);
+      if (!rec) return error(`Session not found: ${id}`);
+      const delta = rec.endedAt === undefined ? null : deps.sessions.deltaOf(rec);
+      return text({ ...rec, delta });
     },
-  )
+  );
 
   server.registerTool(
     'delete_session',
@@ -461,7 +463,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
       inputSchema: { id: sessionId },
     },
     ({ id }) => text({ deleted: deps.sessions.delete(id) }),
-  )
+  );
 
-  return server
+  return server;
 }

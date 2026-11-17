@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { untrack } from 'svelte'
+  import { untrack } from 'svelte';
 
-  let { start = 0 }: { start?: number } = $props()
+  let { start = 0 }: { start?: number } = $props();
 
   // seeded once from the prop; later prop changes do not reset the count
-  let count = $state(untrack(() => start))
-  const doubled = $derived(count * 2)
+  let count = $state(untrack(() => start));
+  const doubled = $derived(count * 2);
 </script>
 
 <p>

@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { resolve } from '$app/paths'
+  import { resolve } from '$app/paths';
 
-  import CodeBlock from '#lib/CodeBlock.svelte'
+  import CodeBlock from '#lib/CodeBlock.svelte';
 
-  const installCode = `npm install -D @sveltejs/vite-devtools-svelte`
+  const installCode = `npm install -D @sveltejs/vite-devtools-svelte`;
 
   const configCode = `import { svelteDevtools } from '@sveltejs/vite-devtools-svelte'
 import { sveltekit } from '@sveltejs/kit/vite'
@@ -14,11 +14,11 @@ export default defineConfig({
     svelteDevtools(),
     sveltekit(),
   ],
-})`
+})`;
 
-  const runCode = `npm run dev`
+  const runCode = `npm run dev`;
 
-  const dockInstallCode = `npm install -D @vitejs/devtools`
+  const dockInstallCode = `npm install -D @vitejs/devtools`;
 
   const dockConfigCode = `import { svelteDevtools } from '@sveltejs/vite-devtools-svelte'
 import { DevTools } from '@vitejs/devtools'
@@ -27,12 +27,12 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [svelteDevtools(), DevTools(), sveltekit()],
-})`
+})`;
 
   const optionsCode = `svelteDevtools({
   // Enable component lifecycle tracking (default: true)
   componentTracking: true,
-})`
+})`;
 
   const steps = [
     { num: '01', title: 'Install', anchor: 'install' },
@@ -40,7 +40,7 @@ export default defineConfig({
     { num: '03', title: 'Run the dev server', anchor: 'run' },
     { num: '04', title: 'Vite DevTools dock (optional)', anchor: 'dock' },
     { num: '05', title: 'Options', anchor: 'options' },
-  ]
+  ];
 </script>
 
 <svelte:head>

@@ -1,43 +1,43 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte'
+  import { onDestroy } from 'svelte';
 
-  let elapsed = $state(0)
-  let running = $state(false)
-  let intervalId: ReturnType<typeof setInterval> | null = null
+  let elapsed = $state(0);
+  let running = $state(false);
+  let intervalId: ReturnType<typeof setInterval> | null = null;
 
   let formatted = $derived.by(() => {
-    const mins = Math.floor(elapsed / 60)
-    const secs = elapsed % 60
-    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
-  })
+    const mins = Math.floor(elapsed / 60);
+    const secs = elapsed % 60;
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  });
 
-  let status = $derived(running ? 'Running' : elapsed > 0 ? 'Paused' : 'Stopped')
+  let status = $derived(running ? 'Running' : elapsed > 0 ? 'Paused' : 'Stopped');
 
   $effect(() => {
     if (running) {
       intervalId = setInterval(() => {
-        elapsed++
-      }, 1000)
+        elapsed++;
+      }, 1000);
     } else if (intervalId) {
-      clearInterval(intervalId)
-      intervalId = null
+      clearInterval(intervalId);
+      intervalId = null;
     }
     return () => {
-      if (intervalId) clearInterval(intervalId)
-    }
-  })
+      if (intervalId) clearInterval(intervalId);
+    };
+  });
 
   function toggle() {
-    running = !running
+    running = !running;
   }
   function reset() {
-    running = false
-    elapsed = 0
+    running = false;
+    elapsed = 0;
   }
 
   onDestroy(() => {
-    if (intervalId) clearInterval(intervalId)
-  })
+    if (intervalId) clearInterval(intervalId);
+  });
 </script>
 
 <div class="timer">

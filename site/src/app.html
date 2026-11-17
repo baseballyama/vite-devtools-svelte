@@ -28,17 +28,17 @@
       href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&family=JetBrains+Mono:wght@400..600&display=swap"
     />
     <script>
-      ;(() => {
-        let stored = null
+      (() => {
+        let stored = null;
         try {
-          stored = localStorage.getItem('theme')
+          stored = localStorage.getItem('theme');
         } catch {}
-        const valid = stored === 'dark' || stored === 'light' ? stored : null
-        const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches
-        const theme = valid ?? (prefersLight ? 'light' : 'dark')
-        const root = document.documentElement
-        if (root.dataset.theme !== theme) root.dataset.theme = theme
-      })()
+        const valid = stored === 'dark' || stored === 'light' ? stored : null;
+        const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+        const theme = valid ?? (prefersLight ? 'light' : 'dark');
+        const root = document.documentElement;
+        if (root.dataset.theme !== theme) root.dataset.theme = theme;
+      })();
     </script>
     %sveltekit.head%
   </head>

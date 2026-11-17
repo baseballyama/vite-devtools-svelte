@@ -3,11 +3,11 @@
 // throws when a tool is missing or extra, so the prerender fails instead of
 // shipping a page that is out of step with the English list.
 
-import { MCP_TOOL_GROUPS, type McpTool } from './mcp-tools'
+import { MCP_TOOL_GROUPS, type McpTool } from './mcp-tools';
 
 interface JaText {
-  summary: string
-  note?: string
+  summary: string;
+  note?: string;
 }
 
 const GROUPS_JA: Record<string, { title: string; intro: string }> = {
@@ -29,7 +29,7 @@ const GROUPS_JA: Record<string, { title: string; intro: string }> = {
     title: '計測セッション',
     intro: '変更の前後を計測して比較します。',
   },
-}
+};
 
 const TOOLS_JA: Record<string, JaText> = {
   get_reactive_summary: {
@@ -109,31 +109,31 @@ const TOOLS_JA: Record<string, JaText> = {
   delete_session: {
     summary: 'セッションをメモリとディスクから削除します。',
   },
-}
+};
 
 export interface McpToolGroupJa {
-  id: string
-  title: string
-  intro: string
-  tools: (Pick<McpTool, 'name' | 'input'> & JaText)[]
+  id: string;
+  title: string;
+  intro: string;
+  tools: (Pick<McpTool, 'name' | 'input'> & JaText)[];
 }
 
 export function mcpToolsJa(): McpToolGroupJa[] {
-  const names = new Set(MCP_TOOL_GROUPS.flatMap(g => g.tools.map(t => t.name)))
-  const extra = Object.keys(TOOLS_JA).filter(n => !names.has(n))
-  if (extra.length > 0) throw new Error(`mcp-tools.ja: unknown tools ${extra.join(', ')}`)
+  const names = new Set(MCP_TOOL_GROUPS.flatMap(g => g.tools.map(t => t.name)));
+  const extra = Object.keys(TOOLS_JA).filter(n => !names.has(n));
+  if (extra.length > 0) throw new Error(`mcp-tools.ja: unknown tools ${extra.join(', ')}`);
   return MCP_TOOL_GROUPS.map(g => {
-    const group = GROUPS_JA[g.id]
-    if (!group) throw new Error(`mcp-tools.ja: missing group ${g.id}`)
+    const group = GROUPS_JA[g.id];
+    if (!group) throw new Error(`mcp-tools.ja: missing group ${g.id}`);
     return {
       id: g.id,
       title: group.title,
       intro: group.intro,
       tools: g.tools.map(t => {
-        const ja = TOOLS_JA[t.name]
-        if (!ja) throw new Error(`mcp-tools.ja: missing tool ${t.name}`)
-        return { name: t.name, input: t.input, ...ja }
+        const ja = TOOLS_JA[t.name];
+        if (!ja) throw new Error(`mcp-tools.ja: missing tool ${t.name}`);
+        return { name: t.name, input: t.input, ...ja };
       }),
-    }
-  })
+    };
+  });
 }

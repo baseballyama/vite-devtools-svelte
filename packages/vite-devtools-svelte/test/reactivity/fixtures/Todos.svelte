@@ -1,12 +1,12 @@
 <script>
-  import TodoItem from './TodoItem.svelte'
-  let todos = $state([{ text: 'a', done: false }])
-  let filter = $state({ onlyOpen: false })
-  const open = $derived(todos.filter(t => !t.done).length)
+  import TodoItem from './TodoItem.svelte';
+  let todos = $state([{ text: 'a', done: false }]);
+  let filter = $state({ onlyOpen: false });
+  const open = $derived(todos.filter(t => !t.done).length);
   export const api = {
     add: () => todos.push({ text: 'b', done: false }),
     toggleFilter: () => (filter.onlyOpen = !filter.onlyOpen),
-  }
+  };
 </script>
 
 <p>{open}</p>

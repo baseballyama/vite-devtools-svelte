@@ -1,10 +1,10 @@
 <script lang="ts" generics="N">
-  import type { Snippet } from 'svelte'
+  import type { Snippet } from 'svelte';
 
-  import { flattenTree, type TreeRow } from '../lib/tree.js'
-  import Icon from './Icon.svelte'
-  import type { VirtualListApi } from './types.js'
-  import VirtualList from './VirtualList.svelte'
+  import { flattenTree, type TreeRow } from '../lib/tree.js';
+  import Icon from './Icon.svelte';
+  import type { VirtualListApi } from './types.js';
+  import VirtualList from './VirtualList.svelte';
 
   /**
    * Virtualised ARIA tree. Expansion state is a key Set owned by the caller
@@ -12,18 +12,18 @@
    * branches are shown expanded regardless of that state.
    */
   interface Props {
-    roots: readonly N[]
-    getKey: (n: N) => string
-    getChildren: (n: N) => readonly N[]
-    label: string
-    row: Snippet<[N, TreeRow<N>]>
-    expanded?: Set<string>
-    selected?: string | null
-    filter?: ((n: N) => boolean) | null
-    rowHeight?: number
-    empty?: Snippet
-    onselect?: (n: N) => void
-    onactivate?: (n: N) => void
+    roots: readonly N[];
+    getKey: (n: N) => string;
+    getChildren: (n: N) => readonly N[];
+    label: string;
+    row: Snippet<[N, TreeRow<N>]>;
+    expanded?: Set<string>;
+    selected?: string | null;
+    filter?: ((n: N) => boolean) | null;
+    rowHeight?: number;
+    empty?: Snippet;
+    onselect?: (n: N) => void;
+    onactivate?: (n: N) => void;
   }
 
   let {
@@ -39,13 +39,13 @@
     empty,
     onselect,
     onactivate,
-  }: Props = $props()
+  }: Props = $props();
 
-  let list = $state<VirtualListApi | null>(null)
+  let list = $state<VirtualListApi | null>(null);
 
   const rows = $derived(
     flattenTree(roots, { key: getKey, children: getChildren }, expanded, filter),
-  )
+  );
 
   // `expanded` is replaced, never mutated: the caller owns it (bindable) and
   // reacts to the new reference.
@@ -53,40 +53,40 @@
     expanded =
       (open ?? !expanded.has(key))
         ? new Set([...expanded, key])
-        : new Set([...expanded].filter(k => k !== key))
+        : new Set([...expanded].filter(k => k !== key));
   }
 
   function indexOfKey(key: string) {
-    return rows.findIndex(r => r.key === key)
+    return rows.findIndex(r => r.key === key);
   }
 
   /** Reveal (expand ancestors) and select a node by key. */
   export function reveal(key: string, ancestors: string[]) {
-    if (ancestors.length > 0) expanded = new Set([...expanded, ...ancestors])
-    selected = key
-    queueMicrotask(() => list?.scrollToIndex(indexOfKey(key), 'center'))
+    if (ancestors.length > 0) expanded = new Set([...expanded, ...ancestors]);
+    selected = key;
+    queueMicrotask(() => list?.scrollToIndex(indexOfKey(key), 'center'));
   }
 
   export function focus() {
-    list?.focus()
+    list?.focus();
   }
 
   function onrowkeydown(e: KeyboardEvent, r: TreeRow<N>) {
     if (e.key === 'ArrowRight' || e.key === 'l') {
-      if (r.hasChildren && !r.expanded) toggle(r.key, true)
-      else if (r.expanded) list?.select(indexOfKey(r.key) + 1)
-      return true
+      if (r.hasChildren && !r.expanded) toggle(r.key, true);
+      else if (r.expanded) list?.select(indexOfKey(r.key) + 1);
+      return true;
     }
     if (e.key === 'ArrowLeft' || e.key === 'h') {
-      if (r.expanded && !filter) toggle(r.key, false)
-      else if (r.parentKey != null) list?.select(indexOfKey(r.parentKey))
-      return true
+      if (r.expanded && !filter) toggle(r.key, false);
+      else if (r.parentKey != null) list?.select(indexOfKey(r.parentKey));
+      return true;
     }
     if (e.key === ' ' && r.hasChildren) {
-      toggle(r.key)
-      return true
+      toggle(r.key);
+      return true;
     }
-    return false
+    return false;
   }
 </script>
 
@@ -119,8 +119,8 @@
         tabindex="-1"
         aria-hidden="true"
         onclick={e => {
-          e.stopPropagation()
-          if (!filter) toggle(r.key)
+          e.stopPropagation();
+          if (!filter) toggle(r.key);
         }}
       >
         <Icon name="chevron" size={12} />

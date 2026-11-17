@@ -1,25 +1,25 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { onMount } from 'svelte';
 
-  let { particleCount = $bindable(80) }: { particleCount?: number } = $props()
+  let { particleCount = $bindable(80) }: { particleCount?: number } = $props();
 
-  let canvas: HTMLCanvasElement
-  let running = $state(true)
+  let canvas: HTMLCanvasElement;
+  let running = $state(true);
 
   interface P {
-    x: number
-    y: number
-    vx: number
-    vy: number
-    r: number
-    hue: number
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    r: number;
+    hue: number;
   }
 
   onMount(() => {
-    const ctx = canvas.getContext('2d')!
-    const w = (canvas.width = canvas.clientWidth)
-    const h = (canvas.height = 200)
-    let particles: P[] = []
+    const ctx = canvas.getContext('2d')!;
+    const w = (canvas.width = canvas.clientWidth);
+    const h = (canvas.height = 200);
+    let particles: P[] = [];
 
     function reset() {
       particles = Array.from({ length: particleCount }, () => ({
@@ -29,37 +29,37 @@
         vy: (Math.random() - 0.5) * 2,
         r: Math.random() * 3 + 1,
         hue: Math.random() * 360,
-      }))
+      }));
     }
-    reset()
+    reset();
 
-    let raf = 0
+    let raf = 0;
     function tick() {
-      if (particles.length !== particleCount) reset()
-      ctx.fillStyle = 'rgba(15, 17, 21, 0.25)'
-      ctx.fillRect(0, 0, w, h)
+      if (particles.length !== particleCount) reset();
+      ctx.fillStyle = 'rgba(15, 17, 21, 0.25)';
+      ctx.fillRect(0, 0, w, h);
       for (const p of particles) {
-        p.x += p.vx
-        p.y += p.vy
-        if (p.x < 0 || p.x > w) p.vx *= -1
-        if (p.y < 0 || p.y > h) p.vy *= -1
-        ctx.beginPath()
-        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2)
-        ctx.fillStyle = `hsl(${p.hue}, 80%, 65%)`
-        ctx.fill()
+        p.x += p.vx;
+        p.y += p.vy;
+        if (p.x < 0 || p.x > w) p.vx *= -1;
+        if (p.y < 0 || p.y > h) p.vy *= -1;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = `hsl(${p.hue}, 80%, 65%)`;
+        ctx.fill();
       }
-      if (running) raf = requestAnimationFrame(tick)
+      if (running) raf = requestAnimationFrame(tick);
     }
 
     $effect(() => {
       if (running) {
-        raf = requestAnimationFrame(tick)
+        raf = requestAnimationFrame(tick);
       }
-      return () => cancelAnimationFrame(raf)
-    })
+      return () => cancelAnimationFrame(raf);
+    });
 
-    return () => cancelAnimationFrame(raf)
-  })
+    return () => cancelAnimationFrame(raf);
+  });
 </script>
 
 <div class="card">

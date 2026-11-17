@@ -1,14 +1,14 @@
 <script lang="ts">
-  import Counter from '#lib/components/Counter.svelte'
-  import DynamicList from '#lib/components/DynamicList.svelte'
-  import TemperatureConverter from '#lib/components/TemperatureConverter.svelte'
-  import ThemeSwitcher from '#lib/components/ThemeSwitcher.svelte'
-  import Timer from '#lib/components/Timer.svelte'
-  import TodoList from '#lib/components/TodoList.svelte'
-  import UserSearch from '#lib/components/UserSearch.svelte'
+  import Counter from '#lib/components/Counter.svelte';
+  import DynamicList from '#lib/components/DynamicList.svelte';
+  import TemperatureConverter from '#lib/components/TemperatureConverter.svelte';
+  import ThemeSwitcher from '#lib/components/ThemeSwitcher.svelte';
+  import Timer from '#lib/components/Timer.svelte';
+  import TodoList from '#lib/components/TodoList.svelte';
+  import UserSearch from '#lib/components/UserSearch.svelte';
 
-  let showTimer = $state(true)
-  let showDynamic = $state(true)
+  let showTimer = $state(true);
+  let showDynamic = $state(true);
 </script>
 
 <svelte:head>

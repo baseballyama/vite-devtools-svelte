@@ -3,7 +3,7 @@
 // even count). Verdict rule: a difference is claimed only when the B and F
 // sample ranges do not overlap (>= 2 samples per side).
 
-import { median, r1 } from './harness.mjs'
+import { median, r1 } from './harness.mjs';
 
 /** @type {Array<[string, (run: any) => number | undefined]>} */
 const METRICS = [
@@ -30,52 +30,54 @@ const METRICS = [
             .reduce((sum, [, v]) => sum + v.bytes, 0)
         : undefined,
   ],
-]
+];
 
-const range = xs => [Math.min(...xs), Math.max(...xs)]
+const range = xs => [Math.min(...xs), Math.max(...xs)];
 
 const fmt = s =>
-  s?.median === undefined ? '—' : `${s.median} [${r1(s.min)}–${r1(s.max)}] (${s.n})`
+  s?.median === undefined ? '—' : `${s.median} [${r1(s.min)}–${r1(s.max)}] (${s.n})`;
 
 function compare(bVals, fVals) {
-  const b = bVals.filter(v => typeof v === 'number' && !Number.isNaN(v))
-  const f = fVals.filter(v => typeof v === 'number' && !Number.isNaN(v))
-  if (b.length === 0 || f.length === 0) return { verdict: 'insufficient samples', b, f }
-  const [bMin, bMax] = range(b)
-  const [fMin, fMax] = range(f)
-  let verdict = 'no measurable difference at this load'
-  if (b.length < 2 || f.length < 2) verdict = 'single sample — indicative only'
-  else if (fMax < bMin) verdict = 'F lower'
-  else if (fMin > bMax) verdict = 'F higher'
+  const b = bVals.filter(v => typeof v === 'number' && !Number.isNaN(v));
+  const f = fVals.filter(v => typeof v === 'number' && !Number.isNaN(v));
+  if (b.length === 0 || f.length === 0) return { verdict: 'insufficient samples', b, f };
+  const [bMin, bMax] = range(b);
+  const [fMin, fMax] = range(f);
+  let verdict = 'no measurable difference at this load';
+  if (b.length < 2 || f.length < 2) verdict = 'single sample — indicative only';
+  else if (fMax < bMin) verdict = 'F lower';
+  else if (fMin > bMax) verdict = 'F higher';
   return {
     verdict,
     b: { median: r1(median(b)), min: bMin, max: bMax, n: b.length },
     f: { median: r1(median(f)), min: fMin, max: fMax, n: f.length },
-  }
+  };
 }
 
 export function summarize(items) {
-  const groups = new Map()
+  const groups = new Map();
   for (const item of items) {
     for (const run of item.app ?? []) {
-      const key = `${run.scale} / ${run.scenario}`
+      const key = `${run.scale} / ${run.scenario}`;
       if (!groups.has(key))
-        groups.set(key, { scale: run.scale, scenario: run.scenario, B: [], F: [] })
-      groups.get(key)[item.side].push(run)
+        groups.set(key, { scale: run.scale, scenario: run.scenario, B: [], F: [] });
+      groups.get(key)[item.side].push(run);
     }
   }
-  const out = {}
+  const out = {};
   const md = [
     '| scale | scenario | metric | B median [min–max] (n) | F median [min–max] (n) | verdict |',
     '|---|---|---|---|---|---|',
-  ]
+  ];
   for (const [key, g] of groups) {
-    out[key] = {}
+    out[key] = {};
     for (const [name, get] of METRICS) {
-      const c = compare(g.B.map(get), g.F.map(get))
-      out[key][name] = c
-      md.push(`| ${g.scale} | ${g.scenario} | ${name} | ${fmt(c.b)} | ${fmt(c.f)} | ${c.verdict} |`)
+      const c = compare(g.B.map(get), g.F.map(get));
+      out[key][name] = c;
+      md.push(
+        `| ${g.scale} | ${g.scenario} | ${name} | ${fmt(c.b)} | ${fmt(c.f)} | ${c.verdict} |`,
+      );
     }
   }
-  return { table: out, markdown: md.join('\n') }
+  return { table: out, markdown: md.join('\n') };
 }

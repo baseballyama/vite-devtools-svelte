@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Snippet } from 'svelte'
+  import type { Snippet } from 'svelte';
 
   /**
    * Panel chrome: one compact header row (title, count, toolbar, actions)
@@ -7,15 +7,15 @@
    * pass `scroll` for document-like panels.
    */
   interface Props {
-    title: string
-    count?: number | string | null
-    toolbar?: Snippet
-    actions?: Snippet
-    scroll?: boolean
-    children: Snippet
+    title: string;
+    count?: number | string | null;
+    toolbar?: Snippet;
+    actions?: Snippet;
+    scroll?: boolean;
+    children: Snippet;
   }
 
-  let { title, count = null, toolbar, actions, scroll = false, children }: Props = $props()
+  let { title, count = null, toolbar, actions, scroll = false, children }: Props = $props();
 </script>
 
 <section class="panel" aria-label={title}>

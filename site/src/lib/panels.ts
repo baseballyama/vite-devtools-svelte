@@ -1,14 +1,14 @@
 export type Panel = {
-  slug: string
-  title: string
-  tagline: string
-  description: string
-  highlights: string[]
+  slug: string;
+  title: string;
+  tagline: string;
+  description: string;
+  highlights: string[];
   /** Screenshots of the current UI (1200×750), in `static/images/`. */
-  images: string[]
+  images: string[];
   /** Shown under the screenshots when the data needs explaining. */
-  caption?: string
-}
+  caption?: string;
+};
 
 // Copy describes what the current UI does; screenshots are taken from it with
 // synthetic demo data. A panel without a current screenshot has none rather
@@ -194,11 +194,11 @@ export const panels: Panel[] = [
     ],
     images: ['v2-panel-assets.jpg'],
   },
-]
+];
 
 /** A tagline split at its `code` spans, for rendering without HTML. */
 export const taglineParts = (s: string) =>
-  s.split('`').map((text, i) => ({ text, code: i % 2 === 1 }))
+  s.split('`').map((text, i) => ({ text, code: i % 2 === 1 }));
 
 /** The tagline as plain text (for meta tags). */
-export const taglineText = (s: string) => s.replaceAll('`', '')
+export const taglineText = (s: string) => s.replaceAll('`', '');

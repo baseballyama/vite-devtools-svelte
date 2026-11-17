@@ -7,17 +7,17 @@
 //
 // Usage: node perf/check-prod-noop.mjs [--repo=<checkout>]
 
-import { spawn } from 'node:child_process'
-import fs from 'node:fs'
-import path from 'node:path'
+import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 
-import { ensurePlaygroundSync, generate } from './generate-large-app.mjs'
+import { ensurePlaygroundSync, generate } from './generate-large-app.mjs';
 
-const repoRoot = path.resolve(import.meta.dirname, '..')
-const repoArg = process.argv.find(a => a.startsWith('--repo='))
-const repo = repoArg ? path.resolve(repoArg.slice(7)) : repoRoot
-const appDir = path.join(repo, 'playground/.temp/noop-app')
-const viteBin = path.join(repo, 'playground/node_modules/vite/bin/vite.js')
+const repoRoot = path.resolve(import.meta.dirname, '..');
+const repoArg = process.argv.find(a => a.startsWith('--repo='));
+const repo = repoArg ? path.resolve(repoArg.slice(7)) : repoRoot;
+const appDir = path.join(repo, 'playground/.temp/noop-app');
+const viteBin = path.join(repo, 'playground/node_modules/vite/bin/vite.js');
 
 // Strings that only exist in code emitted by vite-devtools-svelte.
 const MARKERS = [
@@ -29,7 +29,7 @@ const MARKERS = [
   // hub inject used by the SvelteKit template injector since fp 63
   '/__devtools/embedded.js',
   '__devtools',
-]
+];
 
 function run(args, env = {}) {
   return new Promise((resolve, reject) => {
@@ -37,62 +37,62 @@ function run(args, env = {}) {
       cwd: appDir,
       env: { ...process.env, ...env },
       stdio: ['ignore', 'pipe', 'pipe'],
-    })
-    let log = ''
+    });
+    let log = '';
     child.stdout.on('data', d => {
-      log += d
-    })
+      log += d;
+    });
     child.stderr.on('data', d => {
-      log += d
-    })
+      log += d;
+    });
     child.on('exit', code =>
       code === 0 ? resolve(log) : reject(new Error(`vite ${args[0]} exited ${code}\n${log}`)),
-    )
-  })
+    );
+  });
 }
 
 function scan(dir) {
-  const hits = []
+  const hits = [];
   const walk = d => {
     for (const ent of fs.readdirSync(d, { withFileTypes: true })) {
-      const p = path.join(d, ent.name)
-      if (ent.isDirectory()) walk(p)
+      const p = path.join(d, ent.name);
+      if (ent.isDirectory()) walk(p);
       else if (/\.(m?js|html|css|json)$/.test(ent.name)) {
-        const text = fs.readFileSync(p, 'utf8')
+        const text = fs.readFileSync(p, 'utf8');
         for (const m of MARKERS)
-          if (text.includes(m)) hits.push({ file: path.relative(appDir, p), marker: m })
+          if (text.includes(m)) hits.push({ file: path.relative(appDir, p), marker: m });
       }
     }
-  }
-  walk(dir)
-  return hits
+  };
+  walk(dir);
+  return hits;
 }
 
 async function devMarkers() {
-  const port = 5395
+  const port = 5395;
   const child = spawn(process.execPath, [viteBin, 'dev', '--port', String(port), '--strictPort'], {
     cwd: appDir,
     stdio: 'ignore',
-  })
+  });
   try {
-    const base = `http://localhost:${port}`
-    let html = ''
+    const base = `http://localhost:${port}`;
+    let html = '';
     for (let i = 0; i < 600 && !html; i++) {
       try {
-        const res = await fetch(`${base}/`)
-        if (res.ok) html = await res.text()
+        const res = await fetch(`${base}/`);
+        if (res.ok) html = await res.text();
       } catch {
         await new Promise(r => {
-          setTimeout(r, 100)
-        })
+          setTimeout(r, 100);
+        });
       }
     }
     // The wrapper/runtime are pulled in by compiled components on the client.
-    const comp = await fetch(`${base}/src/lib/components/gen/C0000.svelte`).then(r => r.text())
-    const found = MARKERS.filter(m => html.includes(m) || comp.includes(m))
-    return found
+    const comp = await fetch(`${base}/src/lib/components/gen/C0000.svelte`).then(r => r.text());
+    const found = MARKERS.filter(m => html.includes(m) || comp.includes(m));
+    return found;
   } finally {
-    child.kill('SIGTERM')
+    child.kill('SIGTERM');
   }
 }
 
@@ -103,65 +103,65 @@ async function devMarkers() {
 // into the marker by the minifier — this check covers literals, the fixture
 // code avoids foldable forms (see generate-large-app.mjs).
 function fixtureHits() {
-  const hits = []
+  const hits = [];
   const walk = d => {
     for (const ent of fs.readdirSync(d, { withFileTypes: true })) {
-      const p = path.join(d, ent.name)
-      if (ent.isDirectory()) walk(p)
+      const p = path.join(d, ent.name);
+      if (ent.isDirectory()) walk(p);
       else if (/\.(svelte|[cm]?[jt]s|html)$/.test(ent.name)) {
-        const text = fs.readFileSync(p, 'utf8')
+        const text = fs.readFileSync(p, 'utf8');
         for (const m of MARKERS)
-          if (text.includes(m)) hits.push({ file: path.relative(appDir, p), marker: m })
+          if (text.includes(m)) hits.push({ file: path.relative(appDir, p), marker: m });
         if (/['"`]__SVELTE_['"`]\s*\+/.test(text))
-          hits.push({ file: path.relative(appDir, p), marker: 'foldable concat' })
+          hits.push({ file: path.relative(appDir, p), marker: 'foldable concat' });
       }
     }
-  }
-  walk(path.join(appDir, 'src'))
-  return hits
+  };
+  walk(path.join(appDir, 'src'));
+  return hits;
 }
 
 async function main() {
-  ensurePlaygroundSync(repo)
-  generate({ components: 20, routes: 20, assets: 10, out: appDir })
-  const dirty = fixtureHits()
+  ensurePlaygroundSync(repo);
+  generate({ components: 20, routes: 20, assets: 10, out: appDir });
+  const dirty = fixtureHits();
   if (dirty.length > 0) {
     console.error(
       'FAIL: fixture sources contain devtools markers (fixture bug, not a plugin leak):',
-    )
-    console.error(JSON.stringify(dirty, null, 2))
-    process.exit(3)
+    );
+    console.error(JSON.stringify(dirty, null, 2));
+    process.exit(3);
   }
-  const t0 = performance.now()
-  await run(['build', '--logLevel', 'warn'])
-  const buildMs = Math.round(performance.now() - t0)
+  const t0 = performance.now();
+  await run(['build', '--logLevel', 'warn']);
+  const buildMs = Math.round(performance.now() - t0);
   const outDirs = ['.svelte-kit/output']
     .map(d => path.join(appDir, d))
-    .filter(d => fs.existsSync(d))
-  if (outDirs.length === 0) throw new Error('no build output found')
-  const hits = outDirs.flatMap(scan)
-  const control = await devMarkers()
+    .filter(d => fs.existsSync(d));
+  if (outDirs.length === 0) throw new Error('no build output found');
+  const hits = outDirs.flatMap(scan);
+  const control = await devMarkers();
   const result = {
     buildMs,
     outDirs: outDirs.map(d => path.relative(appDir, d)),
     prodHits: hits,
     devControlMarkers: control,
-  }
-  console.log(JSON.stringify(result, null, 2))
+  };
+  console.log(JSON.stringify(result, null, 2));
   if (control.length === 0) {
-    console.error('FAIL: positive control found no markers in dev — check is vacuous')
-    process.exit(2)
+    console.error('FAIL: positive control found no markers in dev — check is vacuous');
+    process.exit(2);
   }
   if (hits.length > 0) {
-    console.error(`FAIL: ${hits.length} devtools marker(s) in production output`)
-    process.exit(1)
+    console.error(`FAIL: ${hits.length} devtools marker(s) in production output`);
+    process.exit(1);
   }
-  console.log('PASS: production build contains no devtools code')
+  console.log('PASS: production build contains no devtools code');
 }
 
 try {
-  await main()
+  await main();
 } catch (e) {
-  console.error(e)
-  process.exit(1)
+  console.error(e);
+  process.exit(1);
 }

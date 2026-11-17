@@ -1,15 +1,15 @@
 <script lang="ts">
-  import { resolve } from '$app/paths'
+  import { resolve } from '$app/paths';
 
-  import ProductCard from '#lib/components/ProductCard.svelte'
-  import { cart } from '#lib/stores/cart.svelte.ts'
+  import ProductCard from '#lib/components/ProductCard.svelte';
+  import { cart } from '#lib/stores/cart.svelte.ts';
 
-  import type { PageProps } from './$types'
+  import type { PageProps } from './$types';
 
-  let { data }: PageProps = $props()
+  let { data }: PageProps = $props();
 
-  let qty = $state(1)
-  const lineTotal = $derived(data.product.price * qty)
+  let qty = $state(1);
+  const lineTotal = $derived(data.product.price * qty);
 
   function addToCart() {
     for (let i = 0; i < qty; i++) {
@@ -17,7 +17,7 @@
         id: data.product.id,
         name: data.product.name,
         price: data.product.price,
-      })
+      });
     }
   }
 </script>

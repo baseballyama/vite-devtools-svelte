@@ -6,7 +6,7 @@
  * (e.g. raw FS paths surfaced from analyzers on Windows) renders correctly.
  */
 
-const segments = (path: string) => path.replaceAll('\\', '/').split('/')
+const segments = (path: string) => path.replaceAll('\\', '/').split('/');
 
 /**
  * Last `depth` segments of a path, joined with `/`. Useful for compact
@@ -18,7 +18,7 @@ const segments = (path: string) => path.replaceAll('\\', '/').split('/')
  *   shortPath('Counter.svelte') // → 'Counter.svelte'
  */
 export function shortPath(path: string, depth = 2): string {
-  return segments(path).slice(-depth).join('/')
+  return segments(path).slice(-depth).join('/');
 }
 
 /**
@@ -29,7 +29,7 @@ export function shortPath(path: string, depth = 2): string {
  *   basename('') // → ''
  */
 export function basename(path: string): string {
-  return segments(path).pop()!
+  return segments(path).pop()!;
 }
 
 /**
@@ -42,37 +42,37 @@ export function basename(path: string): string {
  *   componentName(undefined, '?') // → '?'
  */
 export function componentName(file: string | undefined | null, fallback = 'Unknown'): string {
-  if (!file) return fallback
+  if (!file) return fallback;
   // Only a trailing `.svelte` is the component extension: module state lives
   // in `x.svelte.ts`, which must not read as `x.ts`.
-  const last = basename(file)
-  return (last.endsWith('.svelte') ? last.slice(0, -'.svelte'.length) : last) || fallback
+  const last = basename(file);
+  return (last.endsWith('.svelte') ? last.slice(0, -'.svelte'.length) : last) || fallback;
 }
 
-const BYTE_UNITS = ['KB', 'MB', 'GB', 'TB'] as const
+const BYTE_UNITS = ['KB', 'MB', 'GB', 'TB'] as const;
 
 /** Human-readable byte size: `512 B`, `1.4 KB`, `2.31 MB`, `1.50 GB`. */
 export function formatBytes(bytes: number | undefined | null): string {
-  if (typeof bytes !== 'number' || !Number.isFinite(bytes)) return '—'
+  if (typeof bytes !== 'number' || !Number.isFinite(bytes)) return '—';
   // The unit follows the magnitude (a negative delta of 2 MB is `-2.00 MB`,
   // not `-2097152 B`), and sizes past 1 GB no longer read as `1048576.00 MB`.
-  if (Math.abs(bytes) < 1024) return `${bytes} B`
-  let v = bytes / 1024
-  let unit = 0
+  if (Math.abs(bytes) < 1024) return `${bytes} B`;
+  let v = bytes / 1024;
+  let unit = 0;
   while (Math.abs(v) >= 1024 && unit < BYTE_UNITS.length - 1) {
-    v /= 1024
-    unit++
+    v /= 1024;
+    unit++;
   }
-  return `${v.toFixed(unit === 0 ? 1 : 2)} ${BYTE_UNITS[unit]}`
+  return `${v.toFixed(unit === 0 ? 1 : 2)} ${BYTE_UNITS[unit]}`;
 }
 
 /** Millisecond duration with precision that adapts to magnitude. */
 export function formatMs(ms: number | undefined | null): string {
-  if (typeof ms !== 'number' || !Number.isFinite(ms)) return '—'
-  if (ms >= 1000) return `${(ms / 1000).toFixed(2)} s`
-  if (ms >= 100) return `${ms.toFixed(0)} ms`
-  if (ms >= 10) return `${ms.toFixed(1)} ms`
-  return `${ms.toFixed(2)} ms`
+  if (typeof ms !== 'number' || !Number.isFinite(ms)) return '—';
+  if (ms >= 1000) return `${(ms / 1000).toFixed(2)} s`;
+  if (ms >= 100) return `${ms.toFixed(0)} ms`;
+  if (ms >= 10) return `${ms.toFixed(1)} ms`;
+  return `${ms.toFixed(2)} ms`;
 }
 
 /** Wall-clock time `HH:MM:SS` (optionally with milliseconds). */
@@ -83,7 +83,7 @@ export function formatClock(ts: number, millis = false): string {
     minute: '2-digit',
     second: '2-digit',
     ...(millis ? { fractionalSecondDigits: 3 } : {}),
-  })
+  });
 }
 
 /**
@@ -93,47 +93,47 @@ export function formatClock(ts: number, millis = false): string {
  * to show for an unserialisable value.
  */
 export function toText(v: unknown): string {
-  return typeof v === 'string' ? v : String(v)
+  return typeof v === 'string' ? v : String(v);
 }
 
 /** The message of a thrown value (anything can be thrown, not only an `Error`). */
 export function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : String(e)
+  return e instanceof Error ? e.message : String(e);
 }
 
 /** Compact one-line rendering of an arbitrary value (JSON-ish, truncated). */
 export function formatValue(v: unknown, max = 80): string {
-  if (v === undefined) return 'undefined'
+  if (v === undefined) return 'undefined';
   // JSON has no NaN / ±Infinity (`JSON.stringify(NaN) === 'null'`): showing
   // `null` for them would misreport the value.
-  if (typeof v === 'number' && !Number.isFinite(v)) return String(v)
-  let s: string
+  if (typeof v === 'number' && !Number.isFinite(v)) return String(v);
+  let s: string;
   try {
-    s = typeof v === 'string' ? JSON.stringify(v) : (JSON.stringify(v) ?? toText(v))
+    s = typeof v === 'string' ? JSON.stringify(v) : (JSON.stringify(v) ?? toText(v));
   } catch {
-    s = toText(v)
+    s = toText(v);
   }
-  return s.length > max ? s.slice(0, max - 1) + '…' : s
+  return s.length > max ? s.slice(0, max - 1) + '…' : s;
 }
 
 /** Pretty multi-line rendering of an arbitrary value for inspectors. */
 export function prettyValue(v: unknown): string {
-  if (v === undefined) return 'undefined'
-  if (typeof v === 'number' && !Number.isFinite(v)) return String(v) // see formatValue
+  if (v === undefined) return 'undefined';
+  if (typeof v === 'number' && !Number.isFinite(v)) return String(v); // see formatValue
   try {
-    return JSON.stringify(v, null, 2) ?? toText(v)
+    return JSON.stringify(v, null, 2) ?? toText(v);
   } catch {
-    return toText(v)
+    return toText(v);
   }
 }
 
 /** Relative "x s ago" label for freshness indicators. */
 export function formatAgo(ts: number | null, now = Date.now()): string {
-  if (ts === null) return 'never'
-  const s = Math.max(0, Math.round((now - ts) / 1000))
-  if (s < 2) return 'just now'
-  if (s < 60) return `${s}s ago`
-  const m = Math.round(s / 60)
-  if (m < 60) return `${m}m ago`
-  return `${Math.round(m / 60)}h ago`
+  if (ts === null) return 'never';
+  const s = Math.max(0, Math.round((now - ts) / 1000));
+  if (s < 2) return 'just now';
+  if (s < 60) return `${s}s ago`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}m ago`;
+  return `${Math.round(m / 60)}h ago`;
 }

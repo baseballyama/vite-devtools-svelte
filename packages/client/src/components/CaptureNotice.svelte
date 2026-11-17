@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { CaptureInfo } from '../lib/capture.svelte.js'
-  import Icon from './Icon.svelte'
+  import type { CaptureInfo } from '../lib/capture.svelte.js';
+  import Icon from './Icon.svelte';
 
   /**
    * Disclosure pill for bounded data (docs/devframe-migration.md §6.7 B):
@@ -15,23 +15,23 @@
     detached = 0,
     stale = null,
   }: {
-    info?: CaptureInfo | null
-    noun?: string
-    detached?: number
-    stale?: string | null
-  } = $props()
+    info?: CaptureInfo | null;
+    noun?: string;
+    detached?: number;
+    stale?: string | null;
+  } = $props();
 
   const reasons: Record<string, string> = {
     'runtime-count': 'the app buffer was full before they were sent',
     'runtime-bytes': 'the app buffer hit its size budget before they were sent',
     'server-count': 'the dev server buffer was full',
     'server-bytes': 'the dev server buffer hit its size budget',
-  }
+  };
 
   const truncated = $derived(
     !!info?.truncated && (info.total === null || info.total > info.captured),
-  )
-  const dropped = $derived(info?.dropped?.reduce((s, d) => s + d.count, 0) ?? 0)
+  );
+  const dropped = $derived(info?.dropped?.reduce((s, d) => s + d.count, 0) ?? 0);
   const title = $derived(
     [
       truncated
@@ -53,7 +53,7 @@
     ]
       .filter(Boolean)
       .join(' '),
-  )
+  );
 </script>
 
 {#if truncated || dropped || detached || stale}

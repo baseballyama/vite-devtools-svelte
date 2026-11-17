@@ -35,4 +35,4 @@ export type {
   ReactiveSummary,
   CaptureInfo,
   CaptureInfoMap,
-} from '../../../vite-devtools-svelte/src/types.js'
+} from '../../../vite-devtools-svelte/src/types.js';

@@ -1,10 +1,10 @@
 <script lang="ts">
-  type Theme = 'dark' | 'light' | 'auto'
+  type Theme = 'dark' | 'light' | 'auto';
 
-  let theme = $state<Theme>('dark')
-  let fontSize = $state(14)
+  let theme = $state<Theme>('dark');
+  let fontSize = $state(14);
   // boolean, not `true`: bind:checked writes it (invisible to the type checker)
-  let showPreview = $state<boolean>(true)
+  let showPreview = $state<boolean>(true);
 
   let effectiveTheme = $derived(
     theme === 'auto'
@@ -12,29 +12,29 @@
         ? 'light'
         : 'dark'
       : theme,
-  )
+  );
 
-  let previewBg = $derived(effectiveTheme === 'light' ? '#f5f5f5' : '#1a1a2e')
-  let previewFg = $derived(effectiveTheme === 'light' ? '#333' : '#e0e0e0')
+  let previewBg = $derived(effectiveTheme === 'light' ? '#f5f5f5' : '#1a1a2e');
+  let previewFg = $derived(effectiveTheme === 'light' ? '#333' : '#e0e0e0');
 
   let settingsSummary = $derived.by(() => {
-    const parts = [`Theme: ${effectiveTheme}`, `Font: ${fontSize}px`]
-    if (!showPreview) parts.push('Preview hidden')
-    return parts.join(' | ')
-  })
+    const parts = [`Theme: ${effectiveTheme}`, `Font: ${fontSize}px`];
+    if (!showPreview) parts.push('Preview hidden');
+    return parts.join(' | ');
+  });
 
-  let changeCount = $state(0)
+  let changeCount = $state(0);
   // Reads its arguments, which makes them dependencies of the calling effect.
-  const track = (...deps: unknown[]) => deps.length
+  const track = (...deps: unknown[]) => deps.length;
 
   $effect(() => {
     // Track setting changes (read the dependencies)
-    track(theme, fontSize, showPreview)
+    track(theme, fontSize, showPreview);
     // Use queueMicrotask to write state outside the effect's tracking scope
     queueMicrotask(() => {
-      changeCount++
-    })
-  })
+      changeCount++;
+    });
+  });
 </script>
 
 <div class="switcher">

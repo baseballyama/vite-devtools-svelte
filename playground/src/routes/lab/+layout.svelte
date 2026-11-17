@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { setContext } from 'svelte'
+  import { setContext } from 'svelte';
 
-  import type { LayoutProps } from './$types'
+  import type { LayoutProps } from './$types';
 
-  let { children }: LayoutProps = $props()
-  const lab = $state({ user: 'ada' })
-  setContext('lab', lab)
+  let { children }: LayoutProps = $props();
+  const lab = $state({ user: 'ada' });
+  setContext('lab', lab);
 </script>
 
 <button

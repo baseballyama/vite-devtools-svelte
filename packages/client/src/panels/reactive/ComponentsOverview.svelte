@@ -1,21 +1,21 @@
 <script lang="ts">
-  import Button from '../../components/Button.svelte'
-  import DataTable from '../../components/DataTable.svelte'
-  import EmptyState from '../../components/EmptyState.svelte'
-  import Inspector from '../../components/Inspector.svelte'
-  import SplitView from '../../components/SplitView.svelte'
-  import type { Column, SortState, TableRowState } from '../../components/types.js'
-  import { componentName, formatMs, shortPath } from '../../lib/format.js'
-  import { reactiveScope } from '../../lib/reactive-selection.svelte.js'
+  import Button from '../../components/Button.svelte';
+  import DataTable from '../../components/DataTable.svelte';
+  import EmptyState from '../../components/EmptyState.svelte';
+  import Inspector from '../../components/Inspector.svelte';
+  import SplitView from '../../components/SplitView.svelte';
+  import type { Column, SortState, TableRowState } from '../../components/types.js';
+  import { componentName, formatMs, shortPath } from '../../lib/format.js';
+  import { reactiveScope } from '../../lib/reactive-selection.svelte.js';
   import {
     baselineNotice,
     groupByFile,
     nodeCount,
     staleLabel,
     totalLabel,
-  } from '../../lib/reactive.js'
-  import type { Resource } from '../../lib/resource.svelte.js'
-  import type { ReactiveSummary, ReactiveSummaryRow } from '../../lib/types.js'
+  } from '../../lib/reactive.js';
+  import type { Resource } from '../../lib/resource.svelte.js';
+  import type { ReactiveSummary, ReactiveSummaryRow } from '../../lib/types.js';
 
   /**
    * Whole-app aggregate from the runtime counters: the most active
@@ -26,27 +26,27 @@
     group,
     onfullgraph,
   }: {
-    summary: Resource<ReactiveSummary | null>
-    group: 'file' | 'instance'
-    onfullgraph: () => void
-  } = $props()
+    summary: Resource<ReactiveSummary | null>;
+    group: 'file' | 'instance';
+    onfullgraph: () => void;
+  } = $props();
 
-  let sort = $state<SortState | null>({ id: 'changes', desc: true })
-  let selected = $state<string | null>(null)
+  let sort = $state<SortState | null>({ id: 'changes', desc: true });
+  let selected = $state<string | null>(null);
 
   interface OverviewRow {
-    key: string
-    file: string
-    instances: ReactiveSummaryRow[]
-    nodes: ReactiveSummaryRow['nodes']
-    changes: number
-    renders: number
-    renderMs: number
+    key: string;
+    file: string;
+    instances: ReactiveSummaryRow[];
+    nodes: ReactiveSummaryRow['nodes'];
+    changes: number;
+    renders: number;
+    renderMs: number;
   }
 
   const rows = $derived.by<OverviewRow[]>(() => {
-    const rows = summary.data?.rows ?? []
-    if (group === 'file') return groupByFile(rows).map(g => ({ key: g.file, ...g }))
+    const rows = summary.data?.rows ?? [];
+    if (group === 'file') return groupByFile(rows).map(g => ({ key: g.file, ...g }));
     return rows.map(r => ({
       key: `#${r.componentId}`,
       file: r.file,
@@ -55,9 +55,9 @@
       changes: r.changes,
       renders: r.renders,
       renderMs: r.renderMs,
-    }))
-  })
-  const current = $derived(selected ? (rows.find(r => r.key === selected) ?? null) : null)
+    }));
+  });
+  const current = $derived(selected ? (rows.find(r => r.key === selected) ?? null) : null);
 
   const columns: Column<OverviewRow>[] = [
     {
@@ -109,11 +109,11 @@
       minWidth: 720,
       sort: (a, b) => a.renderMs - b.renderMs,
     },
-  ]
+  ];
 
   /** Scoped selections need the page load the id belongs to; without one there is nothing to validate. */
   function select(r: ReactiveSummaryRow, epoch: string | null) {
-    if (epoch) reactiveScope.scopeTo(r.componentId, r.file, epoch)
+    if (epoch) reactiveScope.scopeTo(r.componentId, r.file, epoch);
   }
 </script>
 

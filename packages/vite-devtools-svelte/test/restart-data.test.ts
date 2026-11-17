@@ -1,12 +1,12 @@
-import fs from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
-import { connectDevframe } from 'devframe/client'
-import type { DevframeRpcClient } from 'devframe/client'
-import { getTempAuthCode } from 'devframe/node/auth'
-import { createServer } from 'vite'
-import type { ViteDevServer } from 'vite'
+import { connectDevframe } from 'devframe/client';
+import type { DevframeRpcClient } from 'devframe/client';
+import { getTempAuthCode } from 'devframe/node/auth';
+import { createServer } from 'vite';
+import type { ViteDevServer } from 'vite';
 /**
  * Integration (review B1): live data must keep flowing after a dev-server
  * restart driven by a config-file change (Vite re-evaluates the config, so a
@@ -17,25 +17,25 @@ import type { ViteDevServer } from 'vite'
  * full snapshot on activation (components → profiles → timeline reset), then
  * deltas. A devframe client (browser globals shimmed) plays the DevTools tab.
  */
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 
-import { authTokenPersisted, waitFor } from './helpers.js'
+import { authTokenPersisted, waitFor } from './helpers.js';
 
 /** The plugin's RPC names are not in devframe's typed registry, so call them by name. */
-type UntypedCall = (method: string, ...args: unknown[]) => Promise<unknown>
+type UntypedCall = (method: string, ...args: unknown[]) => Promise<unknown>;
 function rpc(client: DevframeRpcClient, method: string, ...args: unknown[]): Promise<unknown> {
-  return (client as unknown as { call: UntypedCall }).call(method, ...args)
+  return (client as unknown as { call: UntypedCall }).call(method, ...args);
 }
 
-const PLUGIN = path.resolve(import.meta.dirname, '../src/plugin.ts')
+const PLUGIN = path.resolve(import.meta.dirname, '../src/plugin.ts');
 
-const realHome = process.env.HOME
-const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'sdt-home-'))
-const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sdt-restart-'))
+const realHome = process.env.HOME;
+const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'sdt-home-'));
+const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sdt-restart-'));
 
-const store = new Map<string, string>()
+const store = new Map<string, string>();
 function shimBrowser(url: string) {
-  Object.defineProperty(globalThis, 'location', { configurable: true, value: new URL(url) })
+  Object.defineProperty(globalThis, 'location', { configurable: true, value: new URL(url) });
   Object.defineProperty(globalThis, 'localStorage', {
     configurable: true,
     value: {
@@ -43,52 +43,52 @@ function shimBrowser(url: string) {
       setItem: (k: string, v: string) => store.set(k, v),
       removeItem: (k: string) => store.delete(k),
     },
-  })
+  });
 }
 
 interface Comp {
-  id: number
-  file: string
-  name: string
-  parentId: number | null
-  mounted: boolean
+  id: number;
+  file: string;
+  name: string;
+  parentId: number | null;
+  mounted: boolean;
 }
 
 /** One page load of the app's runtime (a reload = a new instance with a new epoch). */
 class FakeRuntime {
-  readonly epoch = Math.random().toString(36).slice(2)
-  readonly components = new Map<number, Comp>()
-  active = false
-  deltas = false
-  ws!: WebSocket
-  log: string[] = []
-  private url: string
+  readonly epoch = Math.random().toString(36).slice(2);
+  readonly components = new Map<number, Comp>();
+  active = false;
+  deltas = false;
+  ws!: WebSocket;
+  log: string[] = [];
+  private url: string;
 
   constructor(url: string, ids: number[]) {
-    this.url = url
-    for (const id of ids) this.components.set(id, comp(id))
+    this.url = url;
+    for (const id of ids) this.components.set(id, comp(id));
   }
 
   async connect(): Promise<void> {
-    this.ws = new WebSocket(this.url, 'vite-hmr')
+    this.ws = new WebSocket(this.url, 'vite-hmr');
     await new Promise<void>((resolve, reject) => {
-      this.ws.addEventListener('open', () => resolve())
-      this.ws.addEventListener('error', () => reject(new Error('hmr ws failed')))
-    })
+      this.ws.addEventListener('open', () => resolve());
+      this.ws.addEventListener('error', () => reject(new Error('hmr ws failed')));
+    });
     this.ws.addEventListener('message', e => {
-      const msg = JSON.parse(String(e.data))
-      if (msg.type !== 'custom' || msg.event !== 'svelte-devtools:subscription') return
-      this.log.push(JSON.stringify(msg.data))
-      const wasActive = this.active
-      this.active = !!msg.data?.active
-      this.deltas = !!msg.data?.componentDeltas
-      if (this.active && (!wasActive || msg.data?.resync)) this.sendFull()
-    })
-    this.send('svelte-devtools:runtime-ready', {})
+      const msg = JSON.parse(String(e.data));
+      if (msg.type !== 'custom' || msg.event !== 'svelte-devtools:subscription') return;
+      this.log.push(JSON.stringify(msg.data));
+      const wasActive = this.active;
+      this.active = !!msg.data?.active;
+      this.deltas = !!msg.data?.componentDeltas;
+      if (this.active && (!wasActive || msg.data?.resync)) this.sendFull();
+    });
+    this.send('svelte-devtools:runtime-ready', {});
   }
 
   send(event: string, data: unknown) {
-    this.ws.send(JSON.stringify({ type: 'custom', event, data }))
+    this.ws.send(JSON.stringify({ type: 'custom', event, data }));
   }
 
   sendFull() {
@@ -96,31 +96,35 @@ class FakeRuntime {
       epoch: this.epoch,
       reset: true,
       components: [...this.components.values()],
-    })
-    this.send('svelte-devtools:profiles', { epoch: this.epoch, profiles: [] })
-    this.send('svelte-devtools:state-timeline', { epoch: this.epoch, reset: true, changes: [] })
+    });
+    this.send('svelte-devtools:profiles', { epoch: this.epoch, profiles: [] });
+    this.send('svelte-devtools:state-timeline', { epoch: this.epoch, reset: true, changes: [] });
   }
 
   mount(id: number) {
-    this.components.set(id, comp(id))
-    if (!this.active) return
+    this.components.set(id, comp(id));
+    if (!this.active) return;
     if (this.deltas)
-      this.send('svelte-devtools:components', { epoch: this.epoch, added: [comp(id)], removed: [] })
-    else this.sendFull()
+      this.send('svelte-devtools:components', {
+        epoch: this.epoch,
+        added: [comp(id)],
+        removed: [],
+      });
+    else this.sendFull();
   }
 
   close() {
-    this.closedByUs = true
-    this.ws?.close()
+    this.closedByUs = true;
+    this.ws?.close();
   }
 
-  closedByUs = false
-  closedByServer = false
+  closedByUs = false;
+  closedByServer = false;
   /** Like runtime.ts: on HMR reconnect, ask again with `resync` semantics. */
   watchClose() {
     this.ws.addEventListener('close', () => {
-      if (!this.closedByUs) this.closedByServer = true
-    })
+      if (!this.closedByUs) this.closedByServer = true;
+    });
   }
 }
 
@@ -130,43 +134,43 @@ const comp = (id: number): Comp => ({
   name: 'Row',
   parentId: null,
   mounted: true,
-})
+});
 
 function writeConfig(marker: string) {
   fs.writeFileSync(
     path.join(root, 'vite.config.mjs'),
     `// ${marker}\nimport { svelteDevtools } from ${JSON.stringify(PLUGIN)}\nexport default { plugins: [svelteDevtools()] }\n`,
-  )
+  );
 }
 
-let server: ViteDevServer
-let origin: string
-let ui: DevframeRpcClient
+let server: ViteDevServer;
+let origin: string;
+let ui: DevframeRpcClient;
 
 async function connectUi(): Promise<DevframeRpcClient> {
-  shimBrowser(`${origin}/.svelte-devtools/`)
+  shimBrowser(`${origin}/.svelte-devtools/`);
   return connectDevframe({
     baseURL: `${origin}/.svelte-devtools/`,
     simpleAuth: false,
     otpParam: false,
     webmcp: false,
-  })
+  });
 }
 
 const liveIds = async () =>
   ((await rpc(ui, 'svelte-devtools:get-live-components')) as Comp[])
     .map(c => c.id)
-    .toSorted((a, b) => a - b)
+    .toSorted((a, b) => a - b);
 
 // The fake runtimes connect to Vite's HMR socket like a browser page, which needs
 // the token Vite injects into its client; there is no public replacement.
 // oxlint-disable-next-line typescript/no-deprecated -- emulating Vite's own HMR client requires its socket token
-const hmrUrl = () => `${origin.replace('http', 'ws')}/?token=${server.config.webSocketToken}`
+const hmrUrl = () => `${origin.replace('http', 'ws')}/?token=${server.config.webSocketToken}`;
 
 beforeAll(async () => {
-  process.env.HOME = tmpHome
-  fs.writeFileSync(path.join(root, 'index.html'), '<!doctype html><p>app</p>')
-  writeConfig('v1')
+  process.env.HOME = tmpHome;
+  fs.writeFileSync(path.join(root, 'index.html'), '<!doctype html><p>app</p>');
+  writeConfig('v1');
   server = await createServer({
     root,
     configFile: path.join(root, 'vite.config.mjs'),
@@ -175,148 +179,148 @@ beforeAll(async () => {
     configLoader: 'runner',
     logLevel: 'silent',
     server: { port: 0, host: 'localhost' },
-  })
-  await server.listen()
-  origin = server.resolvedUrls!.local[0]!.replace(/\/$/, '')
-  ui = await connectUi()
+  });
+  await server.listen();
+  origin = server.resolvedUrls!.local[0]!.replace(/\/$/, '');
+  ui = await connectUi();
   await waitFor(
     () => ui.status,
     s => s === 'unauthorized',
-  )
+  );
   if (!(await ui.requestTrustWithCode(getTempAuthCode())))
-    throw new Error('DevTools tab could not be trusted')
+    throw new Error('DevTools tab could not be trusted');
   // the debounced token store must be on disk before the restart tests
-  await waitFor(() => authTokenPersisted(tmpHome, store))
-}, 30_000)
+  await waitFor(() => authTokenPersisted(tmpHome, store));
+}, 30_000);
 
 afterAll(async () => {
-  ui?.close?.()
-  await server?.close()
-  process.env.HOME = realHome
-  fs.rmSync(tmpHome, { recursive: true, force: true })
-  fs.rmSync(root, { recursive: true, force: true })
-})
+  ui?.close?.();
+  await server?.close();
+  process.env.HOME = realHome;
+  fs.rmSync(tmpHome, { recursive: true, force: true });
+  fs.rmSync(root, { recursive: true, force: true });
+});
 
 describe('live data across a config-file restart (review B1)', () => {
   it('shows components mounted after the restart, and after a UI reload', async () => {
-    const before = new FakeRuntime(hmrUrl(), [1, 2, 3, 4, 5])
-    await before.connect()
-    await rpc(ui, 'svelte-devtools:set-active', { client: 'tab', active: true })
-    expect(await waitFor(liveIds, ids => ids.length === 5)).toEqual([1, 2, 3, 4, 5])
+    const before = new FakeRuntime(hmrUrl(), [1, 2, 3, 4, 5]);
+    await before.connect();
+    await rpc(ui, 'svelte-devtools:set-active', { client: 'tab', active: true });
+    expect(await waitFor(liveIds, ids => ids.length === 5)).toEqual([1, 2, 3, 4, 5]);
 
     // config change → Vite restarts with a new plugin instance; the app page
     // full-reloads (new runtime, new epoch) and the DevTools tab reconnects.
-    writeConfig('v2')
-    await server.restart()
-    before.close()
-    ui.close?.()
-    ui = await connectUi()
+    writeConfig('v2');
+    await server.restart();
+    before.close();
+    ui.close?.();
+    ui = await connectUi();
     await waitFor(
       () => ui.status,
       s => s === 'connected',
-    )
-    await rpc(ui, 'svelte-devtools:set-active', { client: 'tab', active: true })
-    const after = new FakeRuntime(hmrUrl(), [1, 2, 3, 4, 5])
-    await after.connect()
+    );
+    await rpc(ui, 'svelte-devtools:set-active', { client: 'tab', active: true });
+    const after = new FakeRuntime(hmrUrl(), [1, 2, 3, 4, 5]);
+    await after.connect();
     await waitFor(liveIds, ids => ids.length === 5).catch(e => {
-      throw new Error(`${e.message}; runtime saw subscriptions ${after.log.join(' ')}`)
-    })
+      throw new Error(`${e.message}; runtime saw subscriptions ${after.log.join(' ')}`);
+    });
 
-    after.mount(6) // a change made after the restart must show
-    expect(await waitFor(liveIds, ids => ids.includes(6))).toEqual([1, 2, 3, 4, 5, 6])
+    after.mount(6); // a change made after the restart must show
+    expect(await waitFor(liveIds, ids => ids.includes(6))).toEqual([1, 2, 3, 4, 5, 6]);
 
     // a fresh DevTools tab (SPA reload) sees the same data
-    ui.close?.()
-    ui = await connectUi()
+    ui.close?.();
+    ui = await connectUi();
     await waitFor(
       () => ui.status,
       s => s === 'connected',
-    )
-    expect(await liveIds()).toEqual([1, 2, 3, 4, 5, 6])
-    after.close()
-  }, 30_000)
+    );
+    expect(await liveIds()).toEqual([1, 2, 3, 4, 5, 6]);
+    after.close();
+  }, 30_000);
 
   it('order B: the reloaded app connects before the DevTools tab reconnects', async () => {
-    const before = new FakeRuntime(hmrUrl(), [1, 2])
-    await before.connect()
-    await rpc(ui, 'svelte-devtools:set-active', { client: 'tab', active: true })
-    await waitFor(liveIds, ids => ids.length === 2)
+    const before = new FakeRuntime(hmrUrl(), [1, 2]);
+    await before.connect();
+    await rpc(ui, 'svelte-devtools:set-active', { client: 'tab', active: true });
+    await waitFor(liveIds, ids => ids.length === 2);
 
-    writeConfig('v3')
-    await server.restart()
-    before.close()
-    const after = new FakeRuntime(hmrUrl(), [7, 8])
-    await after.connect() // app first …
+    writeConfig('v3');
+    await server.restart();
+    before.close();
+    const after = new FakeRuntime(hmrUrl(), [7, 8]);
+    await after.connect(); // app first …
     // … and seen by the restarted server (it answered runtime-ready) …
-    await waitFor(() => after.log.length > 0)
-    ui.close?.()
-    ui = await connectUi() // … DevTools tab later (reconnect backoff)
+    await waitFor(() => after.log.length > 0);
+    ui.close?.();
+    ui = await connectUi(); // … DevTools tab later (reconnect backoff)
     await waitFor(
       () => ui.status,
       s => s === 'connected',
-    )
-    await rpc(ui, 'svelte-devtools:set-active', { client: 'tab', active: true })
+    );
+    await rpc(ui, 'svelte-devtools:set-active', { client: 'tab', active: true });
     await waitFor(liveIds, ids => ids.join() === '7,8').catch(e => {
-      throw new Error(`${e.message}; runtime saw subscriptions ${after.log.join(' ')}`)
-    })
-    after.mount(9)
-    expect(await waitFor(liveIds, ids => ids.includes(9))).toEqual([7, 8, 9])
-    after.close()
-  }, 30_000)
+      throw new Error(`${e.message}; runtime saw subscriptions ${after.log.join(' ')}`);
+    });
+    after.mount(9);
+    expect(await waitFor(liveIds, ids => ids.includes(9))).toEqual([7, 8, 9]);
+    after.close();
+  }, 30_000);
 
   it('variant M: two app tabs reload after the restart; a change in either tab shows', async () => {
-    writeConfig('v5')
-    await server.restart()
-    ui.close?.()
-    ui = await connectUi()
+    writeConfig('v5');
+    await server.restart();
+    ui.close?.();
+    ui = await connectUi();
     await waitFor(
       () => ui.status,
       s => s === 'connected',
-    )
-    await rpc(ui, 'svelte-devtools:set-active', { client: 'tab', active: true })
-    const tabA = new FakeRuntime(hmrUrl(), [31, 32])
-    const tabB = new FakeRuntime(hmrUrl(), [41, 42])
-    await tabA.connect()
-    await tabB.connect()
-    await waitFor(liveIds, ids => ids.join() === '41,42') // most recent full snapshot: tab B
+    );
+    await rpc(ui, 'svelte-devtools:set-active', { client: 'tab', active: true });
+    const tabA = new FakeRuntime(hmrUrl(), [31, 32]);
+    const tabB = new FakeRuntime(hmrUrl(), [41, 42]);
+    await tabA.connect();
+    await tabB.connect();
+    await waitFor(liveIds, ids => ids.join() === '41,42'); // most recent full snapshot: tab B
     // tab B keeps pushing profiles/timeline (periodic), tab A gets a new row
-    tabB.send('svelte-devtools:profiles', { epoch: tabB.epoch, profiles: [] })
-    tabA.mount(33)
-    tabB.send('svelte-devtools:state-timeline', { epoch: tabB.epoch, changes: [] })
-    const shown = await waitFor(liveIds, ids => ids.length > 0)
+    tabB.send('svelte-devtools:profiles', { epoch: tabB.epoch, profiles: [] });
+    tabA.mount(33);
+    tabB.send('svelte-devtools:state-timeline', { epoch: tabB.epoch, changes: [] });
+    const shown = await waitFor(liveIds, ids => ids.length > 0);
     // whichever tab is served, it must be a complete tree — never an empty or partial one
-    expect([['31', '32', '33'].join(), ['41', '42'].join()]).toContain(shown.join())
-    tabA.mount(34)
-    expect(await waitFor(liveIds, ids => ids.includes(34))).toEqual([31, 32, 33, 34])
-    tabA.close()
-    tabB.close()
-  }, 30_000)
+    expect([['31', '32', '33'].join(), ['41', '42'].join()]).toContain(shown.join());
+    tabA.mount(34);
+    expect(await waitFor(liveIds, ids => ids.includes(34))).toEqual([31, 32, 33, 34]);
+    tabA.close();
+    tabB.close();
+  }, 30_000);
 
   it('an epoch known only from profiles/timeline (no component snapshot yet) is never served as an empty tree', async () => {
-    const tab = new FakeRuntime(hmrUrl(), [51])
-    await tab.connect()
-    await rpc(ui, 'svelte-devtools:set-active', { client: 'tab', active: true })
-    await waitFor(liveIds, ids => ids.includes(51))
+    const tab = new FakeRuntime(hmrUrl(), [51]);
+    await tab.connect();
+    await rpc(ui, 'svelte-devtools:set-active', { client: 'tab', active: true });
+    await waitFor(liveIds, ids => ids.includes(51));
     // a second page load whose component snapshot has not arrived yet
-    const half = new FakeRuntime(hmrUrl(), [])
-    half.ws = new WebSocket(hmrUrl(), 'vite-hmr')
+    const half = new FakeRuntime(hmrUrl(), []);
+    half.ws = new WebSocket(hmrUrl(), 'vite-hmr');
     await new Promise<void>(resolve => {
-      half.ws.addEventListener('open', () => resolve(), { once: true })
-    })
-    const replies: unknown[] = []
+      half.ws.addEventListener('open', () => resolve(), { once: true });
+    });
+    const replies: unknown[] = [];
     half.ws.addEventListener('message', e => {
-      replies.push(JSON.parse(String(e.data)))
-    })
-    half.send('svelte-devtools:profiles', { epoch: half.epoch, profiles: [] })
-    half.send('svelte-devtools:state-timeline', { epoch: half.epoch, changes: [] })
+      replies.push(JSON.parse(String(e.data)));
+    });
+    half.send('svelte-devtools:profiles', { epoch: half.epoch, profiles: [] });
+    half.send('svelte-devtools:state-timeline', { epoch: half.epoch, changes: [] });
     // Barrier: one socket is processed in order, so once runtime-ready is
     // answered, both payloads above have been ingested.
-    half.send('svelte-devtools:runtime-ready', {})
+    half.send('svelte-devtools:runtime-ready', {});
     await waitFor(() =>
       replies.some(m => (m as { event?: string }).event === 'svelte-devtools:subscription'),
-    )
-    expect(await liveIds()).toContain(51)
-    tab.close()
-    half.close()
-  }, 30_000)
-})
+    );
+    expect(await liveIds()).toContain(51);
+    tab.close();
+    half.close();
+  }, 30_000);
+});

@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { resolve } from '$app/paths'
+  import { resolve } from '$app/paths';
 
-  import HeavyList from '#lib/components/HeavyList.svelte'
+  import HeavyList from '#lib/components/HeavyList.svelte';
 
-  import type { PageProps } from './$types'
+  import type { PageProps } from './$types';
 
-  let { data }: PageProps = $props()
+  let { data }: PageProps = $props();
 </script>
 
 <h1>ダッシュボード</h1>

@@ -1,12 +1,12 @@
 <script lang="ts">
-  import Badge from '../../components/Badge.svelte'
-  import Button from '../../components/Button.svelte'
-  import Inspector from '../../components/Inspector.svelte'
-  import { componentName, prettyValue, shortPath } from '../../lib/format.js'
-  import { isValueSummary, kindLabel } from '../../lib/reactive.js'
-  import { router } from '../../lib/router.svelte.js'
-  import type { ReactiveNode, ReactiveSummary } from '../../lib/types.js'
-  import KindBadge from './KindBadge.svelte'
+  import Badge from '../../components/Badge.svelte';
+  import Button from '../../components/Button.svelte';
+  import Inspector from '../../components/Inspector.svelte';
+  import { componentName, prettyValue, shortPath } from '../../lib/format.js';
+  import { isValueSummary, kindLabel } from '../../lib/reactive.js';
+  import { router } from '../../lib/router.svelte.js';
+  import type { ReactiveNode, ReactiveSummary } from '../../lib/types.js';
+  import KindBadge from './KindBadge.svelte';
 
   /** Detail pane for one signal of the loaded graph. */
   let {
@@ -23,24 +23,24 @@
     onscope,
     onclose,
   }: {
-    node: ReactiveNode
-    byId: Map<string, ReactiveNode>
+    node: ReactiveNode;
+    byId: Map<string, ReactiveNode>;
     /** Ids this signal reads (can affect it). */
-    deps: string[]
+    deps: string[];
     /** Ids this signal can affect. */
-    dependents: string[]
+    dependents: string[];
     /** Its value changed in the latest reply. */
-    flash: boolean
-    capabilities: ReactiveSummary['capabilities']
+    flash: boolean;
+    capabilities: ReactiveSummary['capabilities'];
     /** The component the graph is scoped to, if any: links elsewhere are marked. */
-    scopedTo: number | null
+    scopedTo: number | null;
     /** A page-load id is known, so another component can be scoped to. */
-    canScope: boolean
-    onselect: (id: string) => void
-    onopen: (n: ReactiveNode) => void
-    onscope: (n: ReactiveNode) => void
-    onclose: () => void
-  } = $props()
+    canScope: boolean;
+    onselect: (id: string) => void;
+    onopen: (n: ReactiveNode) => void;
+    onscope: (n: ReactiveNode) => void;
+    onclose: () => void;
+  } = $props();
 </script>
 
 <Inspector title={node.name} subtitle={shortPath(node.componentFile, 3)} {onclose}>

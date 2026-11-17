@@ -1,30 +1,30 @@
 <script lang="ts">
   interface Todo {
-    id: number
-    text: string
-    done: boolean
+    id: number;
+    text: string;
+    done: boolean;
   }
 
   let todos = $state<Todo[]>([
     { id: 1, text: 'Try Svelte DevTools', done: false },
     { id: 2, text: 'Check component tree', done: false },
     { id: 3, text: 'Explore routes panel', done: true },
-  ])
+  ]);
 
-  let newTodo = $state('')
-  let nextId = $state(4)
+  let newTodo = $state('');
+  let nextId = $state(4);
 
-  let remaining = $derived(todos.filter(t => !t.done).length)
+  let remaining = $derived(todos.filter(t => !t.done).length);
 
   function addTodo() {
-    if (!newTodo.trim()) return
-    todos.push({ id: nextId++, text: newTodo.trim(), done: false })
-    newTodo = ''
+    if (!newTodo.trim()) return;
+    todos.push({ id: nextId++, text: newTodo.trim(), done: false });
+    newTodo = '';
   }
 
   function removeTodo(id: number) {
-    const idx = todos.findIndex(t => t.id === id)
-    if (idx !== -1) todos.splice(idx, 1)
+    const idx = todos.findIndex(t => t.id === id);
+    if (idx !== -1) todos.splice(idx, 1);
   }
 </script>
 
@@ -33,8 +33,8 @@
 
   <form
     onsubmit={e => {
-      e.preventDefault()
-      addTodo()
+      e.preventDefault();
+      addTodo();
     }}
   >
     <input type="text" placeholder="Add a todo..." bind:value={newTodo} />

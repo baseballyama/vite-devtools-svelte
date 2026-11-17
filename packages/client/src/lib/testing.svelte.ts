@@ -6,25 +6,25 @@
  * another. Importing these helpers the same way (after the reset) keeps the
  * module under test and the effects observing it on one runtime.
  */
-import { flushSync } from 'svelte'
+import { flushSync } from 'svelte';
 
 /** Run `setup` inside an effect root (so it may create `$effect`s); `stop` tears it down. */
 export function withRoot<T>(setup: () => T): { value: T; stop: () => void; flush: () => void } {
-  let value!: T
+  let value!: T;
   const stop = $effect.root(() => {
-    value = setup()
-  })
-  flushSync()
-  return { value, stop, flush: () => flushSync() }
+    value = setup();
+  });
+  flushSync();
+  return { value, stop, flush: () => flushSync() };
 }
 
 /** Every value `read()` takes, recorded by an `$effect` (so only real changes count). */
 export function track<T>(read: () => T): { seen: T[]; stop: () => void; flush: () => void } {
-  const seen: T[] = []
+  const seen: T[] = [];
   const { stop, flush } = withRoot(() => {
     $effect(() => {
-      seen.push(read())
-    })
-  })
-  return { seen, stop, flush }
+      seen.push(read());
+    });
+  });
+  return { seen, stop, flush };
 }
