@@ -14,7 +14,8 @@ This package is the master copy of the inspector: it does not track upstream, an
 except for what running in the Vite DevTools dock needs:
 
 - options come from the plugin argument (`svelteInspector(options)`, which `svelteDevtools({ inspector })` passes on) instead of `vitePlugin.inspector` in `svelte.config.js`
-- adding the plugin always enables it: `SVELTE_INSPECTOR_OPTIONS=true|false` does not toggle it (an options object and `SVELTE_INSPECTOR_TOGGLE` still apply)
+- adding the plugin always enables it: `SVELTE_INSPECTOR_OPTIONS=true|false` does not toggle it
+- it has its own environment variables, `SVELTE_DEVTOOLS_INSPECTOR_OPTIONS` and `SVELTE_DEVTOOLS_INSPECTOR_TOGGLE`. Upstream's `SVELTE_INSPECTOR_OPTIONS` (an options object) and `SVELTE_INSPECTOR_TOGGLE` are still read, with the own ones winning option by option, but never written: they also switch vite-plugin-svelte's built-in inspector on
 - it only runs in the [Vite DevTools dock](#in-the-vite-devtools-dock): without `@vitejs/devtools` in the Vite config it does nothing. This part is new, not copied from upstream
 - there is no floating toggle button (`showToggleButton` and `toggleButtonPos` are gone): the dock has its own
 - when vite-plugin-svelte's built-in inspector is configured (`vitePlugin.inspector`) and both would run in the dock, the dev server fails to start with an error that says to turn that one off. When only `SVELTE_INSPECTOR_OPTIONS` / `SVELTE_INSPECTOR_TOGGLE` switch it on, it is turned off instead
@@ -63,7 +64,10 @@ export default {
 
 - **Svelte Inspector** on the dock bar turns the inspector on and off, as do the `toggleKeyCombo` and the **Toggle Svelte Inspector** command in the command palette; all of them stay in sync.
 - Picked files open through Vite DevTools' `vite:core:open-in-editor`. It refuses files outside the workspace root (e.g. a linked package), which open through Vite's `/__open-in-editor` instead, as upstream.
+- **Svelte Inspector settings**, in the dock's **Svelte tools** group, edits your personal options: the shortcut, the keys used while picking (click one and press the key to record it), hold mode and styles. Saving writes the options that differ from the `inspector` options to `.env.local` as `SVELTE_DEVTOOLS_INSPECTOR_OPTIONS`, and Vite restarts the dev server to apply them. **Reset to defaults** removes the variable again. If the shell or a `.env.[mode]` file also sets `SVELTE_DEVTOOLS_INSPECTOR_OPTIONS`, the view says so, because that value wins over `.env.local`. Options from upstream's `SVELTE_INSPECTOR_OPTIONS` count as defaults here: the view never changes that variable.
 - The inspector loads once the browser is authorized for Vite DevTools.
+
+The **Svelte tools** group (id `svelte`) is meant to be shared by Svelte tools: other plugins can add their dock entries to it with `groupId: 'svelte'`. Whichever plugin registers it first keeps its registration.
 
 ## Upstream documentation
 
@@ -78,14 +82,14 @@ To allow you to use your own setup, svelte inspector can be configured via envir
 
 ```shell
 # just keycombo, unquoted string
-SVELTE_INSPECTOR_TOGGLE=alt-x
+SVELTE_DEVTOOLS_INSPECTOR_TOGGLE=alt-x
 
 # options object as json
-SVELTE_INSPECTOR_OPTIONS='{"holdMode": false, "openKey": "o"}'
+SVELTE_DEVTOOLS_INSPECTOR_OPTIONS='{"holdMode": false, "openKey": "o"}'
 
 ```
 
-> Inspector options set on the environment take precedence over the `inspector` options passed to `svelteDevtools()`. Unlike upstream, `SVELTE_INSPECTOR_OPTIONS=true|false` is ignored: the inspector cannot be turned off. These variables also switch vite-plugin-svelte's built-in inspector on; in the dock, this plugin turns that one off again.
+> Inspector options set on the environment take precedence over the `inspector` options passed to `svelteDevtools()`. Unlike upstream, the variables start with `SVELTE_DEVTOOLS_INSPECTOR_`, and `true|false` is ignored: the inspector cannot be turned off. The `SVELTE_INSPECTOR_` ones are read too, with lower precedence. They also switch vite-plugin-svelte's built-in inspector on; in the dock, this plugin turns that one off again.
 
 ### Plugin options
 

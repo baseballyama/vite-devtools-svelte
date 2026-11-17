@@ -71,5 +71,7 @@ export interface InspectorOptions {
     // the directory Svelte makes `__svelte_meta.loc.file` relative to (its `rootDir`, which
     // defaults to process.cwd()), to open files by absolute path through Vite DevTools
     cwd?: string;
+    // what the settings view resets to
+    defaults?: Omit<InspectorOptions, '__internal'>;
   };
 }

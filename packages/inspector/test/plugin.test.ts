@@ -95,6 +95,18 @@ describe('svelteInspector', () => {
     expect(await loadOptions(await start())).toMatchObject({ toggleKeyCombo: 'meta-i' });
   });
 
+  it("lets its own variables win over vite-plugin-svelte's", async () => {
+    vi.stubEnv('SVELTE_INSPECTOR_OPTIONS', '{"holdMode":false,"openKey":"o"}');
+    vi.stubEnv('SVELTE_DEVTOOLS_INSPECTOR_OPTIONS', '{"openKey":"p"}');
+    expect(await loadOptions(await start())).toMatchObject({ holdMode: false, openKey: 'p' });
+    vi.stubEnv('SVELTE_DEVTOOLS_INSPECTOR_OPTIONS', '');
+    vi.stubEnv('SVELTE_DEVTOOLS_INSPECTOR_TOGGLE', 'meta-i');
+    expect(await loadOptions(await start())).toMatchObject({
+      toggleKeyCombo: 'meta-i',
+      openKey: 'o',
+    });
+  });
+
   it.each([
     ['SVELTE_INSPECTOR_TOGGLE', 'meta-i', { toggleKeyCombo: 'meta-i' }],
     ['SVELTE_INSPECTOR_OPTIONS', '{"holdMode":false}', { holdMode: false }],
