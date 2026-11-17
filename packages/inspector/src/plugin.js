@@ -16,6 +16,9 @@ function cleanUrl(url) {
 	return url.replace(/[?#].*$/s, '');
 }
 
+/** name of the inspector plugin that ships inside vite-plugin-svelte 7 */
+const BUILTIN_INSPECTOR_NAME = 'vite-plugin-svelte-inspector';
+
 function getInspectorPath() {
 	// vite-devtools-svelte: the runtime sits next to this file instead of under
 	// vite-plugin-svelte's `src/plugins/inspector/`.
@@ -25,18 +28,18 @@ function getInspectorPath() {
 
 /**
  * vite-devtools-svelte: options come from the plugin argument instead of
- * vite-plugin-svelte's `inspector` option.
+ * vite-plugin-svelte's `inspector` option, and adding the plugin always enables
+ * it (see `configResolved`).
  *
- * @param {Partial<InspectorOptions> | boolean} [options]
+ * @param {Partial<InspectorOptions>} [options]
  * @returns {Plugin}
  */
-export function svelteInspector(options = true) {
+export function svelteInspector(options = {}) {
 	const inspectorPath = getInspectorPath();
 	log.debug(`svelte inspector path: ${inspectorPath}`, null, 'inspector');
 
 	/** @type {InspectorOptions} */
 	let inspectorOptions;
-	let disabled = false;
 
 	return {
 		name: 'vite-devtools-svelte-inspector',
@@ -44,46 +47,41 @@ export function svelteInspector(options = true) {
 		enforce: 'pre',
 
 		applyToEnvironment(env) {
-			return !disabled && env.config.consumer === 'client';
+			return env.config.consumer === 'client';
 		},
 
 		configResolved(config) {
+			// vite-devtools-svelte: this plugin is always on once it is added, so
+			// `SVELTE_INSPECTOR_OPTIONS=true|false` does not toggle it; an options
+			// object or `SVELTE_INSPECTOR_TOGGLE` still applies as a personal preference.
 			const environmentOptions = parseEnvironmentOptions(config);
-			if (environmentOptions === false) {
-				log.debug('environment options set to false, inspector disabled', null, 'inspector');
-				disabled = true;
-				return;
-			}
-			const configFileOptions = options;
 
-			if (!configFileOptions && !environmentOptions) {
-				log.debug('no inspector options found, inspector disabled', null, 'inspector');
-				disabled = true;
-				return;
-			}
-
-			if (environmentOptions === true) {
-				inspectorOptions = defaultInspectorOptions;
-			} else {
-				inspectorOptions = {
-					...defaultInspectorOptions,
-					...(typeof configFileOptions === 'object' ? configFileOptions : {}),
-					...(environmentOptions || {})
-				};
-			}
+			inspectorOptions = {
+				...defaultInspectorOptions,
+				...options,
+				...(typeof environmentOptions === 'object' ? environmentOptions : {})
+			};
 
 			inspectorOptions.__internal = {
 				base: config.base?.replace(/\/$/, '') || ''
 			};
+
+			// vite-devtools-svelte: vite-plugin-svelte's built-in inspector would mount a
+			// second `#svelte-inspector-host` (and throw) when it is enabled through
+			// `vitePlugin.inspector` or the same environment variables. Vite applies
+			// `applyToEnvironment` after `configResolved`, so this keeps it out of every
+			// environment.
+			const builtin = config.plugins.find((p) => p.name === BUILTIN_INSPECTOR_NAME);
+			if (builtin) {
+				builtin.applyToEnvironment = () => false;
+				log.debug('disabled the built-in inspector of vite-plugin-svelte', null, 'inspector');
+			}
 		},
 		resolveId: {
 			filter: {
 				id: /^virtual:vite-devtools-svelte-inspector-/
 			},
 			async handler(id) {
-				if (disabled) {
-					return;
-				}
 				if (id === 'virtual:vite-devtools-svelte-inspector-options') {
 					return id;
 				} else if (id.startsWith('virtual:vite-devtools-svelte-inspector-path:') && !id.includes('..')) {
@@ -99,9 +97,6 @@ export function svelteInspector(options = true) {
 				}
 			},
 			async handler(id) {
-				if (disabled) {
-					return;
-				}
 				if (id === 'virtual:vite-devtools-svelte-inspector-options') {
 					return `export default ${JSON.stringify(inspectorOptions ?? {})}`;
 				} else if (id.startsWith(inspectorPath)) {
@@ -123,9 +118,6 @@ export function svelteInspector(options = true) {
 				id: /(?:vite\/dist|vite\/dist\/vite|vite-plus-core\/dist\/vite)\/client\/client\.mjs(?:\?|$)/
 			},
 			handler(code) {
-				if (disabled) {
-					return;
-				}
 				return { code: `${code}\nimport('virtual:vite-devtools-svelte-inspector-path:load-inspector.js')` };
 			}
 		}

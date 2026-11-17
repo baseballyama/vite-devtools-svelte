@@ -88,8 +88,8 @@ export interface InspectorOptions {
 /**
  * Svelte Inspector as a standalone Vite plugin.
  *
- * Pass `false` (or leave it out and set `SVELTE_INSPECTOR_OPTIONS=false`) to disable it.
- *
- * @default true
+ * It is always enabled once added (during `vite dev`), and it turns off the built-in
+ * inspector of vite-plugin-svelte so the two never run together. To turn it off, leave the
+ * plugin out.
  */
-export function svelteInspector(options?: InspectorOptions | boolean): Plugin;
+export function svelteInspector(options?: InspectorOptions): Plugin;

@@ -12,12 +12,11 @@ vite-devtools-svelte (for example, jumping from a picked element to its node in 
 The source under `src/` is a verbatim copy, except for what a standalone plugin needs:
 
 - options come from the plugin argument (`svelteInspector(options)`) instead of `vitePlugin.inspector` in `svelte.config.js`
+- adding the plugin always enables it: `SVELTE_INSPECTOR_OPTIONS=true|false` does not toggle it (an options object and `SVELTE_INSPECTOR_TOGGLE` still apply)
+- it turns off vite-plugin-svelte's built-in inspector, so the two never mount at the same time
 - the plugin name and virtual module ids use the `vite-devtools-svelte-inspector` prefix, so they do not clash with the built-in inspector
 - `src/utils/log.js` is a reduced copy of upstream's logger
 - `src/public.d.ts` holds only `InspectorOptions` and the plugin's signature
-
-Do not enable the built-in inspector (`vitePlugin.inspector`) at the same time: both mount
-`#svelte-inspector-host`, and the second one throws.
 
 ## Setup
 
@@ -49,14 +48,9 @@ SVELTE_INSPECTOR_TOGGLE=alt-x
 # options object as json
 SVELTE_INSPECTOR_OPTIONS='{"holdMode": false, "toggleButtonPos": "bottom-left"}'
 
-# disable completely
-SVELTE_INSPECTOR_OPTIONS=false
-
-# force default options
-SVELTE_INSPECTOR_OPTIONS=true
 ```
 
-> Inspector options set on the environment take precedence over options passed to `svelteInspector()` and automatically enable svelte inspector during dev.
+> Inspector options set on the environment take precedence over options passed to `svelteInspector()`. Unlike upstream, `SVELTE_INSPECTOR_OPTIONS=true|false` is ignored: the inspector is on whenever the plugin is added.
 
 ### Plugin options
 
