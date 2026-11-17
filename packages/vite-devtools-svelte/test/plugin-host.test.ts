@@ -1,10 +1,11 @@
 // What the plugin wires into its devframe host and MCP server: every data
 // source must read the live dev server / collector it belongs to.
 import http from 'node:http'
+import type { AddressInfo } from 'node:net'
 import path from 'node:path'
 
 import type { Plugin } from 'vite'
-import { describe, it, expect, vi } from 'vitest'
+import { afterAll, describe, it, expect, vi } from 'vitest'
 
 import * as mcpServerModule from '../src/mcp/server.js'
 import type { McpDeps } from '../src/mcp/server.js'
@@ -142,6 +143,37 @@ describe('devframe host wiring', () => {
     const assets = await (await hub(s.plugins))('get-assets')
     expect(assets.length).toBeGreaterThan(0)
     for (const a of assets) expect(a.url.startsWith('/app/')).toBe(true)
+  })
+
+  describe('get-og-preview: the dev server origins are allowed', () => {
+    const local = http.createServer((_req, res) => {
+      res.setHeader('content-type', 'text/html')
+      res.end('<meta property="og:title" content="hello">')
+    })
+    afterAll(
+      () =>
+        new Promise<void>(resolve => {
+          local.close(() => resolve())
+        }),
+    )
+
+    it('reads its own server, and only once it knows its URLs', async () => {
+      await new Promise<void>(resolve => {
+        local.listen(0, '127.0.0.1', resolve)
+      })
+      const url = `http://127.0.0.1:${(local.address() as AddressInfo).port}/`
+      const s = setup()
+      const call = await hub(s.plugins)
+      // before configureServer: no origins, a loopback URL is refused (SSRF guard)
+      const blocked = await call('get-og-preview', { url })
+      expect(blocked.title).toBe('')
+      expect(blocked.issues.join(' ')).toMatch(/Blocked/)
+      s.server.resolvedUrls = { local: [url], network: [] }
+      s.configure()
+      const res = await call('get-og-preview', { url })
+      expect(res.title).toBe('hello')
+      expect(res.issues.join(' ')).not.toMatch(/Blocked/)
+    })
   })
 })
 
