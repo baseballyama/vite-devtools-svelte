@@ -3,37 +3,26 @@
 <script lang="ts">
   import { untrack } from 'svelte';
 
-  import { INSPECTOR_ICON_SVG } from './icon.js';
+  import { INSPECTOR_ICON_URL } from './icon.js';
   import KeyInput from './KeyInput.svelte';
-
-  interface Settings {
-    toggleKeyCombo: string;
-    holdMode: boolean;
-    openKey: string;
-    openMenuKey: string;
-    escapeKeys: string[];
-    navKeys: { parent: string; child: string; next: string; prev: string };
-    customStyles: boolean;
-  }
+  import { same } from './settings-shared.js';
+  import type { ActionResult, Settings } from './settings-shared.js';
 
   interface Props {
     /** the options the inspector currently runs with */
     current: Settings;
     /** the options without personal settings */
     defaults: Settings;
-    /** resolves to a status message */
-    save: (settings: Settings) => Promise<{ ok: boolean; status: string }>;
-    reset: () => Promise<{ ok: boolean; status: string }>;
-    /** the file settings are saved to */
-    file: string;
+    /** resolve to a status message */
+    save: (settings: Settings) => Promise<ActionResult>;
+    reset: () => Promise<ActionResult>;
   }
 
-  let { current, defaults, save, reset, file }: Props = $props();
+  let { current, defaults, save, reset }: Props = $props();
 
-  const clone = (s: Settings): Settings => $state.snapshot(s);
   /** a deeply reactive copy, a plain object assigned to `form` would stop tracking edits */
   function editable(s: Settings): Settings {
-    const f = $state(clone(s));
+    const f = $state($state.snapshot(s));
     return f;
   }
   // starts over from `current` whenever that changes
@@ -48,15 +37,16 @@
   });
   let status = $state<{ ok: boolean; text: string } | null>(null);
   let busy = $state(false);
-  const same = (a: Settings, b: Settings) => JSON.stringify(a) === JSON.stringify(b);
-  const dirty = $derived(!same(form, current));
+  // what is saved, updated after a save or a reset too, as the page may not reload
+  let saved_form = $derived(current);
+  const dirty = $derived(!same(form, saved_form));
   /** personal settings are saved */
-  const saved = $derived(!same(current, defaults));
+  let saved = $derived(!same(current, defaults));
   /** nothing to reset, no saved settings and the form shows the defaults */
   const at_defaults = $derived(!saved && same(form, defaults));
 
   function reset_to_defaults() {
-    // only unsaved edits, no need to touch .env.local
+    // only unsaved edits, nothing saved to remove
     if (!saved) {
       form = editable(defaults);
       status = null;
@@ -64,13 +54,23 @@
     }
     void run(reset).then(ok => {
       // a failed reset leaves the saved settings in use
-      if (ok) form = editable(defaults);
+      if (!ok) return;
+      form = editable(defaults);
+      saved_form = defaults;
+      saved = false;
     });
   }
 
-  const icon = `data:image/svg+xml;base64,${btoa(INSPECTOR_ICON_SVG)}`;
+  function save_form() {
+    const settings = $state.snapshot(form);
+    void run(() => save(settings)).then(ok => {
+      if (!ok) return;
+      saved_form = settings;
+      saved = !same(settings, defaults);
+    });
+  }
 
-  async function run(action: () => Promise<{ ok: boolean; status: string }>) {
+  async function run(action: () => Promise<ActionResult>) {
     busy = true;
     try {
       const r = await action();
@@ -108,10 +108,10 @@
 
 <div class="sis">
   <header class="sis-header">
-    <img src={icon} alt="" width="28" height="28" />
+    <img src={INSPECTOR_ICON_URL} alt="" width="28" height="28" />
     <div>
       <h2>Svelte Inspector</h2>
-      <p>Your personal settings, saved to <code>{file}</code> (not committed)</p>
+      <p>Your personal settings, kept by Vite DevTools for all your projects</p>
     </div>
   </header>
 
@@ -223,11 +223,8 @@
       disabled={busy || at_defaults}
       onclick={reset_to_defaults}>Reset to defaults</button
     >
-    <button
-      type="button"
-      class="sis-button primary"
-      disabled={busy || !dirty}
-      onclick={() => run(() => save($state.snapshot(form)))}>Save</button
+    <button type="button" class="sis-button primary" disabled={busy || !dirty} onclick={save_form}
+      >Save</button
     >
   </footer>
 </div>

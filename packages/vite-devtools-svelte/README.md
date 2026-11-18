@@ -232,9 +232,9 @@ svelteDevtools({
 
 `inspector` takes the options (`toggleKeyCombo`, `navKeys`, `openKey`, `openMenuKey`, `escapeKeys`, `holdMode`, `customStyles`).
 
-`SVELTE_DEVTOOLS_INSPECTOR_TOGGLE` and an options object in `SVELTE_DEVTOOLS_INSPECTOR_OPTIONS` (shell or `.env` files) take precedence over them, for personal preferences. vite-plugin-svelte's `SVELTE_INSPECTOR_TOGGLE` and `SVELTE_INSPECTOR_OPTIONS` are read too, with lower precedence.
+`SVELTE_INSPECTOR_TOGGLE` and an options object in `SVELTE_INSPECTOR_OPTIONS` (shell or `.env` files) take precedence over them, for personal preferences.
 
-The Svelte Inspector settings in the DevTools Svelte tools group edits your personal shortcut and keys, saved to `.env.local`.
+The **Svelte Inspector settings** view, in the dock's **Svelte tools** group, edits your personal shortcut, keys and styles. Vite DevTools keeps them for your user in `~/.vite/devtools/settings/svelte-inspector.json`, so they apply to all your projects (a dev server that is already running picks up changes made in another project when it restarts) and take precedence over both. **Reset to defaults** removes them.
 
 ## How It Works
 

@@ -16,8 +16,8 @@
   const MODIFIERS = ['shift', 'control', 'alt', 'meta'];
 
   // modifier names as the keyboard prints them, option and command on a mac
-  const platform = window.navigator.platform;
-  const mac = /mac|iphone|ipad/i.test(platform);
+  const platform = window.navigator.platform.toLowerCase();
+  const mac = ['mac', 'iphone', 'ipad'].some(name => platform.includes(name));
   const MODIFIER_NAMES: Record<string, string> = mac
     ? { control: '⌃ Control', alt: '⌥ Option', shift: '⇧ Shift', meta: '⌘ Cmd' }
     : { control: 'Ctrl', alt: 'Alt', shift: 'Shift', meta: 'Win' };
@@ -32,16 +32,14 @@
     escape: 'Esc',
     enter: '↵ Enter',
     minus: '-',
-    numpadsubtract: 'Num -',
   };
 
   /** the key as the inspector compares it, letters and digits by physical key */
   function key_of(e: KeyboardEvent) {
-    if (/^Key[A-Z]$/.test(e.code)) return e.code.slice(3).toLowerCase();
-    if (/^Digit\d$/.test(e.code)) return e.code.slice(5);
-    // `-` separates the keys of a combo, so the minus keys are saved by code (`minus`)
-    if (e.key === '-') return e.code.toLowerCase();
-    return e.key.toLowerCase() === 'control' ? 'control' : e.key;
+    if (e.code.startsWith('Key') && e.code.length === 4) return e.code.slice(3).toLowerCase();
+    if (e.code.startsWith('Digit') && e.code.length === 6) return e.code.slice(5);
+    // modifiers lowercase, as in a combo
+    return MODIFIERS.includes(e.key.toLowerCase()) ? e.key.toLowerCase() : e.key;
   }
 
   function show(v: string) {
@@ -72,7 +70,8 @@
       return;
     }
     const mods = MODIFIERS.filter(m => e.getModifierState(m.charAt(0).toUpperCase() + m.slice(1)));
-    finish([...mods, name].join('-'));
+    // `-` separates the keys of a combo, so the minus key is saved as `minus`
+    finish([...mods, name === '-' ? 'minus' : name].join('-'));
   }
 
   function keyup(e: KeyboardEvent) {

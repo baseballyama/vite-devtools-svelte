@@ -3,9 +3,8 @@ import { mount, unmount } from 'svelte';
 import options from 'virtual:vite-devtools-svelte-inspector-options';
 import SettingsView from 'virtual:vite-devtools-svelte-inspector-path:SettingsView.svelte';
 
-import { RESET_SETTINGS, SAVE_SETTINGS, SETTINGS_FILE } from './settings-constants.js';
-
-type ActionResult = { ok: boolean; status: string };
+import { RESET_SETTINGS, SAVE_SETTINGS } from './settings-shared.js';
+import type { ActionResult } from './settings-shared.js';
 
 /** the parts of `DockClientScriptContext` used here */
 interface DockContext {
@@ -57,7 +56,6 @@ export default function setup(ctx: DockContext): void {
       props: {
         current,
         defaults: __internal.defaults ?? current,
-        file: SETTINGS_FILE,
         save: (settings: unknown) => call(SAVE_SETTINGS, settings),
         reset: () => call(RESET_SETTINGS),
       },

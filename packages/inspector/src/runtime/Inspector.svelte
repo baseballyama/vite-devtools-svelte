@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import options from 'virtual:vite-devtools-svelte-inspector-options';
 
-  import { INSPECTOR_ICON_HOTSPOT, INSPECTOR_ICON_SVG } from './icon.js';
+  import { INSPECTOR_ICON_HOTSPOT, INSPECTOR_ICON_URL } from './icon.js';
 
   // Copied from Svelte's internal types
   interface DevStackEntry {
@@ -42,7 +42,11 @@
 
   let { openInEditor, onenabledchange, ignore }: Props = $props();
 
-  const toggle_combo = options.toggleKeyCombo.toLowerCase().split('-');
+  // vite-devtools-svelte: `minus` stands for the `-` key, which separates the keys of a combo
+  const toggle_combo = options.toggleKeyCombo
+    .toLowerCase()
+    .split('-')
+    .map(k => (k === 'minus' ? '-' : k));
   const escape_keys = options.escapeKeys.map(k => k.toLowerCase());
   const nav_keys = Object.values(options.navKeys).map(k => k.toLowerCase());
   const open_key = options.openKey.toLowerCase();
@@ -51,7 +55,7 @@
   let enabled = $state(false);
   let has_opened = $state(false);
 
-  const icon = `data:image/svg+xml;base64,${btoa(INSPECTOR_ICON_SVG)}`;
+  const icon = INSPECTOR_ICON_URL;
 
   // overlay positioning
   let x = $state(0),
@@ -103,23 +107,24 @@
     return undefined;
   }
 
-  function find_selectable_for_nav(key: string) {
+  // vite-devtools-svelte: matched like `is_nav`, so a key recorded by its code (e.g. `w`)
+  // also moves on other keyboard layouts, where `e.key` differs
+  function find_selectable_for_nav(e: KeyboardEvent) {
     const el = active_el;
     if (!el) {
       return find_selectable_child(document.body);
     }
-    switch (key) {
-      case options.navKeys.parent:
-        return find_selectable_parent(el);
-      case options.navKeys.child:
-        return find_selectable_child(el);
-      case options.navKeys.next:
-        return find_selectable_sibling(el) || find_selectable_parent(el);
-      case options.navKeys.prev:
-        return find_selectable_sibling(el, true) || find_selectable_parent(el);
-      default:
-        return;
-    }
+    const { parent, child, next, prev } = options.navKeys;
+    const keys = [parent, child, next, prev].map(k => k.toLowerCase());
+    // by the physical key first: on AZERTY `e.key` of KeyZ is the `w` another direction uses
+    const physical = physical_key(e.code);
+    let i = keys.indexOf(physical);
+    if (i === -1) i = keys.indexOf(e.key.toLowerCase());
+    if (i === 0) return find_selectable_parent(el);
+    if (i === 1) return find_selectable_child(el);
+    if (i === 2) return find_selectable_sibling(el) || find_selectable_parent(el);
+    if (i === 3) return find_selectable_sibling(el, true) || find_selectable_parent(el);
+    return undefined;
   }
 
   function is_selectable(el: Element | null): el is ElementWithMetadata {
@@ -304,7 +309,7 @@
       }
     } else if (enabled) {
       if (is_nav(e)) {
-        const el = find_selectable_for_nav(e.key);
+        const el = find_selectable_for_nav(e);
         if (el) {
           activate(el);
           stop(e);

@@ -1,46 +1,54 @@
-import fs from 'node:fs';
-import path from 'node:path';
-
-import { OPTIONS_ENV_KEY } from './options.js';
-import { SETTINGS_FILE } from './runtime/settings-constants.js';
+import { same } from './runtime/settings-shared.js';
+import type { Settings } from './runtime/settings-shared.js';
 import type { InspectorOptions } from './types.js';
 
-const setsKey = (line: string) =>
-  new RegExp(`^\\s*(export\\s+)?${OPTIONS_ENV_KEY}\\s*=`).test(line);
+/** a single space is a key, the default menu key */
+const isKey = (value: unknown): value is string =>
+  typeof value === 'string' && (value === ' ' || value.trim() !== '');
 
-type Settings = Required<Omit<InspectorOptions, '__internal'>>;
+/** `-` separates the keys, so no part may be empty (the minus key is saved as `minus`) */
+const isCombo = (value: unknown): value is string =>
+  typeof value === 'string' && value.split('-').every(isKey);
+
+/** options that may set only some navigation keys */
+export type SavedOptions = Partial<Omit<Settings, 'navKeys'>> & {
+  navKeys?: Partial<Settings['navKeys']>;
+};
+
+const NAV_LABELS = {
+  parent: 'Parent',
+  child: 'First child',
+  next: 'Next sibling',
+  prev: 'Previous sibling',
+} as const;
 
 /** `value` as a key setting, or throws a message naming `label` */
 function keySetting(value: unknown, label: string): string {
-  // a single space is a key, the default menu key
-  if (typeof value !== 'string' || value === '' || (value !== ' ' && value.trim() === '')) {
-    throw new Error(`${label} needs a key`);
-  }
-  // saved inside single quotes in the env file, which cannot be escaped
-  if (value.includes("'")) throw new Error(`${label} can't be '`);
+  if (!isKey(value)) throw new Error(`${label} needs a key`);
   return value;
 }
 
-/** check the options the settings view sends before they are written to an env file */
+/** check the options the settings view sends before they are saved */
 export function validateSettings(input: unknown): { options: Settings } | { error: string } {
   try {
     if (input === null || typeof input !== 'object') throw new Error('No settings to save');
     const settings = input as Record<string, unknown>;
+    if (!isCombo(settings.toggleKeyCombo)) throw new Error('Shortcut needs a key');
     const nav = (settings.navKeys ?? {}) as Record<string, unknown>;
     const escape: unknown[] = Array.isArray(settings.escapeKeys) ? settings.escapeKeys : [];
     if (escape.length === 0) throw new Error('Stop picking needs at least one key');
     return {
       options: {
-        toggleKeyCombo: keySetting(settings.toggleKeyCombo, 'Shortcut').toLowerCase(),
+        toggleKeyCombo: settings.toggleKeyCombo.toLowerCase(),
         holdMode: settings.holdMode === true,
         openKey: keySetting(settings.openKey, 'Open in editor'),
         openMenuKey: keySetting(settings.openMenuKey, 'Component menu'),
         escapeKeys: escape.map(k => keySetting(k, 'Stop picking')),
         navKeys: {
-          parent: keySetting(nav.parent, 'Parent'),
-          child: keySetting(nav.child, 'First child'),
-          next: keySetting(nav.next, 'Next sibling'),
-          prev: keySetting(nav.prev, 'Previous sibling'),
+          parent: keySetting(nav.parent, NAV_LABELS.parent),
+          child: keySetting(nav.child, NAV_LABELS.child),
+          next: keySetting(nav.next, NAV_LABELS.next),
+          prev: keySetting(nav.prev, NAV_LABELS.prev),
         },
         customStyles: settings.customStyles === true,
       },
@@ -50,46 +58,78 @@ export function validateSettings(input: unknown): { options: Settings } | { erro
   }
 }
 
-/** the options in `options` that differ from `base` */
-export function changedOptions(
-  options: InspectorOptions,
-  base: InspectorOptions,
-): Record<string, unknown> {
-  const changed: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(options)) {
-    if (key === '__internal') continue;
-    if (JSON.stringify(value) !== JSON.stringify(base[key as keyof InspectorOptions])) {
-      changed[key] = value;
+/**
+ * the options in `input` the inspector can run with, from a hand-written variable or saved
+ * settings: others are dropped and named in `invalid`, `navKeys` may set only some keys
+ */
+export function pickOptions(input: unknown): { options: SavedOptions; invalid: string[] } {
+  const options: SavedOptions = {};
+  const invalid: string[] = [];
+  if (input === null || typeof input !== 'object') return { options, invalid };
+  const record = input as Record<string, unknown>;
+  const take = (key: Exclude<keyof Settings, 'navKeys'>, valid: boolean) => {
+    if (!(key in record)) return;
+    if (valid) Object.assign(options, { [key]: record[key] });
+    else invalid.push(key);
+  };
+  take('toggleKeyCombo', isCombo(record.toggleKeyCombo));
+  take('openKey', isKey(record.openKey));
+  take('openMenuKey', isKey(record.openMenuKey));
+  take('holdMode', typeof record.holdMode === 'boolean');
+  take('customStyles', typeof record.customStyles === 'boolean');
+  take(
+    'escapeKeys',
+    Array.isArray(record.escapeKeys) &&
+      record.escapeKeys.length > 0 &&
+      record.escapeKeys.every(isKey),
+  );
+  if ('navKeys' in record) {
+    const nav = record.navKeys;
+    if (nav === null || typeof nav !== 'object') {
+      invalid.push('navKeys');
+    } else {
+      const picked: Partial<Settings['navKeys']> = {};
+      for (const [direction, key] of Object.entries(nav)) {
+        if (direction in NAV_LABELS && isKey(key)) {
+          picked[direction as keyof Settings['navKeys']] = key;
+        } else {
+          invalid.push(`navKeys.${direction}`);
+        }
+      }
+      options.navKeys = picked;
     }
   }
-  return changed;
+  return { options, invalid };
+}
+
+/** `base` with `patches` applied in order, `navKeys` merged key by key */
+export function mergeOptions(
+  base: Settings,
+  ...patches: (InspectorOptions | SavedOptions | undefined)[]
+): Settings {
+  const merged = { ...base, navKeys: { ...base.navKeys } };
+  for (const patch of patches) {
+    if (!patch) continue;
+    const { __internal: _, navKeys, ...rest } = patch as InspectorOptions;
+    Object.assign(merged, rest);
+    Object.assign(merged.navKeys, navKeys);
+  }
+  return merged;
 }
 
 /**
- * set `SVELTE_DEVTOOLS_INSPECTOR_OPTIONS` in the .env.local of `dir`, keeping other lines
- * `null` or `{}` removes it, and the file if nothing else is left
- * @returns the file written
+ * the saved options once `form` is saved: the options changed from what runs now (`base` with
+ * `saved`) are set, or removed when they equal `base`; the others stay as they were, since
+ * other projects with other defaults may rely on them
  */
-export function writeSettings(dir: string, options: Record<string, unknown> | null): string {
-  const file = path.join(dir, SETTINGS_FILE);
-  const existing = fs.existsSync(file) ? fs.readFileSync(file, 'utf-8') : '';
-  const lines = existing === '' ? [] : existing.replace(/\r?\n$/, '').split(/\r?\n/);
-  const kept = lines.filter(line => !setsKey(line));
-  if (options && Object.keys(options).length > 0) {
-    kept.push(`${OPTIONS_ENV_KEY}='${JSON.stringify(options)}'`);
+export function updateSaved(saved: SavedOptions, form: Settings, base: Settings): SavedOptions {
+  const current = mergeOptions(base, saved);
+  const next: Record<string, unknown> = { ...saved };
+  for (const [key, value] of Object.entries(form)) {
+    const option = key as keyof Settings;
+    if (same(value, current[option])) continue;
+    if (same(value, base[option])) delete next[key];
+    else next[key] = value;
   }
-  if (kept.length > 0) {
-    fs.writeFileSync(file, `${kept.join('\n')}\n`);
-  } else if (existing !== '') {
-    fs.rmSync(file);
-  }
-  return file;
-}
-
-/** env files vite loads after .env.local for `mode` that also set the variable, their value wins */
-export function overridingEnvFiles(dir: string, mode: string): string[] {
-  return [`.env.${mode}`, `.env.${mode}.local`].filter(name => {
-    const file = path.join(dir, name);
-    return fs.existsSync(file) && fs.readFileSync(file, 'utf-8').split(/\r?\n/).some(setsKey);
-  });
+  return next;
 }
