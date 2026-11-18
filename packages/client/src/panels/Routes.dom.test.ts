@@ -151,7 +151,6 @@ describe('Routes', () => {
     const { user, tree } = await setup();
     await user.click(item(tree, '[slug]'));
     const details = screen.getByRole('complementary', { name: '/blog/[slug] details' });
-    expect(within(details).getByText('src/routes/blog/[slug]')).toBeTruthy();
     expect(within(details).getByText('slug=word').getAttribute('title')).toBe('matcher: word');
     expect(within(details).getByText('+page.server')).toBeTruthy();
     // Dynamic routes cannot be visited directly.
@@ -179,7 +178,6 @@ describe('Routes', () => {
     const { user, tree } = await setup();
     await user.click(item(tree, '/'));
     const details = screen.getByRole('complementary', { name: '/ details' });
-    expect(within(details).getByText('src/routes')).toBeTruthy();
     expect(within(details).getByText('page')).toBeTruthy();
     expect(within(details).getByText('layout')).toBeTruthy();
     expect(within(details).getByText('none')).toBeTruthy();
@@ -213,18 +211,6 @@ describe('Routes', () => {
     await user.click(item(tree, '(app)'));
     await user.keyboard('{Enter}');
     expect(rpc.openInEditor).toHaveBeenCalledTimes(3);
-  });
-
-  it("shows the route's directory under a custom routes dir (files.routes), Windows paths too", async () => {
-    vi.mocked(rpc.getRoutes).mockResolvedValue([
-      route('/settings', {
-        files: [{ type: 'page', path: 'C:\\app\\src\\app-routes\\settings\\+page.svelte' }],
-      }),
-    ]);
-    const { user, tree } = await setup();
-    await user.click(item(tree, 'settings'));
-    const details = screen.getByRole('complementary', { name: '/settings details' });
-    expect(within(details).getByText('C:\\app\\src\\app-routes\\settings')).toBeTruthy();
   });
 
   it('does nothing when a route has no files', async () => {

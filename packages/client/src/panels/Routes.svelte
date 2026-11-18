@@ -52,12 +52,6 @@
     return (n: RouteNode) => !!n.route && (!k || k(n.route)) && (!m || m(n.route.path, n.route.id));
   });
 
-  /** The route's directory on disk (where its files live, under the configured routes dir). */
-  function routeDir(r: RouteInfo): string | undefined {
-    const file = r.files[0]?.path;
-    return file?.slice(0, Math.max(file.lastIndexOf('/'), file.lastIndexOf('\\')));
-  }
-
   const counts = $derived({
     pages: routes.data.filter(KINDS.pages).length,
     endpoints: routes.data.filter(KINDS.endpoints).length,
@@ -196,7 +190,7 @@
     {#snippet aside()}
       {#if selectedRoute}
         {@const r = selectedRoute}
-        <Inspector title={r.path} subtitle={routeDir(r)} onclose={() => (selected = null)}>
+        <Inspector title={r.path} onclose={() => (selected = null)}>
           {#snippet badges()}
             {#if r.hasPage}<Badge tone="accent">page</Badge>{/if}
             {#if r.hasLayout}<Badge tone="purple">layout</Badge>{/if}

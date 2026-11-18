@@ -1,25 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { normalizePath } from 'vite';
-
 import type { RouteInfo, ParamInfo, RouteFile } from '../types.js';
 import { HEX_DIGITS, WORD_CHARS, consistsOf } from './text.js';
-
-/**
- * The routes directory SvelteKit resolved (`files.routes`, absolute once its
- * `config` hook ran), read from its setup plugin as SvelteKit's own
- * `extract_svelte_config` does; `undefined` without SvelteKit.
- */
-export function kitRoutesDir(
-  plugins: readonly { name: string; api?: unknown }[],
-): string | undefined {
-  const api = plugins.find(p => p.name === 'vite-plugin-sveltekit-setup')?.api as
-    | { options?: { files?: { routes?: unknown } } }
-    | undefined;
-  const routes = api?.options?.files?.routes;
-  return typeof routes === 'string' ? normalizePath(routes) : undefined;
-}
 
 export function analyzeRoutes(routesDir: string | undefined): RouteInfo[] {
   if (!routesDir || !fs.existsSync(routesDir)) return [];

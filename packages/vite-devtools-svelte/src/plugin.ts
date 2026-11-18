@@ -2,13 +2,14 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 
 import { launchEditor } from 'devframe/utils/launch-editor';
+import { normalizePath } from 'vite';
 import type { Plugin, ResolvedConfig, ViteDevServer } from 'vite';
 
 import { serverResolver } from './analyzers/api.js';
 import { analyzeComponents } from './analyzers/components.js';
 import type { GraphModuleLike } from './analyzers/module-graph.js';
 import { analyzeProject } from './analyzers/project.js';
-import { analyzeRoutes, kitRoutesDir } from './analyzers/routes.js';
+import { analyzeRoutes } from './analyzers/routes.js';
 import { createMcpMiddleware, MCP_PATH } from './mcp/http.js';
 import { buildMcpServer } from './mcp/server.js';
 import { SessionStore } from './mcp/sessions.js';
@@ -148,7 +149,13 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     configResolved(resolvedConfig) {
       config = resolvedConfig;
       root = config.root;
-      routesDir = kitRoutesDir(config.plugins);
+      // SvelteKit's `files.routes`, made absolute in its `config` hook (read
+      // the way its own `extract_svelte_config` does).
+      const kit = config.plugins.find(p => p.name === 'vite-plugin-sveltekit-setup')?.api as
+        | { options?: { files?: { routes?: unknown } } }
+        | undefined;
+      const routes = kit?.options?.files?.routes;
+      routesDir = typeof routes === 'string' ? normalizePath(routes) : undefined;
       hostedByViteDevtools = config.plugins.some(p => p.name === VITE_DEVTOOLS_PLUGIN);
     },
 

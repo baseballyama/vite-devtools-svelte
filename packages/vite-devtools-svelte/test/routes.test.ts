@@ -9,14 +9,8 @@ import path from 'node:path';
 import * as fc from 'fast-check';
 import { describe, it, expect, afterAll } from 'vitest';
 
-import {
-  analyzeRoutes,
-  classifyFile,
-  kitRoutesDir,
-  parseRouteId,
-} from '../src/analyzers/routes.js';
+import { analyzeRoutes, classifyFile, parseRouteId } from '../src/analyzers/routes.js';
 import type { ParamInfo, RouteFile, RouteInfo } from '../src/types.js';
-import { kitSetup } from './helpers.js';
 
 const tmpRoots: string[] = [];
 afterAll(() => {
@@ -252,20 +246,5 @@ describe('parseRouteId properties', () => {
         expect(routePath.startsWith('/')).toBe(true);
       }),
     );
-  });
-});
-
-describe('kitRoutesDir', () => {
-  it("reads files.routes from SvelteKit's setup plugin, `/`-separated", () => {
-    const dir = path.join(os.tmpdir(), 'app', 'src', 'app-routes');
-    expect(kitRoutesDir([{ name: 'other' }, kitSetup(dir)])).toBe(dir.split(path.sep).join('/'));
-  });
-
-  it.each<[string, { name: string; api?: unknown }[]]>([
-    ['without SvelteKit', [{ name: 'vite-plugin-svelte:config', api: {} }]],
-    ['without an api', [{ name: 'vite-plugin-sveltekit-setup' }]],
-    ['with a non-string routes', [kitSetup(1 as never)]],
-  ])('undefined %s', (_label, plugins) => {
-    expect(kitRoutesDir(plugins)).toBeUndefined();
   });
 });
