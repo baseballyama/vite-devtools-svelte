@@ -8,7 +8,6 @@
   import EmptyState from '../components/EmptyState.svelte';
   import Highlight from '../components/Highlight.svelte';
   import Inspector from '../components/Inspector.svelte';
-  import LiveControls from '../components/LiveControls.svelte';
   import Panel from '../components/Panel.svelte';
   import RefreshButton from '../components/RefreshButton.svelte';
   import SearchField from '../components/SearchField.svelte';
@@ -282,7 +281,7 @@
   }
 </script>
 
-<Panel title="Components" count={mode.value === 'tree' ? liveList.length : relations.data.length}>
+<Panel title="Components">
   {#snippet toolbar()}
     <Segmented
       label="View"
@@ -315,9 +314,7 @@
     {/if}
   {/snippet}
   {#snippet actions()}
-    {#if mode.value === 'tree'}
-      <LiveControls res={live} />
-    {:else}
+    {#if mode.value !== 'tree'}
       <RefreshButton res={relations} label="Re-analyze" />
     {/if}
   {/snippet}

@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as rpc from '../lib/rpc.js';
 import type { StateTimelineDelta, StateTimelineEntry } from '../lib/types.js';
-import { layout, settle } from '../test/dom.js';
+import { fakePollClock, layout, nextPoll, settle } from '../test/dom.js';
 import StateTimeline from './StateTimeline.svelte';
 
 function entry(seq: number, over: Partial<StateTimelineEntry> = {}): StateTimelineEntry {
@@ -61,7 +61,6 @@ describe('StateTimeline', () => {
     expect(rows()[0]!.querySelector('.new')?.textContent).toBe('4');
     // Two distinct signal ids (s1 twice).
     expect(screen.getByText('2 signals')).toBeTruthy();
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('3');
   });
 
   it('filters by signal, component or value, with a no-match state', async () => {
@@ -128,6 +127,7 @@ describe('StateTimeline', () => {
   });
 
   it('appends deltas after the cursor and replaces the list on a reset', async () => {
+    fakePollClock();
     const pulls = vi.mocked(rpc.getStateTimelineDelta);
     pulls.mockResolvedValueOnce(delta([entry(1), entry(2)]));
     render(StateTimeline);
@@ -136,34 +136,20 @@ describe('StateTimeline', () => {
 
     // Append: only entries after the cursor arrive.
     pulls.mockResolvedValueOnce(delta([entry(3)], { reset: false }));
-    await userEvent.click(screen.getByRole('button', { name: /^Refresh/ }));
-    await settle();
+    await nextPoll(1000);
     expect(pulls).toHaveBeenLastCalledWith(2);
     expect(rows()).toHaveLength(3);
 
     // Nothing new: the list is kept.
     pulls.mockResolvedValueOnce(delta([], { reset: false, cursor: 3 }));
-    await userEvent.click(screen.getByRole('button', { name: /^Refresh/ }));
-    await settle();
+    await nextPoll(1000);
     expect(rows()).toHaveLength(3);
 
     // A cursor the server cannot continue (clear, restart): the whole buffer, reset.
     pulls.mockResolvedValueOnce(delta([entry(1, { name: 'fresh' })]));
-    await userEvent.click(screen.getByRole('button', { name: /^Refresh/ }));
-    await settle();
+    await nextPoll(1000);
     expect(pulls).toHaveBeenLastCalledWith(3);
     expect(rows().map(r => r.querySelector('.name')?.textContent)).toEqual(['fresh']);
-  });
-
-  it('pauses and resumes live updates', async () => {
-    render(StateTimeline);
-    await settle();
-    const live = screen.getByRole('button', { name: /Live/ });
-    expect(live.getAttribute('aria-pressed')).toBe('true');
-    await userEvent.click(live);
-    expect(screen.getByRole('button', { name: /Paused/ }).getAttribute('aria-pressed')).toBe(
-      'false',
-    );
   });
 
   it('discloses capture limits and an incomplete baseline', async () => {

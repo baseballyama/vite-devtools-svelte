@@ -277,7 +277,7 @@
   }
 </script>
 
-<Panel title="API" count={endpoints.data.length}>
+<Panel title="API">
   {#snippet toolbar()}
     <SearchField bind:value={query} placeholder="Filter endpoints…" count={rows.length} />
   {/snippet}

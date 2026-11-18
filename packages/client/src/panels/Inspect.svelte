@@ -106,7 +106,7 @@
   });
 </script>
 
-<Panel title="Compiled output" count={files.data.length}>
+<Panel title="Compiled output">
   {#snippet toolbar()}
     <SearchField bind:value={query} placeholder="Find a .svelte file…" count={rows.length} />
     {#if result}

@@ -5,7 +5,6 @@ import {
   errorMessage,
   basename,
   componentName,
-  formatAgo,
   formatBytes,
   formatClock,
   formatMs,
@@ -260,28 +259,5 @@ describe('prettyValue', () => {
     [cyclic, ''],
   ])('prettyValue(%s) → %j', (v, expected) => {
     expect(prettyValue(v)).toBe(expected);
-  });
-});
-
-describe('formatAgo', () => {
-  const now = 1_000_000_000;
-  it.each([
-    [null, 'never'],
-    [now, 'just now'],
-    [now - 1499, 'just now'],
-    [now - 2000, '2s ago'],
-    [now - 59_000, '59s ago'],
-    [now - 60_000, '1m ago'],
-    [now - 59 * 60_000, '59m ago'],
-    [now - 60 * 60_000, '1h ago'],
-    [now - 25 * 3_600_000, '25h ago'],
-    // A timestamp from the future (clock skew) is not "-5s ago".
-    [now + 5000, 'just now'],
-  ])('formatAgo(%s) → %j', (ts, expected) => {
-    expect(formatAgo(ts, now)).toBe(expected);
-  });
-
-  it('defaults `now` to the current time', () => {
-    expect(formatAgo(Date.now())).toBe('just now');
   });
 });

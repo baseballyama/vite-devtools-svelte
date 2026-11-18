@@ -82,7 +82,6 @@ describe('resource: one load', () => {
       loading: true,
       busy: true,
       error: null,
-      updatedAt: null,
     });
     f.last().resolve([1, 2]);
     await settle();
@@ -91,7 +90,6 @@ describe('resource: one load', () => {
       loading: false,
       busy: false,
       error: null,
-      updatedAt: 1_000,
     });
   });
 
@@ -175,27 +173,6 @@ describe('resource: polling', () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
-  it('paused starts without polling; live toggles it', async () => {
-    const fetcher = vi.fn(() => Promise.resolve(1));
-    const { res, flush } = mount(fetcher, { initial: 0, interval: 1_000, paused: true });
-    await vi.advanceTimersByTimeAsync(5_000);
-    // The first load still happens; only polling is paused.
-    expect(fetcher).toHaveBeenCalledTimes(1);
-    expect(res.live).toBe(false);
-    res.live = true;
-    flush();
-    await vi.advanceTimersByTimeAsync(2_000);
-    // Resuming loads at once, then polls.
-    expect(fetcher).toHaveBeenCalledTimes(4);
-    res.live = false;
-    flush();
-    await settle();
-    const paused = fetcher.mock.calls.length;
-    await vi.advanceTimersByTimeAsync(5_000);
-    expect(fetcher).toHaveBeenCalledTimes(paused);
-    expect(visibility).toHaveLength(0);
-  });
-
   it('stops polling and listening when its owner is destroyed', async () => {
     const fetcher = vi.fn(() => Promise.resolve(1));
     const { stop } = mount(fetcher, { initial: 0, interval: 1_000 });
@@ -249,7 +226,6 @@ describe('resource: change detection', () => {
     await vi.advanceTimersByTimeAsync(3_000);
     expect(fetcher).toHaveBeenCalledTimes(4);
     expect(res.data).toBe(first);
-    expect(res.updatedAt).toBe(4_000);
   });
 
   it('always replaces data it cannot serialise', async () => {

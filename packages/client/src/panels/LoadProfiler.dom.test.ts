@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as rpc from '../lib/rpc.js';
 import type { LoadProfile } from '../lib/types.js';
-import { layout, settle } from '../test/dom.js';
+import { fakePollClock, layout, nextPoll, settle } from '../test/dom.js';
 import LoadProfiler from './LoadProfiler.svelte';
 
 const loads: LoadProfile[] = [
@@ -70,6 +70,7 @@ describe('LoadProfiler', () => {
   });
 
   it('keeps the selected call selected when the server drops older ones', async () => {
+    fakePollClock();
     vi.mocked(rpc.getLoadProfiles).mockResolvedValue(loads);
     render(LoadProfiler);
     await settle();
@@ -77,8 +78,8 @@ describe('LoadProfiler', () => {
     await userEvent.click(within(list).getByRole('option', { name: /about/ }));
     // The server buffer is bounded: the oldest call falls off the front.
     vi.mocked(rpc.getLoadProfiles).mockResolvedValue(loads.slice(1));
-    await userEvent.click(screen.getByRole('button', { name: /^Refresh/ }));
-    await settle();
+    await nextPoll(2000);
+    expect(routes()).toEqual(['/about', '/']);
     const selected = within(list).getByRole('option', { selected: true });
     expect(selected.querySelector('.route')!.textContent).toBe('/about');
   });
@@ -87,7 +88,6 @@ describe('LoadProfiler', () => {
     vi.mocked(rpc.getLoadProfiles).mockResolvedValue(loads);
     render(LoadProfiler);
     await settle();
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('3');
     expect(routes()).toEqual(['/about', '/', '/blog/[slug]']);
     expect(stat('Calls')).toBe('3');
     expect(stat('Max')).toBe('250 ms');

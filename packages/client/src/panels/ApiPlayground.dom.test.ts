@@ -98,7 +98,7 @@ beforeEach(() => {
 });
 
 describe('ApiPlayground', () => {
-  it('lists endpoints with their methods and a count', async () => {
+  it('lists endpoints with their methods', async () => {
     const { list } = await setup();
     const options = within(list).getAllByRole('option');
     expect(options).toHaveLength(3);
@@ -106,7 +106,6 @@ describe('ApiPlayground', () => {
     expect(options[0]!.textContent).toContain('POST');
     // More than three methods collapse into a "+n" badge.
     expect(options[1]!.textContent).toContain('+2');
-    expect(screen.getByRole('heading', { name: /API/ }).textContent).toContain('3');
     // Nothing picked yet.
     expect(within(response()).getByText('Send a request')).toBeTruthy();
     expect(sendButton().disabled).toBe(true);

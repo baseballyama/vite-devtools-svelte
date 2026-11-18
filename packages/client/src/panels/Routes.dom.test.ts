@@ -109,7 +109,6 @@ describe('Routes', () => {
     expect(item(tree, '[...rest]').querySelector('.seg.rest')).toBeTruthy();
     expect(item(tree, '[slug]').querySelector('.seg.param')).toBeTruthy();
     expect(item(tree, '(app)').querySelector('.seg.group.dir')).toBeTruthy();
-    expect(screen.getByRole('heading', { name: /Routes/ }).textContent).toContain('6');
   });
 
   it('filters by kind with counts', async () => {

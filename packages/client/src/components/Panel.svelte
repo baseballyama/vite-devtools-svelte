@@ -2,28 +2,24 @@
   import type { Snippet } from 'svelte';
 
   /**
-   * Panel chrome: one compact header row (title, count, toolbar, actions)
+   * Panel chrome: one compact header row (title, toolbar, actions)
    * above a body that fills the remaining height. Lists scroll themselves;
    * pass `scroll` for document-like panels.
    */
   interface Props {
     title: string;
-    count?: number | string | null;
     toolbar?: Snippet;
     actions?: Snippet;
     scroll?: boolean;
     children: Snippet;
   }
 
-  let { title, count = null, toolbar, actions, scroll = false, children }: Props = $props();
+  let { title, toolbar, actions, scroll = false, children }: Props = $props();
 </script>
 
 <section class="panel" aria-label={title}>
   <header class="header">
-    <h1 class="title">
-      {title}
-      {#if count != null}<span class="count num">{count}</span>{/if}
-    </h1>
+    <h1 class="title">{title}</h1>
     {#if toolbar}<div class="toolbar">{@render toolbar()}</div>{/if}
     {#if actions}<div class="actions">{@render actions()}</div>{/if}
   </header>
@@ -58,11 +54,6 @@
     font-weight: 600;
     letter-spacing: -0.005em;
     white-space: nowrap;
-  }
-  .count {
-    font-size: var(--fs-xs);
-    font-weight: 500;
-    color: var(--fg-faint);
   }
   .toolbar {
     display: flex;

@@ -75,7 +75,6 @@ describe('Assets', () => {
     ]);
     expect(within(list).getByText('image/png')).toBeTruthy();
     expect(screen.getByTitle('Total size of shown assets').textContent).toBe('924.9 KB');
-    expect(screen.getByRole('heading', { name: /Assets/ }).textContent).toContain('6');
   });
 
   it('sorts by column, toggling the direction', async () => {

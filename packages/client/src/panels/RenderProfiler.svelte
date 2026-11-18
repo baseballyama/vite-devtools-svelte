@@ -5,7 +5,6 @@
   import DataTable from '../components/DataTable.svelte';
   import Highlight from '../components/Highlight.svelte';
   import Inspector from '../components/Inspector.svelte';
-  import LiveControls from '../components/LiveControls.svelte';
   import Panel from '../components/Panel.svelte';
   import ResourceEmpty from '../components/ResourceEmpty.svelte';
   import SearchField from '../components/SearchField.svelte';
@@ -160,7 +159,7 @@
   }
 </script>
 
-<Panel title="Render" count={profiles.data.length}>
+<Panel title="Render">
   {#snippet toolbar()}
     <Segmented
       label="Group by"
@@ -175,9 +174,6 @@
     <span class="summary num"
       >{totals.renders.toLocaleString()} renders · {formatMs(totals.time)}</span
     >
-  {/snippet}
-  {#snippet actions()}
-    <LiveControls res={profiles} />
   {/snippet}
 
   <SplitView id="render" open={!!current}>

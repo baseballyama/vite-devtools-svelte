@@ -7,7 +7,7 @@ import { reactiveScope } from '../lib/reactive-selection.svelte.js';
 import { router } from '../lib/router.svelte.js';
 import * as rpc from '../lib/rpc.js';
 import type { ComponentInstance, ComponentRelation, LiveComponentsMeta } from '../lib/types.js';
-import { layout, settle } from '../test/dom.js';
+import { fakePollClock, layout, nextPoll, settle } from '../test/dom.js';
 import Components from './Components.svelte';
 
 const c = (
@@ -73,7 +73,6 @@ describe('Components: live tree', () => {
     expect(second.getAttribute('aria-posinset')).toBe('2');
     expect(second.getAttribute('aria-setsize')).toBe('2');
     expect(second.hasAttribute('aria-expanded')).toBe(false);
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('5');
   });
 
   it('collapses and expands all', async () => {
@@ -180,6 +179,7 @@ describe('Components: live tree', () => {
   });
 
   it('keeps the selection on the same instance when a sibling unmounts', async () => {
+    fakePollClock();
     render(Components);
     await settle();
     await userEvent.click(row('Row', 1)); // #5
@@ -188,8 +188,7 @@ describe('Components: live tree', () => {
     );
     // #4 goes away: #5 becomes the first <Row>, its path key shifts.
     vi.mocked(rpc.getLiveComponents).mockResolvedValue(instances.filter(i => i.id !== 4));
-    await userEvent.click(screen.getByRole('button', { name: /^Refresh/ }));
-    await settle();
+    await nextPoll(2000);
     expect(labels()).toEqual(['<App>', '<Layout>', '<Page>', '<Row>']);
     expect(row('Row').getAttribute('aria-selected')).toBe('true');
     expect(screen.getByRole('complementary', { name: '<Row> details' }).textContent).toContain(
@@ -257,15 +256,6 @@ describe('Components: live tree', () => {
     await settle();
     expect(screen.getByRole('alert').textContent).toContain('app gone');
   });
-
-  it('pauses live updates', async () => {
-    render(Components);
-    await settle();
-    await userEvent.click(screen.getByRole('button', { name: /Live/ }));
-    expect(screen.getByRole('button', { name: /Paused/ }).getAttribute('aria-pressed')).toBe(
-      'false',
-    );
-  });
 });
 
 async function files() {
@@ -288,7 +278,6 @@ describe('Components: files', () => {
     const cells = [...rowEl.querySelectorAll('.end')].map(e => e.textContent);
     // Row: no imports, used by Page, 2 mounted.
     expect(cells).toEqual(['', '1', '2']);
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('3');
     // Persisted across reloads.
     expect(localStorage.getItem('svelte-devtools:components:mode')).toBe('"files"');
   });

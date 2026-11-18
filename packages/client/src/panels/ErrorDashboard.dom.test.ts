@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as rpc from '../lib/rpc.js';
 import type { CompilerWarning, RuntimeError } from '../lib/types.js';
-import { layout, settle } from '../test/dom.js';
+import { fakePollClock, layout, nextPoll, settle } from '../test/dom.js';
 import ErrorDashboard from './ErrorDashboard.svelte';
 
 const XSS = '<img src=x onerror="alert(1)"><script>alert(2)</script>';
@@ -78,10 +78,10 @@ describe('ErrorDashboard', () => {
     expect(within(options[1]!).queryByTitle('Open in editor')).toBeNull();
     // Markup in messages is text.
     expect(list.querySelector('img, script')).toBeNull();
-    expect(screen.getByRole('heading', { name: /Problems/ }).textContent).toContain('5');
   });
 
   it('keeps the selected error selected when a newer one arrives', async () => {
+    fakePollClock();
     const { user, list } = await setup();
     await user.click(within(list).getAllByRole('option')[1]!);
     expect(screen.getByRole('complementary').textContent).toContain('older error');
@@ -89,8 +89,7 @@ describe('ErrorDashboard', () => {
       ...errors,
       { message: 'newest error', timestamp: 3_000 },
     ]);
-    await user.click(screen.getByRole('button', { name: /^Refresh/ }));
-    await settle();
+    await nextPoll(3000);
     expect(messages(list)[0]).toBe('newest error');
     const selected = within(list).getByRole('option', { selected: true });
     expect(selected.querySelector('.msg')!.textContent).toBe('older error');
@@ -222,15 +221,5 @@ describe('ErrorDashboard', () => {
     await setup();
     const notice = screen.getByRole('status', { name: /150 more exist/ });
     expect(notice.textContent).toMatch(/Showing\s+100\s+of\s+250/);
-  });
-
-  it('pauses and resumes live updates', async () => {
-    const { user } = await setup();
-    const live = screen.getByRole('button', { name: 'Live' });
-    expect(live.getAttribute('aria-pressed')).toBe('true');
-    await user.click(live);
-    expect(screen.getByRole('button', { name: 'Paused' }).getAttribute('aria-pressed')).toBe(
-      'false',
-    );
   });
 });
