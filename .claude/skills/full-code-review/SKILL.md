@@ -9,7 +9,7 @@ Review the branch as its code owner would, phase by phase. Each phase finds prob
 
 ## Ground rules
 
-- **Verify, don't trust.** This skill and `implementation-checklist.md` say where to look, not what is true; the code at HEAD wins. Reviewer output (subagents, CodeRabbit, Codex) is a claim until you have read the cited lines and can state the concrete failure. Drop what you cannot confirm.
+- **Verify, don't trust.** This skill and `implementation-checklist.md` say where to look, not what is true; the code at HEAD wins. Reviewer output (subagents, Codex) is a claim until you have read the cited lines and can state the concrete failure. Drop what you cannot confirm.
 - **Every finding** has a severity, `file:line`, the failure scenario (input/state → wrong result), and a fix.
 - **Fix with consent.** Present findings in one batch per phase or chunk; apply what the user approves. When the user asked for the review only, report and stop.
 - **Never merge.** Commit or push only when the user asks.
@@ -69,14 +69,13 @@ For each chunk, in table order, launch the reviewers below **in parallel in one 
 
 Skip a reviewer that has nothing to look at (e.g. Security on a docs chunk). For `changeset`, `lockfile`, `docs`, and `apps` chunks, a single combined reviewer is enough; for `lockfile`, only check that changes match the `package.json` edits.
 
-**External reviewers**, once for the whole branch at the start of Phase 3, in the background, if installed and authenticated (otherwise record "skipped"):
+**External reviewer**, once for the whole branch at the start of Phase 3, in the background, if installed and authenticated (otherwise record "skipped"):
 
 ```bash
-coderabbit review --agent --base "$BASE"      # add --uncommitted / --include-untracked as needed
 codex review --base "$BASE"
 ```
 
-Assign their findings to chunks and verify them like any other.
+Assign its findings to chunks and verify them like any other.
 
 **Per chunk:** merge and dedupe the findings, verify each yourself, present them, apply approved fixes, then re-run only the reviewers that reported Critical/Major, on the files touched. Repeat until no unwaived Critical/Major remains. After three rounds on one chunk, ask the user whether to continue.
 
@@ -95,7 +94,7 @@ Progress line: `Chunk 2/7 (plugin: src/server/) · round 1`.
 
 ```
 ## Review summary — Approve / Request changes
-Base: origin/main · 12 files · 4 chunks · CodeRabbit ✓ · Codex skipped (not installed)
+Base: origin/main · 12 files · 4 chunks · Codex skipped (not installed)
 
 | Phase | Result | Fixed | Waived |
 |---|---|---|---|
