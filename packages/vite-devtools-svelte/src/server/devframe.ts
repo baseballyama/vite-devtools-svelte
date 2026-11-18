@@ -54,7 +54,7 @@ export interface SvelteDevtoolsHost {
   collector: Collector;
   /** Absolute project root. */
   root: () => string;
-  /** SvelteKit's routes directory, when SvelteKit configured one (else `src/routes` or `src/pages`). */
+  /** SvelteKit's routes directory; `undefined` without SvelteKit (no routes). */
   routesDir: () => string | undefined;
   /** Public base the dev server serves the app (and static files) under. */
   publicBase: () => string;
@@ -87,8 +87,8 @@ const action = <N extends string, R>(name: N, handler: () => R) => plain('action
 
 export function createRpcFunctions(host: SvelteDevtoolsHost) {
   const { collector } = host;
-  const project = () => analyzeProject(host.root(), host.routesDir());
-  const routes = () => analyzeRoutes(project().routesDir);
+  const project = () => analyzeProject(host.root());
+  const routes = () => analyzeRoutes(host.routesDir());
 
   return [
     query('get-project', project),

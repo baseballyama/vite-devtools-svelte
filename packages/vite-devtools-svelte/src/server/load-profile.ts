@@ -16,35 +16,29 @@ const LOAD_FILES: Record<string, LoadProfile['type']> = {
   '+layout.js': 'universal',
 };
 
-/**
- * The route id of a load file: its directory under `routesDir`, or under the
- * first `routes` directory on its path when it lies elsewhere; `/` when there
- * is none.
- */
-function routeOf(file: string, routesDir: string): string {
+/** The route id of a load file (its directory under `routesDir`), or `null` outside it. */
+function routeOf(file: string, routesDir: string): string | null {
   const dir = file.slice(0, file.lastIndexOf('/'));
-  if (dir === routesDir || dir.startsWith(`${routesDir}/`)) {
-    return dir.slice(routesDir.length) || '/';
-  }
-  const segments = dir.split('/');
-  const i = segments.indexOf('routes');
-  return i === -1 ? '/' : `/${segments.slice(i + 1).join('/')}`;
+  if (dir === routesDir) return '/';
+  return dir.startsWith(`${routesDir}/`) ? dir.slice(routesDir.length) : null;
 }
 
 /**
  * Wrap the exported `load` of a SvelteKit load file (`+page.ts`,
  * `+layout.server.js`, …) so each call reports its duration and data size,
- * or `null` when `id` is not a load file or declares no exported `load`.
+ * or `null` when `id` is not a load file under `routesDir` (absolute,
+ * `/`-separated) or declares no exported `load`.
  *
  * Only the `export` keyword is removed (the local binding stays, so the
  * module's own references keep the original) and a profiled wrapper is
- * exported as `load` instead; line numbers are unchanged. `routesDir` is the
- * absolute, `/`-separated routes directory route ids are taken from.
+ * exported as `load` instead; line numbers are unchanged.
  */
 export function profileLoad(code: string, id: string, routesDir: string): string | null {
   // Cheap checks first: this runs for every module the dev server serves.
   const type = LOAD_FILES[id.slice(id.lastIndexOf('/') + 1)];
   if (!type || id.includes('node_modules') || !code.includes('load')) return null;
+  const route = routeOf(id, routesDir);
+  if (route === null) return null;
   // The module record only: oxc builds it natively, without materialising
   // an AST in JS.
   const { module, errors } = parseSync(id, code);
@@ -57,7 +51,7 @@ export function profileLoad(code: string, id: string, routesDir: string): string
   // Names the stripped `export` covered besides `load`, exported again.
   const others = stmt.entries.map(e => e.localName.name!).filter(n => n !== 'load');
   const local = code.slice(0, stmt.start) + code.slice(entry.start);
-  return local + profiledExport(others, routeOf(id, routesDir), id, type);
+  return local + profiledExport(others, route, id, type);
 }
 
 // Measuring must never change what load does: a result JSON can't encode (a

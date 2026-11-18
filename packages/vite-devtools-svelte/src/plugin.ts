@@ -7,8 +7,8 @@ import type { Plugin, ResolvedConfig, ViteDevServer } from 'vite';
 import { serverResolver } from './analyzers/api.js';
 import { analyzeComponents } from './analyzers/components.js';
 import type { GraphModuleLike } from './analyzers/module-graph.js';
-import { analyzeProject, kitRoutesDir } from './analyzers/project.js';
-import { analyzeRoutes } from './analyzers/routes.js';
+import { analyzeProject } from './analyzers/project.js';
+import { analyzeRoutes, kitRoutesDir } from './analyzers/routes.js';
 import { createMcpMiddleware, MCP_PATH } from './mcp/http.js';
 import { buildMcpServer } from './mcp/server.js';
 import { SessionStore } from './mcp/sessions.js';
@@ -197,8 +197,8 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
           logger: devServer.config.logger,
           createServer: () =>
             buildMcpServer({
-              getProject: () => analyzeProject(root, routesDir),
-              getRoutes: () => analyzeRoutes(analyzeProject(root, routesDir).routesDir),
+              getProject: () => analyzeProject(root),
+              getRoutes: () => analyzeRoutes(routesDir),
               getLiveSnapshot: () => collector.liveSnapshot,
               getComponentRelations: () => analyzeComponents(root),
               getRenderProfiles: () => collector.renderProfiles,
@@ -337,8 +337,8 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     },
 
     transform(code, id) {
-      if (!serving()) return null;
-      const profiled = profileLoad(code, id, routesDir ?? path.posix.join(root, 'src/routes'));
+      if (!serving() || !routesDir) return null;
+      const profiled = profileLoad(code, id, routesDir);
       return profiled === null ? null : { code: profiled, map: null };
     },
   };

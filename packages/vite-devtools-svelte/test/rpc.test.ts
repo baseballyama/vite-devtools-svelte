@@ -72,14 +72,15 @@ describe('devframe definition', () => {
 describe('project analysis RPCs', () => {
   const rpc = rpcHandlers(createTestHost(FIXTURES_DIR, { publicBase: () => '/base/' }));
 
-  it("get-routes scans the host's routes directory (SvelteKit's files.routes)", async () => {
+  it("get-routes scans the host's routes directory (SvelteKit's files.routes), none without one", async () => {
+    const none = rpcHandlers(createTestHost(FIXTURES_DIR, { routesDir: () => {} }));
+    expect(await none.get('svelte-devtools:get-routes')!()).toEqual([]);
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sdt-kit-routes-'));
     const routesDir = path.join(root, 'src/app-routes');
     fs.mkdirSync(path.join(routesDir, 'blog'), { recursive: true });
     fs.writeFileSync(path.join(routesDir, 'blog/+page.svelte'), '');
     try {
       const custom = rpcHandlers(createTestHost(root, { routesDir: () => routesDir }));
-      expect((await custom.get('svelte-devtools:get-project')!()).routesDir).toBe(routesDir);
       const routes = await custom.get('svelte-devtools:get-routes')!();
       expect(routes.map((r: { id: string }) => r.id)).toEqual(['blog']);
     } finally {

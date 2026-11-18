@@ -23,7 +23,7 @@ pnpm examples kit-config            # http://localhost:5211/base/  （DevTools �
 - [x] dock モードでも `/__devtools/embedded.js` が注入されドックが出る
 - [x] **Assets**: `static/logo.svg` の公開 URL が `/base/logo.svg` と表示され、プレビューも出る
 - [x] **API**: `http://localhost:5211/base/api/echo` を直接入力すれば呼べる
-- [ ] **Routes**: 0 件（「src/routes がない」と表示）。プラグインは `src/routes` / `src/pages` しか見ていない → **既知のギャップ**
+- [x] **Routes**: `files.routes` の `src/app-routes` 配下のルートが出る
 - [ ] **Load functions**: 記録はされるが、すべてのルート ID が `/` になる（`app-routes` 配下のディレクトリをルートとして扱えていない）→ **既知のギャップ**
 - [ ] **API**: エンドポイント一覧が空（Routes に依存）
 - [ ] **Social preview**: ルート一覧が空。`http://localhost:5211/` は `/base` へのリダイレクトで失敗、`http://localhost:5211/base/` を直接入力すれば取れる。`og:image` が相対 URL（`./logo.svg`、`paths.relative` の既定）でも警告されない

@@ -482,7 +482,6 @@ export function createMockBackend(scale = 5000) {
         vitest: '^4.1.10',
         playwright: '^1.63.0',
       },
-      routesDir: 'src/routes',
       staticDir: 'static',
     }),
     'svelte-devtools:get-routes': () => routes,

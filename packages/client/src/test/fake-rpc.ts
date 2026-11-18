@@ -37,7 +37,6 @@ export const project: ProjectInfo = {
   viteVersion: '6.0.0',
   dependencies: {},
   devDependencies: {},
-  routesDir: 'src/routes',
   staticDir: 'static',
 };
 

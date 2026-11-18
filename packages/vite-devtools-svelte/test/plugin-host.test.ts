@@ -11,7 +11,7 @@ import * as mcpServerModule from '../src/mcp/server.js';
 import type { McpDeps } from '../src/mcp/server.js';
 import { SessionStore } from '../src/mcp/sessions.js';
 import { svelteDevtools } from '../src/plugin.js';
-import { callHook, resolvePlugins } from './helpers.js';
+import { callHook, kitSetup, resolvePlugins } from './helpers.js';
 
 const editor = vi.hoisted(() => ({ launchEditor: vi.fn() }));
 vi.mock('devframe/utils/launch-editor', () => editor);
@@ -38,7 +38,10 @@ const graphModule = (file: string, imports: string[] = []) => ({
   importedModules: imports.map(f => ({ file: f })),
 });
 
-function setup(serverOverrides: Record<string, unknown> = {}, appPlugins: object[] = []) {
+function setup(
+  serverOverrides: Record<string, unknown> = {},
+  appPlugins: object[] = [kitSetup(path.join(FIXTURES, 'src/routes'))],
+) {
   const plugins: Plugin[] = svelteDevtools();
   resolvePlugins(plugins, {
     root: FIXTURES,
@@ -258,23 +261,18 @@ describe('MCP server wiring', () => {
     expect(deps.getLoadProfiles()).toMatchObject([{ route: '/', file: PAGE }]);
     expect(deps.getStateTimelineDelta().changes.map(c => c.id)).toEqual(['n']);
     expect(deps.getCaptureInfo().liveComponents?.total).toBe(1);
-    expect(deps.getProject().routesDir).toBe(path.join(FIXTURES, 'src/routes'));
     expect(deps.getRoutes().length).toBeGreaterThan(0);
     expect(deps.getComponentRelations().length).toBeGreaterThan(0);
     expect(deps.sessions).toBeInstanceOf(SessionStore);
   });
 
-  it("project and routes follow SvelteKit's files.routes", async () => {
-    const routesDir = path.join(FIXTURES, 'src/routes/api');
-    const kitSetup = {
-      name: 'vite-plugin-sveltekit-setup',
-      api: { options: { files: { routes: routesDir } } },
-    };
-    const s = setup({}, [kitSetup]);
+  it("routes follow SvelteKit's files.routes, and are empty without SvelteKit", async () => {
+    const s = setup({}, [kitSetup(path.join(FIXTURES, 'src/routes/api'))]);
     s.configure();
-    const deps = await mcpDeps(s);
-    expect(deps.getProject().routesDir).toBe(routesDir.split(path.sep).join('/'));
-    expect(deps.getRoutes().map(r => r.id)).toEqual(['hello', 'items', 'users']);
+    expect((await mcpDeps(s)).getRoutes().map(r => r.id)).toEqual(['hello', 'items', 'users']);
+    const plain = setup({}, []);
+    plain.configure();
+    expect((await mcpDeps(plain)).getRoutes()).toEqual([]);
   });
 
   it('sessions measure the live collector', async () => {
