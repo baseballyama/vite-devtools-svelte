@@ -57,6 +57,18 @@ async function connect(): Promise<DevframeRpcClient> {
   return client;
 }
 
+const listTools = (from: string) =>
+  fetch(`${origin}/.svelte-devtools/__mcp`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      accept: 'application/json, text/event-stream',
+      'mcp-protocol-version': '2025-06-18',
+      origin: from,
+    },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+  });
+
 function wsProbe(url: string, wsOrigin: string): Promise<'open' | 'rejected'> {
   return new Promise(resolve => {
     const ws = new WebSocket(url, { headers: { Origin: wsOrigin } });
@@ -110,7 +122,22 @@ describe('standalone host (initDevframe on the Vite dev server)', () => {
     };
     expect(meta.backend).toBe('websocket');
     expect(meta.websocket).toEqual({ path: '__ws' });
-    expect(meta.mcp).toBeUndefined();
+    expect(meta.mcp).toEqual({ path: '__mcp' });
+  });
+
+  it("serves the MCP tools on devframe's route too", async () => {
+    const res = await listTools(origin);
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    // One SSE `message` event: the JSON-RPC answer follows `data: `.
+    const json = JSON.parse(body.slice(body.indexOf('{'))) as {
+      result: { tools: Array<{ name: string }> };
+    };
+    expect(json.result.tools.map(t => t.name)).toContain('svelte-devtools_get_routes');
+  });
+
+  it('the MCP route refuses a foreign origin', async () => {
+    expect((await listTools('https://example.com')).status).toBe(403);
   });
 
   it('gates RPC behind auth; the magic link points at the SPA; a code exchange trusts the client', async () => {

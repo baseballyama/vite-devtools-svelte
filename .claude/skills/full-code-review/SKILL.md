@@ -31,7 +31,7 @@ These are what most reviews hinge on. Confirm each against the code before relyi
 - **Server → UI** over devframe RPC: `defineRpcFunction` in `src/server/devframe.ts`, typed in `src/types.ts`, called from `packages/client/src/lib/rpc.ts`. Arguments are validated with zod.
 - **Bounded memory.** Long-lived datasets use `Ring` (`src/server/ring.ts`) or another explicit cap.
 - **Security** helpers in `src/server/security.ts`: outbound URLs go through `validateExternalUrl` / its DNS-resolving variant; served files through `resolveWithinRoot`. The standalone UI is gated by a one-time code (`clientAuth`, `src/server/mount.ts`).
-- **MCP** endpoint (`src/mcp/http.ts`) is gated by a token; its tools never modify the user's project.
+- **MCP** endpoint (`src/mcp/http.ts`) is gated by a token; the same tools are on devframe's agent host (`registerAgentTools`), behind its loopback-only route. They never modify the user's project.
 - **UI** (`packages/client`, shipped in the plugin's `dist/client`): panels register in `src/lib/panels.ts`; reuse `src/components/`; colors and sizes come from `src/lib/design-system.css` tokens.
 - **Shipped skills** (`packages/vite-devtools-svelte/skills/`): `name` equals the directory name, lowercase with hyphens (enforced by `test/skills.test.ts`).
 - **Public API** = the plugin options and the npm package contents. Changing either needs README and changeset updates.

@@ -17,6 +17,9 @@ import { getOGPreview } from '../analyzers/og.js';
 import { analyzeProject } from '../analyzers/project.js';
 import { analyzeRoutes } from '../analyzers/routes.js';
 import { findReactiveLine } from '../analyzers/source.js';
+import { registerAgentTools } from '../mcp/server.js';
+import type { McpDeps } from '../mcp/server.js';
+import type { SessionStore } from '../mcp/sessions.js';
 import type {
   CaptureInfoMap,
   ElementPick,
@@ -58,6 +61,7 @@ export interface SvelteDevtoolsHost {
   /** The OG preview may call these. */
   serverOrigins: () => string[];
   openInEditor: (target: string) => void;
+  sessions: () => SessionStore;
 }
 
 const filePath = z.string().min(1).max(4096);
@@ -214,9 +218,30 @@ export function createRpcFunctions(host: SvelteDevtoolsHost) {
   ] as const;
 }
 
+/** What the MCP tools read, for both the plugin's endpoint and devframe's route. */
+export function mcpDeps(host: SvelteDevtoolsHost): McpDeps {
+  const { collector } = host;
+  return {
+    getProject: () => analyzeProject(host.root(), host.routesDir() !== undefined),
+    getRoutes: () => analyzeRoutes(host.routesDir()),
+    getLiveSnapshot: () => collector.liveSnapshot,
+    getComponentRelations: () => analyzeComponents(host.root()),
+    getRenderProfiles: () => collector.renderProfiles,
+    getReactiveGraph: () => collector.requestReactiveGraph(),
+    getLoadProfiles: () => collector.loadProfiles,
+    getFpsSamples: () => collector.fpsSamples,
+    sessions: host.sessions(),
+    getReactiveSummary: req => collector.requestReactiveSummary(req),
+    getReactiveScope: req => collector.requestReactiveGraph(req),
+    getStateTimelineDelta: since => collector.getStateTimelineDelta(since),
+    getCaptureInfo: () => collector.getCaptureInfo(),
+  };
+}
+
 export function createSvelteDevframe(host: SvelteDevtoolsHost): DevframeDefinition {
   // A host may run setup again (dev-server restart): one picker subscription at a time.
   let detachPicker: (() => void) | undefined;
+  let unregisterAgentTools: (() => void) | undefined;
   return defineDevframe({
     id: DEVFRAME_ID,
     name: 'Svelte',
@@ -240,6 +265,15 @@ export function createSvelteDevframe(host: SvelteDevtoolsHost): DevframeDefiniti
     setup(ctx) {
       const scoped = ctx.scope(DEVFRAME_ID);
       for (const fn of createRpcFunctions(host)) scoped.rpc.register(fn);
+      unregisterAgentTools?.();
+      unregisterAgentTools = registerAgentTools(ctx.agent, mcpDeps(host), {
+        namespace: DEVFRAME_ID,
+        // Same lease as the plugin's endpoint: if this call woke the runtime up,
+        // wait for its activation snapshot so the first answer isn't stale.
+        beforeCall: async () => {
+          if (host.collector.lease('mcp', 60_000)) await host.collector.waitForSnapshot(1000);
+        },
+      });
       const docks = (ctx as { docks?: { activate?: (dockId: string) => void } }).docks;
       detachPicker?.();
       detachPicker = host.collector.onElementPicked(pick => {

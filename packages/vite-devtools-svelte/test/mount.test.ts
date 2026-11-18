@@ -169,7 +169,8 @@ describe('mount lifecycle', () => {
   it('middleware mode: SSE through the same middleware, disposed by the caller', async () => {
     const f = fakeServer({ http: false });
     const dispose = mountStandalone(f.server as never, DEF)!;
-    expect(lastOptions()).toMatchObject({ ws: false, sse: true, mcp: false });
+    expect(lastOptions()).toMatchObject({ ws: false, sse: true });
+    expect(lastOptions()).not.toHaveProperty('mcp');
     const instance = lastInstance();
     const next = vi.fn();
     f.stack[0]!({ url: '/.svelte-devtools/' }, res(), next);

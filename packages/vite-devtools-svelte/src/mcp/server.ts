@@ -1,4 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { AgentHandle, DevframeAgentHost } from 'devframe';
 import { z } from 'zod';
 
 import type {
@@ -75,12 +76,76 @@ export function text(value: unknown) {
 
 export const error = (message: string) => ({ ...text(message), isError: true });
 
+type ToolResult = ReturnType<typeof text> & { isError?: boolean };
+
+type ToolHost = Pick<McpServer, 'registerTool'>;
+
 export function buildMcpServer(deps: McpDeps): McpServer {
   const server = new McpServer(
     { name: 'vite-devtools-svelte', version: '0.1.0' },
     { instructions: MCP_INSTRUCTIONS },
   );
+  registerTools(server, deps);
+  return server;
+}
 
+export interface AgentToolsOptions {
+  namespace: string;
+  /** Runs before each tool call, after its input is validated. */
+  beforeCall: () => Promise<void>;
+}
+
+/** The same tools on devframe's agent host, served by its MCP route. Returns their unregister. */
+export function registerAgentTools(
+  agent: DevframeAgentHost,
+  deps: McpDeps,
+  opts: AgentToolsOptions,
+): () => void {
+  const handles: AgentHandle[] = [];
+  const host = {
+    registerTool(
+      name: string,
+      config: {
+        title: string;
+        description: string;
+        inputSchema: z.ZodRawShape;
+        annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean };
+      },
+      handler: (input: unknown) => ToolResult | Promise<ToolResult>,
+    ) {
+      const schema = z.object(config.inputSchema);
+      const { readOnlyHint, destructiveHint } = config.annotations ?? {};
+      const handle = agent.registerTool({
+        // The agent host is shared by every devframe in the Vite DevTools hub.
+        id: `${opts.namespace}:${name}`,
+        title: config.title,
+        description: config.description,
+        safety: destructiveHint ? 'destructive' : readOnlyHint === false ? 'action' : 'read',
+        // Flat input, as on the HTTP endpoint; `args` would nest it under `arg0`.
+        inputSchema: z.toJSONSchema(schema),
+        handler: async (args: unknown) => {
+          const input = schema.safeParse(args);
+          if (!input.success) throw new Error(z.prettifyError(input.error));
+          await opts.beforeCall();
+          const result = await handler(input.data);
+          const out = result.content.map(c => c.text).join('\n');
+          // A string, not `withMcpContent`: @devframes/agentic before 1.2.6
+          // ignores that and answers `{}`, and an older Vite DevTools may bring it.
+          if (!result.isError) return out;
+          // devframe answers a throw with `isError: true` and its message.
+          throw new Error(out);
+        },
+      });
+      handles.push(handle);
+    },
+  };
+  registerTools(host as unknown as ToolHost, deps);
+  return () => {
+    for (const handle of handles) handle.unregister();
+  };
+}
+
+function registerTools(server: ToolHost, deps: McpDeps): void {
   server.registerTool(
     'list_performance_issues',
     {
@@ -368,6 +433,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     'start_session',
     {
       title: 'Start measurement session',
+      annotations: { readOnlyHint: false },
       description:
         'Begin capturing metrics under a labelled session. Required before compare_sessions. Set `persist:true` to write to disk on end; otherwise the session lives in memory only.',
       inputSchema: {
@@ -385,6 +451,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     'end_session',
     {
       title: 'End current measurement session',
+      annotations: { readOnlyHint: false },
       description:
         'Closes the active session and returns its delta. `keep` decides disposal: "memory" keeps it for this dev-server lifetime, "disk" writes to .vite-devtools-svelte/sessions/, "discard" deletes it.',
       inputSchema: {
@@ -445,11 +512,10 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     'delete_session',
     {
       title: 'Delete a session',
+      annotations: { readOnlyHint: false, destructiveHint: true },
       description: 'Removes a session from memory and disk.',
       inputSchema: { id: sessionId },
     },
     ({ id }) => text({ deleted: deps.sessions.delete(id) }),
   );
-
-  return server;
 }

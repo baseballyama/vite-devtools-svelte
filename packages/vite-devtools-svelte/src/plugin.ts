@@ -7,10 +7,8 @@ import { normalizePath } from 'vite';
 import type { Plugin, ResolvedConfig, ViteDevServer } from 'vite';
 
 import { serverResolver } from './analyzers/api.js';
-import { analyzeComponents } from './analyzers/components.js';
 import type { GraphModuleLike } from './analyzers/module-graph.js';
 import { analyzeProject } from './analyzers/project.js';
-import { analyzeRoutes } from './analyzers/routes.js';
 import { inspectorPlugin, isInspectorRuntime } from './inspector.js';
 import type { InspectorOptions } from './inspector.js';
 import { createMcpMiddleware, MCP_PATH } from './mcp/http.js';
@@ -31,7 +29,7 @@ import {
 } from './runtime/transform.js';
 import { Collector, HOT_EVENTS } from './server/collector.js';
 import { captureCompilerWarnings } from './server/compiler-warnings.js';
-import { createSvelteDevframe, DEVFRAME_BASE, workflowDockId } from './server/devframe.js';
+import { createSvelteDevframe, DEVFRAME_BASE, mcpDeps, workflowDockId } from './server/devframe.js';
 import type { SvelteDevtoolsHost } from './server/devframe.js';
 import {
   LOAD_RECORDER,
@@ -155,6 +153,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       return [...urls.local, ...urls.network].map(u => new URL(u).origin);
     },
     openInEditor: target => launchEditor(target),
+    sessions: getSessions,
   };
   const devframe = createSvelteDevframe(host);
   const middlewareModeMounts: Array<{ generation: number; dispose: () => Promise<void> }> = [];
@@ -243,22 +242,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
           token: mcpToken,
           collector,
           logger: devServer.config.logger,
-          createServer: () =>
-            buildMcpServer({
-              getProject: () => analyzeProject(root, routesDir !== undefined),
-              getRoutes: () => analyzeRoutes(routesDir),
-              getLiveSnapshot: () => collector.liveSnapshot,
-              getComponentRelations: () => analyzeComponents(root),
-              getRenderProfiles: () => collector.renderProfiles,
-              getReactiveGraph: () => collector.requestReactiveGraph(),
-              getLoadProfiles: () => collector.loadProfiles,
-              getFpsSamples: () => collector.fpsSamples,
-              sessions: getSessions(),
-              getReactiveSummary: req => collector.requestReactiveSummary(req),
-              getReactiveScope: req => collector.requestReactiveGraph(req),
-              getStateTimelineDelta: since => collector.getStateTimelineDelta(since),
-              getCaptureInfo: () => collector.getCaptureInfo(),
-            }),
+          createServer: () => buildMcpServer(mcpDeps(host)),
         }),
       );
     },

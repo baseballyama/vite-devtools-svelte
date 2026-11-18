@@ -92,6 +92,7 @@ async function hub(plugins: Plugin[]) {
       rpc: { register: (fn: any) => handlers.set(fn.name, fn.handler) },
     }),
     docks: { register: vi.fn() },
+    agent: { registerTool: () => ({ unregister: () => {} }) },
   });
   return (name: string, ...args: unknown[]) => handlers.get(name)!(...args);
 }

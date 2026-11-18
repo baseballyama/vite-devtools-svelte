@@ -4,6 +4,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 
 import type { Plugin } from 'vite';
 
+import { SessionStore } from '../src/mcp/sessions.js';
 import { Collector } from '../src/server/collector.js';
 import { createRpcFunctions, DEVFRAME_ID } from '../src/server/devframe.js';
 import type { SvelteDevtoolsHost } from '../src/server/devframe.js';
@@ -23,8 +24,10 @@ export function createTestHost(
   overrides: Partial<SvelteDevtoolsHost> = {},
 ): TestHost {
   const opened: string[] = [];
+  const collector = new Collector();
+  let sessions: SessionStore | undefined;
   return {
-    collector: new Collector(),
+    collector,
     root: () => root,
     routesDir: () => path.join(root, 'src/routes'),
     publicBase: () => '/',
@@ -33,6 +36,15 @@ export function createTestHost(
     openInEditor: target => {
       opened.push(target);
     },
+    sessions: () =>
+      (sessions ??= new SessionStore({
+        persistDir: path.join(root, 'node_modules/.vite-devtools-svelte/sessions'),
+        getters: {
+          getRenderProfiles: () => collector.renderProfiles,
+          getLoadProfiles: () => collector.loadProfiles,
+          getFpsSamples: () => collector.fpsSamples,
+        },
+      })),
     opened,
     ...overrides,
   };

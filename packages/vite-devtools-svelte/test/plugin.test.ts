@@ -182,6 +182,7 @@ async function hubHandlers(plugins: Plugin[]) {
       rpc: { register: (fn: any) => handlers.set(`${id}:${fn.name}`, fn.handler) },
     }),
     docks: { register: vi.fn() },
+    agent: { registerTool: () => ({ unregister: () => {} }) },
   });
   return handlers;
 }
@@ -242,6 +243,7 @@ describe('mainPlugin devtools hook (Vite DevTools)', () => {
     await (main.devtools as any).setup({
       scope: () => ({ rpc: { register: vi.fn() } }),
       docks: { register },
+      agent: { registerTool: () => ({ unregister: () => {} }) },
     });
     expect(register.mock.calls.map(([entry]) => entry)).toEqual([
       {
@@ -393,11 +395,10 @@ describe('middleware mode disposal (closeServer hook)', () => {
     const plugins = svelteDevtools();
     resolve(plugins);
     callHook(plugins[0]!.configureServer, middlewareServer().server);
-    expect(initiate.initDevframe.mock.calls.at(-1)![1]).toMatchObject({
-      ws: false,
-      sse: true,
-      mcp: false,
-    });
+    const options = initiate.initDevframe.mock.calls.at(-1)![1];
+    expect(options).toMatchObject({ ws: false, sse: true });
+    // devframe's default: the MCP route mounts once the tools are registered.
+    expect(options).not.toHaveProperty('mcp');
   });
 });
 
