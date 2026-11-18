@@ -1,6 +1,7 @@
 // Generated from the `mcp-examples` artifact of CI run 37204003993 by
 // scripts/screenshots/mcp-examples.mjs. Real answers; arrays longer than 4
-// are cut (marked `shortened`). Do not edit by hand.
+// are cut (marked `shortened`). Do not edit by hand, except the summary
+// answer: converted to the current response shape until it is re-recorded.
 
 export interface McpExample {
   id: string;
@@ -11,7 +12,7 @@ export interface McpExample {
 }
 
 export const MCP_EXAMPLES_SOURCE =
-  'Recorded by scripts/screenshots/mcp-examples.mjs in CI run 37204003993 (linux x64, Node v22.23.3) at commit 533928b (the PR #85 merge ref), with the 0.4.0 code before the version bump (package version 0.3.0 at capture), on examples/sample-app, a synthetic demo app. Absolute paths are shown as <project> / <repo>, and arrays longer than 4 are cut where marked; no value was changed.';
+  'Recorded by scripts/screenshots/mcp-examples.mjs in CI run 37204003993 (linux x64, Node v22.23.3) at commit 533928b (the PR #85 merge ref), with the 0.4.0 code before the version bump (package version 0.3.0 at capture), on examples/sample-app, a synthetic demo app. Absolute paths are shown as <project> / <repo>, and arrays longer than 4 are cut where marked; no value was changed, except that the get_reactive_summary answer was converted by hand to the current response shape (the time window replaced by computedAt and lastActiveAt, which are illustrative).';
 
 export const MCP_EXAMPLES: McpExample[] = [
   {
@@ -19,16 +20,10 @@ export const MCP_EXAMPLES: McpExample[] = [
     tool: 'get_reactive_summary',
     arguments: {
       topK: 5,
-      windowMs: 30000,
     },
     response: {
       epoch: 'yotxdjn137mutu4dc2',
-      window: {
-        ms: 30000,
-        since: 1791119166841,
-        until: 1791119196841,
-        sampledActiveMs: 5000,
-      },
+      computedAt: 1791119196841,
       policy: 'sampled-200ms',
       coverage: 'component-init',
       components: {
@@ -47,6 +42,7 @@ export const MCP_EXAMPLES: McpExample[] = [
           changes: 2,
           renders: 1,
           renderMs: 0,
+          lastActiveAt: 1791119195295,
         },
         {
           componentId: 2,
@@ -59,6 +55,7 @@ export const MCP_EXAMPLES: McpExample[] = [
           changes: 0,
           renders: 2,
           renderMs: 0.1,
+          lastActiveAt: 1791119195310,
         },
       ],
       other: {

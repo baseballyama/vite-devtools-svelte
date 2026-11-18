@@ -53,7 +53,7 @@
   const GRAPH_LIMIT = 400;
   /** Every graph poll makes the app walk the requested scope: slow, visible-only. */
   const POLL_MS = 5000;
-  const SUMMARY = { topK: 50, windowMs: 10000 } as const;
+  const SUMMARY = { topK: 50 } as const;
   const SUMMARY_POLL_MS = 2000;
 
   type Tab = 'overview' | 'local' | 'full';

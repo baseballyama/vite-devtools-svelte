@@ -32,6 +32,7 @@ const summaryRow = (
   changes,
   renders: changes,
   renderMs: changes / 2,
+  lastActiveAt: 10_000 - changes * 3000,
   ...over,
 });
 
@@ -185,15 +186,18 @@ describe('ReactiveGraph: components overview', () => {
   it('summarises activity per file without fetching a graph', async () => {
     render(ReactiveGraph);
     await settle();
-    expect(rpc.getReactiveSummary).toHaveBeenCalledWith({ topK: 50, windowMs: 10000 });
+    expect(rpc.getReactiveSummary).toHaveBeenCalledWith({ topK: 50 });
     expect(rpc.getReactiveGraph).not.toHaveBeenCalled();
     // one short line; coverage and capability details stay in the MCP answer
-    expect(text()).toMatch(/3 components · 3 active\s+in the last 10 s/);
-    expect(text()).not.toMatch(/Window|Coverage|Not available yet/);
+    expect(text()).toMatch(/3 components · 3 active\s+since mount/);
+    expect(text()).not.toMatch(/Window|Coverage|Not available yet|last \d+ s/);
     const rows = options('Most active components');
     // Grouped by file, most changes first.
     expect(rows.map(r => r.querySelector('.mono')?.textContent)).toEqual(['Counter', 'App']);
     expect(rows[0]!.textContent).toContain('≥ 7');
+    // relative to when the page computed the answer; a file row shows its latest instance
+    expect(rows[0]!.textContent).toContain('6s ago');
+    expect(rows[1]!.textContent).toContain('3s ago');
     expect(screen.getByText(/Listed: 3\s+components \(all active\)/)).toBeTruthy();
     expect(screen.getByText(/Other: unknown\./)).toBeTruthy();
   });
@@ -270,7 +274,7 @@ describe('ReactiveGraph: components overview', () => {
     const body = text();
     expect(body).toContain('top 3 of 9 active');
     expect(body).toContain('Other: 6 components with 40 signals.');
-    expect(body).toMatch(/unknown components · 9 active\s+in the last 10 s/);
+    expect(body).toMatch(/unknown components · 9 active\s+since mount/);
     expect(body).toContain('no app page is connected');
     expect(body).toContain('Sampling baseline: 1 state pending');
   });
@@ -296,6 +300,7 @@ describe('ReactiveGraph: components overview', () => {
       'Changes',
       'Renders',
       'Render time',
+      'Last active',
       'Component',
     ]);
     await userEvent.click(options('Most active components')[0]!);
@@ -303,11 +308,11 @@ describe('ReactiveGraph: components overview', () => {
     expect(screen.queryByRole('complementary')).toBeNull();
   });
 
-  it('shows an empty window', async () => {
+  it('shows an empty overview', async () => {
     vi.mocked(rpc.getReactiveSummary).mockResolvedValue(summary({ rows: [] }));
     render(ReactiveGraph);
     await settle();
-    expect(screen.getByText('No component was active in the window')).toBeTruthy();
+    expect(screen.getByText('No live component has changed or rendered yet')).toBeTruthy();
     expect(screen.getByText(/Listed: 0\s+components/)).toBeTruthy();
   });
 });

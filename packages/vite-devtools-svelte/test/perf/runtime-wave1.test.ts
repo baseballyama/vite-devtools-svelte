@@ -1,5 +1,5 @@
 // Deterministic: fake timers and an injected clock, never wall-clock ratios.
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { countVisits, createRuntime, mountList, pollFn, type Harness } from './harness.js';
 
@@ -428,11 +428,13 @@ describe('reactive summary', () => {
       states[3].v += 100;
       poll();
     }
-    const s = h.dt.getReactiveSummary({ topK: 1, windowMs: 10_000 });
+    const before = Date.now();
+    const s = h.dt.getReactiveSummary({ topK: 1 });
     expect(s.policy).toBe('sampled-200ms');
     expect(s.coverage).toBe('component-init');
     expect(s.rows).toHaveLength(1);
     expect(s.rows[0].componentId).toBe(list.ids[3]);
+    expect(s.rows[0].changes).toBe(3);
     expect(s.rows[0].nodes).toEqual({ state: 1, derived: 1, effect: 1 });
     expect(s.truncated).toBe(true);
     expect(s.components.total).toBe(21);
@@ -445,7 +447,83 @@ describe('reactive summary', () => {
       signalHistory: false,
       writeCause: false,
     });
-    expect(s.window.sampledActiveMs).toBeGreaterThan(0);
+    expect(s.rows[0].lastActiveAt).toBeLessThanOrEqual(before);
+    expect(s.computedAt).toBeGreaterThanOrEqual(before);
+    expect(s.components.withActivity).toBe(2);
+    expect(s).not.toHaveProperty('window');
+  });
+
+  it('ties rank by renders, then render ms, then the most recently active', () => {
+    const h = createRuntime();
+    const list = mountList(h, 4, 1);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(1000);
+      h.dt.recordRender(list.ids[0]);
+      h.dt.recordRenderTime(list.ids[0], 1);
+      vi.setSystemTime(2000);
+      h.dt.recordRender(list.ids[1]);
+      h.dt.recordRenderTime(list.ids[1], 1);
+      h.dt.recordRender(list.ids[2]);
+      h.dt.recordRenderTime(list.ids[2], 5);
+      h.dt.recordRender(list.ids[3]);
+      h.dt.recordRender(list.ids[3]);
+    } finally {
+      vi.useRealTimers();
+    }
+    const rows = h.dt.getReactiveSummary({}).rows;
+    expect(rows.map((r: any) => r.componentId)).toEqual([3, 2, 1, 0].map(i => list.ids[i]));
+    expect(rows.map((r: any) => r.lastActiveAt)).toEqual([2000, 2000, 2000, 1000]);
+  });
+
+  it('topK keeps the highest ranked rows whatever the activity order', () => {
+    const h = createRuntime();
+    const list = mountList(h, 30, 1);
+    // distinct render counts in a scrambled order: instance i renders (i * 7) % 30 times
+    const entries = list.ids.map((id: number, i: number) => ({ id, renders: (i * 7) % 30 }));
+    for (const e of entries) for (let n = 0; n < e.renders; n++) h.dt.recordRender(e.id);
+    const expected = entries
+      .filter(e => e.renders > 0)
+      .toSorted((x, y) => y.renders - x.renders)
+      .slice(0, 5)
+      .map(e => e.id);
+    const s = h.dt.getReactiveSummary({ topK: 5 });
+    expect(s.rows.map((r: any) => r.componentId)).toEqual(expected);
+    expect(s.truncated).toBe(true);
+    expect(s.components.withActivity).toBe(29);
+  });
+
+  it('totals accumulate since mount (no time window) and leave with a destroyed instance', () => {
+    let now = 0;
+    const h = createRuntime({ clock: () => now });
+    const list = mountList(h, 3, 1);
+    const poll = pollFn(h);
+    poll();
+    const state = list.signals.filter((s: any) => s.deps === null)[1];
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      for (let t = 0; t < 4; t++) {
+        // 15 s apart: far beyond the former 10 s window
+        now += 15_000;
+        vi.setSystemTime(now);
+        state.v += 1;
+        poll();
+        h.dt.recordRender(list.ids[1]);
+      }
+      now += 60_000;
+      vi.setSystemTime(now);
+      const s = h.dt.getReactiveSummary({});
+      const row = s.rows.find((r: any) => r.componentId === list.ids[1]);
+      expect(row).toMatchObject({ changes: 4, renders: 4, lastActiveAt: 60_000 });
+      expect(s.components.withActivity).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+    h.dt.unmount(list.ids[1]);
+    const s = h.dt.getReactiveSummary({});
+    expect(s.rows).toEqual([]);
+    expect(s.components).toEqual({ total: 3, withActivity: 0 });
+    expect(h.dt._activity.has(list.ids[1])).toBe(false);
   });
 
   it('counts follow unmount, re-tracking a signal, and same-name signals', () => {

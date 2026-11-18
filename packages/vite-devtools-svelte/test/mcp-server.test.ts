@@ -191,7 +191,8 @@ describe('every tool answers valid input', () => {
       get_routes: [{}, r => expect(r).toEqual([{ id: '/', path: '/' }])],
       get_live_components: [{}, r => expect(r).toEqual([{ id: 1 }])],
       get_component_relations: [{}, r => expect(r[0].name).toBe('A')],
-      get_reactive_summary: [{ topK: 5 }, r => expect(r.req).toEqual({ topK: 5 })],
+      // windowMs was removed: not passed on
+      get_reactive_summary: [{ topK: 5, windowMs: 1000 }, r => expect(r.req).toEqual({ topK: 5 })],
       get_reactive_scope: [{}, r => expect(r.req).toEqual({})],
       get_state_timeline: [
         {},
@@ -251,8 +252,7 @@ describe('input validation', () => {
     ['get_live_components', { includeMeta: 'yes' }],
     ['get_reactive_summary', { topK: 0 }],
     ['get_reactive_summary', { topK: 201 }],
-    ['get_reactive_summary', { windowMs: 999 }],
-    ['get_reactive_summary', { windowMs: 60_001 }],
+    ['get_reactive_summary', { topK: 1.5 }],
     ['get_reactive_scope', { componentId: -1, epoch: 'e' }],
     ['get_reactive_scope', { componentId: 1.5, epoch: 'e' }],
     ['get_reactive_scope', { epoch: 'x'.repeat(201) }],
@@ -295,8 +295,8 @@ describe('input validation', () => {
     ['get_fps_drops', { threshold: 1 }],
     ['get_fps_drops', { threshold: 120, sinceMs: 0 }],
     ['get_live_components', { limit: 50_000 }],
-    ['get_reactive_summary', { topK: 200, windowMs: 60_000 }],
-    ['get_reactive_summary', { windowMs: 1000 }],
+    ['get_reactive_summary', { topK: 200 }],
+    ['get_reactive_summary', { topK: 1 }],
     [
       'get_reactive_scope',
       { componentId: 0, epoch: 'x'.repeat(200), maxNodes: 5000, maxEdges: 20_000 },
