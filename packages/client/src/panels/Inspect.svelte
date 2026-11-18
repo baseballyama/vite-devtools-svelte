@@ -3,6 +3,7 @@
   import CodePane from '../components/CodePane.svelte';
   import EmptyState from '../components/EmptyState.svelte';
   import Highlight from '../components/Highlight.svelte';
+  import Icon from '../components/Icon.svelte';
   import Panel from '../components/Panel.svelte';
   import ResourceEmpty from '../components/ResourceEmpty.svelte';
   import SearchField from '../components/SearchField.svelte';
@@ -197,7 +198,10 @@
         onselect={(n: FileNode) => n.file && load(n.file.file)}
       >
         {#snippet row(n: FileNode)}
-          <span class="truncate" class:dir={!n.file}><Highlight text={n.label} {query} /></span>
+          <span class="node" class:dir={!n.file}>
+            <Icon name={n.file ? 'file' : 'folder'} size={14} />
+            <span class="truncate"><Highlight text={n.label} {query} /></span>
+          </span>
         {/snippet}
         {#snippet empty()}
           <ResourceEmpty
@@ -254,6 +258,15 @@
     stroke: var(--accent);
     stroke-width: 1.5;
     opacity: 0.75;
+  }
+  .node {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+  .node :global(.icon) {
+    color: var(--fg-faint);
   }
   .dir {
     color: var(--fg-muted);
