@@ -221,7 +221,7 @@ svelteDevtools({
   // Require the one-time code for the standalone DevTools (default: true).
   // In the Vite DevTools dock use DevTools({ clientAuth: false }) instead.
   clientAuth: true,
-  // The Svelte Inspector (default: true). Pass its options, or false to leave it out.
+  // Options of the Svelte Inspector, which runs in the Vite DevTools dock.
   inspector: { toggleKeyCombo: 'alt-x', holdMode: true },
 });
 ```

@@ -78,19 +78,13 @@ describe('the inspector inside svelteDevtools()', () => {
   });
 
   it("with Vite DevTools, refuses to start next to vite-plugin-svelte's configured inspector", async () => {
-    await expect(start({}, true)).rejects.toThrow(/pass `inspector: false` to svelteDevtools\(\)/);
+    await expect(start({}, true)).rejects.toThrow(/remove `inspector` from `vitePlugin`/);
   });
 
-  it('with Vite DevTools and `inspector: false`, starts with the built-in inspector', async () => {
-    const env = await start({ inspector: false }, true);
-    expect(names(env)).not.toContain('vite-devtools-svelte-inspector');
-    expect(names(env)).toContain('vite-plugin-svelte-inspector');
-  });
-
-  it('with `inspector: false`, leaves it out', async () => {
-    const env = await start({ inspector: false });
-    expect(names(env)).not.toContain('vite-devtools-svelte-inspector');
-    expect(names(env)).toContain('vite-plugin-svelte-inspector');
+  it('has no off switch: `inspector` takes options only', () => {
+    expectTypeOf<SvelteDevtoolsOptions['inspector']>().toEqualTypeOf<
+      InspectorOptions | undefined
+    >();
   });
 
   it("declares the fork's public options (the published types cannot import it)", () => {

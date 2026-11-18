@@ -85,8 +85,7 @@ export function svelteInspector(options: InspectorOptions = {}): InspectorPlugin
       if (dock && builtin && (builtin.applyToEnvironment?.(env) ?? true) !== false) {
         throw new Error(
           "[vite-devtools-svelte] svelteDevtools() includes the Svelte Inspector, but vite-plugin-svelte's own inspector is enabled as well. " +
-            'Turn that one off: remove `inspector` from `vitePlugin` in svelte.config.js (or from the options of `svelte()`). ' +
-            'To keep it instead, pass `inspector: false` to svelteDevtools().',
+            'Turn that one off: remove `inspector` from `vitePlugin` in svelte.config.js (or from the options of `svelte()`).',
         );
       }
       return true;

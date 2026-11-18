@@ -36,12 +36,6 @@ describe('svelteDevtools factory', () => {
       { name: 'vite-devtools-svelte-inspector', enforce: 'pre', apply: 'serve' },
     ]);
   });
-
-  it('leaves the inspector out with `inspector: false`', () => {
-    const names = svelteDevtools({ inspector: false }).map(p => p.name);
-    expect(names).not.toContain('vite-devtools-svelte-inspector');
-    expect(names).toHaveLength(4);
-  });
 });
 
 // the inspector's runtime, here from its source (the build copies it to dist/inspector/runtime)

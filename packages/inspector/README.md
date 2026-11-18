@@ -14,7 +14,7 @@ This package is the master copy of the inspector: it does not track upstream, an
 except for what running in the Vite DevTools dock needs:
 
 - options come from the plugin argument (`svelteInspector(options)`, which `svelteDevtools({ inspector })` passes on) instead of `vitePlugin.inspector` in `svelte.config.js`
-- adding the plugin always enables it (`svelteDevtools({ inspector: false })` leaves it out): `SVELTE_INSPECTOR_OPTIONS=true|false` does not toggle it (an options object and `SVELTE_INSPECTOR_TOGGLE` still apply)
+- adding the plugin always enables it: `SVELTE_INSPECTOR_OPTIONS=true|false` does not toggle it (an options object and `SVELTE_INSPECTOR_TOGGLE` still apply)
 - it only runs in the [Vite DevTools dock](#in-the-vite-devtools-dock): without `@vitejs/devtools` in the Vite config it does nothing. This part is new, not copied from upstream
 - there is no floating toggle button (`showToggleButton` and `toggleButtonPos` are gone): the dock has its own
 - when vite-plugin-svelte's built-in inspector is configured (`vitePlugin.inspector`) and both would run in the dock, the dev server fails to start with an error that says to turn that one off. When only `SVELTE_INSPECTOR_OPTIONS` / `SVELTE_INSPECTOR_TOGGLE` switch it on, it is turned off instead
@@ -31,7 +31,7 @@ This package is private and never published. It is not meant to be used on its o
 `svelteDevtools()` from `@sveltejs/vite-devtools-svelte` adds it to the plugins it returns,
 and the plugin's build bundles it (plugin code into `dist/inspector/index.mjs`, the
 browser runtime into `dist/inspector/runtime/`). Configure it through the `inspector`
-option, or turn it off with `inspector: false`:
+option:
 
 ```js
 // vite.config.js
@@ -85,7 +85,7 @@ SVELTE_INSPECTOR_OPTIONS='{"holdMode": false, "openKey": "o"}'
 
 ```
 
-> Inspector options set on the environment take precedence over the `inspector` options passed to `svelteDevtools()`. Unlike upstream, `SVELTE_INSPECTOR_OPTIONS=true|false` is ignored: use `svelteDevtools({ inspector: false })` to turn the inspector off. These variables also switch vite-plugin-svelte's built-in inspector on; in the dock, this plugin turns that one off again.
+> Inspector options set on the environment take precedence over the `inspector` options passed to `svelteDevtools()`. Unlike upstream, `SVELTE_INSPECTOR_OPTIONS=true|false` is ignored: the inspector cannot be turned off. These variables also switch vite-plugin-svelte's built-in inspector on; in the dock, this plugin turns that one off again.
 
 ### Plugin options
 

@@ -10,7 +10,7 @@ import { analyzeComponents } from './analyzers/components.js';
 import type { GraphModuleLike } from './analyzers/module-graph.js';
 import { analyzeProject } from './analyzers/project.js';
 import { analyzeRoutes } from './analyzers/routes.js';
-import { inspectorPlugins, isInspectorRuntime } from './inspector.js';
+import { inspectorPlugin, isInspectorRuntime } from './inspector.js';
 import type { InspectorOptions } from './inspector.js';
 import { createMcpMiddleware, MCP_PATH } from './mcp/http.js';
 import { buildMcpServer } from './mcp/server.js';
@@ -58,12 +58,11 @@ export interface SvelteDevtoolsOptions {
   /**
    * The Svelte Inspector: hold the toggle key combo (`alt-x` by default) and
    * click an element to open its source in your editor. It only runs in the
-   * Vite DevTools dock (`@vitejs/devtools`). Pass options to configure it, or
-   * `false` to leave it out. The dev server fails to start when vite-plugin-svelte's
-   * built-in inspector is configured too (`vitePlugin.inspector`): turn that one off.
-   * @default true
+   * Vite DevTools dock (`@vitejs/devtools`). The dev server fails to start when
+   * vite-plugin-svelte's built-in inspector is configured too (`vitePlugin.inspector`):
+   * turn that one off.
    */
-  inspector?: boolean | InspectorOptions;
+  inspector?: InspectorOptions;
 }
 
 /** Name of `@vitejs/devtools`' config plugin; its presence means the hub will call our `devtools.setup`. */
@@ -90,7 +89,7 @@ function collectModules(server: ViteDevServer): GraphModuleLike[] {
 }
 
 export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
-  const { componentTracking = true, clientAuth = true, inspector = true } = options;
+  const { componentTracking = true, clientAuth = true } = options;
 
   let config: ResolvedConfig;
   let server: ViteDevServer | undefined;
@@ -378,6 +377,6 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     trackingPlugin,
     loadProfilePlugin,
     warningCapturePlugin,
-    ...inspectorPlugins(inspector),
+    inspectorPlugin(options.inspector),
   ];
 }

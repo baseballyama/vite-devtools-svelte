@@ -57,9 +57,8 @@ export interface InspectorOptions {
   customStyles?: boolean;
 }
 
-/** The inspector's Vite plugins, or none when `options` is `false`. */
-export function inspectorPlugins(options: boolean | InspectorOptions = true): Plugin[] {
-  if (options === false) return [];
+/** The inspector's Vite plugin. */
+export function inspectorPlugin(options: InspectorOptions = {}): Plugin {
   // its `devtools` hook types only the parts of the Vite DevTools context it uses
-  return [svelteInspector(options === true ? {} : options) as Plugin];
+  return svelteInspector(options) as Plugin;
 }
