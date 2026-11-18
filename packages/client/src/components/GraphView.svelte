@@ -129,6 +129,17 @@
     prevNodeCount = count;
   });
 
+  // The container follows the panel's height: refit when it is resized, unless the user zoomed
+  $effect(() => {
+    const el = containerEl;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      if (!hasManuallyZoomed) fitToView();
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
+
   // Mouse-wheel zoom (centered on cursor)
   function handleWheel(e: WheelEvent) {
     e.preventDefault();
@@ -417,6 +428,8 @@
   .graph-container {
     overflow: hidden;
     flex: 1;
+    /* sized by the parent, not by the SVG's viewBox aspect */
+    min-height: 0;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background: var(--bg);

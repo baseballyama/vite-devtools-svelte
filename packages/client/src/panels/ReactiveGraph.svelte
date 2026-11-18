@@ -560,6 +560,7 @@
   .body {
     flex: 1;
     min-height: 0;
+    overflow: auto;
   }
   .legend {
     margin: 0;
@@ -586,8 +587,12 @@
     text-decoration: underline;
     cursor: pointer;
   }
+  /* The canvas fills the panel below the bars; under the minimum the body scrolls. */
   .graph {
+    display: flex;
+    flex-direction: column;
     height: 100%;
+    min-height: 240px;
     padding: 8px;
   }
   .name {
