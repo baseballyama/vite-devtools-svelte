@@ -2,25 +2,15 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 
 import {
-  assertOutboundUrl,
   isPrivateIP,
+  outboundLookup,
+  publicOnlyLookup,
   resolveWithinRoot,
   validateExternalUrl,
 } from '../src/server/security.js';
-
-const PUBLIC_ANSWER = [{ address: '93.184.215.14', family: 4 }];
-const lookup = vi.hoisted(() =>
-  vi.fn<(host: string, options: object) => Promise<{ address: string; family: number }[]>>(),
-);
-vi.mock('node:dns/promises', () => ({ default: { lookup } }));
-
-beforeEach(() => {
-  lookup.mockReset();
-  lookup.mockResolvedValue(PUBLIC_ANSWER);
-});
 
 // Addresses no outbound request may reach, by range. Boundaries of each
 // range are included so an off-by-one in a prefix length shows up.
@@ -72,6 +62,12 @@ const PRIVATE_IPS = [
   ['64:ff9b::a00:1', 'NAT64 of 10.0.0.1'],
   ['2002:7f00:1::', '6to4 of 127.0.0.1'],
   ['2002:c0a8:101::1', '6to4 of 192.168.1.1'],
+  ['::ffff:0:a00:1', 'SIIT of 10.0.0.1'],
+  ['::ffff:0:7f00:1', 'SIIT of 127.0.0.1'],
+  ['64:ff9b:1::7f00:1', 'local-use NAT64'],
+  ['64:ff9b:1:ffff::1', 'local-use NAT64, end of /48'],
+  ['2001:0:4136:e378::1', 'Teredo'],
+  ['2001:0:ffff:ffff::1', 'Teredo, end of /32'],
   // not an IP literal at all: fail closed
   ['', 'empty'],
   ['not-an-ip', 'a name'],
@@ -102,6 +98,9 @@ const PUBLIC_IPS = [
   ['::808:808', 'IPv4-compatible public'],
   ['64:ff9b::808:808', 'NAT64 of a public address'],
   ['2002:808:808::1', '6to4 of a public address'],
+  ['::ffff:0:808:808', 'SIIT of a public address'],
+  ['64:ff9b:2::1', 'above local-use NAT64'],
+  ['2001:1::1', 'above Teredo'],
 ] as const;
 
 describe('isPrivateIP', () => {
@@ -179,21 +178,18 @@ describe('validateExternalUrl', () => {
   });
 });
 
-describe('assertOutboundUrl', () => {
-  it('allows exactly the dev server origins it is given', async () => {
+describe('outboundLookup', () => {
+  it('connects exactly the dev server origins it is given with the default resolver', () => {
     const allowedOrigins = ['http://localhost:5173'];
-    await expect(
-      assertOutboundUrl('http://localhost:5173/api/hello', { allowedOrigins }),
-    ).resolves.toBeInstanceOf(URL);
+    expect(outboundLookup('http://localhost:5173/api/hello', { allowedOrigins })).toBeUndefined();
     for (const url of [
       'http://localhost:6379/',
       'http://127.0.0.1:5173/',
       'https://localhost:5173/',
       'http://[::1]:5173/',
     ]) {
-      await expect(assertOutboundUrl(url, { allowedOrigins })).rejects.toThrow(/Blocked/);
+      expect(() => outboundLookup(url, { allowedOrigins })).toThrow(/Blocked/);
     }
-    expect(lookup).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -201,49 +197,25 @@ describe('assertOutboundUrl', () => {
     'http://[fe80::1]/',
     'http://[::ffff:127.0.0.1]/',
     'http://[::ffff:7f00:1]/',
+    'http://[::ffff:0:7f00:1]/',
     'http://0.1.2.3/',
+    'http://2130706433/',
+    'http://0x7f.1/',
     'http://169.254.169.254/latest',
     'http://localhost./',
-  ])('rejects the literal %s without a DNS lookup', async url => {
-    await expect(assertOutboundUrl(url)).rejects.toThrow(/Blocked/);
-    expect(lookup).not.toHaveBeenCalled();
+  ])('refuses the literal or internal host %s (no lookup would see it)', url => {
+    expect(() => outboundLookup(url)).toThrow(/Blocked/);
   });
 
-  it.each([
-    [[{ address: '10.0.0.5', family: 4 }]],
-    [[{ address: 'fd00::5', family: 6 }]],
-    [[{ address: '::ffff:127.0.0.1', family: 6 }]],
-    // one private answer among public ones is enough (the client may pick it)
-    [
-      [
-        { address: '93.184.215.14', family: 4 },
-        { address: '127.0.0.1', family: 4 },
-      ],
-    ],
-  ])('rejects a name that resolves to %j', async answer => {
-    lookup.mockResolvedValueOnce(answer);
-    await expect(assertOutboundUrl('https://intranet.example.com/')).rejects.toThrow(
-      /resolves to private/,
-    );
-    expect(lookup).toHaveBeenCalledWith('intranet.example.com', { all: true });
+  it('connects any other name through the public-only lookup', () => {
+    expect(outboundLookup('https://example.com/')).toBe(publicOnlyLookup);
+    expect(outboundLookup('https://example.com./')).toBe(publicOnlyLookup);
+    expect(outboundLookup('http://8.8.8.8/')).toBe(publicOnlyLookup);
   });
 
-  it('rejects a name that does not resolve (fails closed)', async () => {
-    lookup.mockRejectedValueOnce(Object.assign(new Error('ENOTFOUND'), { code: 'ENOTFOUND' }));
-    await expect(assertOutboundUrl('https://nowhere.example/')).rejects.toThrow(/does not resolve/);
-  });
-
-  it('accepts names and literals that resolve to public addresses', async () => {
-    await expect(assertOutboundUrl('https://example.com/')).resolves.toBeInstanceOf(URL);
-    await expect(assertOutboundUrl('https://example.com./')).resolves.toBeInstanceOf(URL);
-    expect(lookup).toHaveBeenLastCalledWith('example.com', { all: true });
-    await expect(assertOutboundUrl('http://8.8.8.8/')).resolves.toBeInstanceOf(URL);
-    expect(lookup).toHaveBeenCalledTimes(2);
-  });
-
-  it('rejects bad schemes before anything else', async () => {
-    await expect(assertOutboundUrl('file:///etc/passwd')).rejects.toThrow(/scheme/);
-    await expect(assertOutboundUrl('nope')).rejects.toThrow(/Invalid URL/);
+  it('refuses bad schemes and URLs', () => {
+    expect(() => outboundLookup('file:///etc/passwd')).toThrow(/scheme/);
+    expect(() => outboundLookup('nope')).toThrow(/Invalid URL/);
   });
 });
 

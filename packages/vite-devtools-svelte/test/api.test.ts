@@ -3,9 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 
 /**
- * API playground: which methods a `+server` file exports (parsed), and the
- * outbound fetch helper the OG preview shares (no redirects, timeout).
- * Offline: fetch is mocked.
+ * API playground: which methods a `+server` file exports (parsed, `export *`
+ * followed).
  */
 import { describe, it, expect, vi, afterEach, afterAll } from 'vitest';
 
@@ -19,7 +18,6 @@ import {
   serverResolver,
 } from '../src/analyzers/api.js';
 import type { ResolveFile } from '../src/analyzers/api.js';
-import { fetchWithTimeout, OUTBOUND_TIMEOUT_MS } from '../src/analyzers/http.js';
 import type { RouteInfo } from '../src/types.js';
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sdt-api-'));
@@ -353,35 +351,5 @@ describe('collectExports: export * from', () => {
       esm: true,
     });
     expect(moduleExports('exports.GET = 1', 'x.js')).toMatchObject({ esm: false });
-  });
-});
-
-function mockFetch(impl: (url: string, init: RequestInit) => Promise<Response>) {
-  // every call in this file passes the URL as a string
-  return vi
-    .spyOn(globalThis, 'fetch')
-    .mockImplementation((url, init) => impl(url as string, init!));
-}
-
-describe('fetchWithTimeout', () => {
-  it('defaults to OUTBOUND_TIMEOUT_MS and clears its timer on success', async () => {
-    vi.useFakeTimers();
-    mockFetch(() => Promise.resolve(new Response('ok')));
-    expect(await fetchWithTimeout('https://e.com', {}, r => r.text())).toBe('ok');
-    expect(vi.getTimerCount()).toBe(0);
-    expect(OUTBOUND_TIMEOUT_MS).toBe(30_000);
-  });
-
-  it('forces redirect: manual even when the caller asks to follow', async () => {
-    const fetchMock = mockFetch(() => Promise.resolve(new Response('')));
-    await fetchWithTimeout('https://e.com', { redirect: 'follow' }, r => r.text());
-    expect(fetchMock.mock.calls[0]![1]!.redirect).toBe('manual');
-  });
-
-  it('propagates a failure of the reader', async () => {
-    mockFetch(() => Promise.resolve(new Response('')));
-    await expect(
-      fetchWithTimeout('https://e.com', {}, () => Promise.reject(new Error('read'))),
-    ).rejects.toThrow('read');
   });
 });

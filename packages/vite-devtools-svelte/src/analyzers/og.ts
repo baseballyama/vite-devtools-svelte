@@ -1,8 +1,27 @@
-import { assertOutboundUrl } from '../server/security.js';
+import { outboundLookup } from '../server/security.js';
 import type { OutboundUrlOptions } from '../server/security.js';
 import type { OGPreview, OGTag } from '../types.js';
 import { HTML_WHITESPACE, collapseWhitespace, decodeEntities, htmlTags } from './html.js';
-import { fetchWithTimeout } from './http.js';
+import { fetchWithTimeout, readCapped } from './http.js';
+
+/**
+ * How much of a page is read for its tags: 1 MB, the cutoff Meta documents
+ * for its crawler (the most generous documented one), so a tag the preview
+ * finds is one a crawler can find. It also keeps a large or endless body
+ * from filling the dev server's memory.
+ */
+export const MAX_PAGE_BYTES = 1024 * 1024;
+
+/**
+ * Sent with the request, as a browser would. Some sites refuse a request
+ * without a User-Agent; a compressed body is decompressed (and the cap
+ * applies to what that yields).
+ */
+const REQUEST_HEADERS = {
+  'user-agent': 'Mozilla/5.0 (compatible; vite-devtools-svelte OG preview)',
+  accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
+  'accept-encoding': 'gzip, deflate, br',
+};
 
 /**
  * Meta tags with a `property` (or `name`) and a `content` attribute, in
@@ -115,18 +134,23 @@ export async function getOGPreview(
 ): Promise<OGPreview> {
   const preview: OGPreview = { url, title: '', description: '', image: '', tags: [], issues: [] };
   try {
-    await assertOutboundUrl(url, options);
+    const lookup = outboundLookup(url, options);
     const page = await fetchWithTimeout(
       url,
-      {},
-      async res => ({
-        status: res.status,
-        location: res.headers.get('location'),
-        html:
-          res.status >= 300 && res.status < 400
-            ? ''
-            : decodeBody(new Uint8Array(await res.arrayBuffer()), res.headers.get('content-type')),
-      }),
+      { lookup, headers: REQUEST_HEADERS },
+      async res => {
+        // A redirect's body is left unread; the request is aborted after this.
+        const redirect = res.status >= 300 && res.status < 400;
+        const { bytes, truncated } = redirect
+          ? { bytes: new Uint8Array(), truncated: false }
+          : await readCapped(res.body, MAX_PAGE_BYTES);
+        return {
+          status: res.status,
+          location: res.headers.location,
+          html: decodeBody(bytes, res.headers['content-type'] ?? null),
+          truncated,
+        };
+      },
       timeoutMs,
     );
     if (page.status >= 300 && page.status < 400) {
@@ -134,6 +158,11 @@ export async function getOGPreview(
       return preview;
     }
     if (page.status >= 400) preview.issues.push(`Responded with HTTP ${page.status}`);
+    if (page.truncated) {
+      preview.issues.push(
+        `Page is larger than ${MAX_PAGE_BYTES / 1024 / 1024} MB; read its start only (crawlers ignore tags past it)`,
+      );
+    }
     const html = page.html;
     preview.tags = parseMetaTags(html);
     const first = (property: string) => preview.tags.find(t => t.property === property)?.content;
