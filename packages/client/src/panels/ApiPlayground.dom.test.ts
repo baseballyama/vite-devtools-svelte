@@ -1,12 +1,13 @@
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { userEvent } from '@testing-library/user-event';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import * as http from '../lib/http.js';
 import type { ApiResponse } from '../lib/http.js';
 import * as rpc from '../lib/rpc.js';
 import type { ApiEndpoint } from '../lib/types.js';
 import { layout, settle } from '../test/dom.js';
+import { versions } from '../test/fake-rpc.js';
 import ApiPlayground from './ApiPlayground.svelte';
 
 vi.mock('../lib/http.js', async importOriginal => ({
@@ -651,6 +652,79 @@ describe('ApiPlayground', () => {
     await user.click(screen.getByRole('button', { name: 'Rescan endpoints' }));
     await settle();
     expect(rpc.getApiEndpoints).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the request and its response when a rescan drops the picked endpoint', async () => {
+    vi.useFakeTimers();
+    onTestFinished(() => void vi.useRealTimers());
+    let apiEndpoints = 0;
+    vi.mocked(rpc.getVersions).mockImplementation(() =>
+      Promise.resolve({ ...versions, apiEndpoints }),
+    );
+    render(ApiPlayground);
+    await vi.advanceTimersByTimeAsync(0);
+    const list = screen.getByRole('listbox', { name: 'API endpoints' });
+    await fireEvent.click(within(list).getAllByRole('option')[0]!);
+    const method = screen.getByRole<HTMLSelectElement>('combobox', { name: 'HTTP method' });
+    await choose(method, 'POST');
+    await fireEvent.click(sendButton());
+    await vi.advanceTimersByTimeAsync(100);
+    const shown = response().textContent;
+    expect(shown).toContain('200');
+
+    vi.mocked(rpc.getApiEndpoints).mockResolvedValue(endpoints.slice(1));
+    apiEndpoints = 1;
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(within(list).getAllByRole('option')).toHaveLength(2);
+    // No endpoint to narrow the picker: every method is offered, the choice stays.
+    expect(within(method).getAllByRole('option')).toHaveLength(7);
+    expect(method.value).toBe('POST');
+    expect(urlInput().value).toBe(`${location.origin}/app/api/users`);
+    expect(response().textContent).toBe(shown);
+  });
+
+  it('rescans after a source change, and keeps a method the endpoint still has', async () => {
+    vi.useFakeTimers();
+    onTestFinished(() => void vi.useRealTimers());
+    let apiEndpoints = 0;
+    vi.mocked(rpc.getVersions).mockImplementation(() =>
+      Promise.resolve({ ...versions, apiEndpoints }),
+    );
+    render(ApiPlayground);
+    await vi.advanceTimersByTimeAsync(0);
+    const list = screen.getByRole('listbox', { name: 'API endpoints' });
+    await fireEvent.click(within(list).getAllByRole('option')[0]!);
+    const method = screen.getByRole<HTMLSelectElement>('combobox', { name: 'HTTP method' });
+    await choose(method, 'POST');
+    const scans = vi.mocked(rpc.getApiEndpoints).mock.calls.length;
+
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(vi.mocked(rpc.getApiEndpoints).mock.calls.length).toBe(scans); // nothing changed
+
+    // The handler gains PUT: the list follows, the chosen POST stays.
+    vi.mocked(rpc.getApiEndpoints).mockResolvedValue([
+      { ...endpoints[0]!, methods: ['GET', 'POST', 'PUT'] },
+      ...endpoints.slice(1),
+    ]);
+    apiEndpoints = 1;
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(within(list).getAllByRole('option')[0]!.textContent).toContain('PUT');
+    expect(method.value).toBe('POST');
+
+    // POST is removed: the picker falls back to the endpoint's first method.
+    vi.mocked(rpc.getApiEndpoints).mockResolvedValue([
+      { ...endpoints[0]!, methods: ['GET', 'PUT'] },
+      ...endpoints.slice(1),
+    ]);
+    apiEndpoints = 2;
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(
+      within(method)
+        .getAllByRole('option')
+        .map(o => o.textContent),
+    ).toEqual(['GET', 'PUT']);
+    expect(method.value).toBe('GET');
+    expect(screen.getByText('GET requests have no body.')).toBeTruthy();
   });
 
   it('ignores plain Enter in the client area', async () => {

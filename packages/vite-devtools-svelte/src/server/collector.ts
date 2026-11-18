@@ -164,6 +164,7 @@ export class Collector {
     reactiveGraph: nextSeq(),
     errors: nextSeq(),
     fps: nextSeq(),
+    apiEndpoints: nextSeq(),
   };
 
   // Keyed pulls (graph scopes, summaries; §6.7 A/I): each request carries a
@@ -512,6 +513,15 @@ export class Collector {
   ingestRuntimeError(error: RuntimeError): void {
     this.errors.push(error);
     this.bump('errors');
+  }
+
+  /**
+   * A watched file was added, changed or deleted. Any file deliberately counts,
+   * not only `+server` files: a rescan is cheap, runs only while the API panel
+   * is visible, and handlers can come from other modules.
+   */
+  sourceChanged(): void {
+    this.bump('apiEndpoints');
   }
 
   recordLoadProfile(profile: LoadProfile): void {

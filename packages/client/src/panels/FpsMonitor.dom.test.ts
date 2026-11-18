@@ -183,6 +183,7 @@ describe('FpsMonitor', () => {
         reactiveGraph: 0,
         errors: 0,
         fps: ++version,
+        apiEndpoints: 0,
       }),
     );
     vi.mocked(rpc.getFps).mockResolvedValue(samples([60]));

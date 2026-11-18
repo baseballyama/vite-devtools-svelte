@@ -43,6 +43,7 @@ function setup(serverConfig: Record<string, unknown> = {}) {
     },
     middlewares: { use: (path: string, fn: Handler) => routes.push([path, fn]) },
     httpServer,
+    watcher: { on: vi.fn() },
     config: { server: serverConfig, logger: { info: vi.fn(), error: vi.fn() } },
     environments: {},
   };

@@ -409,6 +409,7 @@ export function createMockBackend(scale = 5000) {
     reactiveGraph: 0,
     errors: 0,
     fps: 0,
+    apiEndpoints: 0,
   };
   let lastTick = 0;
   function tick() {

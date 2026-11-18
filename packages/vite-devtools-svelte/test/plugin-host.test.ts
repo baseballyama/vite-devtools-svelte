@@ -47,6 +47,7 @@ function setup(serverOverrides: Record<string, unknown> = {}) {
   });
   const listeners = new Map<string, Handler>();
   const routes: Array<[string, Handler]> = [];
+  const watched = new Map<string, Handler[]>();
   // an unlistened http.Server: the plugin only reads its events and address
   const httpServer = Object.assign(http.createServer(), { address: () => null });
   const server = {
@@ -57,6 +58,9 @@ function setup(serverOverrides: Record<string, unknown> = {}) {
     },
     middlewares: { use: (p: string, fn: Handler) => routes.push([p, fn]) },
     httpServer,
+    watcher: {
+      on: (event: string, fn: Handler) => watched.set(event, [...(watched.get(event) ?? []), fn]),
+    },
     config: { server: {}, logger: { info: vi.fn(), error: vi.fn() } },
     environments: {} as Record<string, unknown>,
     transformRequest: vi.fn((_file: string) => Promise.resolve({ code: 'compiled', map: null })),
@@ -65,11 +69,15 @@ function setup(serverOverrides: Record<string, unknown> = {}) {
   };
   const emit = (event: string, payload: unknown) =>
     listeners.get(`svelte-devtools:${event}`)!(payload, { send: vi.fn() });
+  const watch = (event: string, file: string) => {
+    for (const fn of watched.get(event) ?? []) fn(file);
+  };
   return {
     plugins,
     server,
     httpServer,
     emit,
+    watch,
     configure: () => callHook(plugins[0]!.configureServer, server),
     mcp: () => routes.find(([p]) => p === '/__svelte-devtools/mcp')![1],
     token: () => (plugins[0]!.api as { getDevtoolsToken: () => string }).getDevtoolsToken(),
@@ -154,6 +162,21 @@ describe('devframe host wiring', () => {
       await hub(s.plugins)
     )('open-in-editor', { file: 'src/routes/+page.svelte', line: 3 });
     expect(editor.launchEditor).toHaveBeenCalledWith(`${PAGE}:3`);
+  });
+
+  it('a watched file added, changed or deleted moves the API endpoints version', async () => {
+    const s = setup();
+    const call = await hub(s.plugins);
+    s.configure();
+    let last = (await call('get-versions')).apiEndpoints;
+    for (const event of ['add', 'change', 'unlink']) {
+      s.watch(event, PAGE);
+      const next = (await call('get-versions')).apiEndpoints;
+      expect(next).not.toBe(last);
+      last = next;
+    }
+    s.watch('addDir', FIXTURES);
+    expect((await call('get-versions')).apiEndpoints).toBe(last);
   });
 
   it('assets are served under the configured Vite base', async () => {

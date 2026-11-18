@@ -73,6 +73,7 @@ export const versions: DatasetVersions = {
   reactiveGraph: 0,
   errors: 0,
   fps: 0,
+  apiEndpoints: 0,
 };
 
 const liveMeta: LiveComponentsMeta = { total: 0, kept: 0, truncated: false, epochs: 1 };

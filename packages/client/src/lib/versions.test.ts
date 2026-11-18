@@ -10,6 +10,7 @@ const V: DatasetVersions = {
   reactiveGraph: 5,
   errors: 6,
   fps: 7,
+  apiEndpoints: 8,
 };
 
 /** Fresh module (its cache is module state) over a mocked RPC layer. */
@@ -52,6 +53,16 @@ describe('datasetVersion', () => {
     await a();
     expect(getVersions).toHaveBeenCalledTimes(1);
     vi.advanceTimersByTime(1);
+    await a();
+    expect(getVersions).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not reuse a cached answer after the clock goes back', async () => {
+    const getVersions = vi.fn(() => Promise.resolve(V));
+    const { datasetVersion } = await load({ getVersions });
+    const a = datasetVersion('components')!;
+    await a();
+    vi.setSystemTime(5_000);
     await a();
     expect(getVersions).toHaveBeenCalledTimes(2);
   });

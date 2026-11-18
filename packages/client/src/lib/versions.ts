@@ -18,7 +18,9 @@ let pending: Promise<DatasetVersions | null> | null = null;
 let at = 0;
 
 function fetchVersions(): Promise<DatasetVersions | null> {
-  if (pending && Date.now() - at < MAX_AGE) return pending;
+  const age = Date.now() - at;
+  // A negative age means the clock went back: the cached answer's age is unknown.
+  if (pending && age >= 0 && age < MAX_AGE) return pending;
   at = Date.now();
   pending = api.getVersions!().catch(() => null);
   return pending;

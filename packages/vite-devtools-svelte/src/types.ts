@@ -311,6 +311,8 @@ export interface DatasetVersions {
   reactiveGraph: number;
   errors: number;
   fps: number;
+  /** Moves on every file the dev server watches being added, changed or deleted. */
+  apiEndpoints: number;
 }
 
 export interface LiveComponentsMeta {
