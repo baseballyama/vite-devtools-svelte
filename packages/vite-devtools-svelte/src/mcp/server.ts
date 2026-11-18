@@ -17,6 +17,7 @@ import type {
   ReactiveSummaryRequest,
   StateTimelineDelta,
 } from '../types.js';
+import { MCP_INSTRUCTIONS } from './instructions.js';
 import { listPerformanceIssues, summarizeReactiveProblems } from './issues.js';
 import type { SessionStore } from './sessions.js';
 import { isSessionId } from './sessions.js';
@@ -61,7 +62,7 @@ function capValue(value: unknown, maxChars: number): unknown {
 /** Anything but an issued session id is rejected before the store. */
 const sessionId = z.string().max(64).refine(isSessionId, 'not a session id');
 
-function text(value: unknown) {
+export function text(value: unknown) {
   return {
     content: [
       {
@@ -72,13 +73,13 @@ function text(value: unknown) {
   };
 }
 
-const error = (message: string) => ({ ...text(message), isError: true });
+export const error = (message: string) => ({ ...text(message), isError: true });
 
 export function buildMcpServer(deps: McpDeps): McpServer {
-  const server = new McpServer({
-    name: 'vite-devtools-svelte',
-    version: '0.1.0',
-  });
+  const server = new McpServer(
+    { name: 'vite-devtools-svelte', version: '0.1.0' },
+    { instructions: MCP_INSTRUCTIONS },
+  );
 
   server.registerTool(
     'list_performance_issues',

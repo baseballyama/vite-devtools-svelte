@@ -9,24 +9,18 @@
 
   const groups = mcpToolsJa();
 
-  const printedCode = `  svelte-devtools MCP ready — register with Claude Code:
-    claude mcp add --transport http svelte http://localhost:5173/__svelte-devtools/mcp --header x-svelte-devtools-token:<token>`;
+  const addCode = `claude mcp add svelte-devtools -- npx @sveltejs/vite-devtools-svelte mcp`;
 
-  const reRegisterCode = `claude mcp remove svelte
-claude mcp add --transport http svelte http://localhost:5173/__svelte-devtools/mcp --header x-svelte-devtools-token:<新しいトークン>`;
+  const svelteMcpCode = `claude mcp add svelte -- npx -y @sveltejs/mcp`;
 
   const mcpJsonCode = `{
   "mcpServers": {
-    "svelte": {
-      "type": "http",
-      "url": "http://localhost:5173/__svelte-devtools/mcp",
-      "headers": { "x-svelte-devtools-token": "\${SVELTE_DEVTOOLS_TOKEN}" }
+    "svelte-devtools": {
+      "command": "npx",
+      "args": ["@sveltejs/vite-devtools-svelte", "mcp"]
     }
   }
 }`;
-
-  const envCode = `export SVELTE_DEVTOOLS_TOKEN=<表示された行のトークン>
-claude`;
 
   const curlCode = `curl -s http://localhost:5173/__svelte-devtools/mcp \\
   -H 'content-type: application/json' \\
@@ -149,44 +143,54 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
             <h2>Claude Code に接続する</h2>
           </header>
           <p>
-            開発サーバーを起動すると、待ち受けを始めた時点で、Claude Code
-            にサーバーを登録するコマンドがポートとトークンつきで表示されます:
+            プロジェクトごとに 1 回、MCP
+            サーバーを登録します。開発サーバーも起動時にこのコマンドを表示します:
           </p>
-          <CodeBlock code={printedCode} lang="text" filename="terminal (npm run dev)" />
+          <CodeBlock code={addCode} lang="bash" />
           <p>
-            表示された行をそのまま実行します。すべてのリクエストは
-            <code>x-svelte-devtools-token</code> ヘッダーにトークンが必要で、ない場合は
-            <code>403</code> が返ります。
+            <code>vite-devtools-svelte mcp</code> は stdio で動き、カレントディレクトリのプロジェクトで動いている開発サーバーに各呼び出しを中継します。開発サーバーとそのポート、トークンは自分で見つけるので、再起動やポートの変更があっても登録し直す必要はありません。開発サーバーが動いていないときは、ツールが起動のしかたを返します。
           </p>
 
-          <h3 class="content-h2">トークンは起動のたびに変わる</h3>
+          <h3 class="content-h2">Svelte のドキュメントとコードチェック</h3>
           <p>
-            トークンは開発サーバーの起動ごとにランダムに生成されます（設定変更で Vite
-            が再起動した場合も同じです）。再起動したら、新しく表示された行で登録し直します:
+            ドキュメントと <code>svelte-autofixer</code> は公式の
+            <a href="https://svelte.dev/docs/mcp">Svelte MCP サーバー</a
+            >が提供します。このサーバーは、公式サーバーが設定されていればそちらを使うよう AI
+            に指示するので、あわせて追加してください:
           </p>
-          <CodeBlock code={reRegisterCode} lang="bash" />
+          <CodeBlock code={svelteMcpCode} lang="bash" />
 
           <h3 class="content-h2">コマンドの代わりにプロジェクトのファイルを使う</h3>
           <p>
             <code>claude mcp add</code> は自分だけにサーバーを登録します（local
-            スコープ）。プロジェクトの
-            <code>.mcp.json</code> はプロジェクトを開く全員と共有されるので（project スコープ）、トークンを書き込まないでください。Claude
-            Code はこのファイル内の環境変数を展開するので、トークンは環境変数から読み込みます:
+            スコープ）。プロジェクトの <code>.mcp.json</code> はプロジェクトを開く全員と共有されます（project
+            スコープ）。トークンを含まないので、コミットしてかまいません:
           </p>
           <CodeBlock code={mcpJsonCode} lang="json" filename=".mcp.json" />
-          <p>開発サーバーが表示した行からトークンを設定し、Claude Code を起動します:</p>
-          <CodeBlock code={envCode} lang="bash" />
-          <p>URL のポートは開発サーバーのポートと一致させてください。</p>
+
+          <h3 class="content-h2">開発サーバーが複数あるとき</h3>
+          <p>
+            モノレポのルートから使う場合や、同じアプリを 2
+            つ起動している場合は、複数の開発サーバーが該当します。そのとき AI は <code
+              >list_dev_servers</code
+            >
+            を呼び、使うサーバーを <code>server</code> で指定します。
+          </p>
 
           <h3 class="content-h2">他の MCP クライアント</h3>
           <p>
-            カスタムヘッダー付きの Streamable HTTP
-            に対応したクライアントなら接続できます。必要なのは URL（<code
+            stdio のサーバーを起動できるクライアントでは、同じコマンド（<code
+              >npx @sveltejs/vite-devtools-svelte mcp</code
+            >）を使います。カスタムヘッダー付きの Streamable HTTP
+            にしか対応していないクライアントは、開発サーバーに直接接続します。必要なのは URL（<code
               >http://localhost:&lt;port&gt;/__svelte-devtools/mcp</code
             >）とヘッダー（<code>x-svelte-devtools-token: &lt;token&gt;</code>）の 2
-            つです。開発サーバーが表示するのは Claude Code
-            のコマンドだけなので、他のクライアントではそれぞれの設定形式でこの 2
-            つを指定します。サーバーはステートレスで JSON で応答します。手動で確認するには:
+            つです。トークンは <code>~/.cache/vite-devtools-svelte/servers/</code>
+            にある開発サーバーのファイルの <code>token</code>
+            で、起動のたびに変わります。開発サーバーがコンテナや別のマシンで動いている場合は、この 2 つを
+            <code>VITE_DEVTOOLS_SVELTE_URL</code>
+            と <code>VITE_DEVTOOLS_SVELTE_TOKEN</code> で stdio のサーバーに渡します（README を参照）。HTTP
+            のエンドポイントはステートレスで JSON で応答します。手動で確認するには:
           </p>
           <CodeBlock code={curlCode} lang="bash" />
 
@@ -228,6 +232,11 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
             <h2>{MCP_TOOL_COUNT} のツール</h2>
           </header>
           <p>入力は <code>?</code> が付いていないもの以外すべて省略できます。</p>
+          <p>
+            <code>vite-devtools-svelte mcp</code> を通すと、どのツールも
+            <code>server?</code>（問い合わせる開発サーバー）を受け取ります。また
+            <code>list_dev_servers</code> で、動いている開発サーバーと既定のサーバーを確認できます。
+          </p>
           {#each groups as group (group.id)}
             <h3 class="group-title" id="tools-{group.id}">{group.title}</h3>
             <p class="group-intro">{group.intro}</p>
@@ -319,7 +328,17 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
             <div>
               <dt><code>403 Forbidden</code></dt>
               <dd>
-                トークンがないか、以前の起動のものです。開発サーバーが最後に表示した行で登録し直してください。
+                HTTP で接続している場合: トークンがないか、以前の起動のものです。<code
+                  >~/.cache/vite-devtools-svelte/servers/</code
+                > にある開発サーバーのファイルから読み直してください。
+              </dd>
+            </div>
+            <div>
+              <dt><code>No running dev server for …</code></dt>
+              <dd>
+                Claude Code
+                を動かしているプロジェクトの開発サーバーを起動するか、回答に並んだ開発サーバーのどれかを
+                <code>server</code> で指定してください。
               </dd>
             </div>
             <div>
@@ -371,7 +390,9 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
           <ul class="limits">
             <li>エンドポイントは開発サーバーにだけ存在します。本番ビルドには含まれません。</li>
             <li>
-              すべてのリクエストにトークンが必要です。トークンは起動ごとにランダムで、ターミナルにだけ表示されます。パスワードと同じように扱い、コミットしないでください。
+              すべてのリクエストにトークンが必要です。トークンは起動ごとにランダムで、自分のユーザーだけが読めるファイル（<code
+                >~/.cache/vite-devtools-svelte/servers/</code
+              >）に置かれます。パスワードと同じように扱い、コミットしないでください。
             </li>
             <li>
               トークンはパネルのブラウザでのサインイン（ワンタイムコード）とは別物です。MCP

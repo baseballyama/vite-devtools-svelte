@@ -13,7 +13,7 @@
 // browser sign-in happens.
 //
 // Safety: isolated HOME, free port on 127.0.0.1. The MCP token is read from
-// the dev server's stdout in memory and never printed or written. Outputs are
+// the dev server's registry file in that HOME and never printed or written. Outputs are
 // redacted (the app root → "<project>", the repo root → "<repo>") and then
 // scanned for machine paths, the token and HOME; a file with a hit is NOT
 // written and the run fails. Hard cap 180 s; the dev server (process group),
@@ -22,7 +22,7 @@
 // Output: <dir>/NN-*.json + <dir>/manifest.json (no machine paths).
 // Exit 0 only when every step wrote a clean file.
 import { spawn, execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import net from 'node:net';
 import os from 'node:os';
@@ -46,6 +46,8 @@ const ANSI = new RegExp(`${String.fromCodePoint(27)}\\[[0-9;]*m`, 'g');
 
 const secrets = new Set();
 const home = mkdtempSync(path.join(os.tmpdir(), 'sdt-mcp-home-'));
+// The dev server announces its MCP endpoint and token here.
+const registry = path.join(home, 'registry');
 /** Replace the roots by placeholders, longest first, in any string. */
 function redact(text) {
   return String(text).split(appDir).join('<project>').split(repoRoot).join('<repo>');
@@ -117,6 +119,7 @@ const child = spawn(
       USERPROFILE: home,
       XDG_CONFIG_HOME: path.join(home, '.config'),
       XDG_CACHE_HOME: path.join(home, '.cache'),
+      VITE_DEVTOOLS_SVELTE_REGISTRY: registry,
       BROWSER: 'none',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -145,12 +148,22 @@ cleanup.push(async () => {
     await sleep(100);
   if (child.exitCode === null && child.signalCode === null) kill('SIGKILL');
 });
+/** The MCP token the dev server wrote to its registry file, once there. */
+function registeredToken() {
+  try {
+    const name = readdirSync(registry).find(n => n.endsWith(`-${port}.json`));
+    return name ? JSON.parse(readFileSync(path.join(registry, name), 'utf8')).token : null;
+  } catch {
+    return null;
+  }
+}
+
 const base = `http://127.0.0.1:${port}`;
 let token = null;
 for (let i = 0; ; i++) {
   if (child.exitCode !== null) throw new Error(`dev server exited: ${mask(log).slice(-600)}`);
   if (i > 300) throw new Error('dev server not ready in 60 s');
-  token ??= log.match(/x-svelte-devtools-token:([0-9a-f-]{36})/)?.[1] ?? null;
+  token ??= registeredToken();
   if (token) secrets.add(token);
   try {
     const r = await fetch(base + '/', { signal: AbortSignal.timeout(5000) });
@@ -265,9 +278,7 @@ try {
     .replaceAll(ANSI, '')
     .split('\n')
     .find(l => l.includes('claude mcp add'));
-  manifest.printedRegisterCommand = printed
-    ? mask(printed.trim()).replace(`:${port}/`, ':<port>/')
-    : null;
+  manifest.printedRegisterCommand = printed ? mask(printed.trim()) : null;
 
   // No or a wrong token: rejected before MCP.
   manifest.withoutToken = (await rpc('tools/list', {}, { auth: false })).status;

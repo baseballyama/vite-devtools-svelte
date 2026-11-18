@@ -270,6 +270,17 @@ function viteBin(appDir) {
   return path.join(path.dirname(req.resolve('vite/package.json')), 'bin/vite.js');
 }
 
+/** The MCP token the dev server on `port` wrote to its registry file, once there. */
+function registeredToken(home, port) {
+  const registry = path.join(home, 'registry');
+  try {
+    const name = fs.readdirSync(registry).find(n => n.endsWith(`-${port}.json`));
+    return name ? JSON.parse(fs.readFileSync(path.join(registry, name), 'utf8')).token : null;
+  } catch {
+    return null;
+  }
+}
+
 function childEnv(home) {
   return {
     ...process.env,
@@ -277,6 +288,7 @@ function childEnv(home) {
     USERPROFILE: home,
     XDG_CONFIG_HOME: path.join(home, '.config'),
     XDG_CACHE_HOME: path.join(home, '.cache'),
+    VITE_DEVTOOLS_SVELTE_REGISTRY: path.join(home, 'registry'),
     SVELTE_DEVTOOLS_DOCK: dock ? '1' : '0',
     BROWSER: 'none',
     FORCE_COLOR: '0',
@@ -310,7 +322,7 @@ function startDev(p, { port, home }) {
       detached: process.platform !== 'win32',
     },
   );
-  const srv = { child, port, base: `http://127.0.0.1:${port}`, log: '' };
+  const srv = { child, port, home, base: `http://127.0.0.1:${port}`, log: '' };
   child.stdout.on('data', d => {
     srv.log += d;
   });
@@ -343,8 +355,8 @@ async function waitReady(srv, ms = 60_000) {
   while (Date.now() < end) {
     if (srv.child.exitCode !== null)
       throw new Error(`dev server exited (${srv.child.exitCode}): ${mask(srv.log).slice(-600)}`);
-    const token = srv.log.match(/x-svelte-devtools-token:([0-9a-f-]{36})/)?.[1];
-    // Vite's "Local:" banner and the MCP token line are printed independently:
+    const token = registeredToken(srv.home, srv.port);
+    // Vite's "Local:" banner and the MCP registration happen independently:
     // wait for both, or the resolved host reads as null.
     const local = srv.log.match(/Local:\s+(https?:\/\/\S+)/)?.[1];
     if (token && local) {

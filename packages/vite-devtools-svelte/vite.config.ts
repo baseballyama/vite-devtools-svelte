@@ -40,9 +40,9 @@ export default defineConfig({
     sourcemap: true,
     target: 'node18',
     lib: {
-      entry: 'src/index.ts',
+      entry: { index: 'src/index.ts', cli: 'src/cli/index.ts' },
       formats: ['es'],
-      fileName: () => 'index.mjs',
+      fileName: (_format, name) => `${name}.mjs`,
     },
     rolldownOptions: {
       external: [

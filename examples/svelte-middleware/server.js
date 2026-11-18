@@ -55,8 +55,8 @@ httpServer.on('request', (req, res) => {
 });
 
 // (console.warn: the repo's lint allows only warn/error.)
-// In middleware mode Vite has no httpServer, so the plugin cannot print its
-// `claude mcp add` line on `listening`: print it here from the plugin's API.
+// In middleware mode Vite has no httpServer, so the plugin cannot register
+// its MCP endpoint on `listening`: print the command here from the plugin's API.
 const devtools = vite.config.plugins.find(p => p.name === 'vite-devtools-svelte');
 const mcpToken = devtools?.api?.getDevtoolsToken?.();
 
@@ -66,7 +66,7 @@ httpServer.listen(port, 'localhost', () => {
   console.warn(`  Svelte DevTools:   http://localhost:${port}/.svelte-devtools/`);
   if (mcpToken) {
     console.warn(
-      `  MCP: claude mcp add --transport http svelte http://localhost:${port}/__svelte-devtools/mcp --header x-svelte-devtools-token:${mcpToken}`,
+      `  MCP: claude mcp add svelte-devtools -e VITE_DEVTOOLS_SVELTE_URL=http://localhost:${port} -e VITE_DEVTOOLS_SVELTE_TOKEN=${mcpToken} -- npx @sveltejs/vite-devtools-svelte mcp`,
     );
   }
 });

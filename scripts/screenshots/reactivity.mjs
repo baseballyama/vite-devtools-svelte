@@ -152,8 +152,6 @@ const base = `http://127.0.0.1:${port}`;
 for (let i = 0; ; i++) {
   if (child.exitCode !== null) throw new Error(`dev server exited: ${mask(log).slice(-600)}`);
   if (i > 300) throw new Error('dev server not ready in 60 s');
-  const token = log.match(/x-svelte-devtools-token:([0-9a-f-]{36})/)?.[1];
-  if (token) secrets.add(token);
   try {
     const r = await fetch(base + '/', { signal: AbortSignal.timeout(5000) });
     if (r.status < 500) break;
