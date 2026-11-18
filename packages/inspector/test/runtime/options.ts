@@ -7,5 +7,5 @@ export default {
   openMenuKey: ' ',
   holdMode: true,
   customStyles: true,
-  __internal: { base: '/app', root: '/project' },
+  __internal: { base: '/app', cwd: '/project' },
 };

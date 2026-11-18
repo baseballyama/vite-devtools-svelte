@@ -1,3 +1,5 @@
+import process from 'node:process';
+
 import { normalizePath } from 'vite';
 import type { Plugin } from 'vite';
 
@@ -113,7 +115,7 @@ export function svelteInspector(options: InspectorOptions = {}): InspectorPlugin
         ...(typeof environmentOptions === 'object' ? environmentOptions : {}),
         __internal: {
           base: config.base.endsWith('/') ? config.base.slice(0, -1) : config.base,
-          root: config.root,
+          cwd: process.cwd(),
         },
       };
     },

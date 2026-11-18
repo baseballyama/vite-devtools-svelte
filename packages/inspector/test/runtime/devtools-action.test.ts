@@ -152,15 +152,15 @@ describe('the dock action', () => {
   });
 
   it("falls back to Vite's own endpoint when Vite DevTools refuses the path", async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
     const { ctx } = start();
     // e.g. DTK0028 for a linked package outside the workspace root
     ctx.rpc.call.mockRejectedValueOnce(new Error('Path is outside the workspace root'));
     await ctx.docks.setActionActive('svelte:inspector', true);
     await settle();
-    await pick(component('../../linked/B.svelte'));
+    // Svelte keeps the absolute path of a file outside its rootDir
+    await pick(component('/linked/B.svelte'));
     expect(fetch).toHaveBeenCalledWith(
-      `/app/__open-in-editor?file=${encodeURIComponent('/project/../../linked/B.svelte:3:5')}`,
+      `/app/__open-in-editor?file=${encodeURIComponent('/linked/B.svelte:3:5')}`,
     );
   });
 

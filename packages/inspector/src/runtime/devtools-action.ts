@@ -51,11 +51,14 @@ function isAbsolute(file: string): boolean {
   );
 }
 
-/** `file` resolved against the vite root (Vite DevTools opens paths inside its workspace) */
+/**
+ * `file` from `__svelte_meta`, made absolute: Svelte writes it relative to its `rootDir`
+ * (process.cwd() by default), and Vite DevTools resolves relative paths elsewhere
+ */
 function absolute(file: string): string {
-  const root = options.__internal.root;
-  if (!root || isAbsolute(file)) return file;
-  const base = root.endsWith('/') || root.endsWith('\\') ? root.slice(0, -1) : root;
+  const cwd = options.__internal.cwd;
+  if (!cwd || isAbsolute(file)) return file;
+  const base = cwd.endsWith('/') || cwd.endsWith('\\') ? cwd.slice(0, -1) : cwd;
   return `${base}/${file}`;
 }
 

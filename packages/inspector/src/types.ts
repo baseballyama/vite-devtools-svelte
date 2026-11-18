@@ -68,7 +68,8 @@ export interface InspectorOptions {
   __internal?: {
     // vite base url
     base: string;
-    // vite root, to open files by absolute path through Vite DevTools
-    root?: string;
+    // the directory Svelte makes `__svelte_meta.loc.file` relative to (its `rootDir`, which
+    // defaults to process.cwd()), to open files by absolute path through Vite DevTools
+    cwd?: string;
   };
 }

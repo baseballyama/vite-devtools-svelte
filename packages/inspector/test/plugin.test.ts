@@ -186,6 +186,12 @@ describe('svelteInspector', () => {
     expect(await loadOptions(await start({ openKey: 'o' }))).toMatchObject({ openKey: 'o' });
   });
 
+  it('passes the directory Svelte makes `loc.file` relative to, not the Vite root', async () => {
+    // Svelte's `rootDir` defaults to process.cwd(), and vite-plugin-svelte does not set it
+    const options = await loadOptions(await start({}, [], { root: tmpdir() }));
+    expect(options).toMatchObject({ __internal: { cwd: process.cwd() } });
+  });
+
   it('passes the base without its trailing slash', async () => {
     const options = await loadOptions(await start({}, [], { base: '/app/' }));
     expect(options).toMatchObject({ __internal: { base: '/app' } });
