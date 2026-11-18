@@ -418,6 +418,7 @@ describe('Components: element picked on the app page', () => {
   });
 
   it("waits for the pick's page load before matching ids", async () => {
+    fakePollClock();
     render(Components);
     await settle();
     const pick = pickOf(4, 'e2');
@@ -427,8 +428,7 @@ describe('Components: element picked on the app page', () => {
     expect(elementPick.pending).toBe(pick);
     // the server now serves the picked tab
     vi.mocked(rpc.getLiveComponentsMeta).mockResolvedValue(meta({ epoch: 'e2' }));
-    await userEvent.click(screen.getByRole('button', { name: /^Refresh/ }));
-    await settle();
+    await nextPoll(2000);
     expect(row('Row').getAttribute('aria-selected')).toBe('true');
   });
 
