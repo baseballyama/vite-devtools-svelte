@@ -68,7 +68,7 @@
   <div class="controls">
     <label>
       パーティクル数: {particleCount}
-      <input type="range" min="10" max="800" bind:value={particleCount} />
+      <input type="range" min="10" max="100000" step="50" bind:value={particleCount} />
     </label>
     <button type="button" onclick={() => (running = !running)}>
       {running ? '一時停止' : '再開'}
