@@ -36,5 +36,8 @@
       "entry": ["src/params.ts"]
     }
   },
-  "ignoreBinaries": ["top", "svelte-check", "svelte-kit"]
+  "ignoreBinaries": ["top", "svelte-check", "svelte-kit"],
+  "ignoreIssues": {
+    "{examples/*,playground,site}/tsconfig.json": ["unlisted"]
+  }
 }

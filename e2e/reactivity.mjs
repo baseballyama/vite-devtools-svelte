@@ -106,6 +106,7 @@ async function tool(name, args = {}) {
   const msg = JSON.parse(raw);
   if (msg.error) throw new Error(`${name}: ${msg.error.message}`);
   const out = msg.result.content?.find(c => c.type === 'text')?.text ?? 'null';
+  // oxlint-disable-next-line unicorn/prefer-type-error -- `isError` is the MCP tool-error flag, not a type check
   if (msg.result.isError) throw new Error(`${name}: ${out.slice(0, 300)}`);
   try {
     return JSON.parse(out);

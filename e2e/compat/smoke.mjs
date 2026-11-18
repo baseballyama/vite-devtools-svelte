@@ -443,6 +443,7 @@ async function mcp(
 async function tool(srv, name, args = {}) {
   const { status, result } = await mcp(srv, 'tools/call', { name, arguments: args });
   if (status !== 200) throw new Error(`${name}: HTTP ${status}`);
+  // oxlint-disable-next-line unicorn/prefer-type-error -- `isError` is the MCP tool-error flag, not a type check
   if (result.isError) throw new Error(`${name}: ${result.content?.[0]?.text?.slice(0, 200)}`);
   const text = result.content?.find(c => c.type === 'text')?.text ?? 'null';
   try {
@@ -556,7 +557,7 @@ function expectedComponents(p) {
 // get_live_components default answer: a bare ComponentInstance[] (types.ts:
 // {id, file, name, parentId, mounted}); metadata only with includeMeta.
 function listedFiles(list) {
-  if (!Array.isArray(list)) throw new Error('get_live_components default is not a bare array');
+  if (!Array.isArray(list)) throw new TypeError('get_live_components default is not a bare array');
   return new Set(list.map(c => fileBase(c.file)));
 }
 
