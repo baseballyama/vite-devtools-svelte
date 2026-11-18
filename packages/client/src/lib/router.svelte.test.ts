@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const loc = { hash: '' };
-const history = { pushState: vi.fn() };
+const history = { pushState: vi.fn(), replaceState: vi.fn() };
 let onHashChange: (() => void) | undefined;
 
 /** Fresh router module (it reads the hash and subscribes on load). */
@@ -10,6 +10,7 @@ async function load(hash: string) {
   loc.hash = hash;
   onHashChange = undefined;
   history.pushState.mockClear();
+  history.replaceState.mockClear();
   vi.stubGlobal('location', loc);
   vi.stubGlobal('history', history);
   vi.stubGlobal('window', {
@@ -74,6 +75,16 @@ describe('router: navigation', () => {
     expect(history.pushState).toHaveBeenCalledWith(null, '', '#/reactive');
     router.go('reactive');
     expect(history.pushState).toHaveBeenCalledTimes(1);
+  });
+
+  it('replace() switches panels without a history entry', async () => {
+    const { router } = await load('#/routes');
+    router.replace('overview');
+    expect(router.current).toBe('overview');
+    expect(history.replaceState).toHaveBeenCalledWith(null, '', '#/overview');
+    expect(history.pushState).not.toHaveBeenCalled();
+    router.replace('overview');
+    expect(history.replaceState).toHaveBeenCalledTimes(1);
   });
 
   it('is reactive', async () => {

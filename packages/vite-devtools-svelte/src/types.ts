@@ -52,6 +52,8 @@ export interface ProjectInfo {
   version: string;
   svelteVersion: string;
   sveltekitVersion: string;
+  /** Whether SvelteKit's Vite plugin is active (not just installed). */
+  kit: boolean;
   viteVersion: string;
   dependencies: Record<string, string>;
   devDependencies: Record<string, string>;

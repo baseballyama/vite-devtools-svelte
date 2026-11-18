@@ -269,10 +269,14 @@ describe('MCP server wiring', () => {
   it("routes follow SvelteKit's files.routes, and are empty without SvelteKit", async () => {
     const s = setup({}, [kitSetup(path.join(FIXTURES, 'src/routes/api'))]);
     s.configure();
-    expect((await mcpDeps(s)).getRoutes().map(r => r.id)).toEqual(['hello', 'items', 'users']);
+    const withKit = await mcpDeps(s);
+    expect(withKit.getRoutes().map(r => r.id)).toEqual(['hello', 'items', 'users']);
+    expect(withKit.getProject().kit).toBe(true);
     const plain = setup({}, []);
     plain.configure();
-    expect((await mcpDeps(plain)).getRoutes()).toEqual([]);
+    const deps = await mcpDeps(plain);
+    expect(deps.getRoutes()).toEqual([]);
+    expect(deps.getProject().kit).toBe(false);
   });
 
   it('sessions measure the live collector', async () => {

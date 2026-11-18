@@ -6,11 +6,15 @@ import type { ProjectInfo } from '../types.js';
 const CACHE_TTL_MS = 5000;
 let cache: { root: string; at: number; info: ProjectInfo } | undefined;
 
-/** Project metadata, cached for {@link CACHE_TTL_MS} per root (every RPC derives from it). */
-export function analyzeProject(root: string): ProjectInfo {
+/**
+ * Project metadata, cached for {@link CACHE_TTL_MS} per root (every RPC
+ * derives from it). `kit` says whether SvelteKit's Vite plugin is active,
+ * which only the plugin knows.
+ */
+export function analyzeProject(root: string, kit: boolean): ProjectInfo {
   const now = Date.now();
-  if (cache?.root !== root || now - cache.at >= CACHE_TTL_MS) {
-    cache = { root, at: now, info: analyzeProjectUncached(root) };
+  if (cache?.root !== root || cache.info.kit !== kit || now - cache.at >= CACHE_TTL_MS) {
+    cache = { root, at: now, info: analyzeProjectUncached(root, kit) };
   }
   return cache.info;
 }
@@ -55,7 +59,7 @@ function readPackageJson(file: string): PackageJson {
   };
 }
 
-function analyzeProjectUncached(root: string): ProjectInfo {
+function analyzeProjectUncached(root: string, kit: boolean): ProjectInfo {
   const pkg = readPackageJson(path.join(root, 'package.json'));
   const deps = pkg.dependencies;
   const devDeps = pkg.devDependencies;
@@ -68,6 +72,7 @@ function analyzeProjectUncached(root: string): ProjectInfo {
     version: pkg.version ?? '0.0.0',
     svelteVersion: versionOf('svelte'),
     sveltekitVersion: versionOf('@sveltejs/kit'),
+    kit,
     viteVersion: versionOf('vite'),
     dependencies: deps,
     devDependencies: devDeps,

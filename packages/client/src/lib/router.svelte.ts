@@ -51,4 +51,10 @@ export const router = {
     current = id;
     history.pushState(null, '', `#/${id}`);
   },
+  /** Like `go`, without a history entry (for redirects). */
+  replace(id: PanelId) {
+    if (id === current) return;
+    current = id;
+    history.replaceState(null, '', `#/${id}`);
+  },
 };

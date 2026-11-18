@@ -5,8 +5,11 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('./rpc.js', () => ({ getCaptureInfo: vi.fn(), getVersions: vi.fn() }));
 vi.stubGlobal('location', { hash: '' });
 
-const { groupLabels, panelById, panels } = await import('./panels.js');
+const { groupLabels, panelById, panels, visiblePanels } = await import('./panels.js');
 const { icons } = await import('./icons.js');
+
+const KIT_ONLY = new Set(['routes', 'loads', 'build', 'api']);
+const visibleIds = (kit?: boolean) => visiblePanels(kit).map(p => p.id);
 
 describe('panel registry', () => {
   it('has unique ids, known icons and known groups', () => {
@@ -24,6 +27,12 @@ describe('panel registry', () => {
     const groups = panels.map(p => p.group);
     const firstSeen = [...new Set(groups)];
     expect(groups).toEqual(firstSeen.flatMap(g => groups.filter(x => x === g)));
+  });
+
+  it('offers the SvelteKit-only panels only when the app uses SvelteKit', () => {
+    expect(visibleIds(true)).toEqual(panels.map(p => p.id));
+    expect(visibleIds(false)).toEqual(panels.map(p => p.id).filter(id => !KIT_ONLY.has(id)));
+    expect(visibleIds()).toEqual(visibleIds(false)); // unknown yet
   });
 
   it.each(panels.map(p => p.id))('panelById(%j) finds it', id => {

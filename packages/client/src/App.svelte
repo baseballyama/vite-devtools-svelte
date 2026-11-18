@@ -12,15 +12,16 @@
   import { connection, connectionSupported } from './lib/connection.svelte.js';
   import { errorMessage } from './lib/format.js';
   import {
-    panels,
     groupLabels,
     panelById,
-    type PanelDef,
+    visiblePanels,
     type PanelGroup,
     type PanelId,
   } from './lib/panels.js';
   import { persisted } from './lib/persisted.svelte.js';
+  import { resource } from './lib/resource.svelte.js';
   import { router } from './lib/router.svelte.js';
+  import { getProject } from './lib/rpc.js';
   import { createThemeStore, type ThemeMode } from './lib/theme.svelte.js';
 
   const theme = createThemeStore();
@@ -37,8 +38,27 @@
   let loadError = $state<Partial<Record<PanelId, string>>>({});
   let visited = $state<PanelId[]>([]);
 
+  // Fetched on every (re)connect: RPCs fail until the tab is trusted, and a
+  // restarted dev server may have added or dropped SvelteKit.
+  const project = resource(getProject, {
+    initial: null,
+    when: () => !connectionSupported || connection.state.status === 'connected',
+  });
+  // A failed lookup shows every panel rather than hiding any for good.
+  const panels = $derived(visiblePanels(project.error ? true : project.data?.kit));
+
+  // A link or reload to a SvelteKit-only panel in an app without SvelteKit.
   $effect(() => {
-    const id = router.current;
+    if (project.data && !panels.some(p => p.id === router.current)) router.replace('overview');
+  });
+
+  // The panel to show: none while a link to a SvelteKit-only panel waits for
+  // the project, so an app without SvelteKit never loads or flashes it.
+  const shown = $derived(panels.some(p => p.id === router.current) ? router.current : null);
+
+  $effect(() => {
+    const id = shown;
+    if (!id) return;
     if (!visited.includes(id)) visited.push(id);
     // `load` records failures in `loadError`, so it never rejects.
     if (!loaded[id] && !loadError[id]) void load(id);
@@ -54,11 +74,11 @@
     }
   }
 
-  const groups = (Object.keys(groupLabels) as PanelGroup[]).map(g => ({
-    id: g,
-    label: groupLabels[g],
-    items: panels.filter(p => p.group === g),
-  }));
+  const groups = $derived(
+    (Object.keys(groupLabels) as PanelGroup[])
+      .map(g => ({ id: g, label: groupLabels[g], items: panels.filter(p => p.group === g) }))
+      .filter(g => g.items.length > 0),
+  );
 
   const themeOrder: ThemeMode[] = ['system', 'light', 'dark'];
   const themeIcon = $derived(
@@ -74,14 +94,14 @@
   }
 
   const commands = $derived<Command[]>([
-    ...(panels as readonly PanelDef[]).map(p => ({
+    ...panels.map(p => ({
       id: `panel:${p.id}`,
       label: p.label,
       hint: p.description,
       group: groupLabels[p.group],
       icon: p.icon,
       keywords: p.keywords,
-      run: () => router.go(p.id as PanelId),
+      run: () => router.go(p.id),
     })),
     {
       id: 'theme:system',
@@ -136,8 +156,11 @@
     } else if (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
       // Alt+↑/↓ steps through panels without touching the mouse.
       e.preventDefault();
-      const i = panels.findIndex(p => p.id === router.current);
-      const next = panels[(i + (e.key === 'ArrowDown' ? 1 : -1) + panels.length) % panels.length]!;
+      const down = e.key === 'ArrowDown';
+      // From a panel that is not listed (yet), ↓ starts at the top, ↑ at the bottom.
+      const i = panels.findIndex(p => p.id === shown);
+      const from = i === -1 ? (down ? -1 : 0) : i;
+      const next = panels[(from + (down ? 1 : -1) + panels.length) % panels.length]!;
       router.go(next.id);
     }
   }
@@ -180,7 +203,7 @@
             <a
               class="item"
               href="#/{p.id}"
-              aria-current={router.current === p.id ? 'page' : undefined}
+              aria-current={shown === p.id ? 'page' : undefined}
               title={collapsed ? p.label : p.description}
             >
               <Icon name={p.icon} size={16} />
@@ -224,16 +247,16 @@
       {@const Comp = loaded[id]}
       {#if Comp}
         <svelte:boundary>
-          <PanelHost component={Comp} active={router.current === id} />
+          <PanelHost component={Comp} active={shown === id} />
           {#snippet failed(error: unknown, reset: () => void)}
-            <div class="host" hidden={router.current !== id}>
+            <div class="host" hidden={shown !== id}>
               <EmptyState title="{panelById(id).label} crashed" error={errorMessage(error)}>
                 <Button icon="refresh" onclick={reset}>Reload panel</Button>
               </EmptyState>
             </div>
           {/snippet}
         </svelte:boundary>
-      {:else if router.current === id}
+      {:else if shown === id}
         <div class="host">
           {#if loadError[id]}
             <EmptyState title="Could not load panel" error={loadError[id]} />
@@ -243,6 +266,11 @@
         </div>
       {/if}
     {/each}
+    {#if !shown}
+      <div class="host">
+        <div class="loading" aria-busy="true" aria-label="Loading panel"></div>
+      </div>
+    {/if}
   </main>
 </div>
 
