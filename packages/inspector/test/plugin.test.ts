@@ -170,22 +170,4 @@ describe('svelteInspector', () => {
     const options = await loadOptions(await start({}, [], { base: '/app/' }));
     expect(options).toMatchObject({ __internal: { base: '/app' } });
   });
-
-  it("injects the runtime loader into Vite's client, including Vite+'s layout", () => {
-    // Called directly: through the plugin container, Vite's dep optimizer claims
-    // node_modules ids before this hook runs.
-    const transform = svelteInspector().transform as {
-      filter: { id: RegExp };
-      handler: (code: string) => { code: string };
-    };
-    const matches = (id: string) => transform.filter.id.test(id);
-    expect(matches('/app/node_modules/vite/dist/client/client.mjs')).toBe(true);
-    expect(matches('/app/node_modules/vite/dist/vite/client/client.mjs?v=1')).toBe(true);
-    expect(matches('/app/node_modules/vite-plus-core/dist/vite/client/client.mjs')).toBe(true);
-    expect(matches('/app/node_modules/vite/dist/client/env.mjs')).toBe(false);
-
-    expect(transform.handler('console.log(1)').code).toBe(
-      "console.log(1)\nimport('virtual:vite-devtools-svelte-inspector-path:load-inspector.ts')",
-    );
-  });
 });

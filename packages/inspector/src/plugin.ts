@@ -145,10 +145,7 @@ export function svelteInspector(options: InspectorOptions = {}): InspectorPlugin
         if (id === DOCK_MODULE_ID) {
           return 'export { default } from "virtual:vite-devtools-svelte-inspector-path:devtools-action.ts";';
         }
-        if (id === 'virtual:vite-devtools-svelte-inspector-options') {
-          return `export default ${JSON.stringify(inspectorOptions ?? {})}`;
-        }
-        return null;
+        return `export default ${JSON.stringify(inspectorOptions ?? {})}`;
       },
     },
   };
