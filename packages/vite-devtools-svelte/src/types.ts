@@ -55,7 +55,6 @@ export interface ProjectInfo {
   viteVersion: string;
   dependencies: Record<string, string>;
   devDependencies: Record<string, string>;
-  routesDir: string;
   staticDir: string;
 }
 

@@ -21,7 +21,7 @@ function rpc(client: DevframeRpcClient, method: string, ...args: unknown[]): Pro
   return (client as unknown as { call: UntypedCall }).call(method, ...args);
 }
 import { svelteDevtools } from '../src/plugin.js';
-import { authTokenPersisted, waitFor } from './helpers.js';
+import { authTokenPersisted, kitSetup, waitFor } from './helpers.js';
 
 const FIXTURES_DIR = path.resolve(import.meta.dirname, 'fixtures');
 
@@ -89,7 +89,7 @@ beforeAll(async () => {
     root: FIXTURES_DIR,
     logLevel: 'silent',
     server: { port: 0, host: 'localhost' },
-    plugins: [svelteDevtools()],
+    plugins: [svelteDevtools(), kitSetup(path.join(FIXTURES_DIR, 'src/routes'))],
   });
   await server.listen();
   origin = server.resolvedUrls!.local[0]!.replace(/\/$/, '');

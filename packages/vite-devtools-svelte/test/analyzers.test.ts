@@ -156,7 +156,6 @@ describe('analyzeProject', () => {
       viteVersion: '^8.0.0',
       dependencies: { svelte: '^5.0.0', '@sveltejs/kit': '^3.0.0' },
       devDependencies: { vite: '^8.0.0' },
-      routesDir: path.join(root, 'src', 'routes'),
       staticDir: path.join(root, 'static'),
     });
   });
@@ -207,17 +206,14 @@ describe('analyzeProject', () => {
     });
   });
 
-  it.each<[label: string, dirs: string[], routes: string, statics: string]>([
-    ['defaults when nothing exists', [], 'src/routes', 'static'],
-    ['src/routes and static', ['src/routes', 'static'], 'src/routes', 'static'],
-    ['src/pages and public', ['src/pages', 'public'], 'src/pages', 'public'],
-    ['src/routes wins over src/pages', ['src/routes', 'src/pages'], 'src/routes', 'static'],
-    ['static wins over public', ['public', 'static'], 'src/routes', 'static'],
-  ])('directories: %s', (_label, dirs, routes, statics) => {
+  it.each<[label: string, dirs: string[], statics: string]>([
+    ['defaults when nothing exists', [], 'static'],
+    ['static', ['static'], 'static'],
+    ['public', ['public'], 'public'],
+    ['static wins over public', ['public', 'static'], 'static'],
+  ])('directories: %s', (_label, dirs, statics) => {
     const root = tree(Object.fromEntries(dirs.map(d => [`${d}/.keep`, ''])));
-    const info = analyzeProject(root);
-    expect(info.routesDir).toBe(path.join(root, ...routes.split('/')));
-    expect(info.staticDir).toBe(path.join(root, statics));
+    expect(analyzeProject(root).staticDir).toBe(path.join(root, statics));
   });
 
   it('caches per root for 5 seconds', () => {

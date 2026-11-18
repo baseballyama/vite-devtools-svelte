@@ -71,7 +71,6 @@ function analyzeProjectUncached(root: string): ProjectInfo {
     viteVersion: versionOf('vite'),
     dependencies: deps,
     devDependencies: devDeps,
-    routesDir: firstExisting(root, 'src/routes', 'src/pages'),
     staticDir: firstExisting(root, 'static', 'public'),
   };
 }

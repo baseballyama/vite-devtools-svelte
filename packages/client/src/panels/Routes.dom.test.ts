@@ -151,7 +151,6 @@ describe('Routes', () => {
     const { user, tree } = await setup();
     await user.click(item(tree, '[slug]'));
     const details = screen.getByRole('complementary', { name: '/blog/[slug] details' });
-    expect(within(details).getByText('src/routes/blog/[slug]')).toBeTruthy();
     expect(within(details).getByText('slug=word').getAttribute('title')).toBe('matcher: word');
     expect(within(details).getByText('+page.server')).toBeTruthy();
     // Dynamic routes cannot be visited directly.
@@ -179,7 +178,6 @@ describe('Routes', () => {
     const { user, tree } = await setup();
     await user.click(item(tree, '/'));
     const details = screen.getByRole('complementary', { name: '/ details' });
-    expect(within(details).getByText('src/routes')).toBeTruthy();
     expect(within(details).getByText('page')).toBeTruthy();
     expect(within(details).getByText('layout')).toBeTruthy();
     expect(within(details).getByText('none')).toBeTruthy();
@@ -242,7 +240,7 @@ describe('Routes', () => {
       }),
     );
     const { user, tree } = await setup();
-    expect(within(tree).getByText('Scanning src/routes…')).toBeTruthy();
+    expect(within(tree).getByText('Scanning routes…')).toBeTruthy();
     reject(new Error('EACCES'));
     await settle();
     expect(within(tree).getByRole('alert').textContent).toContain('EACCES');

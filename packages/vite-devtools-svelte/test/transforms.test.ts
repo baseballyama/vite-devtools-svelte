@@ -14,7 +14,7 @@ import {
   injectModuleTracking,
   isSvelteModule,
 } from '../src/runtime/transform.js';
-import { callHook, codeOf, resolvePlugins } from './helpers.js';
+import { callHook, codeOf, kitSetup, resolvePlugins } from './helpers.js';
 
 const RUNTIME_IMPORT = `import '${RUNTIME_MODULE_ID}';`;
 
@@ -289,7 +289,12 @@ describe('trackingPlugin transform', () => {
 // Load profiling (SvelteKit load functions): executed, not grepped
 // =====================================================================
 
-const loadProfile = (config = {}) => plugin('vite-devtools-svelte:load-profile', {}, config);
+const loadProfile = (config = {}) =>
+  plugin(
+    'vite-devtools-svelte:load-profile',
+    {},
+    { plugins: [kitSetup('/app/src/routes')], ...config },
+  );
 
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sdt-load-'));
 afterAll(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
@@ -301,8 +306,8 @@ interface LoadModule {
 }
 
 /** Transform `code` as `id` and import the result as a real ES module. */
-async function loadModule(code: string, id: string): Promise<LoadModule> {
-  const result = callHook(loadProfile().transform, code, id);
+async function loadModule(code: string, id: string, config = {}): Promise<LoadModule> {
+  const result = callHook(loadProfile(config).transform, code, id);
   expect(result).not.toBeNull();
   expect(result.map).toBeNull();
   const file = path.join(tmpDir, `m${moduleSeq++}.mjs`);
@@ -447,19 +452,22 @@ describe('loadProfilePlugin: profiled load functions', () => {
     expect(rec).not.toHaveBeenCalled();
   });
 
-  it('takes the route from <root>/src/routes, not from the first "routes" in the path', async () => {
+  it('takes the route from files.routes, not from a "routes" directory in the path', async () => {
     const rec = installRecorder();
-    const id = '/home/routes/app/src/routes/blog/+page.ts';
-    const result = callHook(
-      loadProfile({ root: '/home/routes/app' }).transform,
+    const mod = await loadModule(
       'export const load = () => ({})',
-      id,
+      '/srv/routes/app/pages/blog/+page.ts',
+      {
+        plugins: [kitSetup('/srv/routes/app/pages')],
+      },
     );
-    const file = path.join(tmpDir, `m${moduleSeq++}.mjs`);
-    fs.writeFileSync(file, codeOf(result));
-    const mod: LoadModule = await import(/* @vite-ignore */ pathToFileURL(file).href);
     await mod.load();
     expect(rec.mock.calls[0]![0]).toBe('/blog');
+  });
+
+  it('profiles nothing without SvelteKit', () => {
+    const hook = loadProfile({ plugins: [] }).transform;
+    expect(callHook(hook, 'export const load = () => ({})', '/app/src/routes/+page.ts')).toBeNull();
   });
 
   it.each([
@@ -469,10 +477,6 @@ describe('loadProfilePlugin: profiled load functions', () => {
     ['/app/src/routes/+layout.server.js', '/', 'server'],
     ['/app/src/routes/blog/+page.js', '/blog', 'universal'],
     ['/app/src/routes/(app)/admin/[id]/+layout.server.ts', '/(app)/admin/[id]', 'server'],
-    // a load file outside a routes directory (custom layout): root route
-    ['/app/+page.ts', '/', 'universal'],
-    // a "routes" substring that is not a directory of its own
-    ['/srv/routes-app/src/routes/blog/+page.ts', '/blog', 'universal'],
   ])('%s → route %s, %s load', async (id, route, type) => {
     const rec = installRecorder();
     const mod = await loadModule('export const load = () => ({})', id);
@@ -482,6 +486,13 @@ describe('loadProfilePlugin: profiled load functions', () => {
 
   it.each([
     ['a component', '/app/src/routes/+page.svelte', 'export const load = () => ({})', {}],
+    ['outside the routes directory', '/app/+page.ts', 'export const load = () => ({})', {}],
+    [
+      'a sibling of the routes directory',
+      '/app/src/routes-old/+page.ts',
+      'export const load = 1',
+      {},
+    ],
     ['an API endpoint', '/app/src/routes/api/+server.ts', 'export const load = () => ({})', {}],
     ['node_modules', '/app/node_modules/kit/src/routes/+page.ts', 'export const load = 1', {}],
     ['a non-exported load', '/app/src/routes/+page.ts', 'const load = () => ({})', {}],

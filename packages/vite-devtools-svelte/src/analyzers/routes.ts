@@ -4,8 +4,8 @@ import path from 'node:path';
 import type { RouteInfo, ParamInfo, RouteFile } from '../types.js';
 import { HEX_DIGITS, WORD_CHARS, consistsOf } from './text.js';
 
-export function analyzeRoutes(routesDir: string): RouteInfo[] {
-  if (!fs.existsSync(routesDir)) return [];
+export function analyzeRoutes(routesDir: string | undefined): RouteInfo[] {
+  if (!routesDir || !fs.existsSync(routesDir)) return [];
 
   const routes: RouteInfo[] = [];
   scanDirectory(routesDir, routesDir, routes);
@@ -83,7 +83,7 @@ export function classifyFile(name: string): RouteFile['type'] | null {
 
 /**
  * URL pattern and params of a route id (`/`-separated, relative to
- * src/routes), following SvelteKit's routing rules:
+ * the routes directory), following SvelteKit's routing rules:
  * - `(group)` segments are not part of the URL;
  * - `[p]` → `:p`, `[[p]]` → `:p?`, `[...p]` → `*p`; a `=matcher` goes to
  *   `params[].matcher`, not into the pattern;
