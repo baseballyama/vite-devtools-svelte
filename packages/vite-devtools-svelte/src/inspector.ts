@@ -1,13 +1,12 @@
 // options are declared here so the published types never import the private inspector package
-import path from 'node:path';
-
 import { normalizePath } from 'vite';
 import type { Plugin } from 'vite';
 
-import { svelteInspector } from '../../inspector/src/index.js';
+import { getInspectorPath, svelteInspector } from '../../inspector/src/index.js';
 
-// the build copies the runtime next to this module, see vite.config.ts
-const INSPECTOR_RUNTIME = `${normalizePath(path.join(import.meta.dirname, 'inspector', 'runtime'))}/`;
+// where the inspector serves its runtime from: dist/inspector/runtime once built (see
+// vite.config.ts), packages/inspector/src/runtime when run from source
+const INSPECTOR_RUNTIME = getInspectorPath();
 
 /** Whether `id` is one of the inspector's own components, which devtools must not track. */
 export function isInspectorRuntime(id: string): boolean {

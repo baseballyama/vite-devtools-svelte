@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { compile } from 'svelte/compiler';
 import type { Plugin } from 'vite';
@@ -278,7 +278,10 @@ describe('trackingPlugin transform', () => {
     ['node_modules', [COUNTER, '/app/node_modules/lib/A.svelte'], {}, {}],
     [
       'the bundled inspector',
-      [COUNTER, new URL('../src/inspector/runtime/Inspector.svelte', import.meta.url).pathname],
+      [
+        COUNTER,
+        fileURLToPath(new URL('../../inspector/src/runtime/Inspector.svelte', import.meta.url)),
+      ],
       {},
       {},
     ],

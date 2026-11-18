@@ -1,5 +1,5 @@
 import http from 'node:http';
-import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import type { Plugin } from 'vite';
 import { describe, it, expect, vi } from 'vitest';
@@ -44,8 +44,10 @@ describe('svelteDevtools factory', () => {
   });
 });
 
-// the bundled inspector runtime sits next to the module that declares it
-const SRC = new URL('../src', import.meta.url).pathname;
+// the inspector's runtime, here from its source (the build copies it to dist/inspector/runtime)
+const INSPECTOR_SVELTE = fileURLToPath(
+  new URL('../../inspector/src/runtime/Inspector.svelte', import.meta.url),
+);
 
 // =====================================================================
 // Virtual Module Resolution (runtime + wrapper)
@@ -76,7 +78,7 @@ describe('mainPlugin virtual module resolution', () => {
     ['the wrapper (virtual \\0 id)', WRAPPER_MODULE_ID, null],
     ['another virtual module', '\0virtual:other', null],
     ['no importer (entry)', undefined, null],
-    ['the bundled inspector', path.join(SRC, 'inspector/runtime/Inspector.svelte'), null],
+    ['the bundled inspector', INSPECTOR_SVELTE, null],
   ])('svelte/internal/client imported by %s → %s', (_, importer, expected) => {
     expect(callHook(getMainPlugin().resolveId, 'svelte/internal/client', importer)).toBe(expected);
   });

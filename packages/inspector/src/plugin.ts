@@ -40,7 +40,8 @@ export type InspectorPlugin = Omit<Plugin, 'devtools'> & {
 /** `svg` as a data url */
 const dataUrl = (svg: string) => `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
 
-function getInspectorPath(): string {
+/** The directory of the browser runtime the plugin serves, with a trailing `/` */
+export function getInspectorPath(): string {
   // vite-devtools-svelte: the runtime sits next to this file instead of under
   // vite-plugin-svelte's `src/plugins/inspector/`.
   const pluginPath = normalizePath(import.meta.dirname);
