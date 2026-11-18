@@ -48,16 +48,16 @@ export default {
 
 ## In the Vite DevTools dock
 
-The inspector only runs in the [Vite DevTools](https://devtools.vite.dev) dock, so `@vitejs/devtools` has to be in the Vite config:
+The inspector only runs in the [Vite DevTools](https://devtools.vite.dev) dock, so `@vitejs/devtools` has to be installed and turned on with Vite's `devtools` option:
 
 ```js
 // vite.config.js
 import { sveltekit } from '@sveltejs/kit/vite';
 import { svelteDevtools } from '@sveltejs/vite-devtools-svelte';
-import { DevTools } from '@vitejs/devtools';
 
 export default {
-  plugins: [svelteDevtools(), DevTools(), sveltekit()],
+  devtools: { apply: 'serve' },
+  plugins: [svelteDevtools(), sveltekit()],
 };
 ```
 

@@ -237,8 +237,9 @@
     <div>
       <h3>Vite DevTools dock</h3>
       <p class="muted">
-        Install <code>@vitejs/devtools</code> ≥ 0.8.0 and add <code>DevTools()</code> to your Vite config:
-        the same panels open as an entry in the Vite DevTools dock.
+        Install <code>@vitejs/devtools</code> ≥ 0.8.0 and set
+        <code>devtools: &#123; apply: 'serve' &#125;</code> in your Vite config: the same panels open
+        as an entry in the Vite DevTools dock.
       </p>
     </div>
   </div>
