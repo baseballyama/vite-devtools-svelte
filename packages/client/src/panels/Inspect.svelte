@@ -1,5 +1,4 @@
 <script lang="ts">
-  import Badge from '../components/Badge.svelte';
   import Button from '../components/Button.svelte';
   import CodePane from '../components/CodePane.svelte';
   import EmptyState from '../components/EmptyState.svelte';
@@ -8,14 +7,16 @@
   import ResourceEmpty from '../components/ResourceEmpty.svelte';
   import SearchField from '../components/SearchField.svelte';
   import SplitView from '../components/SplitView.svelte';
+  import TreeView from '../components/TreeView.svelte';
   import type { CodePaneApi } from '../components/types.js';
-  import VirtualList from '../components/VirtualList.svelte';
+  import { buildFileTree, type FileNode } from '../lib/file-tree.js';
   import { errorMessage, shortPath } from '../lib/format.js';
   import { highlightJS, highlightSvelte } from '../lib/highlight.js';
   import { matcher } from '../lib/match.js';
   import { resource } from '../lib/resource.svelte.js';
   import { getSvelteFiles, inspectFile, openInEditor, type SvelteFileEntry } from '../lib/rpc.js';
   import { parseLineMappings, type LineMaps } from '../lib/sourcemap.js';
+  import { branchKeys } from '../lib/tree.js';
   import type { InspectResult } from '../lib/types.js';
 
   const LH = 18;
@@ -39,10 +40,20 @@
   let outPane = $state<CodePaneApi | null>(null);
   let codeWidth = $state(1000);
 
-  const rows = $derived.by(() => {
-    const m = matcher(query);
-    return m ? files.data.filter(f => m(f.name, f.file)) : files.data;
+  const tree = $derived(buildFileTree(files.data));
+  let expanded = $state(new Set<string>());
+  let seeded = false;
+  $effect(() => {
+    if (seeded || tree.length === 0) return;
+    seeded = true;
+    expanded = branchKeys(tree, { key: n => n.key, children: n => n.children });
   });
+
+  const match = $derived(matcher(query));
+  const filter = $derived(match && ((n: FileNode) => !!n.file && match(n.file.name, n.file.file)));
+  const matches = $derived(
+    match ? files.data.filter(f => match(f.name, f.file)).length : files.data.length,
+  );
 
   const srcHtml = $derived(result ? highlightSvelte(result.source.split('\n')) : []);
   const outHtml = $derived(result ? highlightJS(result.compiled.split('\n')) : []);
@@ -108,10 +119,9 @@
 
 <Panel title="Compiled output">
   {#snippet toolbar()}
-    <SearchField bind:value={query} placeholder="Find a .svelte file…" count={rows.length} />
+    <SearchField bind:value={query} placeholder="Find a .svelte file…" count={matches} />
     {#if result}
       <span class="file mono truncate" title={result.file}>{shortPath(result.file, 3)}</span>
-      {#if maps}<Badge tone="green">source map</Badge>{:else}<Badge>no source map</Badge>{/if}
     {/if}
   {/snippet}
   {#snippet actions()}
@@ -127,7 +137,7 @@
         variant="ghost"
         label="Recompile"
         disabled={loading}
-        onclick={() => selected && load(selected)}
+        onclick={() => load(result!.file)}
       />
     {/if}
   {/snippet}
@@ -139,8 +149,8 @@
       {:else if !result}
         <EmptyState icon="inspect" title={loading ? 'Compiling…' : 'Pick a component'}>
           {#if !loading}<p>
-              See exactly what the Svelte compiler emits. Click any line to jump to its
-              source-mapped counterpart.
+              See exactly what the Svelte compiler emits. Click a line to see the code it compiles
+              to.
             </p>{/if}
         </EmptyState>
       {:else}
@@ -176,16 +186,18 @@
       {/if}
     </div>
     {#snippet aside()}
-      <VirtualList
-        items={rows}
-        getKey={(f: SvelteFileEntry) => f.file}
+      <TreeView
+        bind:expanded
         bind:selected
+        roots={tree}
+        getKey={(n: FileNode) => n.key}
+        getChildren={(n: FileNode) => n.children}
+        {filter}
         label="Svelte files"
-        onselect={(f: SvelteFileEntry) => load(f.file)}
+        onselect={(n: FileNode) => n.file && load(n.file.file)}
       >
-        {#snippet row(f: SvelteFileEntry)}
-          <span class="name truncate"><Highlight text={f.name} {query} /></span>
-          <span class="path truncate"><Highlight text={shortPath(f.file, 3)} {query} /></span>
+        {#snippet row(n: FileNode)}
+          <span class="truncate" class:dir={!n.file}><Highlight text={n.label} {query} /></span>
         {/snippet}
         {#snippet empty()}
           <ResourceEmpty
@@ -198,7 +210,7 @@
             noMatch="No files match"
           />
         {/snippet}
-      </VirtualList>
+      </TreeView>
     {/snippet}
   </SplitView>
 </Panel>
@@ -243,13 +255,7 @@
     stroke-width: 1.5;
     opacity: 0.75;
   }
-  .name {
-    font-weight: 500;
-    flex-shrink: 0;
-    max-width: 60%;
-  }
-  .path {
-    color: var(--fg-faint);
-    font-size: var(--fs-xs);
+  .dir {
+    color: var(--fg-muted);
   }
 </style>

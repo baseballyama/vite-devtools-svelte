@@ -10,13 +10,13 @@ import Inspect from './Inspect.svelte';
 const XSS = '<img src=x onerror="alert(1)"><script>alert(2)</script>';
 
 const files: rpc.SvelteFileEntry[] = [
-  { file: '/app/src/lib/Card.svelte', name: 'Card' },
-  { file: '/app/src/routes/+page.svelte', name: '+page' },
+  { file: 'src/lib/Card.svelte', name: 'Card' },
+  { file: 'src/routes/+page.svelte', name: '+page' },
 ];
 
 // Compiled line 1 ← source 1; compiled 2 and 3 ← source 2.
 const card: InspectResult = {
-  file: '/app/src/lib/Card.svelte',
+  file: 'src/lib/Card.svelte',
   source: `<script>let n = 1</script>\n<p>{n}</p>\n${XSS}`,
   compiled: `import 'svelte'\nconst p = "${XSS}"\n$.template(p)`,
   mappings: 'AAAA;AACA;AAAA',
@@ -27,13 +27,18 @@ async function setup() {
   const user = userEvent.setup();
   render(Inspect);
   await settle();
-  return { user, list: screen.getByRole('listbox', { name: 'Svelte files' }) };
+  return { user, list: screen.getByRole('tree', { name: 'Svelte files' }) };
 }
 
 async function pick(user: ReturnType<typeof userEvent.setup>, list: HTMLElement, name: string) {
   await user.click(within(list).getByText(name));
   await settle();
 }
+
+const rowLabels = (list: HTMLElement) =>
+  within(list)
+    .getAllByRole('treeitem')
+    .map(r => r.textContent?.trim());
 
 const pane = (name: 'Source' | 'Compiled JS') =>
   screen.getByRole('region', { name: `${name} code` });
@@ -56,17 +61,40 @@ beforeEach(() => {
 });
 
 describe('Inspect', () => {
-  it('lists .svelte files and invites a pick', async () => {
+  it('lists .svelte files in their folders and invites a pick', async () => {
     const { list } = await setup();
-    expect(within(list).getAllByRole('option')).toHaveLength(2);
-    expect(within(list).getByText('src/lib/Card.svelte')).toBeTruthy();
+    expect(rowLabels(list)).toEqual(['src', 'lib', 'Card.svelte', 'routes', '+page.svelte']);
     expect(screen.getByText('Pick a component')).toBeTruthy();
+  });
+
+  it('picking a folder compiles nothing', async () => {
+    const { user, list } = await setup();
+    await user.click(within(list).getByText('lib'));
+    await settle();
+    expect(rpc.inspectFile).not.toHaveBeenCalled();
+    expect(screen.getByText('Pick a component')).toBeTruthy();
+  });
+
+  it('recompiles the shown file after a folder is selected', async () => {
+    const { user, list } = await setup();
+    await pick(user, list, 'Card.svelte');
+    await user.click(within(list).getByText('routes'));
+    await user.click(screen.getByRole('button', { name: 'Recompile' }));
+    await settle();
+    expect(rpc.inspectFile).toHaveBeenLastCalledWith('src/lib/Card.svelte');
+    expect(rpc.inspectFile).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps every file under a folder that matches the query', async () => {
+    const { user, list } = await setup();
+    await user.type(screen.getByRole('searchbox'), 'lib');
+    expect(rowLabels(list)).toEqual(['src', 'lib', 'Card.svelte']);
   });
 
   it('filters files and shows a no-match state', async () => {
     const { user, list } = await setup();
     await user.type(screen.getByRole('searchbox'), 'page');
-    expect(within(list).getAllByRole('option')).toHaveLength(1);
+    expect(rowLabels(list)).toEqual(['src', 'routes', '+page.svelte']);
     await user.type(screen.getByRole('searchbox'), 'zzz');
     expect(within(list).getByText('No files match')).toBeTruthy();
   });
@@ -81,17 +109,16 @@ describe('Inspect', () => {
     vi.mocked(rpc.getSvelteFiles).mockRejectedValue(new Error('RPC down'));
     render(Inspect);
     await settle();
-    const list = screen.getByRole('listbox', { name: 'Svelte files' });
+    const list = screen.getByRole('tree', { name: 'Svelte files' });
     expect(within(list).getByRole('alert').textContent).toContain('RPC down');
     expect(screen.queryByText('No files match')).toBeNull();
   });
 
   it('compiles the picked file and shows source and compiled code side by side', async () => {
     const { user, list } = await setup();
-    await pick(user, list, 'Card');
-    expect(rpc.inspectFile).toHaveBeenCalledWith('/app/src/lib/Card.svelte');
-    expect(screen.getByText('source map')).toBeTruthy();
-    expect(screen.getByTitle('/app/src/lib/Card.svelte').textContent).toBe('src/lib/Card.svelte');
+    await pick(user, list, 'Card.svelte');
+    expect(rpc.inspectFile).toHaveBeenCalledWith('src/lib/Card.svelte');
+    expect(screen.getByTitle('src/lib/Card.svelte').textContent).toBe('src/lib/Card.svelte');
     expect(lines(pane('Source'))).toHaveLength(3);
     expect(lines(pane('Compiled JS'))).toHaveLength(3);
     expect(screen.getAllByText('3 lines')).toHaveLength(2);
@@ -99,7 +126,7 @@ describe('Inspect', () => {
 
   it('renders markup in source and compiled code as text, never as elements', async () => {
     const { user, list } = await setup();
-    await pick(user, list, 'Card');
+    await pick(user, list, 'Card.svelte');
     for (const region of [pane('Source'), pane('Compiled JS')]) {
       expect(region.querySelector('img, script')).toBeNull();
       expect(region.textContent).toContain('<img src=x onerror=');
@@ -109,7 +136,7 @@ describe('Inspect', () => {
 
   it('links a clicked source line to its compiled lines, and back', async () => {
     const { user, list } = await setup();
-    await pick(user, list, 'Card');
+    await pick(user, list, 'Card.svelte');
     await user.click(lines(pane('Source'))[1]!);
     expect(highlighted(pane('Source'))).toEqual([2]);
     expect(highlighted(pane('Compiled JS'))).toEqual([2, 3]);
@@ -130,7 +157,7 @@ describe('Inspect', () => {
   it('stacks the panes in narrow containers and drops the connectors', async () => {
     layout(narrow);
     const { user, list } = await setup();
-    await pick(user, list, 'Card');
+    await pick(user, list, 'Card.svelte');
     await user.click(lines(pane('Source'))[1]!);
     expect(highlighted(pane('Compiled JS'))).toEqual([2, 3]);
     expect(document.querySelector('.gutter')).toBeNull();
@@ -139,8 +166,7 @@ describe('Inspect', () => {
   it('works without a source map', async () => {
     vi.mocked(rpc.inspectFile).mockResolvedValue({ ...card, mappings: undefined });
     const { user, list } = await setup();
-    await pick(user, list, 'Card');
-    expect(screen.getByText('no source map')).toBeTruthy();
+    await pick(user, list, 'Card.svelte');
     await user.click(lines(pane('Source'))[0]!);
     expect(highlighted(pane('Source'))).toEqual([1]);
     expect(highlighted(pane('Compiled JS'))).toEqual([]);
@@ -151,9 +177,9 @@ describe('Inspect', () => {
 
   it('opens the source in the editor and recompiles', async () => {
     const { user, list } = await setup();
-    await pick(user, list, 'Card');
+    await pick(user, list, 'Card.svelte');
     await user.click(screen.getByRole('button', { name: 'Open source in editor' }));
-    expect(rpc.openInEditor).toHaveBeenCalledWith('/app/src/lib/Card.svelte');
+    expect(rpc.openInEditor).toHaveBeenCalledWith('src/lib/Card.svelte');
     await user.click(screen.getByRole('button', { name: 'Recompile' }));
     await settle();
     expect(rpc.inspectFile).toHaveBeenCalledTimes(2);
@@ -163,11 +189,11 @@ describe('Inspect', () => {
     vi.mocked(rpc.inspectFile).mockRejectedValueOnce(new Error('Unexpected token'));
     vi.mocked(rpc.inspectFile).mockRejectedValueOnce('boom');
     const { user, list } = await setup();
-    await pick(user, list, 'Card');
+    await pick(user, list, 'Card.svelte');
     expect(screen.getByRole('alert').textContent).toContain('Unexpected token');
-    await pick(user, list, '+page');
+    await pick(user, list, '+page.svelte');
     expect(screen.getByRole('alert').textContent).toContain('boom');
-    await pick(user, list, 'Card');
+    await pick(user, list, 'Card.svelte');
     expect(screen.queryByRole('alert')).toBeNull();
     expect(pane('Source')).toBeTruthy();
   });
@@ -183,16 +209,16 @@ describe('Inspect', () => {
         }),
     );
     const { user, list } = await setup();
-    await user.click(within(list).getByText('Card'));
+    await user.click(within(list).getByText('Card.svelte'));
     expect(screen.getByText('Compiling…')).toBeTruthy();
-    await user.click(within(list).getByText('+page'));
+    await user.click(within(list).getByText('+page.svelte'));
     // The first (stale) answer arrives last and is dropped, success or failure.
-    pending[1]!({ ...card, file: '/app/src/routes/+page.svelte', source: 'page', compiled: 'x' });
+    pending[1]!({ ...card, file: 'src/routes/+page.svelte', source: 'page', compiled: 'x' });
     await settle();
     pending[0]!(card);
     fail[0]!(new Error('stale'));
     await settle();
-    expect(screen.getByTitle('/app/src/routes/+page.svelte')).toBeTruthy();
+    expect(screen.getByTitle('src/routes/+page.svelte')).toBeTruthy();
     expect(lines(pane('Source'))).toHaveLength(1);
     expect(screen.queryByRole('alert')).toBeNull();
   });
@@ -208,11 +234,11 @@ describe('Inspect', () => {
       )
       .mockResolvedValueOnce(card);
     const { user, list } = await setup();
-    await user.click(within(list).getByText('+page'));
-    await pick(user, list, 'Card');
+    await user.click(within(list).getByText('+page.svelte'));
+    await pick(user, list, 'Card.svelte');
     fail[0]!(new Error('stale'));
     await settle();
     expect(screen.queryByRole('alert')).toBeNull();
-    expect(screen.getByTitle('/app/src/lib/Card.svelte')).toBeTruthy();
+    expect(screen.getByTitle('src/lib/Card.svelte')).toBeTruthy();
   });
 });
