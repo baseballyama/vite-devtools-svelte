@@ -1774,24 +1774,29 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     });
   });
 
-  // An element opened in the Svelte Inspector: its component instance is
-  // selected in the DevTools. Svelte (5.58+) records the component context
-  // an element was rendered in as `__svelte_meta.component`; library
-  // components and the context `mount` creates are not tracked, so the
-  // nearest tracked ancestor (`ctx.p`, Svelte's parent context) is picked.
-  window.addEventListener('svelte-inspector:pick', event => {
+  // The Svelte Inspector shows the component instance of the selected element,
+  // and selects it in the DevTools when the element is opened.
+  // Svelte (5.58+) records the component context an element was rendered in
+  // as `__svelte_meta.component`; library components and the context `mount`
+  // creates are not tracked, so the nearest tracked ancestor (`ctx.p`,
+  // Svelte's parent context) is used. undefined when there is none.
+  const instanceOf = element => {
     let id;
-    for (
-      let ctx = event.detail?.element?.__svelte_meta?.component;
-      ctx && id === undefined;
-      ctx = ctx.p
-    ) {
+    for (let ctx = element?.__svelte_meta?.component; ctx && id === undefined; ctx = ctx.p) {
       id = __SVELTE_DT._idByContext.get(ctx);
     }
-    if (id === undefined || !__SVELTE_DT._instances.has(id)) return;
+    return id === undefined ? undefined : __SVELTE_DT._instances.get(id);
+  };
+  window.addEventListener('svelte-inspector:describe', event => {
+    const instance = instanceOf(event.detail?.element);
+    if (instance) event.detail.name = instance.name;
+  });
+  window.addEventListener('svelte-inspector:pick', event => {
+    const instance = instanceOf(event.detail?.element);
+    if (!instance) return;
     __SVELTE_DT._send('svelte-devtools:element-picked', {
       epoch: __SVELTE_DT._epoch,
-      componentId: id,
+      componentId: instance.id,
     });
   });
 
