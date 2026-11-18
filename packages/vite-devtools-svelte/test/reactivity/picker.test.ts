@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
+import Outer from './fixtures/Outer.svelte';
 import Picked from './fixtures/Picked.svelte';
 import { dt, instances, render } from './harness.js';
 
@@ -7,7 +8,10 @@ import { dt, instances, render } from './harness.js';
 type El = object;
 const win = globalThis as unknown as {
   dispatchEvent(event: unknown): boolean;
-  CustomEvent: new (type: string, init: { detail: unknown }) => unknown;
+  CustomEvent: new (
+    type: string,
+    init: { detail: unknown; cancelable?: boolean },
+  ) => { defaultPrevented: boolean };
   document: { createElement(tag: string): El };
 };
 
@@ -114,5 +118,145 @@ describe('element picks from the Svelte Inspector', () => {
     const bold = all(r.target, 'b')[0]!;
     r.destroy();
     expect([pick(bold), nameOf(bold)]).toEqual([[], null]);
+  });
+});
+
+interface Entry {
+  type: string;
+  componentTag?: string;
+  file: string;
+  line: number;
+  parent: Entry | null;
+}
+
+function componentEntries(el: El): Entry[] {
+  const entries: Entry[] = [];
+  for (let e: Entry | null = (el as any).__svelte_meta.parent; e !== null; e = e.parent) {
+    if (e.type === 'component') entries.push(e);
+  }
+  return entries;
+}
+
+/** The names the runtime gives the menu's parent rows of `el`, by entry. */
+function parentNames(el: El): Map<Entry, string> {
+  const parents = new Map<Entry, string>();
+  win.dispatchEvent(
+    new win.CustomEvent('svelte-inspector:describe', {
+      detail: { element: el, name: null, parents },
+    }),
+  );
+  return parents;
+}
+
+/** "Inspect" on the row of `entry`: the ids reported, and whether the pick was taken. */
+function inspect(el: El, entry: Entry) {
+  send.mockClear();
+  const event = new win.CustomEvent('svelte-inspector:pick', {
+    detail: { element: el, entry },
+    cancelable: true,
+  });
+  win.dispatchEvent(event);
+  const reported = send.mock.calls
+    .filter(([name]) => name === PICKED)
+    .map(([, data]) => (data as { componentId: number }).componentId);
+  return { reported, taken: event.defaultPrevented };
+}
+
+/** For each component entry of `el`: `Tag@file:line -> id`, or `-> none`. */
+function parentRows(el: El) {
+  const names = parentNames(el);
+  return componentEntries(el).map(entry => {
+    const { reported, taken } = inspect(el, entry);
+    expect(taken).toBe(reported.length > 0);
+    expect(names.get(entry) ?? null).toBe(reported.length > 0 ? entry.componentTag : null);
+    const at = `${entry.componentTag}@${entry.file.slice(entry.file.lastIndexOf('/') + 1)}:${entry.line}`;
+    return `${at} -> ${reported[0] ?? 'none'}`;
+  });
+}
+
+const leafByText = (target: object, text: string) =>
+  all(target, 'i').find(i => (i as { textContent: string }).textContent === text)!;
+
+describe('the menu rows of the components around an element', () => {
+  // Outer.svelte renders <Card> (each rendering a <Leaf> in an {#if}) five
+  // times: plain twice, with a <Leaf> passed as children, through an alias,
+  // and with a css custom property.
+  it('pairs each component entry with the instance it rendered, among same-file siblings', () => {
+    const r = render(Outer);
+    const cards = instances('Card').map(c => c.id);
+    const leaves = instances('Leaf').map(c => c.id);
+    expect(parentRows(leafByText(r.target, 'two'))).toEqual([
+      `Leaf@Card.svelte:8 -> ${leaves[1]}`,
+      `Card@Outer.svelte:9 -> ${cards[1]}`,
+    ]);
+    r.destroy();
+  });
+
+  it('a component passed as children pairs through the {@render} that ran it', () => {
+    const r = render(Outer);
+    expect(parentRows(leafByText(r.target, 'passed'))).toEqual([
+      `Leaf@Outer.svelte:10 -> ${instances('Leaf')[3]!.id}`,
+      `Card@Outer.svelte:10 -> ${instances('Card')[2]!.id}`,
+    ]);
+    r.destroy();
+  });
+
+  it('an aliased tag is not paired; the rows inside it still are', () => {
+    const r = render(Outer);
+    expect(parentRows(leafByText(r.target, 'alias'))).toEqual([
+      `Leaf@Card.svelte:8 -> ${instances('Leaf')[4]!.id}`,
+      'Alias@Outer.svelte:11 -> none',
+    ]);
+    r.destroy();
+  });
+
+  it('a call without an entry (css custom properties) leaves no row to pair', () => {
+    const r = render(Outer);
+    expect(parentRows(leafByText(r.target, 'styled'))).toEqual([
+      `Leaf@Card.svelte:8 -> ${instances('Leaf')[5]!.id}`,
+    ]);
+    r.destroy();
+  });
+
+  it('an untracked component (a library) is not paired, and no ancestor stands in', () => {
+    const r = render(Outer);
+    const two = leafByText(r.target, 'two');
+    const card = (two as any).__svelte_meta.component.p;
+    const id = dt()._idByContext.get(card);
+    dt()._idByContext.delete(card);
+    try {
+      expect(parentRows(two)).toEqual([
+        `Leaf@Card.svelte:8 -> ${instances('Leaf')[1]!.id}`,
+        'Card@Outer.svelte:9 -> none',
+      ]);
+    } finally {
+      dt()._idByContext.set(card, id);
+    }
+    r.destroy();
+  });
+
+  it('an entry of another element, or no Svelte metadata, picks and names nothing', () => {
+    const r = render(Outer);
+    const one = leafByText(r.target, 'one');
+    const two = leafByText(r.target, 'two');
+    expect(inspect(one, componentEntries(two)[1]!)).toEqual({ reported: [], taken: false });
+    expect(parentNames(win.document.createElement('p'))).toEqual(new Map());
+    r.destroy();
+  });
+
+  it("the element row's Inspect (no entry) is taken; the inspector's own open is not", () => {
+    const r = render(Outer);
+    const two = leafByText(r.target, 'two');
+    const row = new win.CustomEvent('svelte-inspector:pick', {
+      detail: { element: two, entry: null },
+      cancelable: true,
+    });
+    win.dispatchEvent(row);
+    expect(row.defaultPrevented).toBe(true);
+    // a click opens the editor and selects: not cancelable, nothing to take
+    const click = new win.CustomEvent('svelte-inspector:pick', { detail: { element: two } });
+    win.dispatchEvent(click);
+    expect(click.defaultPrevented).toBe(false);
+    r.destroy();
   });
 });

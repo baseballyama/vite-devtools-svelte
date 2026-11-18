@@ -313,3 +313,147 @@ describe('the label', () => {
     expect(await hover(component())).toBe('<div>');
   });
 });
+
+interface Entry {
+  componentTag: string;
+  parent: Entry | null;
+}
+
+/** Names the element `A` and its Layout row, walking its entries like the devtools runtime does */
+const onDescribe = (e: Event) => {
+  const detail = (e as CustomEvent).detail as {
+    element: { __svelte_meta: { parent: Entry | null } };
+    name: unknown;
+    parents?: Map<Entry, unknown>;
+  };
+  detail.name = 'A';
+  for (let entry = detail.element.__svelte_meta.parent; entry; entry = entry.parent) {
+    if (entry.componentTag === 'Layout') detail.parents?.set(entry, 'Layout');
+  }
+};
+
+const button = (name: string) =>
+  document.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`);
+
+describe('the menu, when an in-page tool names its rows', () => {
+  const layout = { file: 'src/Layout.svelte', line: 7, column: 2 };
+  const page = { file: 'src/Page.svelte', line: 2, column: 0 };
+  let picks: CustomEvent[];
+  let take: boolean;
+  const onPick = (e: Event) => {
+    picks.push(e as CustomEvent);
+    if (take && e.cancelable) e.preventDefault();
+  };
+  beforeEach(() => {
+    picks = [];
+    take = true;
+    window.addEventListener('svelte-inspector:describe', onDescribe);
+    window.addEventListener('svelte-inspector:pick', onPick);
+  });
+  afterEach(() => {
+    window.removeEventListener('svelte-inspector:describe', onDescribe);
+    window.removeEventListener('svelte-inspector:pick', onPick);
+  });
+
+  /** Opens the menu of an element rendered in <Layout> in <Page>; returns the element, its entry */
+  async function openMenu() {
+    const dock = start();
+    await dock.ctx.docks.setActionActive('svelte:inspector', true);
+    await settle();
+    const el = component();
+    const pageEntry = { type: 'component', componentTag: 'Page', ...page, parent: null };
+    const layoutEntry = { type: 'component', componentTag: 'Layout', ...layout, parent: pageEntry };
+    (el as unknown as { __svelte_meta: Record<string, unknown> }).__svelte_meta.parent =
+      layoutEntry;
+    el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    flushSync();
+    return { ...dock, el, layoutEntry };
+  }
+
+  it('each row opens the editor, and named rows also inspect', async () => {
+    await openMenu();
+    const rows = [...document.querySelectorAll('.svelte-inspector-actions-row')];
+    expect(rows.map(row => row.querySelector('.svelte-inspector-tag')!.textContent)).toEqual([
+      '<div>',
+      '<Layout>',
+      '<Page>',
+    ]);
+    expect(button('Inspect A in DevTools')).not.toBeNull();
+    expect(button('Inspect Layout in DevTools')).not.toBeNull();
+    // the unnamed row keeps the column with a placeholder, out of focus and assistive tech
+    expect(rows[2]!.querySelector('button.svelte-inspector-inspect')).toBeNull();
+    expect(
+      rows[2]!.querySelector('.svelte-inspector-placeholder')!.getAttribute('aria-hidden'),
+    ).toBe('true');
+    expect(button('Open src/Page.svelte:2 in editor')).not.toBeNull();
+  });
+
+  it('Inspect offers the row to the tool; taken, no editor opens and the inspector turns off', async () => {
+    const { ctx, el, layoutEntry } = await openMenu();
+    button('Inspect Layout in DevTools')!.click();
+    await settle();
+    expect(picks.map(e => [e.detail.element, e.detail.entry, e.cancelable])).toEqual([
+      [el, layoutEntry, true],
+    ]);
+    expect(ctx.rpc.call).not.toHaveBeenCalled();
+    expect(enabled()).toBe(false);
+  });
+
+  it('Inspect opens the editor when the tool does not take it', async () => {
+    take = false;
+    const { ctx } = await openMenu();
+    button('Inspect Layout in DevTools')!.click();
+    await settle();
+    expect(ctx.rpc.call).toHaveBeenCalledWith(
+      'vite:core:open-in-editor',
+      '/project/src/Layout.svelte:7:3',
+    );
+  });
+
+  it('Open opens the editor without offering the element', async () => {
+    const { ctx } = await openMenu();
+    button('Open src/Layout.svelte:7 in editor')!.click();
+    await settle();
+    expect(picks.map(e => e.detail.element)).toEqual([null]);
+    expect(ctx.rpc.call).toHaveBeenCalledWith(
+      'vite:core:open-in-editor',
+      '/project/src/Layout.svelte:7:3',
+    );
+    expect(enabled()).toBe(false);
+  });
+
+  it('a click on a row outside its buttons keeps the menu open', async () => {
+    await openMenu();
+    document
+      .querySelector<HTMLElement>('.svelte-inspector-actions-row .svelte-inspector-file')!
+      .click();
+    flushSync();
+    expect(document.querySelector('.svelte-inspector-actions-row')).not.toBeNull();
+    expect(picks).toEqual([]);
+  });
+
+  it("the element row's Inspect offers the element itself (no entry)", async () => {
+    const { ctx, el } = await openMenu();
+    button('Inspect A in DevTools')!.click();
+    await settle();
+    expect(picks.map(e => [e.detail.element, e.detail.entry, e.cancelable])).toEqual([
+      [el, null, true],
+    ]);
+    expect(ctx.rpc.call).not.toHaveBeenCalled();
+  });
+
+  it('Inspect acts on the element the menu was opened on, after keyboard navigation', async () => {
+    const { el } = await openMenu();
+    component('src/B.svelte');
+    document.body.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowRight', code: 'ArrowRight', bubbles: true }),
+    );
+    flushSync();
+    button('Inspect A in DevTools')!.click();
+    await settle();
+    expect(picks).toHaveLength(1);
+    // (toEqual would match another element of the same shape)
+    expect(picks[0]!.detail.element).toBe(el);
+  });
+});

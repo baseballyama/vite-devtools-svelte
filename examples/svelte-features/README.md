@@ -39,6 +39,7 @@ pnpm examples svelte-features         # 単体で起動（--dock で Vite DevToo
   - [ ] ライブラリの `Card` の中身をクリックすると、最も近いアプリのコンポーネントが選ばれる。右クリックのメニューにライブラリの行は「Open」だけ
   - [ ] 動的コンポーネント（セクション）と `<svelte:element>` の要素でも選択できる
   - [ ] ラベルに要素のタグではなくインスタンス名（例 `<Slider>`）が出る
+  - [ ] 右クリックのメニューで外側のコンポーネントの行の Inspect を押すと、そのインスタンスが選ばれ、エディタは開かない。Open ではエディタが開く
 - **Reactivity**
   - [ ] 概要に `src/lib/state.svelte.ts`（モジュール状態）が出て、shared-state の操作で数が増える
   - [ ] `SharedState` を選ぶと `Counter` クラスの `count` / `doubled` / `parity`、`$effect.pre` がつながって見える

@@ -66,7 +66,16 @@
   // the component instance of `active_el`, named by an in-page tool (see `describe`); null when none did
   let active_name = $state<string | null>(null);
 
-  let menu = $state<{ x: number; y: number; stack: Array<Loc & { tag: string }> } | null>(null);
+  // `element`: keyboard navigation can move `active_el` while the menu is open. `$state.raw`:
+  // tools resolve a row's `entry` by identity, so it must stay unproxied. `rows` is null when
+  // no tool named a row, and the menu is upstream's.
+  let menu = $state.raw<{
+    x: number;
+    y: number;
+    stack: StackItem[];
+    element: ElementWithMetadata;
+    rows: Array<{ item: StackItem; name: string | null; entry: DevStackEntry | null }> | null;
+  } | null>(null);
 
   let hold_start_ts = $state<number | null>(null);
 
@@ -177,15 +186,29 @@
     }
   }
 
-  // in-page tools (e.g. a devtools panel) name the component instance; a listener sets
-  // `detail.name`
-  function describe(el: Element): string | null {
-    const detail: { element: Element; name: unknown } = { element: el, name: null };
+  // in-page tools (e.g. a devtools panel) name the component instance (`detail.name`) and,
+  // given `parents`, the instance of each `__svelte_meta.parent` entry they know
+  function describe(el: Element, parents?: Map<DevStackEntry, unknown>): string | null {
+    const detail = { element: el, name: null as unknown, parents };
     window.dispatchEvent(new CustomEvent('svelte-inspector:describe', { detail }));
     return typeof detail.name === 'string' ? detail.name : null;
   }
 
-  function get_stack(target: ElementWithMetadata) {
+  // the editor opens when no tool takes the pick
+  function inspect_row(row: { item: StackItem; entry: DevStackEntry | null }) {
+    const { element, stack } = menu!;
+    const taken = !window.dispatchEvent(
+      new CustomEvent('svelte-inspector:pick', {
+        detail: { loc: row.item, stack, element, entry: row.entry },
+        cancelable: true,
+      }),
+    );
+    if (!taken) openInEditor(row.item);
+    disable();
+  }
+
+  // `entries` gets each row's `__svelte_meta.parent` entry (null for the element's row)
+  function get_stack(target: ElementWithMetadata, entries: Array<DevStackEntry | null> = []) {
     const el = find_selectable_parent(target, true)!;
     const meta = el.__svelte_meta;
 
@@ -197,6 +220,7 @@
         tag: el.tagName.toLowerCase(),
       },
     ];
+    entries.push(null);
 
     let entry: Metadata | DevStackEntry | undefined = meta;
 
@@ -210,6 +234,7 @@
         column: entry.column,
         tag: entry.componentTag!,
       });
+      entries.push(entry);
     }
 
     return stack;
@@ -229,7 +254,22 @@
     if (!active_el) return;
 
     stop(e);
-    menu = { x, y, stack: get_stack(active_el) };
+    const entries: Array<DevStackEntry | null> = [];
+    const stack = get_stack(active_el, entries);
+    const parents = new Map<DevStackEntry, unknown>();
+    const name = describe(active_el, parents);
+    const rows = stack.map((item, i) => {
+      const entry = entries[i] ?? null;
+      const named = entry === null ? name : parents.get(entry);
+      return { item, name: typeof named === 'string' ? named : null, entry };
+    });
+    menu = {
+      x,
+      y,
+      stack,
+      element: active_el,
+      rows: rows.some(row => row.name !== null) ? rows : null,
+    };
   }
 
   /** `element`: the element opened, null for a component chosen from the menu */
@@ -508,16 +548,54 @@
 
       <hr />
 
-      <ul class="svelte-inspector-grid">
-        {#each menu.stack as item, i (`${item.file}:${item.line}:${i}`)}
-          <li>
-            <button type="button" class="svelte-inspector-menu-row" onclick={() => send(item)}>
-              <span class="svelte-inspector-tag">&lt;{item.tag}&gt;</span>
-              <span class="svelte-inspector-file">{item.file}:{item.line}</span>
-            </button>
-          </li>
-        {/each}
-      </ul>
+      {#if menu.rows}
+        <ul class="svelte-inspector-actions-grid">
+          {#each menu.rows as row, i (`${row.item.file}:${row.item.line}:${i}`)}
+            <!-- the row is not a control: a click on its text must not close the menu -->
+            <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
+            <li class="svelte-inspector-actions-row" onclick={e => e.stopPropagation()}>
+              <span class="svelte-inspector-tag">&lt;{row.item.tag}&gt;</span>
+              <span class="svelte-inspector-file">{row.item.file}:{row.item.line}</span>
+              <span class="svelte-inspector-actions">
+                {#if row.name !== null}
+                  <button
+                    type="button"
+                    class="svelte-inspector-action svelte-inspector-inspect"
+                    aria-label="Inspect {row.name} in DevTools"
+                    onclick={() => inspect_row(row)}>Inspect</button
+                  >
+                {:else}
+                  <!-- keeps "Open" aligned; hidden from focus and assistive tech -->
+                  <span
+                    class="svelte-inspector-action svelte-inspector-inspect svelte-inspector-placeholder"
+                    aria-hidden="true">Inspect</span
+                  >
+                {/if}
+                <button
+                  type="button"
+                  class="svelte-inspector-action"
+                  aria-label="Open {row.item.file}:{row.item.line} in editor"
+                  onclick={() => {
+                    send(row.item);
+                    disable();
+                  }}>Open ↗</button
+                >
+              </span>
+            </li>
+          {/each}
+        </ul>
+      {:else}
+        <ul class="svelte-inspector-grid">
+          {#each menu.stack as item, i (`${item.file}:${item.line}:${i}`)}
+            <li>
+              <button type="button" class="svelte-inspector-menu-row" onclick={() => send(item)}>
+                <span class="svelte-inspector-tag">&lt;{item.tag}&gt;</span>
+                <span class="svelte-inspector-file">{item.file}:{item.line}</span>
+              </button>
+            </li>
+          {/each}
+        </ul>
+      {/if}
     {:else if active_el}
       {@const loc = active_el.__svelte_meta.loc}
 
@@ -591,6 +669,73 @@
   .svelte-inspector-tag {
     white-space: nowrap;
     font-weight: 600;
+  }
+
+  .svelte-inspector-actions-grid {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr) max-content;
+    column-gap: 8px;
+    row-gap: 2px;
+    /* fits the viewport, the file column is ellipsized */
+    max-width: min(560px, calc(100vw - 24px));
+    padding: 2px 0;
+  }
+
+  .svelte-inspector-actions-row {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
+    align-items: center;
+    padding: 2px 4px 2px 8px;
+    border-radius: 2px;
+    cursor: default;
+
+    &:hover {
+      background-color: rgb(0 0 0 / 0.05);
+    }
+  }
+
+  .svelte-inspector-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .svelte-inspector-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 24px;
+    padding: 0 8px;
+    border: 1px solid #c8c8c8;
+    border-radius: 4px;
+    background-color: #fff;
+    color: #222;
+    white-space: nowrap;
+    cursor: pointer;
+
+    &:hover {
+      background-color: #f0f0f0;
+    }
+
+    &:focus-visible {
+      outline: 2px solid #2563eb;
+      outline-offset: 1px;
+    }
+  }
+
+  .svelte-inspector-inspect {
+    border-color: #ff3e00;
+    color: #c83200;
+
+    &:hover,
+    &:focus-visible {
+      background-color: #ff3e00;
+      color: #fff;
+    }
+  }
+
+  .svelte-inspector-placeholder {
+    visibility: hidden;
   }
 
   .svelte-inspector-file {
