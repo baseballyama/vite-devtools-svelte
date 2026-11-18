@@ -161,7 +161,6 @@ export function createRpcFunctions(host: SvelteDevtoolsHost) {
         z
           .object({
             topK: z.number().int().positive().optional(),
-            windowMs: z.number().int().positive().optional(),
           })
           .optional(),
       ],

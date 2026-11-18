@@ -857,16 +857,17 @@ describe('Collector reactive summary pulls', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  it('clamps topK/windowMs, correlates by requestId and never assumes capabilities', async () => {
+  it('clamps topK, correlates by requestId and never assumes capabilities', async () => {
     const c = new Collector();
     const h = fakeHot();
     c.attach(h.hot);
-    const p = c.requestReactiveSummary({ topK: 9999, windowMs: 1 });
+    const p = c.requestReactiveSummary({ topK: 9999, windowMs: 1 } as any);
     const req = h.sent.find(s => s.event === HOT_EVENTS.requestReactiveSummary)!.payload as any;
-    expect(req).toEqual({ requestId: expect.any(String), topK: 200, windowMs: 1000 });
+    expect(req).toEqual({ requestId: expect.any(String), topK: 200 });
     h.emit(HOT_EVENTS.reactiveSummary, { requestId: 'nobody', rows: [] });
     h.emit(HOT_EVENTS.reactiveSummary, {
       requestId: req.requestId,
+      computedAt: 1001,
       window: { ms: 1000, since: 1, until: 1001, sampledActiveMs: 800 },
       components: { total: 50000, withActivity: 3 },
       rows: [
@@ -877,15 +878,19 @@ describe('Collector reactive summary pulls', () => {
           changes: 5,
           renders: 2,
           renderMs: 1.5,
+          lastActiveAt: 990,
         },
       ],
       other: { components: 49999, nodes: 120000 },
       truncated: true,
       capabilities: { valueInspection: 'yes' },
     });
-    await expect(p).resolves.toMatchObject({
+    const s = await p;
+    expect(s).not.toHaveProperty('window');
+    expect(s).toMatchObject({
+      computedAt: 1001,
       components: { total: 50000, withActivity: 3 },
-      rows: [{ componentId: 4, changes: 5, renders: 2 }],
+      rows: [{ componentId: 4, changes: 5, renders: 2, lastActiveAt: 990 }],
       other: { components: 49999, nodes: 120000 },
       truncated: true,
       policy: 'sampled-200ms',
@@ -901,6 +906,7 @@ describe('Collector reactive summary pulls', () => {
     const p = c.requestReactiveSummary();
     vi.advanceTimersByTime(RUNTIME_REQUEST_TIMEOUT + 1);
     await expect(p).resolves.toMatchObject({
+      computedAt: null,
       rows: [],
       components: { total: null },
       stale: true,

@@ -12,13 +12,7 @@ import { isBaseline } from './state-timeline.js';
 
 export const GRAPH_LIMITS = { nodes: 5000, edges: 20000 } as const;
 
-export const SUMMARY_DEFAULTS = {
-  topK: 50,
-  maxTopK: 200,
-  windowMs: 10_000,
-  minWindowMs: 1000,
-  maxWindowMs: 60_000,
-} as const;
+export const SUMMARY_DEFAULTS = { topK: 50, maxTopK: 200 } as const;
 
 export type StaleReason = NonNullable<ReactiveGraphResult['staleReason']>;
 
@@ -44,12 +38,11 @@ export function emptyGraph(
 
 export function emptySummary(
   epoch: string | null,
-  windowMs: number,
   reason: 'timeout' | 'no-runtime',
 ): ReactiveSummary {
   return {
     epoch,
-    window: { ms: windowMs, since: 0, until: 0, sampledActiveMs: 0 },
+    computedAt: null,
     policy: 'sampled-200ms',
     coverage: 'component-init',
     components: { total: null, withActivity: 0 },
@@ -150,22 +143,17 @@ export function normalizeSummary(data: Payload | undefined, epoch: string | null
         changes: nonNegInt(r?.changes),
         renders: nonNegInt(r?.renders),
         renderMs: typeof r?.renderMs === 'number' && r.renderMs >= 0 ? r.renderMs : 0,
+        lastActiveAt: finiteOrNull(r?.lastActiveAt),
       };
       if (r?.kind === 'module') row.kind = 'module';
       return row;
     });
-  const w = asPayload(data?.window);
   const components = asPayload(data?.components);
   const other = asPayload(data?.other);
   const capabilities = asPayload(data?.capabilities);
   return {
     epoch: typeof data?.epoch === 'string' ? data.epoch : epoch,
-    window: {
-      ms: nonNegInt(w?.ms),
-      since: nonNegInt(w?.since),
-      until: nonNegInt(w?.until),
-      sampledActiveMs: nonNegInt(w?.sampledActiveMs),
-    },
+    computedAt: finiteOrNull(data?.computedAt),
     policy: 'sampled-200ms',
     coverage: 'component-init',
     components: {

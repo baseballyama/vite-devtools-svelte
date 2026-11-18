@@ -297,7 +297,7 @@ try {
   await app.locator('table tbody tr').first().waitFor({ timeout: 15_000 });
   await sleep(1500);
 
-  await call('get_reactive_summary', { topK: 5, windowMs: 30_000 });
+  await call('get_reactive_summary', { topK: 5 });
   const live = await call('get_live_components', { includeMeta: true, limit: 50 });
   const chart = live?.components?.find(c => c.name === 'ReactivePriceChart');
   if (!chart) throw new Error('ReactivePriceChart not in get_live_components');

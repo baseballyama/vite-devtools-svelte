@@ -5,7 +5,7 @@
   import Inspector from '../../components/Inspector.svelte';
   import SplitView from '../../components/SplitView.svelte';
   import type { Column, SortState, TableRowState } from '../../components/types.js';
-  import { componentName, formatMs, shortPath } from '../../lib/format.js';
+  import { componentName, formatAgo, formatMs, shortPath } from '../../lib/format.js';
   import { reactiveScope } from '../../lib/reactive-selection.svelte.js';
   import {
     baselineNotice,
@@ -38,6 +38,7 @@
     changes: number;
     renders: number;
     renderMs: number;
+    lastActiveAt: number | null;
   }
 
   const rows = $derived.by<OverviewRow[]>(() => {
@@ -51,6 +52,7 @@
       changes: r.changes,
       renders: r.renders,
       renderMs: r.renderMs,
+      lastActiveAt: r.lastActiveAt,
     }));
   });
   const current = $derived(selected ? (rows.find(r => r.key === selected) ?? null) : null);
@@ -105,6 +107,15 @@
       minWidth: 720,
       sort: (a, b) => a.renderMs - b.renderMs,
     },
+    {
+      id: 'lastActive',
+      label: 'Last active',
+      width: '84px',
+      align: 'end',
+      descFirst: true,
+      minWidth: 800,
+      sort: (a, b) => (a.lastActiveAt ?? 0) - (b.lastActiveAt ?? 0),
+    },
   ];
 
   /** Scoped selections need the page load the id belongs to; without one there is nothing to validate. */
@@ -130,7 +141,7 @@
   <div class="overview">
     <p class="record">
       {totalLabel(s.components.total)} components · {s.components.withActivity.toLocaleString()} active
-      in the last {Math.round(s.window.ms / 1000)} s
+      since mount
     </p>
     {#if baseline}<p class="record warn">{baseline}</p>{/if}
     {#if stale}<p class="record warn">{stale}</p>{/if}
@@ -163,16 +174,19 @@
             {/if}
             <span
               class="end num"
-              title="at least this many changes in the window (sampled every 200 ms); not a rate"
+              title="at least this many changes since mount (sampled every 200 ms); not a rate"
               >≥ {r.changes.toLocaleString()}</span
             >
             <span class="end num">{r.renders.toLocaleString()}</span>
             {#if visible.has('renderMs')}<span class="end num faint">{formatMs(r.renderMs)}</span
               >{/if}
+            {#if visible.has('lastActive')}<span class="end num faint"
+                >{formatAgo(r.lastActiveAt, s.computedAt ?? Date.now())}</span
+              >{/if}
           {/snippet}
           {#snippet empty()}<EmptyState
               icon="reactive"
-              title="No component was active in the window"
+              title="No live component has changed or rendered yet"
             />{/snippet}
         </DataTable>
         {#snippet aside()}
@@ -214,7 +228,8 @@
         : 'all active'}).
       {#if s.other}Other: {s.other.components.toLocaleString()} components with {s.other.nodes.toLocaleString()}
         signals.{:else}Other: unknown.{/if}
-      Total registered: {totalLabel(s.components.total)}. Counts restart when the app page reloads.
+      Total registered: {totalLabel(s.components.total)}. Counts restart when an instance is
+      destroyed or the app page reloads.
     </p>
   </div>
 {/if}

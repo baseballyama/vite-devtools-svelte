@@ -177,6 +177,8 @@ export interface SummaryFileRow {
   changes: number;
   renders: number;
   renderMs: number;
+  /** The most recent instance's; `null` when none reported it. */
+  lastActiveAt: number | null;
 }
 
 export function groupByFile(rows: readonly ReactiveSummaryRow[]): SummaryFileRow[] {
@@ -191,6 +193,7 @@ export function groupByFile(rows: readonly ReactiveSummaryRow[]): SummaryFileRow
         changes: 0,
         renders: 0,
         renderMs: 0,
+        lastActiveAt: null,
       };
       m.set(r.file, g);
     }
@@ -201,6 +204,9 @@ export function groupByFile(rows: readonly ReactiveSummaryRow[]): SummaryFileRow
     g.changes += r.changes;
     g.renders += r.renders;
     g.renderMs += r.renderMs;
+    if (r.lastActiveAt !== null && (g.lastActiveAt === null || r.lastActiveAt > g.lastActiveAt)) {
+      g.lastActiveAt = r.lastActiveAt;
+    }
   }
   return [...m.values()];
 }

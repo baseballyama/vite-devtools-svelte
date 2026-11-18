@@ -45,10 +45,6 @@ function __denseRemove(ids, index, id) {
   }
 }
 
-function __slot(sec) {
-  return ((sec % 60) + 60) % 60;
-}
-
 // String() throws for a null-prototype object or a throwing toString.
 function __describe(value) {
   try {
@@ -71,6 +67,25 @@ function __componentEntry(instance) {
 // Approximate, for cost-adaptive throttling.
 function __componentBytes(instance) {
   return instance.file.length + instance.name.length + 72;
+}
+
+// The k smallest items by `compare`, sorted: O(n log k), so a page with many long-lived
+// scopes does not sort them all on every summary poll.
+function __topK(items, k, compare) {
+  const top = [];
+  for (const item of items) {
+    if (top.length === k && compare(item, top[k - 1]) >= 0) continue;
+    let lo = 0;
+    let hi = top.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (compare(item, top[mid]) < 0) hi = mid;
+      else lo = mid + 1;
+    }
+    top.splice(lo, 0, item);
+    if (top.length > k) top.pop();
+  }
+  return top;
 }
 
 function __clampInt(v, lo, hi, d) {
@@ -155,11 +170,11 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     _timelineDropped: { 'runtime-count': 0, 'runtime-bytes': 0 },
     _valueTooLarge: 0,
 
-    // Overview aggregate, O(1) per event. _activity: a ring of 60 one-second
-    // buckets per component, including how long sampling ran in that second.
+    // Overview aggregate, O(1) per event. _activity: per live scope, totals
+    // since it was registered; a destroyed instance takes them with it.
     _nodeCounts: new Map(),
     _nodeTotals: { state: 0, derived: 0, effect: 0 },
-    _activity: [],
+    _activity: new Map(),
     _epoch: Math.random().toString(36).slice(2) + Date.now().toString(36),
 
     // Inactive until the server says a DevTools client (UI tab or MCP lease)
@@ -252,6 +267,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       // never sent, so it cancels out.
       if (this._active && !this._pendingAdded.delete(id)) this._pendingRemoved.add(id);
       this._cleanupReactiveNodes(id);
+      this._activity.delete(id);
       this._effectSeq.delete(id);
       this._nameSeq.delete(id);
       this._instances.delete(id);
@@ -450,23 +466,13 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       if (c.state + c.derived + c.effect <= 0) this._nodeCounts.delete(componentId);
     },
 
-    _bucket() {
-      const sec = Math.floor(performance.now() / 1000);
-      let b = this._activity[__slot(sec)];
-      if (!b || b.second !== sec) {
-        b = { second: sec, sampledMs: 0, rows: new Map() };
-        this._activity[__slot(sec)] = b;
-      }
-      return b;
-    },
-
     _activityRow(componentId) {
-      const rows = this._bucket().rows;
-      let r = rows.get(componentId);
+      let r = this._activity.get(componentId);
       if (!r) {
-        r = { changes: 0, renders: 0, renderMs: 0 };
-        rows.set(componentId, r);
+        r = { changes: 0, renders: 0, renderMs: 0, lastActiveAt: 0 };
+        this._activity.set(componentId, r);
       }
+      r.lastActiveAt = Date.now();
       return r;
     },
 
@@ -1127,41 +1133,21 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       this._send('svelte-devtools:reactive-graph', graph);
     },
 
-    // Built from the window's activity buckets: O(components active in the
-    // window), no graph, no node scan.
+    // O(scopes with activity), no graph, no node scan.
     getReactiveSummary(opts) {
-      const o = opts ?? {};
-      const topK = __clampInt(o.topK, 1, 200, 50);
-      const windowMs = __clampInt(o.windowMs, 1000, 60000, 10000);
-      const nowSec = Math.floor(performance.now() / 1000);
-      const agg = new Map();
-      let sampledMs = 0;
-      for (let k = 0; k < Math.ceil(windowMs / 1000); k++) {
-        const sec = nowSec - k;
-        const b = this._activity[__slot(sec)];
-        if (!b || b.second !== sec) continue;
-        sampledMs += b.sampledMs;
-        for (const [cid, r] of b.rows) {
-          if (!this._scopeLive(cid)) continue;
-          let a = agg.get(cid);
-          if (!a) {
-            a = { changes: 0, renders: 0, renderMs: 0 };
-            agg.set(cid, a);
-          }
-          a.changes += r.changes;
-          a.renders += r.renders;
-          a.renderMs += r.renderMs;
-        }
-      }
-      const ranked = [...agg].toSorted(
+      const topK = __clampInt(opts?.topK, 1, 200, 50);
+      const ranked = __topK(
+        this._activity,
+        topK,
         (x, y) =>
           y[1].changes - x[1].changes ||
           y[1].renders - x[1].renders ||
           y[1].renderMs - x[1].renderMs ||
+          y[1].lastActiveAt - x[1].lastActiveAt ||
           x[0] - y[0],
       );
       let rowNodes = 0;
-      const rows = ranked.slice(0, topK).map(([cid, a]) => {
+      const rows = ranked.map(([cid, a]) => {
         const n = this._nodeCounts.get(cid) ?? { state: 0, derived: 0, effect: 0 };
         rowNodes += n.state + n.derived + n.effect;
         const row = {
@@ -1171,6 +1157,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
           changes: a.changes,
           renders: a.renders,
           renderMs: Math.round(a.renderMs * 1000) / 1000,
+          lastActiveAt: a.lastActiveAt,
         };
         // module scope (shared .svelte.js state), not a component instance
         if (this._modules.has(cid)) row.kind = 'module';
@@ -1179,32 +1166,25 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       const t = this._nodeTotals;
       // module scopes count as rows like components (rows + other = total)
       const scopes = this._instances.size + this._modules.size;
-      const until = Date.now();
       return {
         epoch: this._epoch,
-        window: {
-          ms: windowMs,
-          since: until - windowMs,
-          until,
-          sampledActiveMs: Math.min(windowMs, sampledMs),
-        },
+        computedAt: Date.now(),
         policy: 'sampled-200ms',
         coverage: 'component-init',
-        components: { total: scopes, withActivity: agg.size },
+        components: { total: scopes, withActivity: this._activity.size },
         rows,
         other: {
           components: scopes - rows.length,
           nodes: t.state + t.derived + t.effect - rowNodes,
         },
-        truncated: agg.size > topK,
+        truncated: this._activity.size > topK,
         capabilities: { valueInspection: false, signalHistory: false, writeCause: false },
         // Seed coverage: changes of pending nodes are not observable yet.
         baseline: this._baselineInfo(),
       };
     },
 
-    // Request { requestId?, epoch?, topK?, windowMs? } (same correlation as
-    // the graph).
+    // Request { requestId?, epoch?, topK? } (same correlation as the graph).
     sendReactiveSummary(request) {
       const req = request ?? {};
       if (this._otherEpoch(req)) return;
@@ -1246,9 +1226,6 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
         // nodes of destroyed {#each} items / effect runs leave the counts
         this._sweepNodes(SWEEP_NODES);
         this._deepCredit = Math.min(10 * DEEP_MS, this._deepCredit + DEEP_MS);
-        // this tick samples 200 ms of wall time (window.sampledActiveMs)
-        const bucket = this._bucket();
-        bucket.sampledMs = Math.min(1000, bucket.sampledMs + 200);
       }
       const ids = this._pollIds;
       const due = [];

@@ -295,13 +295,12 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     {
       title: 'Reactive overview (top components)',
       description:
-        'Busiest component instances from runtime counters over all instances, without capturing the graph. Counts are sampled state changes (at most one per state per 200 ms) and renders within the window, not rates. Tracked: state created during component init and shared state of .svelte.js/.ts modules (rows with kind "module"; their componentId is a module scope id, usable with get_reactive_scope). `rows` + `other` add up to the totals; null means unknown. Use get_reactive_scope with a componentId to look at one instance. The same request is answered from a cache for up to 1 s; `window.until` says when the answer was computed.',
+        'Busiest live component instances from runtime counters over all instances, without capturing the graph. Counts are totals since each instance was registered: sampled state changes (at most one per state per 200 ms, observed only while a DevTools client or MCP lease is active) and renders, not rates; `lastActiveAt` is when the instance last changed or rendered. A destroyed instance leaves with its counters. Rows rank by changes, then renders, then render time, then most recently active. Tracked: state created during component init and shared state of .svelte.js/.ts modules (rows with kind "module"; their componentId is a module scope id, usable with get_reactive_scope). `rows` + `other` add up to the totals; null means unknown. Use get_reactive_scope with a componentId to look at one instance. The same request is answered from a cache for up to 1 s; `computedAt` says when the answer was computed.',
       inputSchema: {
         topK: z.number().int().min(1).max(200).optional(),
-        windowMs: z.number().int().min(1000).max(60000).optional(),
       },
     },
-    async ({ topK, windowMs }) => text(await deps.getReactiveSummary({ topK, windowMs })),
+    async ({ topK }) => text(await deps.getReactiveSummary({ topK })),
   );
 
   server.registerTool(
