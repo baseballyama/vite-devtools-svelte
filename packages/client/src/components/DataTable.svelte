@@ -22,6 +22,8 @@
     empty?: Snippet;
     onselect?: (item: T) => void;
     onactivate?: (item: T) => void;
+    /** Return true when the key was handled (skips default navigation). */
+    onrowkeydown?: (e: KeyboardEvent, item: T) => boolean;
   }
 
   let {
@@ -36,6 +38,7 @@
     empty,
     onselect,
     onactivate,
+    onrowkeydown,
   }: Props = $props();
 
   let width = $state(1000);
@@ -107,6 +110,7 @@
       {empty}
       onselect={(item: T) => onselect?.(item)}
       onactivate={(item: T) => onactivate?.(item)}
+      onrowkeydown={onrowkeydown && ((e: KeyboardEvent, item: T) => onrowkeydown(e, item))}
     >
       {#snippet row(item: T, state: RowState)}
         <div class="tr">{@render renderRow(item, { visible, state })}</div>

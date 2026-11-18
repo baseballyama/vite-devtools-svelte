@@ -258,7 +258,8 @@ describe('MCP server wiring', () => {
     expect(deps.getLiveSnapshot()).toMatchObject({ epoch: 'e1', total: 1 });
     expect(deps.getRenderProfiles()).toEqual([{ id: 1, renders: 2 }]);
     expect(deps.getFpsSamples()).toEqual([{ timestamp: 1, fps: 60 }]);
-    expect(deps.getLoadProfiles()).toMatchObject([{ route: '/', file: PAGE }]);
+    // Root-relative, as the panel shows it.
+    expect(deps.getLoadProfiles()).toMatchObject([{ route: '/', file: 'src/routes/+page.svelte' }]);
     expect(deps.getStateTimelineDelta().changes.map(c => c.id)).toEqual(['n']);
     expect(deps.getCaptureInfo().liveComponents?.total).toBe(1);
     expect(deps.getRoutes().length).toBeGreaterThan(0);

@@ -74,6 +74,16 @@ const VITE_DEVTOOLS_PLUGIN = 'vite:devtools';
 let serverGeneration = 0;
 
 /** Collect every module the dev server knows, across Vite 8 environments (legacy graph as fallback). */
+/**
+ * `file` relative to `root`, as the panels show it (open-in-editor resolves
+ * it against the root again); absolute when it lies outside the root, e.g.
+ * a root reached through a symlink while module ids are real paths.
+ */
+function displayPath(root: string, file: string): string {
+  const rel = path.posix.relative(root, file);
+  return rel.startsWith('../') ? file : rel;
+}
+
 function collectModules(server: ViteDevServer): GraphModuleLike[] {
   type WithGraph = { moduleGraph?: { idToModuleMap?: Map<string, GraphModuleLike> } };
   const modules: GraphModuleLike[] = [];
@@ -345,7 +355,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       ) => {
         collector.recordLoadProfile({
           route,
-          file,
+          file: displayPath(root, file),
           type,
           duration: Math.round(duration * 100) / 100,
           dataSize,
