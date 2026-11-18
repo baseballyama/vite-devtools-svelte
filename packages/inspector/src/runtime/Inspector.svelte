@@ -64,6 +64,9 @@
     h = $state(0);
 
   let active_el = $state<ElementWithMetadata | undefined>();
+  // vite-devtools-svelte: the component instance of `active_el`, named by an in-page tool
+  // (see `describe`); null when none did
+  let active_name = $state<string | null>(null);
 
   let menu = $state<{ x: number; y: number; stack: Array<Loc & { tag: string }> } | null>(null);
 
@@ -157,6 +160,8 @@
       }
     }
 
+    // vite-devtools-svelte: `mouseover` repeats inside the same element
+    if (el !== active_el) active_name = el ? describe(el) : null;
     active_el = el;
     if (set_bubble_pos) {
       const pos = el!.getBoundingClientRect();
@@ -172,6 +177,14 @@
       stop(e);
       send(active_el.__svelte_meta.loc, active_el);
     }
+  }
+
+  // vite-devtools-svelte: asks in-page tools (e.g. a devtools panel) to name the component
+  // instance that rendered `el`; a listener sets `detail.name`
+  function describe(el: Element): string | null {
+    const detail: { element: Element; name: unknown } = { element: el, name: null };
+    window.dispatchEvent(new CustomEvent('svelte-inspector:describe', { detail }));
+    return typeof detail.name === 'string' ? detail.name : null;
   }
 
   function get_stack(target: ElementWithMetadata) {
@@ -415,6 +428,7 @@
       active_el?.classList.remove('svelte-inspector-active-target');
     }
     active_el = undefined;
+    active_name = null;
     if (was_enabled) onenabledchange(false);
   }
 
@@ -514,7 +528,10 @@
 
       <div class="svelte-inspector-grid">
         <div class="svelte-inspector-menu-row">
-          <span class="svelte-inspector-tag">&lt;{active_el.tagName.toLowerCase()}&gt;</span>
+          <!-- vite-devtools-svelte: the component instance when a tool named it -->
+          <span class="svelte-inspector-tag"
+            >&lt;{active_name ?? active_el.tagName.toLowerCase()}&gt;</span
+          >
           <span class="svelte-inspector-file">{loc.file}:{loc.line}</span>
         </div>
       </div>

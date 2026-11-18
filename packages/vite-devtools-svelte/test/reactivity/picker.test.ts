@@ -3,9 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import Picked from './fixtures/Picked.svelte';
 import { dt, instances, render } from './harness.js';
 
-// The Svelte Inspector's `svelte-inspector:pick` event, on real compiled
-// components: the element's `__svelte_meta.component` resolves to the
-// instance id the component tree uses, reported to the dev server.
+// The Svelte Inspector's `svelte-inspector:describe` / `svelte-inspector:pick`
+// events, on real compiled components: the element's `__svelte_meta.component`
+// resolves to the instance the component tree uses, named for the label and
+// reported to the dev server on a pick.
 
 // DOM elements (the package type-checks against Node's lib only).
 type El = object;
@@ -32,6 +33,13 @@ function pick(el: El | null): any[] {
   return send.mock.calls.filter(([event]) => event === PICKED).map(([, data]) => data);
 }
 
+/** The name the runtime gives `el`'s instance, or null. */
+function nameOf(el: El | null): string | null {
+  const detail = { element: el, name: null };
+  win.dispatchEvent(new win.CustomEvent('svelte-inspector:describe', { detail }));
+  return detail.name;
+}
+
 const ids = (el: El) => pick(el).map(data => data.componentId as number);
 
 const all = (target: object, selector: string): El[] => [
@@ -56,6 +64,7 @@ describe('element picks from the Svelte Inspector', () => {
     const [picked] = instances('Picked');
     const bold = all(r.target, 'b')[0]!;
     expect(pick(bold)).toEqual([{ epoch: dt()._epoch, componentId: picked!.id }]);
+    expect(nameOf(bold)).toBe('Picked');
     r.destroy();
   });
 
@@ -91,16 +100,17 @@ describe('element picks from the Svelte Inspector', () => {
     const r = render(Picked);
     const [picked] = instances('Picked');
     const span = all(r.target, 'span')[0]!;
-    expect(asUntracked(span, () => ids(span))).toEqual([picked!.id]);
+    expect(asUntracked(span, () => [ids(span), nameOf(span)])).toEqual([[picked!.id], 'Picked']);
     r.destroy();
   });
 
   it('reports nothing without a tracked component, an element, or Svelte metadata', () => {
     const r = render(Picked);
     const bold = all(r.target, 'b')[0]!;
-    expect(asUntracked(bold, () => pick(bold))).toEqual([]);
+    expect(asUntracked(bold, () => [pick(bold), nameOf(bold)])).toEqual([[], null]);
     expect(pick(null)).toEqual([]);
-    expect(pick(win.document.createElement('p'))).toEqual([]);
+    const plain = win.document.createElement('p');
+    expect([pick(plain), nameOf(plain)]).toEqual([[], null]);
     r.destroy();
   });
 
@@ -108,6 +118,6 @@ describe('element picks from the Svelte Inspector', () => {
     const r = render(Picked);
     const bold = all(r.target, 'b')[0]!;
     r.destroy();
-    expect(pick(bold)).toEqual([]);
+    expect([pick(bold), nameOf(bold)]).toEqual([[], null]);
   });
 });

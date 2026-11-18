@@ -228,7 +228,7 @@ svelteDevtools({
 
 `svelteDevtools()`: hold the toggle key combo (`alt-x` by default) in your app and click an element to open its source in your editor. It only runs in the Vite DevTools dock, and loads once the browser is authorized there.
 
-The Svelte panel then opens with that element's component instance selected in Components. This needs Svelte 5.58 or later, which records the component on each element in development.
+With Svelte 5.58 or later, which records the component on each element in development, the label shows the element's component instance, and the Svelte panel opens with that instance selected in Components.
 
 `inspector` takes the options (`toggleKeyCombo`, `navKeys`, `openKey`, `openMenuKey`, `escapeKeys`, `holdMode`, `customStyles`).
 

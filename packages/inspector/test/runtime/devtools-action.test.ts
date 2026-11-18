@@ -267,3 +267,49 @@ describe('the dock action', () => {
     expect(ctx.commands.register).not.toHaveBeenCalled();
   });
 });
+
+/** The label of `el` once the pointer is over it, with the inspector on */
+async function hover(el: Element) {
+  const { ctx } = start();
+  await ctx.docks.setActionActive('svelte:inspector', true);
+  await settle();
+  el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+  flushSync();
+  return document.querySelector('#svelte-inspector-overlay .svelte-inspector-tag')!.textContent;
+}
+
+describe('the label', () => {
+  const describes: Array<{ element: Element; name: unknown }> = [];
+  let name: unknown = 'Row';
+  const listener = (e: Event) => {
+    const detail = (e as CustomEvent<{ element: Element; name: unknown }>).detail;
+    describes.push({ ...detail });
+    detail.name = name;
+  };
+  beforeEach(() => {
+    describes.length = 0;
+    name = 'Row';
+    window.addEventListener('svelte-inspector:describe', listener);
+  });
+  afterEach(() => {
+    window.removeEventListener('svelte-inspector:describe', listener);
+  });
+
+  it('shows the component instance an in-page tool names, asked once per element', async () => {
+    const el = component();
+    expect(await hover(el)).toBe('<Row>');
+    el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    flushSync();
+    expect(describes).toEqual([{ element: el, name: null }]);
+  });
+
+  it('shows the tag when no tool names the element', async () => {
+    name = null;
+    expect(await hover(component())).toBe('<div>');
+  });
+
+  it('ignores a name that is not a string', async () => {
+    name = { toString: () => 'x' };
+    expect(await hover(component())).toBe('<div>');
+  });
+});

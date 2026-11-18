@@ -23,7 +23,7 @@ except for what running in the Vite DevTools dock needs:
 - runtime files are read by Vite itself; upstream's own disk read for them never ran (its filter glob ended in `//**`) and is removed
 - `src/utils/log.ts` is a reduced copy of upstream's logger
 - `src/types.ts` holds only `InspectorOptions`
-- it dispatches a `svelte-inspector:pick` event and marks its components with `Symbol.for('svelte.devtools.ignore')` (see [below](#events)); this part is new, not copied from upstream
+- it dispatches `svelte-inspector:pick` and `svelte-inspector:describe` events and marks its components with `Symbol.for('svelte.devtools.ignore')` (see [below](#events)); this part is new, not copied from upstream
 
 ## Setup
 
@@ -160,6 +160,15 @@ window.addEventListener('svelte-inspector:pick', e => {
   // e.detail.loc: { file, line, column } of the element
   // e.detail.stack: the element and the components it is rendered in, innermost first
   // e.detail.element: the element, or null when a component was chosen from the context menu
+});
+```
+
+When an element is selected (with the pointer or the keyboard), the inspector dispatches `svelte-inspector:describe` on `window`. A tool that knows the component instance that rendered the element sets its name, which the label shows instead of the tag:
+
+```js
+window.addEventListener('svelte-inspector:describe', e => {
+  // e.detail.element: the selected element
+  e.detail.name = 'Row';
 });
 ```
 
