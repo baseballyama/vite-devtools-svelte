@@ -1,4 +1,3 @@
-// Client script of the `svelte:inspector` dock action
 import { mount, unmount } from 'svelte';
 import options from 'virtual:vite-devtools-svelte-inspector-options';
 import Inspector from 'virtual:vite-devtools-svelte-inspector-path:Inspector.svelte';

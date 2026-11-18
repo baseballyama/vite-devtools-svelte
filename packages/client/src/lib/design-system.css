@@ -1,11 +1,4 @@
-/*
- * Design tokens for the Svelte DevTools client.
- *
- * Neutral, dense, low-chrome surfaces in the spirit of the official Vite
- * DevTools: one accent (Svelte orange), hairline borders, a single sans and a
- * single mono family, and 28px interactive rows. Everything a component needs
- * is a token here so light/dark only differ in this file.
- */
+/* Everything a component needs is a token here so light/dark only differ in this file. */
 
 :root {
   --font-sans:
@@ -93,7 +86,7 @@
   --fg-muted: #474b53;
   /* ≥ 4.5:1 on every surface incl. hover/active/selected overlays (axe color-contrast) */
   --fg-faint: #5f636b;
-  /* accent text + tone colors: ≥ 4.5:1 incl. on their tinted badge bg and on selected rows (axe, checkpoint 19) */
+  /* accent text + tone colors: ≥ 4.5:1 incl. on their tinted badge bg and on selected rows (axe) */
   --accent-fg: #b82e00;
   --focus: #ff3e00;
   --mark: rgb(255 170 0 / 0.35);

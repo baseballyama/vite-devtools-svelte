@@ -14,10 +14,6 @@ import {
 } from '../src/runtime/index.js';
 import { callHook, resolvePlugins } from './helpers.js';
 
-// =====================================================================
-// Plugin Factory: svelteDevtools()
-// =====================================================================
-
 const shape = (p: Plugin) => ({
   name: p.name,
   enforce: p.enforce,
@@ -42,10 +38,6 @@ describe('svelteDevtools factory', () => {
 const INSPECTOR_SVELTE = fileURLToPath(
   new URL('../../inspector/src/runtime/Inspector.svelte', import.meta.url),
 );
-
-// =====================================================================
-// Virtual Module Resolution (runtime + wrapper)
-// =====================================================================
 
 function getMainPlugin(): Plugin {
   const plugins = svelteDevtools();
@@ -144,10 +136,6 @@ describe('build command: every hook is inert', () => {
   });
 });
 
-// =====================================================================
-// HTML Injection (transformIndexHtml)
-// =====================================================================
-
 describe('mainPlugin transformIndexHtml', () => {
   it('should inject runtime script in serve mode', () => {
     const plugins = svelteDevtools();
@@ -165,10 +153,6 @@ describe('mainPlugin transformIndexHtml', () => {
     expect(result[0].injectTo).toBe('head-prepend');
   });
 });
-
-// =====================================================================
-// Vite DevTools (hub) integration via the devtools hook
-// =====================================================================
 
 const kit = vi.hoisted(() => ({
   createPluginFromDevframe: vi.fn((def: any, options: any) => ({
@@ -359,10 +343,6 @@ describe('middleware mode disposal (closeServer hook)', () => {
   });
 });
 
-// =====================================================================
-// Warning Capture Plugin
-// =====================================================================
-
 async function warnings(plugins: Plugin[]) {
   return (await hubHandlers(plugins)).get('svelte-devtools:get-compiler-warnings')!();
 }
@@ -441,10 +421,6 @@ describe('warningCapturePlugin', () => {
   });
 });
 
-// =====================================================================
-// Load Profile Server Plugin
-// =====================================================================
-
 describe('loadProfilePlugin recorder', () => {
   it('records load timings from the transformed load wrapper', async () => {
     const plugins = svelteDevtools();
@@ -458,10 +434,6 @@ describe('loadProfilePlugin recorder', () => {
     expect(loads[0].file).toBe('/r/+page.ts');
   });
 });
-
-// =====================================================================
-// Production no-op
-// =====================================================================
 
 function appliesToBuild(p: Plugin): boolean {
   return typeof p.apply === 'function'

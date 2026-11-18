@@ -1,8 +1,3 @@
-/**
- * Issue classification (pure): every IssueKind at its threshold boundary,
- * severity bands, overridden thresholds, ordering, and the reactive problem
- * summary.
- */
 import * as fc from 'fast-check';
 import { describe, it, expect } from 'vitest';
 
@@ -56,7 +51,6 @@ const node = (
   componentFile: '/src/C.svelte',
   ...extra,
 });
-/** An effect `e` with `deps` distinct state dependencies. */
 function effectWithDeps(deps: number): ReactiveGraph {
   const nodes = [node('e', 'effect')];
   const edges: ReactiveEdge[] = [];

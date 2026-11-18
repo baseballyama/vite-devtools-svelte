@@ -165,7 +165,7 @@ describe('collector-backed RPCs', () => {
     });
     const d = await rpc.get('svelte-devtools:get-state-timeline-delta')!({});
     expect(d.reset).toBe(true);
-    // seq is opaque and monotonic (seeded per process, §6.4 D2); the cursor is the newest seq
+    // seq is opaque and monotonic (seeded per process); the cursor is the newest seq
     expect(d.changes).toHaveLength(1);
     expect(d.cursor).toBe(d.changes[0].seq);
     const next = await rpc.get('svelte-devtools:get-state-timeline-delta')!({ since: d.cursor });
@@ -314,11 +314,6 @@ describe('module graph RPC', () => {
   });
 });
 
-// =====================================================================
-// Every RPC through devframe's validating handler (as the wire calls it)
-// =====================================================================
-
-/** A small generated project: one page, one endpoint, one static file, one component. */
 function projectRoot(): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sdt-rpc-'));
   const files: Record<string, string> = {

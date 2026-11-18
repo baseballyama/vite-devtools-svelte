@@ -9,7 +9,6 @@ const TAG = /<span class="hl-[a-z]{2}">|<\/span>/g;
 const unescape = (s: string) =>
   s.replaceAll('&lt;', '<').replaceAll('&gt;', '>').replaceAll('&amp;', '&');
 
-/** Text content of highlighted HTML. */
 const text = (html: string) => unescape(html.replaceAll(TAG, ''));
 
 /** `[class, text]` of each highlighted span (spans never nest). */

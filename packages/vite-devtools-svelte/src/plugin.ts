@@ -65,7 +65,7 @@ export interface SvelteDevtoolsOptions {
   inspector?: InspectorOptions;
 }
 
-/** Name of `@vitejs/devtools`' config plugin; its presence means the hub will call our `devtools.setup`. */
+/** When `@vitejs/devtools`' config plugin is present, the hub calls our `devtools.setup`. */
 const VITE_DEVTOOLS_PLUGIN = 'vite:devtools';
 
 // Shared by every plugin instance in the process: a config-file restart
@@ -73,11 +73,9 @@ const VITE_DEVTOOLS_PLUGIN = 'vite:devtools';
 // counter tells the old instance that a newer server exists.
 let serverGeneration = 0;
 
-/** Collect every module the dev server knows, across Vite 8 environments (legacy graph as fallback). */
 /**
- * `file` relative to `root`, as the panels show it (open-in-editor resolves
- * it against the root again); absolute when it lies outside the root, e.g.
- * a root reached through a symlink while module ids are real paths.
+ * Relative to `root`, as the panels show it (open-in-editor resolves it against
+ * the root again); absolute when outside the root, e.g. a root reached through a symlink while module ids are real paths.
  */
 function displayPath(root: string, file: string): string {
   const rel = path.posix.relative(root, file);
@@ -113,12 +111,11 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
   // Plugins are `apply: 'serve'`, but a hook can still be reached outside dev
   // (a plugin list reused by another tool): every hook is inert unless serving.
   const serving = () => config?.command === 'serve';
-  // Per-process token for the MCP endpoint (MCP clients are local processes,
-  // not browser tabs, so they cannot use devframe's browser auth handshake).
+  // MCP clients are local processes, not browser tabs, so they cannot use
+  // devframe's browser auth handshake.
   const mcpToken = crypto.randomUUID();
 
-  // Session store for AI-driven measurement workflows. Built lazily after
-  // `root` is resolved.
+  // Built lazily: `root` is resolved later.
   let sessions: SessionStore | null = null;
   function getSessions(): SessionStore {
     sessions ??= new SessionStore({
@@ -160,8 +157,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     enforce: 'pre',
     apply: 'serve',
 
-    // Surfaces the per-process MCP token for inter-plugin (and test)
-    // consumption, so tests need no production-only flag.
+    // Lets tests read the MCP token without a production-only flag.
     api: {
       getDevtoolsToken: () => mcpToken,
     },
@@ -200,8 +196,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
         if (dispose) middlewareModeMounts.push({ generation, dispose });
       }
 
-      // Print a one-line `claude mcp add` snippet once the dev server is
-      // actually listening — that's when we know the resolved port.
+      // The resolved port is known only once the server is listening.
       devServer.httpServer?.once('listening', () => {
         const addr = devServer.httpServer?.address();
         if (!addr || typeof addr === 'string') return;
@@ -242,13 +237,11 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       );
     },
 
-    // Middleware-mode mounts have no `httpServer` close event; dispose them
-    // from Vite's public `closeServer` hook (>= 8.3), which runs after the
-    // server is torn down but carries no server reference. On restart Vite has
-    // already configured the replacement server, so every mount older than
-    // the newest server generation belongs to the server being torn down —
-    // whether that server used this plugin instance (inline config) or a
-    // previous one (config file, re-evaluated per restart).
+    // Middleware-mode mounts have no `httpServer` close event, and `closeServer`
+    // (Vite >= 8.3) carries no server reference. On restart Vite has already
+    // configured the replacement server, so every mount older than the newest
+    // generation belongs to the server being torn down, whichever plugin
+    // instance (inline config or re-evaluated config file) made it.
     async closeServer({ reason }) {
       const doomed = middlewareModeMounts.filter(
         m => reason === 'close' || m.generation < serverGeneration,
@@ -257,7 +250,6 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       await Promise.all(doomed.map(m => m.dispose()));
     },
 
-    // Virtual module resolution: runtime + svelte/internal/client wrapper.
     resolveId(id, importer) {
       if (!serving()) return null;
       if (id === RUNTIME_MODULE_ID) return RESOLVED_RUNTIME_ID;
@@ -281,11 +273,8 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       return null;
     },
 
-    // Inject the runtime into the user's app
-    // 'pre': the tag is injected before Vite's own HTML processing, which
-    // rewrites the inline module's bare `virtual:` import to a URL the browser
-    // can load (as a normal-order hook, the browser requested
-    // 'virtual:svelte-devtools-runtime' itself and failed with a CORS error).
+    // 'pre' so Vite's own HTML processing rewrites the bare `virtual:` import to
+    // a URL; otherwise the browser requests it itself and fails with a CORS error.
     transformIndexHtml: {
       order: 'pre',
       handler() {
@@ -301,8 +290,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       },
     },
 
-    // Vite DevTools integration: only invoked by `@vitejs/devtools`. The kit
-    // is imported lazily so apps without Vite DevTools never load it.
+    // Imported lazily so apps without Vite DevTools never load the kit.
     devtools: {
       capabilities: { dev: true, build: false },
       async setup(ctx) {
@@ -313,10 +301,8 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     },
   };
 
-  // Minimal component tracking transform plugin.
-  // Only injects the file path before $.push() so the runtime wrapper knows
-  // which component file is being initialized. All reactive tracking (state,
-  // derived, proxy, effect) is handled by the svelte/internal/client wrapper.
+  // Only injects the file path before $.push(); all reactive tracking is done
+  // by the svelte/internal/client wrapper.
   const trackingPlugin: Plugin = {
     name: 'vite-devtools-svelte:tracking',
     enforce: 'post',
@@ -338,8 +324,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     },
   };
 
-  // SvelteKit load function profiling: the transform wraps each exported
-  // `load`, and the wrapper reports to a recorder the dev server exposes.
+  // The transform wraps each exported `load`, which reports to this recorder.
   const loadProfilePlugin: Plugin = {
     name: 'vite-devtools-svelte:load-profile',
     enforce: 'post',

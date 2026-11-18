@@ -1,22 +1,13 @@
 #!/usr/bin/env node
 // Browser benchmark for vite-devtools-svelte on the generated huge app.
-//
-// Measures, with real Chromium (Playwright + CDP):
-//   app  — instrumentation overhead in the *user's* app: cold SSR, mount /
-//          unmount of a wide list and a deep tree, idle main-thread cost
-//          (polling), state-churn frame times, heap growth over mount cycles.
-//          Run with the plugin on and off to get the overhead ratio.
-//   ui   — the DevTools client against that app: first load, every panel
-//          switch, search latency, scroll smoothness, live tree, idle cost of
-//          polling, heap, axe accessibility violations, screenshots.
+// Run `app` with the plugin on and off to get the overhead ratio.
 //
 // Usage:
 //   node perf/bench-browser.mjs --label=baseline [--repo=<checkout>] \
 //     [--rows=5000] [--tree=5x5] [--big=20000] [--modes=off,on] [--ui=1] \
 //     [--devtools-path=/.svelte-devtools/] [--port=5390] [--headed=1]
 //
-// `--repo` lets the same harness measure another checkout (e.g. a pristine
-// baseline copy); the fixture is generated into <repo>/playground/.temp.
+// `--repo` measures another checkout (e.g. a pristine baseline copy).
 // Playwright/axe resolve from the workspace, or from PERF_NODE_MODULES.
 
 import { spawn } from 'node:child_process';
@@ -106,8 +97,6 @@ const pct = (xs, p) => {
 };
 const r1 = n => Math.round(n * 10) / 10;
 
-// ---------------------------------------------------------------- server
-
 async function startServer(appDir, port, withDevtools) {
   const viteBin = path.join(appDir, '../../node_modules/vite/bin/vite.js');
   const t0 = performance.now();
@@ -125,8 +114,7 @@ async function startServer(appDir, port, withDevtools) {
     log += d;
   });
   const base = `http://localhost:${port}`;
-  // Ready = the dev server answered the first SSR request of /bench (includes
-  // the cold compile of the route + plugin transforms).
+  // The first SSR of /bench includes the cold compile of the route + plugin transforms.
   for (let i = 0; i < 600; i++) {
     if (child.exitCode !== null) throw new Error(`vite exited early:\n${log}`);
     try {
@@ -150,8 +138,6 @@ async function stopServer(srv) {
   for (let i = 0; i < 50 && srv.child.exitCode === null; i++) await sleep(100);
   if (srv.child.exitCode === null) srv.child.kill('SIGKILL');
 }
-
-// ---------------------------------------------------------------- page helpers
 
 // Installed before any page script: long-task + layout-shift collectors.
 const INIT_SCRIPT = `
@@ -182,8 +168,7 @@ async function heapAfterGc(cdp) {
   return usedSize;
 }
 
-// Main-thread cost over a quiet window: CPU time spent in tasks/scripts plus
-// long tasks. This is what the user's app pays for background polling.
+// What the user's app pays for background polling.
 async function idleWindow(page, cdp, ms) {
   const before = await cdpMetrics(cdp);
   const ltStart = await page.evaluate(() => performance.now());
@@ -215,8 +200,6 @@ function frameStats(durations) {
     over50ms: d.filter(x => x > 50).length,
   };
 }
-
-// ---------------------------------------------------------------- app scenario
 
 async function benchApp(browser, srv, opts, withDevtools) {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
@@ -274,7 +257,6 @@ async function benchApp(browser, srv, opts, withDevtools) {
     unmountMs: r1(treeUnmount),
   };
 
-  // Steady state with everything mounted: what does the app pay while idle?
   await page.evaluate(n => window.__bench.mountRows(n), opts.rows);
   await page.evaluate(([d, b]) => window.__bench.mountTree(d, b), [depth, breadth]);
   await sleep(1500); // let debounced devtools flushes run first
@@ -304,7 +286,6 @@ async function benchApp(browser, srv, opts, withDevtools) {
     };
   });
 
-  // Leak check: repeated mount/unmount must return the heap to ~baseline.
   await page.evaluate(() => window.__bench.clearTree());
   await page.evaluate(() => window.__bench.setBig(0));
   for (let i = 0; i < opts.cycles; i++) {
@@ -336,8 +317,6 @@ async function benchApp(browser, srv, opts, withDevtools) {
   return res;
 }
 
-// ---------------------------------------------------------------- UI scenario
-
 const PANEL_LABELS = [
   'Overview',
   'Components',
@@ -356,8 +335,7 @@ const PANEL_LABELS = [
   'OG',
 ];
 
-// Find the navigation control for a panel by accessible name. Tries roles the
-// redesign is likely to use (tab / link / button) and falls back to text.
+// Tries every role a redesigned UI is likely to use.
 async function findPanelControl(page, label) {
   const name = new RegExp(`^\\s*${label}\\b`, 'i');
   for (const role of ['tab', 'link', 'button', 'menuitem']) {
@@ -367,10 +345,8 @@ async function findPanelControl(page, label) {
   return null;
 }
 
-// A panel is settled when the network is idle, nothing is marked aria-busy,
-// and no bare "Loading…" placeholder is visible. RPC transports may connect
-// lazily (the baseline waits up to 2 s for DevTools Kit before falling back to
-// HTTP), so network idle alone is not enough.
+// RPC transports may connect lazily (the baseline waits up to 2 s for DevTools
+// Kit before falling back to HTTP), so network idle alone is not enough.
 async function settle(page, timeout = 60_000) {
   await page.waitForLoadState('networkidle').catch(() => {});
   await page
@@ -463,7 +439,6 @@ async function benchUi(browser, srv, opts, outDir) {
     };
   }
 
-  // Components: search latency + scroll smoothness + live tree.
   const comp = await findPanelControl(page, 'Components');
   if (comp) {
     await comp.click();
@@ -521,7 +496,6 @@ async function benchUi(browser, srv, opts, outDir) {
       );
       res.liveTree.idle = await idleWindow(page, cdp, opts.idleMs);
       res.liveTree.scroll = await scrollLargest(page);
-      // Update storm: app remounts all rows while the live tree is open.
       const before = await cdpMetrics(cdp);
       await app.evaluate(() => window.__bench.clearRows());
       await app.evaluate(n => window.__bench.mountRows(n), opts.rows);
@@ -531,7 +505,6 @@ async function benchUi(browser, srv, opts, outDir) {
     }
   }
 
-  // Idle cost of the devtools page itself on its heaviest panel (polling).
   for (const label of ['Render', 'FPS', 'Timeline']) {
     const ctl = await findPanelControl(page, label);
     if (!ctl) continue;
@@ -543,7 +516,6 @@ async function benchUi(browser, srv, opts, outDir) {
   res.heapMB = r1((await heapAfterGc(cdp)) / 1048576);
   res.httpRequestsTotal = rpcCalls.length;
 
-  // Accessibility (axe-core) on the initial + components panel.
   const axePath = resolveDepFile('axe-core', 'axe.min.js');
   if (axePath) {
     res.a11y = {};
@@ -561,7 +533,6 @@ async function benchUi(browser, srv, opts, outDir) {
   }
   res.cls = await page.evaluate(() => Math.round(window.__perf.cls * 1000) / 1000);
 
-  // Keyboard reachability: can the panel nav be reached and switched by keys?
   res.keyboard = await page.evaluate(() => {
     const focusables = [
       ...document.querySelectorAll('a[href],button,input,select,textarea,[tabindex]'),
@@ -574,8 +545,6 @@ async function benchUi(browser, srv, opts, outDir) {
   return res;
 }
 
-// Scroll the largest scroll container 120px per frame for ~2 s and record
-// frame durations (virtualization / layout cost).
 function scrollLargest(page) {
   return page.evaluate(async () => {
     const els = [...document.querySelectorAll('*')].filter(el => {
@@ -613,8 +582,6 @@ function scrollLargest(page) {
     };
   });
 }
-
-// ---------------------------------------------------------------- main
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2));

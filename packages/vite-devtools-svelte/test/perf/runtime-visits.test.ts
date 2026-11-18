@@ -1,6 +1,5 @@
-// Work-count scaling tests. They monkey-patch Map/Set/Array iteration to count
-// visited elements, which permanently disables V8 fast paths (protectors) for
-// the worker — so they live in their own file, isolated from timing tests.
+// Patching Map/Set/Array iteration permanently disables V8 fast paths for the
+// worker, so these live in their own file, isolated from timing tests.
 import { describe, it, expect } from 'vitest';
 
 import { countVisits, createRuntime, unmountVisits } from './harness.js';

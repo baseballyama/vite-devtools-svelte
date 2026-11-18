@@ -96,7 +96,6 @@
     },
   ];
 
-  // Public dev-server URL (docs/devframe-migration.md §6.1: `AssetInfo.url`).
   // Static files are served from the root, so fall back to that.
   function assetUrl(a: AssetInfo) {
     return a.url || '/' + a.relativePath;

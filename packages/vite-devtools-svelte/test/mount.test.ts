@@ -1,5 +1,3 @@
-// Standalone devframe mount on the Vite dev server (src/server/mount.ts):
-// WebSocket origin allowlist per binding, readiness gate, and lifecycle.
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import os from 'node:os';

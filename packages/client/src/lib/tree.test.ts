@@ -52,7 +52,7 @@ const at = (epoch: string | null, list: Inst[]): EpochIndex<Node> => {
 const across = (key: string, prev: EpochIndex<Node>, next: EpochIndex<Node>) =>
   remapAcross([key], prev, next, idOf, keyOf)[0] ?? null;
 
-describe('tree anchors (review U4b)', () => {
+describe('tree anchors', () => {
   const rows = [10, 11, 12, 13, 14];
   const prev = snapshot(app(rows));
   const selected = 'App#0/Row#3'; // id 13
@@ -122,7 +122,7 @@ describe('tree anchors (review U4b)', () => {
   });
 });
 
-describe('tree anchors across app page loads (review U4b epoch)', () => {
+describe('tree anchors across app page loads', () => {
   const selected = 'App#0/Row#3'; // id 13 in epoch A
 
   it('reload: ids reused by the new page load → resolve by path, not by id', () => {
@@ -230,8 +230,6 @@ describe('tree anchors: edge cases', () => {
     expect(resolveAnchor({ id: undefined, path: 'nope' }, new Set(), next, idOf)).toBeNull();
   });
 });
-
-// ---- flattenTree / branchKeys --------------------------------------------
 
 interface TNode {
   key: string;

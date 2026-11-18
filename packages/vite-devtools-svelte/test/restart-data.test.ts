@@ -8,14 +8,10 @@ import { getTempAuthCode } from 'devframe/node/auth';
 import { createServer } from 'vite';
 import type { ViteDevServer } from 'vite';
 /**
- * Integration (review B1): live data must keep flowing after a dev-server
- * restart driven by a config-file change (Vite re-evaluates the config, so a
- * *new* plugin instance and Collector serve the restarted server).
- *
- * A simulated runtime speaks the real hot-channel protocol over Vite's HMR
- * WebSocket the way `runtime.ts` does (§6.3 / §6.5): `runtime-ready` on boot,
- * full snapshot on activation (components → profiles → timeline reset), then
- * deltas. A devframe client (browser globals shimmed) plays the DevTools tab.
+ * Vite re-evaluates the config on a config-file change, so a *new* plugin
+ * instance and Collector serve the restarted server: live data must keep flowing.
+ * The simulated runtime speaks the real hot-channel protocol over Vite's HMR
+ * WebSocket the way `runtime.ts` does.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 
@@ -201,7 +197,7 @@ afterAll(async () => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-describe('live data across a config-file restart (review B1)', () => {
+describe('live data across a config-file restart', () => {
   it('shows components mounted after the restart, and after a UI reload', async () => {
     const before = new FakeRuntime(hmrUrl(), [1, 2, 3, 4, 5]);
     await before.connect();

@@ -5,11 +5,7 @@
   import type { Resource } from '../lib/resource.svelte.js';
   import EmptyState from './EmptyState.svelte';
 
-  /**
-   * The empty state of a view fed by a resource: still loading, a failed
-   * load, nothing there yet (`icon`, `title`, `children`), or — when the
-   * unfiltered `total` is not 0 — a filter that matches nothing.
-   */
+  /** A non-zero unfiltered `total` means the filter matched nothing. */
   let {
     res,
     total,

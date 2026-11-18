@@ -97,8 +97,7 @@ function metaCharset(head: string): string | undefined {
 
 /**
  * Decode the page body by its declared charset (Content-Type header, else a
- * meta tag in the first 1024 bytes), UTF-8 otherwise. `res.text()` always
- * used UTF-8, garbling e.g. Shift_JIS or Latin-1 pages.
+ * meta tag in the first 1024 bytes), UTF-8 otherwise.
  */
 export function decodeBody(bytes: Uint8Array, contentType: string | null): string {
   const head = new TextDecoder('latin1').decode(bytes.subarray(0, 1024));

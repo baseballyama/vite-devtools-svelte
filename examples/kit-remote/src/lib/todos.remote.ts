@@ -3,13 +3,11 @@ import { error, invalid } from '@sveltejs/kit';
 
 import * as db from '#lib/server/db.ts';
 
-/** `query` without an argument. */
 export const getTodos = query(async () => {
   await db.sleep(150);
   return db.todos.map(t => ({ ...t }));
 });
 
-/** `query` with an (unchecked) argument. */
 export const getTodo = query('unchecked', async (id: number) => {
   await db.sleep(100);
   const todo = db.todos.find(t => t.id === id);
@@ -30,7 +28,6 @@ export const getBroken = query(async (): Promise<string> => {
   throw new Error('getBroken always fails (on purpose)');
 });
 
-/** `getRequestEvent()` inside a remote function. */
 export const getRequestInfo = query(() => {
   const event = getRequestEvent();
   return {
@@ -42,13 +39,12 @@ export const getRequestInfo = query(() => {
   };
 });
 
-/** `prerender`: computed once at build time (and per request in dev). */
+/** Computed once at build time (per request in dev). */
 export const getBuildInfo = prerender(() => ({
   builtAt: new Date().toISOString(),
   todoCount: db.todos.length,
 }));
 
-/** `query.live`: a stream the client stays subscribed to. */
 export const getClock = query.live(async function* () {
   for (let tick = 0; tick < 1000; tick++) {
     yield { tick, at: new Date().toLocaleTimeString() };
@@ -58,7 +54,6 @@ export const getClock = query.live(async function* () {
   }
 });
 
-/** `form` with server-side validation through `invalid(...)`. */
 export const createTodo = form('unchecked', async (data: { text: string }, issue) => {
   const text = (data.text ?? '').trim();
   if (text.length < 3) invalid(issue.text('At least 3 characters'));

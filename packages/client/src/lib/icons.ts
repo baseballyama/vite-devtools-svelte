@@ -1,7 +1,4 @@
-/**
- * Stroke icon set (24×24 viewBox, `currentColor`). Each entry is SVG inner
- * markup so `Icon.svelte` can render it inline — no icon font, no network.
- */
+/** SVG inner markup for a 24×24 viewBox in `currentColor`, inlined so no icon font or network is needed. */
 export const icons = {
   overview:
     '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',

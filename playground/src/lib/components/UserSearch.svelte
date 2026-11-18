@@ -37,7 +37,6 @@
   let hasSelection = $derived(selectedUser !== null);
 
   $effect(() => {
-    // Clear selection when filtered results change and selected user is no longer in list
     if (selectedUser && !filtered.some(u => u.id === selectedUser!.id)) {
       selectedUser = null;
     }

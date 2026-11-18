@@ -1,7 +1,3 @@
-/**
- * Panel registry — single source of truth for navigation, the command
- * palette and the router. Panels are code-split and loaded on first visit.
- */
 import type { Component } from 'svelte';
 
 import type { IconName } from './icons.js';
@@ -20,10 +16,7 @@ export interface PanelDef {
   load: () => Promise<{ default: Component }>;
 }
 
-/**
- * Grouped by task: where to start, look at the live app, measure it, then
- * its static structure. `start` has no visible heading in the sidebar.
- */
+/** `start` has no visible heading in the sidebar. */
 export const groupLabels: Record<PanelGroup, string> = {
   start: 'General',
   inspect: 'Inspect',
@@ -174,11 +167,7 @@ export const panels = [
 
 export type PanelId = (typeof panels)[number]['id'];
 
-/**
- * The panels to offer: SvelteKit-only ones need `kit` to be true. While it is
- * unknown (`undefined`) they stay hidden, so apps without SvelteKit never
- * see them flash in.
- */
+/** SvelteKit-only panels stay hidden while `kit` is unknown, so apps without SvelteKit never see them flash in. */
 export function visiblePanels(kit: boolean | undefined): (PanelDef & { id: PanelId })[] {
   return panels.filter((p: PanelDef) => !p.kit || kit === true);
 }

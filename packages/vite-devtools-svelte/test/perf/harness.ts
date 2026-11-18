@@ -1,6 +1,3 @@
-// Shared harness for the runtime perf tests: evaluates the injected runtime
-// (runtimeCode) in an isolated fake browser and drives
-// `window.__SVELTE_DEVTOOLS__` like the svelte/internal/client wrapper does.
 import { runtimeCode } from '../../src/runtime/index.js';
 import { countVisits } from './visits.js';
 
@@ -14,7 +11,6 @@ export interface Sent {
 
 export interface Harness {
   dt: any;
-  /** the fake window the runtime was evaluated against */
   window: Record<string, any>;
   sent: Sent[];
   /** live intervals (cleared ones are removed) */
@@ -30,17 +26,13 @@ export interface Harness {
   document: { visibilityState: 'visible' | 'hidden'; dispatch: () => void };
 }
 
-// Evaluate runtimeCode in an isolated fake browser. Timers are captured (not
-// scheduled) so tests control exactly when debounced/periodic work runs.
-// `clock` replaces performance.now() inside the runtime (time-based logic).
-// `active` (default true) delivers the §6.3 subscription message after boot,
-// as the server does when a DevTools client is attached; `deltas` (default
-// true) sets its §6.5 componentDeltas feature gate.
+// Timers are captured, not scheduled, so tests control when debounced/periodic work runs.
+// `active` (default true) delivers the subscription message, as when a DevTools client is attached.
 export function createRuntime(
   opts: {
     clock?: () => number;
     active?: boolean;
-    /** advertise subscription.componentDeltas (§6.5); default true */
+    /** advertise subscription.componentDeltas; default true */
     deltas?: boolean;
     onSend?: (bytes: number) => void;
   } = {},
@@ -78,7 +70,6 @@ export function createRuntime(
     },
   };
   const code = runtimeCode.replaceAll('import.meta.hot', '__hot');
-  // Evaluates the injected runtime's own source with stubbed browser globals.
   // oxlint-disable-next-line typescript/no-implied-eval -- running the runtime source under test is the point
   const fn = new Function(
     'window',
@@ -162,8 +153,7 @@ export function createRuntime(
   };
 }
 
-// Mount `n` sibling components under one root, each with `statesPer` states,
-// one derived and one effect — the shape of a big keyed `{#each}` list.
+// One derived and one effect per row: the shape of a big keyed `{#each}` list.
 export function mountList(h: Harness, n: number, statesPer = 2) {
   const { dt } = h;
   const root = dt.register('/app/src/routes/+page.svelte');

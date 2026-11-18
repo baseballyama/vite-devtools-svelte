@@ -99,13 +99,11 @@ describe('Routes', () => {
     expect(root.getAttribute('aria-expanded')).toBe('true');
     expect(item(tree, 'dash').getAttribute('aria-level')).toBe('3');
     expect(item(tree, 'dash').getAttribute('aria-expanded')).toBeNull();
-    // Route kind markers.
     expect(within(root).getByTitle('+page.svelte')).toBeTruthy();
     expect(within(root).getByTitle('+layout.svelte')).toBeTruthy();
     expect(within(item(tree, 'about')).getByTitle('server load')).toBeTruthy();
     expect(within(item(tree, 'dash')).getByTitle('universal load')).toBeTruthy();
     expect(within(item(tree, 'items')).getByTitle('+server endpoint')).toBeTruthy();
-    // Segment kinds are styled apart.
     expect(item(tree, '[...rest]').querySelector('.seg.rest')).toBeTruthy();
     expect(item(tree, '[slug]').querySelector('.seg.param')).toBeTruthy();
     expect(item(tree, '(app)').querySelector('.seg.group.dir')).toBeTruthy();
@@ -162,7 +160,6 @@ describe('Routes', () => {
     await user.click(within(details).getByRole('button', { name: 'Close details (Esc)' }));
     expect(screen.queryByRole('complementary')).toBeNull();
 
-    // Optional / rest params and unknown file types.
     await user.click(item(tree, '[...rest]'));
     const rest = screen.getByRole('complementary', { name: '/docs/[[lang]]/[...rest] details' });
     expect(within(rest).getByText('lang?')).toBeTruthy();
@@ -225,7 +222,6 @@ describe('Routes', () => {
       Array.from({ length: 61 }, (_, i) => route(`/s${i}/mid/deep`)),
     );
     const { tree } = await setup();
-    // The root and the first-level directories are open; deeper ones stay collapsed.
     expect(item(tree, 's0').getAttribute('aria-expanded')).toBe('true');
     expect(labels(tree)).toContain('mid');
     expect(labels(tree)).not.toContain('deep');

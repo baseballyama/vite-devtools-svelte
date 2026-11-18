@@ -1,5 +1,4 @@
 <script lang="ts" generics="V extends string">
-  /** Single-choice segmented control (ARIA radiogroup, arrow keys move). */
   interface Option {
     value: V;
     label: string;

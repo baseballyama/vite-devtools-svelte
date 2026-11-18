@@ -1,6 +1,5 @@
 import type { ComponentInstance } from './types.js';
 
-/** A mounted component instance in the Components tree. */
 export interface LiveNode {
   c: ComponentInstance;
   /** Path key: `Parent#0/Name#ordinal` (ordinal among same-name siblings). */
@@ -17,11 +16,7 @@ export interface LiveTree {
   epoch: string | null;
 }
 
-/**
- * Build the instance tree of one live snapshot. Rows are keyed by a path
- * (`Parent#0/Name#ordinal`, ordinal among same-name siblings). Tree order is
- * registration order, which can differ from DOM order after keyed reorders.
- */
+/** Tree order is registration order, which can differ from DOM order after keyed reorders. */
 export function buildLiveTree(list: readonly ComponentInstance[], epoch: string | null): LiveTree {
   const byId = new Map<number, LiveNode>();
   for (const c of list) byId.set(c.id, { c, key: '', children: [] });

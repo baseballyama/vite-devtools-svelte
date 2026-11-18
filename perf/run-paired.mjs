@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 // Paired baseline (B) vs final (F) browser measurement, bounded and ordered.
-// Plan + rationale: docs/performance-status.md "Bounded paired measurement plan".
 //
 // Part A (decisive app comparison, ~17 min): order B F F B; per item one dev
 // server (plugin on) and, in that session, every scale x scenario:
-//   closed — no DevTools tab (F runtime must be inactive, §6.3)
+//   closed — no DevTools tab (the runtime must be inactive)
 //   open   — one DevTools tab holding the activity lease (F runtime active)
 // Part B (~14 min): plugin-off reference (B, F) and the DevTools UI itself at
 // the largest scale (B, F).
@@ -105,8 +104,6 @@ function parseArgs(argv) {
 const treeNodes = t => (t ? (t[1] ** (t[0] + 1) - 1) / (t[1] - 1) : 0);
 const log = (...a) => console.log(`[paired ${new Date().toISOString().slice(11, 19)}]`, ...a);
 
-// ---------------------------------------------------------------- fixture
-
 function prepareFixture(repo) {
   ensurePlaygroundSync(repo);
   const appDir = path.join(repo, 'playground/.temp/large-app');
@@ -121,13 +118,10 @@ function prepareFixture(repo) {
   };
 }
 
-// ---------------------------------------------------------------- DevTools tab
-
 /**
- * Open (or reuse) the DevTools tab of this checkout in its own, persistent
- * context. A devframe one-time code is consumed at most once per context and
- * run: the trusted token then lives in this context's localStorage and in the
- * server's isolated HOME, so later server restarts re-trust silently.
+ * A devframe one-time code is consumed at most once per context and run: the
+ * trusted token then lives in this context's localStorage and in the server's
+ * isolated HOME, so later server restarts re-trust silently.
  */
 async function openDevtoolsTab(side, srv, opts) {
   const page = await side.uiCtx.newPage();
@@ -175,7 +169,6 @@ async function openDevtoolsTab(side, srv, opts) {
   return { page, cdp, ws };
 }
 
-/** Wait until the app runtime reports the expected subscription state. */
 async function waitForActive(appPage, expected, timeoutMs = 25_000) {
   const t0 = Date.now();
   for (;;) {
@@ -187,8 +180,6 @@ async function waitForActive(appPage, expected, timeoutMs = 25_000) {
     await sleep(250);
   }
 }
-
-// ---------------------------------------------------------------- app scenario
 
 async function appScenario(appCtx, srv) {
   const page = await appCtx.newPage();
@@ -235,7 +226,6 @@ async function measureApp(app, scale, opts) {
     res.tree = { nodes: treeNodes(scale.tree), mountMs: r1(tm), unmountMs: r1(tu) };
   }
 
-  // steady state, everything mounted
   await page.evaluate(n => window.__bench.mountRows(n), scale.rows);
   if (scale.tree) await page.evaluate(([dd, bb]) => window.__bench.mountTree(dd, bb), scale.tree);
   await sleep(1500); // let throttled pushes settle
@@ -248,7 +238,6 @@ async function measureApp(app, scale, opts) {
   res.dom = await page.evaluate(() => document.querySelectorAll('*').length);
   res.runtime = await runtimeState(page);
 
-  // heap growth over mount/unmount cycles
   if (scale.tree) await page.evaluate(() => window.__bench.clearTree());
   for (let i = 0; i < opts.cycles; i++) {
     await page.evaluate(() => window.__bench.mountRows(2000));
@@ -263,8 +252,6 @@ async function measureApp(app, scale, opts) {
   res.errors = app.errors;
   return res;
 }
-
-// ---------------------------------------------------------------- UI scenario (part B)
 
 async function measureUi(side, srv, scale, opts, outDir, tag) {
   const app = await appScenario(side.appCtx, srv);
@@ -318,7 +305,7 @@ async function measureUi(side, srv, scale, opts, outDir, tag) {
     };
     await tab.page.screenshot({ path: path.join(outDir, `${tag}-ui-${label.toLowerCase()}.png`) });
   }
-  // Components: is the route root present with > 5 000 instances (H2)?
+
   const comp = nav(/^\s*Components\b/i).first();
   if ((await comp.count()) > 0) {
     await comp.click();
@@ -339,8 +326,6 @@ async function measureUi(side, srv, scale, opts, outDir, tag) {
   await app.page.close();
   return res;
 }
-
-// ---------------------------------------------------------------- main
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2));

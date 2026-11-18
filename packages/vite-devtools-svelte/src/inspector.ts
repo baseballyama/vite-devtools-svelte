@@ -8,7 +8,7 @@ import { getInspectorPath, svelteInspector } from '../../inspector/src/index.js'
 // vite.config.ts), packages/inspector/src/runtime when run from source
 const INSPECTOR_RUNTIME = getInspectorPath();
 
-/** Whether `id` is one of the inspector's own components, which devtools must not track. */
+/** Devtools must not track the inspector's own components. */
 export function isInspectorRuntime(id: string): boolean {
   return normalizePath(id).startsWith(INSPECTOR_RUNTIME);
 }
@@ -58,7 +58,6 @@ export interface InspectorOptions {
   customStyles?: boolean;
 }
 
-/** The inspector's Vite plugin. */
 export function inspectorPlugin(options: InspectorOptions = {}): Plugin {
   // its `devtools` hook types only the parts of the Vite DevTools context it uses
   return svelteInspector(options) as Plugin;

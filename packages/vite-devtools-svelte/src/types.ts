@@ -82,8 +82,6 @@ export interface ElementPick {
   componentId: number;
 }
 
-// Phase 2: Performance Analysis
-
 export interface RenderProfile {
   componentId: number;
   file: string;
@@ -127,9 +125,8 @@ export interface ReactiveGraph {
   edges: ReactiveEdge[];
 }
 
-/** `get-reactive-graph` arguments (docs/devframe-migration.md §6.7 A). Omitted = whole app. */
 export interface ReactiveGraphRequest {
-  /** Component instance id within the served epoch (page load). */
+  /** Within the served epoch; omitted = whole app. */
   componentId?: number;
   /**
    * The page load `componentId` came from. When it is no longer the served
@@ -156,7 +153,6 @@ export interface ReactiveGraphTotal {
 export interface ReactiveGraphResult extends ReactiveGraph {
   /** Component instance the graph is scoped to; `null` = whole app. */
   scope: number | null;
-  /** Page load the graph came from; `null` when no page load is known. */
   epoch: string | null;
   /** `null` = unknown, never a guessed number. */
   total: ReactiveGraphTotal | null;
@@ -177,13 +173,11 @@ export interface ReactiveGraphResult extends ReactiveGraph {
   staleReason?: 'timeout' | 'no-runtime' | 'epoch-changed';
 }
 
-/** `get-reactive-summary` arguments (§6.7 I). */
 export interface ReactiveSummaryRequest {
   topK?: number;
   windowMs?: number;
 }
 
-/** One component instance in the overview, from runtime counters over all instances. */
 export interface ReactiveSummaryRow {
   /** Component instance id, or the id of a module scope (`kind: 'module'`). */
   componentId: number;
@@ -193,7 +187,6 @@ export interface ReactiveSummaryRow {
    * created while its body ran), not a component instance.
    */
   kind?: 'module';
-  /** Tracked nodes registered for this instance, by type. */
   nodes: { state: number; derived: number; effect: number };
   /** Sampled state changes in the window (≤ 1 per node per 200 ms tick); not a rate. */
   changes: number;
@@ -203,7 +196,7 @@ export interface ReactiveSummaryRow {
 }
 
 /**
- * Whole-app overview without capturing the graph (§6.7 I/J). `rows` + `other`
+ * Whole-app overview without capturing the graph. `rows` + `other`
  * add up to `components` / the registered node counts; `null` = unknown.
  */
 export interface ReactiveSummary {
@@ -229,7 +222,6 @@ export interface ReactiveSummary {
   staleReason?: 'timeout' | 'no-runtime';
 }
 
-/** Datasets with capture metadata (`get-capture-info`). */
 export type CaptureKey =
   | 'liveComponents'
   | 'renderProfiles'
@@ -245,7 +237,6 @@ export type CaptureKey =
 export type DropReason = 'runtime-count' | 'runtime-bytes' | 'server-count' | 'server-bytes';
 
 /**
- * What the server holds versus what was reported, per dataset (§6.7 B).
  * Counts are monotonic until the dataset is cleared or its page load is
  * dropped; both bump the dataset version.
  */
@@ -286,8 +277,6 @@ export interface LoadProfile {
   timestamp: number;
 }
 
-// Phase 3: Debug & Developer Experience
-
 export interface StateChange {
   id: string;
   name: string;
@@ -302,7 +291,6 @@ export interface StateTimelineEntry extends StateChange {
   seq: number;
 }
 
-/** Cursor-based timeline read (`getStateTimelineDelta`). */
 export interface StateTimelineDelta {
   /** Pass back as `since` on the next call. */
   cursor: number;
@@ -374,11 +362,8 @@ export interface InspectResult {
   file: string;
   /** VLQ-encoded source map `mappings` string (per the Source Map v3 spec). */
   mappings?: string;
-  /** Source map sources array */
   sources?: string[];
 }
-
-// Phase 4: Advanced Features
 
 export interface ModuleNode {
   id: string;
@@ -421,8 +406,6 @@ export interface BuildAnalysis {
   totalSize: number;
   timestamp: number;
 }
-
-// FPS Monitoring
 
 export interface FpsSample {
   timestamp: number;

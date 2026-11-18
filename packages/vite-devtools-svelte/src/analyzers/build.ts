@@ -7,8 +7,7 @@ const WEB_EXTENSIONS = new Set(['.js', '.css', '.html']);
 
 /**
  * Scan common SvelteKit build output directories for emitted web assets.
- * Each file is counted once: `build/client` lies inside `build`, which used
- * to list (and add to `totalSize`) every client file twice. An unreadable
+ * Each file is counted once, as `build/client` lies inside `build`. An unreadable
  * entry (e.g. a dangling symlink) is skipped instead of ending the scan of
  * its directory; directory symlinks are not followed.
  */

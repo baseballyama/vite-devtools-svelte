@@ -1,6 +1,3 @@
-// Collector boundaries: lease expiry to the millisecond, the state timeline
-// byte budget (exact sizes, multibyte values), and a model-based check of the
-// timeline cursor protocol under random pushes, trims, resets and clears.
 import assert from 'node:assert/strict';
 
 import * as fc from 'fast-check';
@@ -187,10 +184,6 @@ describe('Collector state timeline byte budget', () => {
   });
 });
 
-// =====================================================================
-// Model-based: the cursor protocol never loses or duplicates an entry
-// =====================================================================
-
 type Op =
   | { kind: 'push'; epoch: string; reset: boolean; sizes: number[] }
   | { kind: 'legacy'; added: number }
@@ -245,16 +238,12 @@ const serverDrops = (c: Collector) =>
 interface ModelClient {
   cursor: number | undefined;
   view: StateTimelineEntry[];
-  /** something was removed from the server timeline since the last pull */
   removedSincePull: boolean;
   /** ids the server appended since the last pull, in order */
   pending: string[];
 }
 
-/**
- * Apply `ops` to a collector while two clients pull deltas, checking the
- * protocol after every step (node:assert: this runs inside fast-check).
- */
+/** Uses node:assert: this runs inside fast-check. */
 function checkTimelineModel(ops: Op[]): { pulls: number; resets: number } {
   const stats = { pulls: 0, resets: 0 };
   const c = new Collector();
@@ -270,7 +259,7 @@ function checkTimelineModel(ops: Op[]): { pulls: number; resets: number } {
   // the legacy runtime's own ring (full snapshots, matched by id + timestamp)
   let legacyBuffer: StateChange[] = [];
   const legacyIds = new Set<string>();
-  /** What the server appends for a legacy full snapshot (§6.4): after the newest entry it holds. */
+  /** What the server appends for a legacy full snapshot: after the newest entry it holds. */
   const legacyAppends = (buffer: StateChange[]) => {
     const last = c.stateTimeline.findLast(e => legacyIds.has(e.id));
     const at = last ? buffer.findIndex(e => e.id === last.id) : -1;

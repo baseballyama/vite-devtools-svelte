@@ -28,9 +28,7 @@ function classify(file: string): ModuleNode['type'] {
  * between two variants of the same file is not a self-import and is dropped.
  * `isCyclic` marks exactly the modules on some import cycle (strongly
  * connected components), and `cycles` lists, for each of them, a shortest
- * cycle through it unless an earlier listed cycle already contains it. The
- * former depth-first search missed modules whose cycle only closed through
- * an already visited module, and recursed once per import level.
+ * cycle through it unless an earlier listed cycle already contains it.
  */
 export function buildModuleGraph(root: string, allModules: GraphModuleLike[]): ModuleGraphData {
   const modules: ModuleNode[] = [];

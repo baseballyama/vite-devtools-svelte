@@ -26,7 +26,7 @@ interface PackageJson {
   devDependencies: Record<string, string>;
 }
 
-/** A non-empty string, or undefined (so `??` keeps the old `||` fallbacks). */
+/** A non-empty string, or undefined, so `??` also falls back on an empty string. */
 function nonEmpty(v: unknown): string | undefined {
   return typeof v === 'string' && v !== '' ? v : undefined;
 }
@@ -48,7 +48,7 @@ function readPackageJson(file: string): PackageJson {
     raw = JSON.parse(fs.readFileSync(file, 'utf-8'));
   } catch {
     // Missing, unreadable or invalid (e.g. mid-edit): every RPC derives from
-    // this analysis, so a syntax error used to break all panels at once.
+    // this analysis, so a syntax error must not break all panels at once.
   }
   const pkg = isRecord(raw) ? raw : {};
   return {

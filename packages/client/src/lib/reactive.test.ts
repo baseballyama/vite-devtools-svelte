@@ -49,7 +49,7 @@ const legacy: ReactiveGraph = {
 };
 
 describe('normalizeGraph', () => {
-  it('keeps §6.7 A fields from a current server', () => {
+  it('keeps the scoped-graph fields from a current server', () => {
     const g: ReactiveGraphResult = {
       ...legacy,
       scope: 1,

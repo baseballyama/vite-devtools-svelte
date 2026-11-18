@@ -1,4 +1,3 @@
-// client script of the `svelte:inspector-settings` dock view
 import { mount, unmount } from 'svelte';
 import options from 'virtual:vite-devtools-svelte-inspector-options';
 import SettingsView from 'virtual:vite-devtools-svelte-inspector-path:SettingsView.svelte';

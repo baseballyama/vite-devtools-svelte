@@ -1,28 +1,22 @@
 import { parseScripts, walk } from './script.js';
 import type { AstNode } from './script.js';
 
-/** Where a source declares things, as offsets into it. */
 interface ReactiveIndex {
   /** First declaration of each binding name and `Class.field` / `Class.#field`. */
   declared: Map<string, number>;
   /** `$effect(…)` (`effect`) and `$effect.pre(…)` (`effect_pre`) calls, in source order. */
   effects: Map<string, number[]>;
-  /** Calls of either kind, in source order. */
   allEffects: number[];
 }
 
-/** The last source indexed: jumping to several signals of one file parses it once. */
+/** Jumping to several signals of one file parses it once. */
 let last: { source: string; index: ReactiveIndex } | undefined;
 
 /**
- * Find the 1-based line of a reactive declaration in a component (its
- * `<script>` blocks) or a `.svelte.js` / `.svelte.ts` module, from the parsed
- * code, so comments, strings and look-alike names never match. Effects: the
- * runtime names them `effect_N` / `effect_pre_N`, the N-th `$effect(…)` /
- * `$effect.pre(…)` call; any other effect name is the first call of either
- * kind. Otherwise `name` is a variable binding (destructuring included) or a
- * `Class.field` / `Class.#field` class field (Svelte's label for `$state`
- * fields). Returns 0 when not found or when the code does not parse.
+ * Uses the parsed code so comments, strings and look-alike names never match.
+ * The runtime names effects `effect_N` / `effect_pre_N` (the N-th `$effect(…)` /
+ * `$effect.pre(…)` call); any other effect name maps to the first call. Svelte
+ * labels `$state` fields `Class.field` / `Class.#field`.
  */
 export function findReactiveLine(source: string, name: string, type: string): number {
   const effect = type === 'effect';
@@ -35,7 +29,6 @@ export function findReactiveLine(source: string, name: string, type: string): nu
   return at === undefined ? 0 : lineAt(source, at);
 }
 
-/** The offset of the effect the runtime names `effect_N` / `effect_pre_N`. */
 function nthEffect(effects: Map<string, number[]>, name: string): number | undefined {
   const separator = name.lastIndexOf('_');
   const n = Number(name.slice(separator + 1));
@@ -83,7 +76,6 @@ function indexSource(source: string): ReactiveIndex {
   return index;
 }
 
-/** `effect` for `$effect(…)`, `effect_pre` for `$effect.pre(…)`. */
 function effectKind(node: AstNode): string | undefined {
   if (node.type !== 'CallExpression') return undefined;
   const callee = node.callee as AstNode;
@@ -99,7 +91,6 @@ function effectKind(node: AstNode): string | undefined {
   return undefined;
 }
 
-/** Each identifier the binding pattern `id` (`a`, `{ a, b: [c = 1, ...d] }`, …) declares. */
 function forEachBinding(id: AstNode | null, visit: (identifier: AstNode) => void): void {
   if (!id) return; // an array pattern hole
   switch (id.type) {

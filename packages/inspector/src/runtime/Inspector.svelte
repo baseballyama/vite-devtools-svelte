@@ -42,7 +42,7 @@
 
   let { openInEditor, onenabledchange, ignore }: Props = $props();
 
-  // vite-devtools-svelte: `minus` stands for the `-` key, which separates the keys of a combo
+  // `minus` stands for the `-` key, which separates the keys of a combo
   const toggle_combo = options.toggleKeyCombo
     .toLowerCase()
     .split('-')
@@ -57,15 +57,13 @@
 
   const icon = INSPECTOR_ICON_URL;
 
-  // overlay positioning
   let x = $state(0),
     y = $state(0),
     w = $state(0),
     h = $state(0);
 
   let active_el = $state<ElementWithMetadata | undefined>();
-  // vite-devtools-svelte: the component instance of `active_el`, named by an in-page tool
-  // (see `describe`); null when none did
+  // the component instance of `active_el`, named by an in-page tool (see `describe`); null when none did
   let active_name = $state<string | null>(null);
 
   let menu = $state<{ x: number; y: number; stack: Array<Loc & { tag: string }> } | null>(null);
@@ -110,8 +108,8 @@
     return undefined;
   }
 
-  // vite-devtools-svelte: matched like `is_nav`, so a key recorded by its code (e.g. `w`)
-  // also moves on other keyboard layouts, where `e.key` differs
+  // matched like `is_nav`, so a key recorded by its code (e.g. `w`) also moves on other
+  // keyboard layouts, where `e.key` differs
   function find_selectable_for_nav(e: KeyboardEvent) {
     const el = active_el;
     if (!el) {
@@ -160,7 +158,7 @@
       }
     }
 
-    // vite-devtools-svelte: `mouseover` repeats inside the same element
+    // `mouseover` repeats inside the same element
     if (el !== active_el) active_name = el ? describe(el) : null;
     active_el = el;
     if (set_bubble_pos) {
@@ -179,8 +177,8 @@
     }
   }
 
-  // vite-devtools-svelte: asks in-page tools (e.g. a devtools panel) to name the component
-  // instance that rendered `el`; a listener sets `detail.name`
+  // in-page tools (e.g. a devtools panel) name the component instance; a listener sets
+  // `detail.name`
   function describe(el: Element): string | null {
     const detail: { element: Element; name: unknown } = { element: el, name: null };
     window.dispatchEvent(new CustomEvent('svelte-inspector:describe', { detail }));
@@ -252,8 +250,7 @@
     }
   }
 
-  // vite-devtools-svelte: digits by code too, so `shift-1` matches though `e.key` is `!`
-  /** `e.code` without the `Key` / `Digit` prefix, lowercased */
+  // digits by code too, so `shift-1` matches though `e.key` is `!`
   function physical_key(code: string) {
     if (code.startsWith('Key')) return code.slice(3).toLowerCase();
     if (code.startsWith('Digit')) return code.slice(5);
@@ -439,7 +436,6 @@
   }
 
   function onLeave() {
-    // disable if a file has been opened or combo is held
     if (enabled && (has_opened || hold_start_ts)) {
       disable();
     }
@@ -458,7 +454,6 @@
     document.addEventListener('visibilitychange', visibilityChange);
     document.documentElement.addEventListener('mouseleave', onLeave);
     return () => {
-      // make sure we get rid of everything
       disable();
       const s = document.head.querySelector('#svelte-inspector-style');
       if (s) {
@@ -528,7 +523,6 @@
 
       <div class="svelte-inspector-grid">
         <div class="svelte-inspector-menu-row">
-          <!-- vite-devtools-svelte: the component instance when a tool named it -->
           <span class="svelte-inspector-tag"
             >&lt;{active_name ?? active_el.tagName.toLowerCase()}&gt;</span
           >
@@ -580,7 +574,6 @@
     display: grid;
     grid-template-columns: max-content 1fr;
     column-gap: 8px;
-    /* row-gap: 4px; */
   }
 
   #svelte-inspector-announcer {

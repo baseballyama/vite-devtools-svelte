@@ -1,23 +1,14 @@
-/**
- * Pure layout and propagation analysis for `<GraphView>` (the reactive
- * dependency graph). Kept out of the component so it is plain, testable
- * TypeScript; the component only renders the result.
- */
 import { componentName } from './format.js';
 import type { ReactiveEdge, ReactiveNode } from './types.js';
 
-// Layout constants (also used by the renderer for node geometry).
 export const NODE_W = 160;
 export const NODE_H = 58;
 const LAYER_GAP_X = 280;
 const NODE_GAP_Y = 78;
-const COMP_GROUP_GAP = 28; // extra gap between component groups in same layer
+const COMP_GROUP_GAP = 28;
 const PADDING = 40;
 
-/**
- * Within a component: state before derived before effect. Typed as a partial
- * record so a node type a newer runtime adds sorts last instead of breaking.
- */
+/** Partial so a node type a newer runtime adds sorts last instead of breaking. */
 const TYPE_ORDER: Partial<Record<string, number>> = {
   state: 0,
   derived: 1,
@@ -30,7 +21,6 @@ interface Point {
   y: number;
 }
 
-/** Background box grouping one component's nodes within one layer. */
 interface ComponentBox {
   /** Display name (`shortFile`). */
   file: string;
@@ -50,7 +40,6 @@ export interface GraphLayout {
   componentBoxes: ComponentBox[];
 }
 
-/** What a change set reaches downstream, for the propagation animation. */
 export interface Propagation {
   affected: Set<string>;
   /** `from→to` keys of edges between affected nodes. */
@@ -59,10 +48,8 @@ export interface Propagation {
   depths: Map<string, number>;
 }
 
-/** File name without directory or `.svelte` extension. */
 export const shortFile = (file: string) => componentName(file, '');
 
-/** Layered DAG layout with component grouping and barycenter ordering. */
 export function layoutGraph(
   nodes: readonly ReactiveNode[],
   edges: readonly ReactiveEdge[],
@@ -72,7 +59,7 @@ export function layoutGraph(
   const nodeById = new Map(nodes.map(n => [n.id, n]));
   const inDegree = new Map<string, number>();
   const adj = new Map<string, string[]>();
-  const radj = new Map<string, string[]>(); // reverse adjacency
+  const radj = new Map<string, string[]>();
   for (const n of nodes) {
     inDegree.set(n.id, 0);
     adj.set(n.id, []);
@@ -88,7 +75,6 @@ export function layoutGraph(
     inDegree.set(e.to, inDegree.get(e.to)! + 1);
   }
 
-  // --- Layer assignment (topological sort BFS) ---
   const layers: string[][] = [];
   let queue = nodes.filter(n => inDegree.get(n.id) === 0).map(n => n.id);
   const visited = new Set<string>();
@@ -107,28 +93,23 @@ export function layoutGraph(
   const remaining = nodes.filter(n => !visited.has(n.id)).map(n => n.id);
   if (remaining.length > 0) layers.push(remaining);
 
-  // --- Within each layer, group by component then sort by barycenter ---
-  // Initial ordering: group by componentFile
   for (const layer of layers) {
     layer.sort((a, b) => {
       const na = nodeById.get(a)!,
         nb = nodeById.get(b)!;
       const cmp = na.componentFile.localeCompare(nb.componentFile);
       if (cmp !== 0) return cmp;
-      // Within same component: state before derived before effect
       return (TYPE_ORDER[na.type] ?? 3) - (TYPE_ORDER[nb.type] ?? 3);
     });
   }
 
-  // Barycenter heuristic: adjust ordering to reduce edge crossings
-  // Run a few passes forward and backward
+  // Barycenter heuristic: reorder to reduce edge crossings.
   const posInLayer = new Map<string, number>();
   for (const layer of layers) {
     for (const [j, id] of layer.entries()) posInLayer.set(id, j);
   }
 
   for (let pass = 0; pass < 4; pass++) {
-    // Forward pass: order each layer by avg position of predecessors
     for (const layer of layers.slice(1)) {
       const bary = new Map<string, number>();
       for (const id of layer) {
@@ -137,7 +118,6 @@ export function layoutGraph(
         const preds = radj.get(id)!;
         bary.set(id, preds.reduce((s, p) => s + posInLayer.get(p)!, 0) / preds.length);
       }
-      // Stable sort by barycenter, keeping component groups together
       layer.sort((a, b) => {
         const na = nodeById.get(a)!,
           nb = nodeById.get(b)!;
@@ -148,7 +128,6 @@ export function layoutGraph(
       for (const [j, id] of layer.entries()) posInLayer.set(id, j);
     }
 
-    // Backward pass
     for (let i = layers.length - 2; i >= 0; i--) {
       const layer = layers[i]!;
       const bary = new Map<string, number>();
@@ -172,8 +151,6 @@ export function layoutGraph(
     }
   }
 
-  // --- Compute positions with component group gaps ---
-  // Step 1: initial top-aligned placement to get total height per layer
   const layerSlots: { id: string; comp: string }[][] = [];
   const layerHeights: number[] = [];
   for (const layer of layers) {
@@ -192,10 +169,8 @@ export function layoutGraph(
     layerHeights.push(h);
   }
 
-  // Step 2: find max height across all layers
   const totalHeight = Math.max(...layerHeights, PADDING * 2);
 
-  // Step 3: place nodes, centering each layer vertically within totalHeight
   const positions = new Map<string, Point>();
   for (const [i, slots] of layerSlots.entries()) {
     const offset = (totalHeight - layerHeights[i]!) / 2;
@@ -209,12 +184,10 @@ export function layoutGraph(
     }
   }
 
-  // Step 4: refine Y positions — pull each node toward its connected neighbors' average Y
-  // This reduces long diagonal edges. Run a few passes.
+  // Pull each node toward its neighbors' average Y to shorten long diagonal edges.
   for (let pass = 0; pass < 6; pass++) {
     for (const layer of layers) {
       if (layer.length <= 1) continue;
-      // Compute ideal Y for each node based on neighbors
       const idealY = new Map<string, number>();
       for (const id of layer) {
         const preds = radj.get(id)!;
@@ -226,14 +199,11 @@ export function layoutGraph(
           idealY.set(id, avgY);
         }
       }
-      // Sort by current Y to maintain relative ordering
       const sorted = layer.toSorted((a, b) => positions.get(a)!.y - positions.get(b)!.y);
-      // Try to move each node toward its ideal Y without overlapping
       for (const [j, id] of sorted.entries()) {
         const ideal = idealY.get(id);
         if (ideal === undefined) continue;
         const cur = positions.get(id)!;
-        // Determine min/max Y to avoid overlapping with neighbors in same layer
         const prevId = j > 0 ? sorted[j - 1]! : null;
         const nextId = j < sorted.length - 1 ? sorted[j + 1]! : null;
         const prevNode = prevId ? nodeById.get(prevId) : null;
@@ -260,14 +230,12 @@ export function layoutGraph(
     maxY = Math.max(maxY, pos.y + NODE_H);
   }
 
-  // --- Compute component bounding boxes per layer ---
-  // Group by (layerIndex, componentFile) so boxes never span multiple columns
+  // Per (layer, componentFile) so boxes never span multiple columns.
   const BOX_PAD = 14;
   const componentBoxes: ComponentBox[] = [];
   for (const [i, layer] of layers.entries()) {
-    // Collect nodes per component in this layer. Keyed by the full path:
-    // two `Row.svelte` in different folders are different groups (keyed by
-    // the short name, one box would span both and the nodes between them).
+    // Keyed by the full path: keyed by the short name, two `Row.svelte` in
+    // different folders would share one box spanning the nodes between them.
     const groups = new Map<string, Point[]>();
     for (const id of layer) {
       const n = nodeById.get(id)!;
@@ -304,7 +272,6 @@ export function layoutGraph(
   };
 }
 
-/** Propagation analysis: affected nodes, edge keys and BFS depths in one pass. */
 export function propagate(
   nodes: readonly ReactiveNode[],
   edges: readonly ReactiveEdge[],
@@ -313,12 +280,10 @@ export function propagate(
   if (changedNodeIds.size === 0)
     return { affected: new Set(), edgeKeys: new Set(), depths: new Map() };
 
-  // Build adjacency once (shared by affected + depths computation)
   const adj = new Map<string, string[]>();
   for (const n of nodes) adj.set(n.id, []);
   for (const e of edges) adj.get(e.from)?.push(e.to);
 
-  // BFS: compute depths and collect all affected nodes simultaneously
   const depths = new Map<string, number>();
   const queue: { id: string; depth: number }[] = [];
   for (const id of changedNodeIds) queue.push({ id, depth: 0 });

@@ -9,11 +9,8 @@
 // Prerequisites (same as the compat job): `pnpm install --frozen-lockfile`,
 // `pnpm build`, `pnpm exec playwright-core install --with-deps chromium`.
 //
-// What it does: starts the dev server, opens the app page in headless
-// Chromium (the runtime lives in the page; the DevTools UI is not opened, so
-// no browser sign-in happens), drives a few real interactions and calls the
-// MCP endpoint the way an agent would. Every call is written as
-// <dir>/NN-<tool>.json = { tool, arguments, response }.
+// The runtime lives in the app page, so the DevTools UI is never opened and no
+// browser sign-in happens.
 //
 // Safety: isolated HOME, free port on 127.0.0.1. The MCP token is read from
 // the dev server's stdout in memory and never printed or written. Outputs are
@@ -94,7 +91,6 @@ function freePort() {
   });
 }
 
-// ---------------------------------------------------------------- dev server
 const port = await freePort();
 const viteBin = path.join(
   path.dirname(createRequire(path.join(appDir, 'package.json')).resolve('vite/package.json')),
@@ -165,7 +161,6 @@ for (let i = 0; ; i++) {
   await sleep(200);
 }
 
-// --------------------------------------------------------------------- MCP
 let rpcId = 0;
 async function rpc(method, params, { auth = true } = {}) {
   const headers = {
@@ -240,7 +235,6 @@ function write(name, record) {
   manifest.calls.push({ file, name, result: 'saved' });
   console.log(`${name}: saved ${file}`);
 }
-/** Call a tool, record { tool, arguments, response } and return the parsed response. */
 async function call(tool, args = {}) {
   const { status, result } = await rpc('tools/call', { name: tool, arguments: args });
   if (status !== 200) throw new Error(`${tool}: HTTP ${status}`);
@@ -255,7 +249,6 @@ async function call(tool, args = {}) {
   return response;
 }
 
-// ------------------------------------------------------------------ browser
 const pwMod = await import(
   pathToFileURL(createRequire(path.join(repoRoot, 'package.json')).resolve('playwright-core')).href
 );
@@ -268,7 +261,6 @@ await app.goto(base + '/', { waitUntil: 'load', timeout: 30_000 });
 try {
   mkdirSync(outDir, { recursive: true });
 
-  // The registration line the dev server prints, with the secrets replaced.
   const printed = log
     .replaceAll(ANSI, '')
     .split('\n')
@@ -288,13 +280,11 @@ try {
   const list = await rpc('tools/list');
   manifest.tools = list.result.tools.map(t => t.name);
 
-  // Real activity: toggle FpsCanvas `running` three times, then add an item
-  // and open /cart by client-side navigation (ReactivePriceChart renders only
-  // for a non-empty cart).
   for (let i = 0; i < 3; i++) {
     await app.getByRole('button', { name: /^(一時停止|再開)$/ }).click({ timeout: 15_000 });
     await sleep(1000);
   }
+  // ReactivePriceChart renders only for a non-empty cart.
   await app.getByRole('link', { name: 'Products', exact: true }).click({ timeout: 15_000 });
   await app.waitForURL(/\/products$/, { timeout: 15_000 });
   await app
@@ -307,23 +297,17 @@ try {
   await app.locator('table tbody tr').first().waitFor({ timeout: 15_000 });
   await sleep(1500);
 
-  // 1 — where is the activity?
   await call('get_reactive_summary', { topK: 5, windowMs: 30_000 });
-  // 2 — instance ids with the page load they belong to.
   const live = await call('get_live_components', { includeMeta: true, limit: 50 });
   const chart = live?.components?.find(c => c.name === 'ReactivePriceChart');
   if (!chart) throw new Error('ReactivePriceChart not in get_live_components');
-  // 3 — one instance, its signals and what can affect what.
   const scopeArgs = { componentId: chart.id, epoch: live.epoch };
   await call('get_reactive_scope', scopeArgs);
-  // 4 — what changed: read the cursor, change taxRate, read again.
   const first = await call('get_state_timeline', { limit: 5 });
   await app.getByLabel('税率').fill('0.08');
   await sleep(1200);
   await call('get_state_timeline', { since: first.cursor, limit: 5 });
-  // 5 — how complete is all this?
   await call('get_capture_info');
-  // 6 — ranked issues, and the measurement-session flow.
   await call('list_performance_issues');
   const a = await call('start_session', { label: 'before' });
   await sleep(1500);
@@ -333,7 +317,7 @@ try {
   await sleep(1500);
   await call('end_session', { keep: 'memory' });
   await call('compare_sessions', { a: a.id, b: b.id });
-  // 7 — after a reload the old id is refused instead of matched to another instance.
+  // After a reload the old id must be refused, not matched to another instance.
   await app.reload({ waitUntil: 'load' });
   await sleep(1500);
   const stale = await call('get_reactive_scope', scopeArgs);

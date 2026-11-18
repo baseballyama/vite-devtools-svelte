@@ -1,6 +1,5 @@
 import type { RequestHandler } from './$types';
 
-// A streamed (chunked) response: five lines, 200 ms apart.
 export const GET: RequestHandler = () => {
   let i = 0;
   let timer: ReturnType<typeof setInterval> | undefined;

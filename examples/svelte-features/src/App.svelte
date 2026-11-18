@@ -28,7 +28,6 @@
   };
 
   let current = $state('blocks');
-  // Dynamic component: the active section held in a variable.
   const Section = $derived(sections[current]);
   let floating = $state(false);
 </script>

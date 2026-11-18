@@ -134,13 +134,11 @@ describe('StateTimeline', () => {
     await settle();
     expect(pulls.mock.lastCall?.[0]).toBeUndefined();
 
-    // Append: only entries after the cursor arrive.
     pulls.mockResolvedValueOnce(delta([entry(3)], { reset: false }));
     await nextPoll(1000);
     expect(pulls).toHaveBeenLastCalledWith(2);
     expect(rows()).toHaveLength(3);
 
-    // Nothing new: the list is kept.
     pulls.mockResolvedValueOnce(delta([], { reset: false, cursor: 3 }));
     await nextPoll(1000);
     expect(rows()).toHaveLength(3);

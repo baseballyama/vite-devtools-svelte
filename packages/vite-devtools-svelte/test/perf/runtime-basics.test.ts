@@ -1,4 +1,3 @@
-// Small runtime behaviours: component names and runtime-error reports.
 import { describe, expect, it } from 'vitest';
 
 import { createRuntime, type Harness } from './harness.js';

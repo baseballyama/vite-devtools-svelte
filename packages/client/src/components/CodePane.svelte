@@ -1,8 +1,7 @@
 <script lang="ts">
   /**
-   * Virtualised, read-only code view with clickable lines. Fixed line height
-   * lets the Compiled output panel draw source-map connectors from line
-   * numbers and `scrollTop` alone.
+   * Fixed line height lets the Compiled output panel draw source-map
+   * connectors from line numbers and `scrollTop` alone.
    */
   interface Props {
     /** Pre-escaped, highlighted HTML per line. */
@@ -46,8 +45,7 @@
   }
 
   function onkeydown(e: KeyboardEvent) {
-    // Arrow keys walk the highlighted line so mappings can be followed
-    // without a mouse.
+    // Arrow keys walk the highlighted lines so mappings can be followed without a mouse.
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
     const cur = highlighted.size && origin ? Math.min(...highlighted) : 0;
     const next = Math.max(1, Math.min(html.length, cur + (e.key === 'ArrowDown' ? 1 : -1)));

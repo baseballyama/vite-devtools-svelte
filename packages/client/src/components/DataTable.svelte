@@ -5,11 +5,7 @@
   import type { Column, RowState, SortState, TableRowState } from './types.js';
   import VirtualList from './VirtualList.svelte';
 
-  /**
-   * Virtualised, sortable table. Rows are rendered by the caller's `row`
-   * snippet as one element per visible column (`visibleColumns` is passed so
-   * cells can be skipped in narrow layouts).
-   */
+  /** `row` gets the visible columns so cells can be skipped in narrow layouts. */
   interface Props {
     items: readonly T[];
     columns: Column<T>[];

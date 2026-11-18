@@ -46,16 +46,8 @@
   import KindBadge from './reactive/KindBadge.svelte';
   import SignalInspector from './reactive/SignalInspector.svelte';
 
-  /*
-   * Information design (docs/ui-status.md "UI information design v2",
-   * docs/devframe-migration.md §6.7 A/I/J):
-   *  - Overview (default): a cheap whole-app aggregate from runtime counters;
-   *    no graph is fetched.
-   *  - Component: the graph of ONE selected instance (scoped request).
-   *  - Full graph: explicit opt-in, capped by the server and disclosed.
-   * Edges are a snapshot of current dependencies ("can affect"), never a
-   * recorded cause; what is not captured is labelled "not recorded".
-   */
+  // Edges are a snapshot of current dependencies ("can affect"), never a
+  // recorded cause; what is not captured is labelled "not recorded".
 
   /** SVG graph layout stays readable (and fast) up to roughly this size. */
   const GRAPH_LIMIT = 400;
@@ -73,8 +65,6 @@
     if (reactiveScope.current) untrack(() => (tab = 'local'));
   });
 
-  // --- Overview ----------------------------------------------------------
-
   /** Overview of components (runtime summary) or of states (timeline buffer); each works without the other. */
   let overviewOf = $state<'components' | 'states'>('components');
 
@@ -86,8 +76,7 @@
 
   let group = $state<'file' | 'instance'>('file');
 
-  // Hot states: the server's timeline buffer grouped by signal (read from the
-  // server buffer only; the app is not asked).
+  // Read from the server buffer only; the app is not asked.
   const timeline = resource<StateTimelineEntry[]>(
     async () => (await getStateTimelineDelta(undefined)).changes,
     {
@@ -105,8 +94,6 @@
     () => tab === 'overview' && overviewOf === 'states',
   );
   const statesBaseline = $derived(baselineNotice(statesCapture.data.stateTimeline?.baseline));
-
-  // --- Graph (component / full) ------------------------------------------
 
   let changed = $state.raw(new Set<string>());
   let lastValues = new Map<string, unknown>();

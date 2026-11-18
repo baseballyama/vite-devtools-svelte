@@ -74,7 +74,6 @@ if (!existsSync(path.join(buildDir, 'index.html'))) {
   process.exit(1);
 }
 
-// ------------------------------------------------- static server (base path)
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript',
@@ -118,7 +117,6 @@ await new Promise(r => {
 });
 const origin = `http://127.0.0.1:${server.address().port}`;
 
-// ------------------------------------------------------------------ browser
 const pwMod = await import(
   pathToFileURL(createRequire(path.join(repoRoot, 'package.json')).resolve('playwright-core')).href
 );
@@ -153,7 +151,6 @@ const manifest = {
 };
 const qa = [];
 let failures = 0;
-/** Error text for the manifest, with machine paths and secrets replaced. */
 function scrub(text) {
   let t = String(text).split(repoRoot).join('<repo>');
   for (const re of SENSITIVE)
@@ -200,7 +197,6 @@ async function shoot(page, dir, name) {
   manifest.shots.push(`${dir}/${name}.png`);
 }
 
-/** QA checks that run inside the page; returns plain data. */
 const inPageChecks = () => {
   // oxlint-disable-next-line unicorn/consistent-function-scoping -- runs in the page (serialized by evaluate); it cannot reference module scope
   const parse = c => {
@@ -314,14 +310,11 @@ async function focusCheck(page, stops = 12) {
 
 const pagesByPath = new Map();
 try {
-  // ------------------------------------------------------------ after (built)
   for (const p of PAGES)
     for (const size of WIDTHS)
       for (const theme of ['dark', 'light']) {
         const { ctx, page } = await newPage(size, theme);
         const url = origin + BASE + (p.path === '/' ? '/' : p.path);
-        // Broken assets and errors: same-origin responses >= 400, console
-        // errors and uncaught page errors.
         const badResponses = [];
         const errors = [];
         page.on('response', resp => {
@@ -366,7 +359,6 @@ try {
             )
             .map(i => i.getAttribute('src')),
         );
-        // Icons the head points at must exist too.
         const icons = await page.evaluate(() =>
           [...document.querySelectorAll('link[rel~="icon"], link[rel="apple-touch-icon"]')].map(
             l => l.href,
@@ -419,7 +411,6 @@ try {
         await ctx.close();
       }
 
-  // Reduced motion: no animation may keep running.
   for (const p of PAGES) {
     const { ctx, page } = await newPage(WIDTHS[0], 'dark', 'reduce');
     await page.goto(origin + BASE + (p.path === '/' ? '/' : p.path), { waitUntil: 'load' });
@@ -441,7 +432,6 @@ try {
     await ctx.close();
   }
 
-  // Internal links and anchors over everything the built pages link to.
   const linkProblems = [];
   const seen = new Set();
   for (const r of qa.filter(x => x.anchors))
@@ -462,7 +452,6 @@ try {
   failures += linkProblems.length;
   for (const r of qa) delete r.anchors;
 
-  // ----------------------------------------- before (live) and reference: best effort
   for (const [dir, baseUrl, pages] of [
     ['before', beforeUrl, PAGES],
     ['reference', referenceUrl, [{ id: 'home', path: '/' }]],

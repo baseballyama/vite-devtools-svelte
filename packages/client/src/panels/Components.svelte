@@ -44,9 +44,7 @@
   const mode = persisted<Mode>('components:mode', 'tree');
   let query = $state('');
 
-  // ---- Live instance tree -------------------------------------------------
   // Polled in both modes: Files mode shows per-file mounted counts too.
-  //
   // Instance ids restart per app page load, so a snapshot carries the epoch
   // (page load) it came from. The meta is read before and after the list:
   // if the served epoch flipped in between (two app tabs), the epoch is
@@ -75,7 +73,7 @@
   // selection and expanded set are carried over with `remapKeys` — a live id
   // wins (so removing an earlier same-name sibling, which shifts ordinals,
   // never moves the selection to a neighbour) and the path is used only for
-  // fresh ids, i.e. HMR remounts (review U4b).
+  // fresh ids, i.e. HMR remounts.
   const tree = $derived(buildLiveTree(liveList, live.data.epoch));
 
   const capture = $derived.by<CaptureInfo | null>(() => {
@@ -157,7 +155,6 @@
     );
   }
 
-  // ---- Element picked on the app page -------------------------------------
   // Revealed once this tab is visible and the snapshot of the pick's page
   // load holds the instance; the first miss refetches the tree right away.
   let pageVisible = $state(!document.hidden);
@@ -187,7 +184,6 @@
     });
   });
 
-  // ---- Static file relations ---------------------------------------------
   const relations = resource<ComponentRelation[]>(getComponentRelations, {
     initial: [],
     when: () => mode.value === 'files' || treeSelected != null,
@@ -256,7 +252,7 @@
     if (live.data.epoch === null) untrack(() => void live.refresh());
   });
 
-  /** Scope Reactivity to this instance (§6.7 A) with the validated page load its id belongs to. */
+  /** Scope Reactivity to this instance with the validated page load its id belongs to. */
   function showReactivity(c: ComponentInstance) {
     if (!liveEpoch) return;
     reactiveScope.set({ componentId: c.id, epoch: liveEpoch, label: `<${c.name}>`, file: c.file });

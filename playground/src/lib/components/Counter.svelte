@@ -15,7 +15,6 @@
   let history = $state<number[]>([0]);
 
   $effect(() => {
-    // Record count changes to history
     if (history[history.length - 1] !== count) {
       history = [...history.slice(-19), count];
     }

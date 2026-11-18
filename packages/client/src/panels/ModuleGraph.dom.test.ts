@@ -199,7 +199,6 @@ describe('ModuleGraph', () => {
     expect((external as HTMLButtonElement).disabled).toBe(true);
     expect(details.textContent).toContain('None');
 
-    // Back through the imports to the cycle, then follow the cycle to b.js.
     await user.click(within(details).getByRole('button', { name: /App\.svelte/ }));
     details = screen.getByRole('complementary', { name: 'App.svelte details' });
     await user.click(within(details).getByRole('button', { name: /a\.js/ }));

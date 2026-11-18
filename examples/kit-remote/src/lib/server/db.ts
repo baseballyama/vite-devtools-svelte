@@ -1,4 +1,3 @@
-// In-memory data shared by the remote functions and the classic load.
 export type Todo = { id: number; text: string; done: boolean };
 export type User = { id: number; name: string };
 

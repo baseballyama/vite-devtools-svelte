@@ -10,10 +10,8 @@ import { arrayOf, asPayload, finiteOrNull, nonNegInt } from './payload.js';
 import type { Payload } from './payload.js';
 import { isBaseline } from './state-timeline.js';
 
-/** Most nodes / edges one graph answer holds. */
 export const GRAPH_LIMITS = { nodes: 5000, edges: 20000 } as const;
 
-/** Defaults and bounds for `get-reactive-summary` (§6.7 I). */
 export const SUMMARY_DEFAULTS = {
   topK: 50,
   maxTopK: 200,
@@ -24,7 +22,6 @@ export const SUMMARY_DEFAULTS = {
 
 export type StaleReason = NonNullable<ReactiveGraphResult['staleReason']>;
 
-/** An empty graph answer, marked stale for `reason`. */
 export function emptyGraph(
   scope: number | null,
   epoch: string | null,
@@ -45,7 +42,6 @@ export function emptyGraph(
   };
 }
 
-/** An empty summary answer, marked stale for `reason`. */
 export function emptySummary(
   epoch: string | null,
   windowMs: number,
@@ -66,13 +62,8 @@ export function emptySummary(
   };
 }
 
-/**
- * Shape a runtime reply into a {@link ReactiveGraphResult}: apply the caps
- * (nodes, then only edges between kept nodes, then the edge cap) and report
- * what was left out. Totals come from the runtime; an older runtime's (no
- * `requestId`) are the counts it sent (`nodesKind: 'sent'`), or unknown when
- * the server had to scope its whole-app graph.
- */
+// An older runtime (no `requestId`) sends the whole app: its totals are the
+// counts it sent, or unknown when the server had to scope the graph.
 export function normalizeGraph(
   data: Payload | undefined,
   scope: number | null,
@@ -141,7 +132,7 @@ export function normalizeGraph(
   };
 }
 
-/** Shape a runtime summary reply (§6.7 I); every field is validated, nothing assumed. */
+// Untrusted reply: every field is validated, nothing assumed.
 export function normalizeSummary(data: Payload | undefined, epoch: string | null): ReactiveSummary {
   const rows = arrayOf<unknown>(data?.rows)
     .slice(0, SUMMARY_DEFAULTS.maxTopK)

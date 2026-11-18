@@ -1,6 +1,5 @@
 import type { CaptureInfo } from '../types.js';
 
-/** A tail-capped dataset that counts what it received since the last clear. */
 export class Ring<T> {
   items: T[] = [];
   received = 0;

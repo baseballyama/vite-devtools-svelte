@@ -1,10 +1,3 @@
-/**
- * Small collection helpers for building indexes from RPC payloads. Maps keep
- * first-occurrence (insertion) order, like the hand-written loops they
- * replace.
- */
-
-/** Number of items per key. */
 export function countBy<T, K>(items: Iterable<T>, key: (item: T) => K): Map<K, number> {
   const out = new Map<K, number>();
   for (const item of items) {
@@ -14,7 +7,6 @@ export function countBy<T, K>(items: Iterable<T>, key: (item: T) => K): Map<K, n
   return out;
 }
 
-/** Items (or `value(item)`) per key, each group in input order. */
 export function groupBy<T, K>(items: Iterable<T>, key: (item: T) => K): Map<K, T[]>;
 export function groupBy<T, K, V>(
   items: Iterable<T>,
@@ -38,9 +30,8 @@ export function groupBy<T, K, V>(
 }
 
 /**
- * `key(item)` for each item, with `#2`, `#3`… appended to repeats so the
- * keys are unique. Counted from the start, so keys already handed out stay
- * put when items are appended — unlike an index suffix, which shifts.
+ * Repeats get `#2`, `#3`… counted from the start, so keys already handed out
+ * stay put when items are appended (an index suffix would shift).
  * `key` must not itself end in `#<n>`.
  */
 export function uniqueKeys<T>(items: readonly T[], key: (item: T) => string): string[] {

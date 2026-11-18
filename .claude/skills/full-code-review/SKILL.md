@@ -65,7 +65,7 @@ For each chunk, in table order, launch the reviewers below **in parallel in one 
 
 1. **Security** — injection, path traversal, SSRF, XSS/prototype pollution in the runtime, unsafe RegExp from input, auth bypass of the standalone UI or MCP endpoint.
 2. **Correctness** — read `implementation-checklist.md` first; bugs, races, leaks, broken invariants, missing or wrong tests.
-3. **Simplicity** — reuse of existing helpers/components, dead code, needless abstraction, comments that restate code. (Do not run the `simplify` skill here: it edits files.)
+3. **Simplicity** — reuse of existing helpers/components, dead code, needless abstraction, comments that are not a short WHY (restating code, banners, signature-repeating JSDoc, history). (Do not run the `simplify` skill here: it edits files.)
 
 Skip a reviewer that has nothing to look at (e.g. Security on a docs chunk). For `changeset`, `lockfile`, `docs`, and `apps` chunks, a single combined reviewer is enough; for `lockfile`, only check that changes match the `package.json` edits.
 

@@ -8,7 +8,7 @@ const sleep = (ms: number) =>
   });
 
 export const load: PageServerLoad = async () => {
-  // 並列 load — Load Profiler のウォーターフォール確認
+  // Parallel loads, to show up side by side in the Load profiler waterfall
   const [stats, lowStock, byCategory] = await Promise.all([
     sleep(120).then(() => ({
       totalSku: products.length,

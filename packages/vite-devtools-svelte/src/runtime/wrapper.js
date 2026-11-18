@@ -5,28 +5,19 @@ function __dt() {
   return typeof window === 'undefined' ? null : window.__SVELTE_DEVTOOLS__;
 }
 
-// Component ID stack (parallel to runtime._stack but local to wrapper)
 const __idStack = [];
 function __currentId() {
   return __idStack.length > 0 ? __idStack.at(-1) : null;
 }
 
-// Tracks the most recently created signal for type determination in tag()
 const __pendingSignal = { ref: null, type: null };
 
-// Component context -> devtools id. A component created later
-// by a block update ({#each}/{#if} after mount) runs outside its parent's
-// push..pop, where the runtime's init stack is empty (the wrapper stack
-// below covers the wrapped block helpers; this covers the rest). Svelte (5.56.8,
-// internal/client) exports active_effect; every effect records the
-// component context it was created in (effect.ctx) and runs with that
-// context restored. The block effect that creates the child belongs to the
-// parent's template, so active_effect.ctx at push time IS the parent's
-// context. Each context is mapped to its id once the component mounted
-// (inside its own deferred effect, where active_effect.ctx is the
-// component's own context). The map lives on the runtime (dt._idByContext)
-// so the reactive graph can name the component of any effect it reaches.
-// Weak map: no leak, no Svelte state touched.
+// A component created later by a block update ({#each}/{#if} after mount)
+// runs outside its parent's push..pop, where the init stack is empty. The
+// block effect creating it belongs to the parent's template, so
+// active_effect.ctx at push time IS the parent's context (Svelte 5.56.8).
+// The map lives on the runtime so the reactive graph can name the component
+// of any effect it reaches.
 function __parentFromContext() {
   const dt = __dt();
   const effect = __svelte_original.active_effect;
@@ -44,12 +35,8 @@ function __owner() {
   return fromContext === undefined ? null : fromContext;
 }
 
-// --- Component Lifecycle ---
-//
-// Observer must not break the observed: every devtools side-effect below is
-// wrapped in try/catch so a bug or an out-of-shape runtime cannot tear down
-// the user's app. The original Svelte function is always called, and its
-// return value always returned, regardless of devtools failures.
+// Observer must not break the observed: every devtools side-effect is wrapped
+// in try/catch so a bug or an out-of-shape runtime cannot tear down the app.
 
 export function push() {
   // Parent hint, read before this component's own id exists:
@@ -81,6 +68,8 @@ export function push() {
       try {
         __svelte_original.user_effect(() => {
           try {
+            // Inside its own deferred effect, active_effect.ctx is this component's
+            // context; at push time it is still the parent's.
             const own = __svelte_original.active_effect;
             if (own?.ctx) dt._idByContext.set(own.ctx, id);
             if (own) dt.setComponentEffect(id, own);
@@ -115,8 +104,6 @@ export function pop() {
   return __svelte_original.pop.apply(null, arguments);
 }
 
-// --- Signal Creation (type markers) ---
-
 // The created signal/proxy is remembered with its type for the tag() call
 // the compiler (dev) emits right after it.
 function __marking(original, type) {
@@ -132,8 +119,6 @@ export const state = __marking(__svelte_original.state, 'state');
 export const derived = __marking(__svelte_original.derived, 'derived');
 export const proxy = __marking(__svelte_original.proxy, 'proxy');
 
-// --- Signal Tagging (Svelte dev mode) ---
-
 export function tag(signal, name) {
   const result = __svelte_original.tag.apply(null, arguments);
   try {
@@ -148,7 +133,6 @@ export function tag(signal, name) {
         dt.trackState(signal, name, cid, owner);
       }
     } else if (dt?._moduleFile) {
-      // created while a .svelte.js/.ts module body runs (shared state)
       dt.trackModuleSignal(type === 'derived' ? 'derived' : 'state', signal, name);
     }
     __pendingSignal.ref = null;
@@ -173,16 +157,9 @@ export function tag_proxy(value, name) {
   return result;
 }
 
-// --- Effect Tracking ---
-//
-// A top-level $effect in a component is deferred by Svelte until mount:
-// user_effect() returns undefined and the effect object is created later,
-// in pop(). So the node is registered now (named per component) and bound
-// to the real effect object on its first run, where active_effect IS the
-// effect; the Svelte runtime then keeps effect.deps current, which is what
-// getReactiveGraph() reads to build edges. The wrapped callback forwards
-// this, arguments and the return value (teardown) unchanged.
-
+// A top-level $effect is deferred by Svelte until mount (user_effect()
+// returns undefined; the effect object is created in pop()), so the node is
+// registered now and bound to the real effect on its first run.
 function __trackUserEffect(original, kind, args) {
   let cid = null;
   let dt = null;
@@ -226,18 +203,10 @@ export function user_pre_effect() {
   return __trackUserEffect(__svelte_original.user_pre_effect, 'effect_pre', arguments);
 }
 
-// --- Render Profiling ---
-//
-// Svelte 5 has no virtual DOM: the compiler wraps every dynamic part of a
-// template in a template_effect (deferred_template_effect for <svelte:head>
-// <title>). A re-run of such an effect IS the component updating the DOM, so
-// these two functions are the measurement points for renders / render time.
-//
-// The first run of an effect is the mount-time paint, already covered by
-// initTime, so it is skipped (initialRun). One state change re-runs several
-// effects of the same component, so durations are pooled per microtask and
-// recorded once per flush: recordRender() +1, recordRenderTime() the sum.
-
+// Svelte 5 has no virtual DOM: a re-run of a template_effect IS the component
+// updating the DOM. The first run is the mount paint, already counted in
+// initTime, so it is skipped. One state change re-runs several effects of the
+// same component, so durations are pooled per microtask.
 const __pendingRenderDurations = new Map();
 let __renderFlushScheduled = false;
 
@@ -265,10 +234,8 @@ function __recordRenderDuration(cid, duration) {
   }
 }
 
-// Returns a (possibly new) args array whose first element times each re-run
-// of the effect closure. The owning component is whatever id is on top of
-// __idStack at effect-creation time. User exceptions propagate untouched;
-// only the args are built inside try so the original is called exactly once.
+// User exceptions propagate untouched: only the args are built inside try,
+// so the original is called exactly once.
 function __wrapTemplateEffect(args) {
   const cid = __owner();
   const fn = args[0];
@@ -292,8 +259,6 @@ function __wrapTemplateEffect(args) {
   return wrapped;
 }
 
-// `original` called with the arguments rewritten by `wrapArgs`, or with the
-// original arguments when rewriting fails.
 function __withArgs(original, wrapArgs) {
   return function () {
     let args = arguments;
@@ -310,18 +275,10 @@ export const deferred_template_effect = __withArgs(
   __wrapTemplateEffect,
 );
 
-// --- Block Attribution ---
-//
-// Svelte creates render effects synchronously at creation time. At mount this
-// happens during the component function (between push/pop), so __idStack has
-// the owner. But effects for {#each} items added later or re-created {#if}
-// branches are created during a batch flush, when the stack is empty — they
-// would never be attributed. Block helpers themselves ARE always called
-// during their owner's init (or inside an outer block's callback), so the
-// owner id is on the stack at block-creation time. __wrapBlock captures it
-// and re-pushes it around every function argument the block invokes later,
-// so effects created inside land on the innermost owner. Child components
-// push their own id on top, keeping nested attribution correct.
+// Effects for {#each} items added later or re-created {#if} branches are
+// created during a batch flush, when __idStack is empty. Block helpers are
+// always called during their owner's init or inside an outer block's callback,
+// so the owner id is on the stack then; it is captured and re-pushed around every callback the block invokes later.
 
 // A component whose init throws (caught by <svelte:boundary>, or by the
 // block's caller) never reaches pop(): its id would stay on both stacks and

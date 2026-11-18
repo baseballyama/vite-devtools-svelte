@@ -12,14 +12,12 @@
     toggleRootEffect,
   } from '../lib/state.svelte';
 
-  // A Counter instance created inside this component.
   const local = new Counter('local');
 
   let lastSnapshot = $state('');
   let preSeen = $state<number[]>([]);
   let tag = $state('');
 
-  // $effect.pre: runs before the DOM updates.
   $effect.pre(() => {
     const count = local.count;
     untrack(() => (preSeen = [...preSeen.slice(-4), count]));

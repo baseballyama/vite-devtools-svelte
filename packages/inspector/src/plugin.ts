@@ -11,7 +11,6 @@ import { mergeOptions, pickOptions, updateSaved, validateSettings } from './sett
 import type { InspectorOptions } from './types.js';
 import { log } from './utils/log.js';
 
-/** name of the inspector plugin that ships inside vite-plugin-svelte */
 const BUILTIN_INSPECTOR_NAME = 'vite-plugin-svelte-inspector';
 /** name of vite-plugin-svelte's config plugin, whose `api.options` holds the resolved options */
 const SVELTE_CONFIG_PLUGIN_NAME = 'vite-plugin-svelte:config';
@@ -27,7 +26,6 @@ function builtinConfigured(plugins: readonly Plugin[]): boolean {
   return api?.options === undefined || Boolean(api.options.inspector);
 }
 
-// vite-devtools-svelte: the inspector lives in the Vite DevTools dock
 /** name of `@vitejs/devtools`' config plugin (the same check as svelteDevtools()) */
 const VITE_DEVTOOLS_PLUGIN = 'vite:devtools';
 const DOCK_MODULE_ID = '\0virtual:vite-devtools-svelte-inspector-dock';
@@ -36,7 +34,6 @@ const OPTIONS_MODULE_ID = 'virtual:vite-devtools-svelte-inspector-options';
 const SVELTE_DOCK_GROUP = 'svelte';
 /** namespace of the saved settings in Vite DevTools, a file in its per-user settings directory */
 const SETTINGS_NAMESPACE = 'svelte-inspector';
-/** the key the settings view saves the changed options under */
 const SAVED_OPTIONS = 'options';
 
 /** the parts of a Vite DevTools settings store (`DevframeSettingsStore`) the inspector uses */
@@ -78,8 +75,6 @@ const action =
 
 /** The directory of the browser runtime the plugin serves, with a trailing `/` */
 export function getInspectorPath(): string {
-  // vite-devtools-svelte: the runtime sits next to this file instead of under
-  // vite-plugin-svelte's `src/plugins/inspector/`.
   const pluginPath = normalizePath(import.meta.dirname);
   return `${pluginPath}/runtime/`;
 }
@@ -91,15 +86,11 @@ export function getInspectorPath(): string {
  * When vite-plugin-svelte's built-in inspector is configured and both would run, the dev
  * server fails to start with an error that says to turn that one off. When only the
  * environment variables switched it on, it is turned off instead.
- *
- * vite-devtools-svelte: options come from the plugin argument instead of
- * vite-plugin-svelte's `inspector` option (see `configResolved`).
  */
 export function svelteInspector(options: InspectorOptions = {}): InspectorPlugin {
   const inspectorPath = getInspectorPath();
   log.debug(`svelte inspector path: ${inspectorPath}`, null, 'inspector');
 
-  /** `__internal` of the served options */
   let internal: NonNullable<InspectorOptions['__internal']> | undefined;
   /** Vite DevTools is installed, so the dock mounts the inspector */
   let dock = false;
@@ -170,10 +161,8 @@ export function svelteInspector(options: InspectorOptions = {}): InspectorPlugin
         log.debug('disabled the built-in inspector of vite-plugin-svelte', null, 'inspector');
       }
 
-      // vite-devtools-svelte: this plugin is always on once it is added, so
-      // `SVELTE_INSPECTOR_OPTIONS=true|false` does not toggle it; an options
-      // object or `SVELTE_INSPECTOR_TOGGLE` still applies as a personal preference.
-      // They come before the saved settings, so reset to defaults keeps them.
+      // `SVELTE_INSPECTOR_OPTIONS=true|false` cannot toggle this always-on plugin; an options
+      // object or `SVELTE_INSPECTOR_TOGGLE` applies before the saved settings, so reset keeps it.
       const { options: fromEnvironment, invalid } = pickOptions(parseEnvironmentOptions(config));
       if (invalid.length > 0) {
         log.warn(
@@ -278,10 +267,8 @@ export function svelteInspector(options: InspectorOptions = {}): InspectorPlugin
         return null;
       },
     },
-    // vite-devtools-svelte: only the virtual modules. Runtime files are read by Vite
-    // itself: it lets through files reached by imports even outside `server.fs.allow`, and its
-    // own read keeps them watched. (Upstream's disk-reading branch never ran: its glob was
-    // `<runtime>//**`.)
+    // Only the virtual modules: Vite reads runtime files itself, which lets through files
+    // reached by imports even outside `server.fs.allow` and keeps them watched.
     load: {
       filter: {
         id: {

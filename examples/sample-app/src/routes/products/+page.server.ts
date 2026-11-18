@@ -10,7 +10,7 @@ const sleep = (ms: number) =>
 export const load: PageServerLoad = async ({ url }) => {
   const category = url.searchParams.get('category') ?? 'all';
 
-  // 意図的な擬似遅延 — Load Profiler のウォーターフォール確認用
+  // Deliberate fake delay, so the load shows up in the Load profiler waterfall
   const [items, categories] = await Promise.all([
     sleep(180).then(() =>
       category === 'all' ? products : products.filter(p => p.category === category),

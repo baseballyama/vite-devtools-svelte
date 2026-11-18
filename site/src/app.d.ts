@@ -3,13 +3,7 @@
 /** Injected by Vite `define` (see vite.config.ts). */
 declare const __PKG_VERSION__: string;
 
-declare namespace App {
-  // interface Error {}
-  // interface Locals {}
-  // interface PageData {}
-  // interface PageState {}
-  // interface Platform {}
-}
+declare namespace App {}
 
 declare module '*.md?raw' {
   const content: string;

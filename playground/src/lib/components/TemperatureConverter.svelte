@@ -15,7 +15,7 @@
   let history = $state<number[]>([]);
 
   $effect(() => {
-    // Track every celsius change (but skip the initial 0)
+    // Skip the initial 0.
     if (celsius !== 0 || history.length > 0) {
       history = [...history.slice(-9), celsius];
     }

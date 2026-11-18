@@ -1,5 +1,5 @@
 /**
- * Dataset change counters (`getVersions`, docs/devframe-migration.md §6.4).
+ * Dataset change counters (`getVersions`).
  * Panels poll this tiny payload and refetch a dataset only when its counter
  * moved. Concurrent panels share one in-flight request (and a result younger
  * than `MAX_AGE`). Feature-detected: without the RPC every tick refetches.

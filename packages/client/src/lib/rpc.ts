@@ -30,10 +30,9 @@ import type {
   LiveComponentsMeta,
 } from './types.js';
 
-// The same SPA runs standalone (`/.svelte-devtools/` on the app's dev
-// server) and inside the Vite DevTools dock. `connectDevframe()` discovers
-// the backend through `./__connection.json` in both cases, so nothing here
-// is host-specific.
+// Runs both standalone and inside the Vite DevTools dock; `connectDevframe()`
+// discovers the backend through `./__connection.json` in both, so nothing
+// here may be host-specific.
 
 const NAMESPACE = 'svelte-devtools';
 
@@ -64,10 +63,8 @@ function setState(next: Partial<ConnectionState>): void {
   syncActivity();
 }
 
-// --- Activity lease ---
 // The injected runtime only polls state / samples FPS while some consumer
-// holds a lease (docs/devframe-migration.md §6.3). This tab holds one while
-// it is connected and visible, renewing well inside the server's 15 s TTL.
+// holds a lease. This tab holds one while it is connected and visible, renewing well inside the server's 15 s TTL.
 
 const HEARTBEAT_INTERVAL = 5_000;
 // Also loaded by unit tests outside a browser.
@@ -104,8 +101,6 @@ if (hasDocument) {
     sendActive(false);
   });
 }
-
-// --- Element picks pushed by the server (server → UI broadcast) ---
 
 const pickListeners = new Set<(pick: ElementPick) => void>();
 
@@ -197,13 +192,11 @@ async function call<T>(method: string, ...args: unknown[]): Promise<T> {
   }
 }
 
-// --- Connection state (for the shell's connection / auth UI) ---
-
 export function getConnectionState(): ConnectionState {
   return state;
 }
 
-/** Subscribe to connection changes; returns an unsubscribe function. Starts connecting. */
+/** Subscribing also starts connecting. */
 export function onConnectionState(cb: (s: ConnectionState) => void): () => void {
   listeners.add(cb);
   cb(state);
@@ -213,23 +206,16 @@ export function onConnectionState(cb: (s: ConnectionState) => void): () => void 
   };
 }
 
-/**
- * Ask the dev server to print the one-time auth code in its terminal.
- * devframe prints each code at most once, so a "print a new code" action must
- * pass `reissue: true` to rotate the code and get it printed again.
- */
+/** devframe prints each code at most once; pass `reissue: true` to rotate it and print again. */
 export async function requestAuthCode(options: { reissue?: boolean } = {}): Promise<void> {
   const c = await getClient();
   await c.requestAuthCode(options.reissue ? { reissue: true } : {});
 }
 
-/** Exchange the code printed in the terminal for a persisted token. */
 export async function submitAuthCode(code: string): Promise<boolean> {
   const c = await getClient();
   return c.requestTrustWithCode(code.trim());
 }
-
-// --- Project / static analysis ---
 
 export function getProject(): Promise<ProjectInfo> {
   return call('get-project');
@@ -286,23 +272,16 @@ export function onElementPicked(cb: (pick: ElementPick) => void): () => void {
   };
 }
 
-// --- Performance ---
-
-/**
- * Reactive graph of one component instance (`componentId`, within the served
- * page load) or, without it, the whole app — built by the runtime within the
- * caps. `total`/`truncated`/`stale` say what the answer covers (§6.7 A).
- */
+/** `total`/`truncated`/`stale` say what the answer covers. */
 export function getReactiveGraph(req?: ReactiveGraphRequest): Promise<ReactiveGraphResult> {
   return req ? call('get-reactive-graph', req) : call('get-reactive-graph');
 }
 
-/** Overview aggregate from runtime counters; never captures the graph (§6.7 I). */
+/** Built from runtime counters; never captures the graph. */
 export function getReactiveSummary(req?: ReactiveSummaryRequest): Promise<ReactiveSummary> {
   return req ? call('get-reactive-summary', req) : call('get-reactive-summary');
 }
 
-/** Captured vs reported counts, truncation and drop reasons per dataset (§6.7 B). */
 export function getCaptureInfo(): Promise<CaptureInfoMap> {
   return call('get-capture-info');
 }
@@ -318,8 +297,6 @@ export function getLoadProfiles(): Promise<LoadProfile[]> {
 export async function clearLoadProfiles(): Promise<void> {
   await call('clear-load-profiles');
 }
-
-// --- Debug ---
 
 export function getStateTimeline(): Promise<StateChange[]> {
   return call('get-state-timeline');
@@ -358,7 +335,6 @@ export async function clearErrors(): Promise<void> {
   await call('clear-errors');
 }
 
-/** A `.svelte` file the Inspect panel can compile. */
 export interface SvelteFileEntry {
   file: string;
   name: string;
@@ -371,8 +347,6 @@ export function getSvelteFiles(): Promise<SvelteFileEntry[]> {
 export function inspectFile(filePath: string): Promise<InspectResult> {
   return call('inspect-file', { file: filePath });
 }
-
-// --- Advanced ---
 
 export function getModuleGraph(): Promise<ModuleGraphData> {
   return call('get-module-graph');

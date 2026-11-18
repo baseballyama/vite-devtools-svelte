@@ -12,17 +12,13 @@ import { DEVFRAME_BASE } from './devframe.js';
 const WILDCARD = new Set(['0.0.0.0', '::']);
 const LOOPBACK = new Set(['127.0.0.1', '::1', 'localhost']);
 
-/** `address` as a URL host: `localhost` for loopback / wildcard bindings, IPv6 bracketed. */
 export function urlHost(address: string): string {
   if (LOOPBACK.has(address) || WILDCARD.has(address)) return 'localhost';
   return address.includes(':') ? `[${address}]` : address;
 }
 
-/**
- * Origins a browser may load the DevTools from when the dev server is
- * reachable beyond loopback (`server.host`). devframe accepts loopback
- * origins by default and rejects every other WS `Origin` unless listed.
- */
+// devframe rejects every non-loopback WS `Origin` unless listed, so a dev
+// server reachable beyond loopback (`server.host`) must list its addresses.
 function networkOrigins(address: AddressInfo, proto: string): string[] {
   if (LOOPBACK.has(address.address)) return [];
   const hosts = WILDCARD.has(address.address)
@@ -34,14 +30,9 @@ function networkOrigins(address: AddressInfo, proto: string): string[] {
   return hosts.map(h => `${proto}://${urlHost(h)}:${address.port}`);
 }
 
-/**
- * Serve the devframe standalone on this dev server: SPA, discovery,
- * WebSocket RPC on Vite's own HTTP server at `<base>__ws`, auth gate.
- *
- * The instance is created per server and closed by *that* server's `close`
- * event, so a restart (which builds the new server before closing the old
- * one) can never tear down the new instance.
- */
+// The instance is closed by *this* server's `close` event, so a restart
+// (which builds the new server before closing the old one) can never tear
+// down the new instance.
 export function mountStandalone(
   server: ViteDevServer,
   def: DevframeDefinition,

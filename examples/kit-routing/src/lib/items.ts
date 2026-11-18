@@ -1,4 +1,3 @@
-// In-memory store shared by the /api/items endpoint and the /items/[id] page.
 export type Item = { id: number; name: string; done: boolean };
 
 export const items: Item[] = [

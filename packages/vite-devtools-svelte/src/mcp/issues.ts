@@ -16,7 +16,6 @@ export interface PerformanceIssue {
   file?: string;
   line?: number;
   metric: Record<string, number>;
-  /** Tool that returns more detail for this issue. */
   suggestedTool: string;
 }
 
@@ -29,10 +28,7 @@ export interface IssueThresholds {
   loadDurationMs?: number;
   /** FPS strictly below which we record a drop. */
   fpsDropThreshold?: number;
-  /**
-   * Dependency count (incoming edges: what the effect reads) at or above
-   * which an effect is over-connected.
-   */
+  /** Dependency count (incoming edges) at or above which an effect is over-connected. */
   effectMaxDeps?: number;
 }
 
@@ -45,9 +41,8 @@ const DEFAULTS: Required<IssueThresholds> = {
 };
 
 /**
- * Thresholds over the defaults. An `undefined` value keeps the default: a
- * plain spread let `{ effectMaxDeps: undefined }` (what get_reactive_graph_problems
- * passes when the argument is omitted) disable the check, as `n >= undefined`
+ * Not a plain spread: `{ effectMaxDeps: undefined }` (what get_reactive_graph_problems
+ * passes when the argument is omitted) would disable the check, as `n >= undefined`
  * is always false.
  */
 function withDefaults(thresholds: IssueThresholds): Required<IssueThresholds> {
@@ -66,7 +61,6 @@ export interface IssueInputs {
   fpsSamples: FpsSample[];
 }
 
-/** `high` from `threshold * high`, `medium` from `threshold * medium`, else `low`. */
 function severity(
   value: number,
   threshold: number,
@@ -165,7 +159,7 @@ function compareSeverity(a: PerformanceIssue, b: PerformanceIssue): number {
   return SEV_RANK[a.severity] - SEV_RANK[b.severity];
 }
 
-/** In / out degree per node over distinct edges (a repeated edge is one dependency). */
+/** A repeated edge counts as one dependency. */
 function degrees(graph: ReactiveGraph): {
   inDegree: Map<string, number>;
   outDegree: Map<string, number>;
@@ -183,7 +177,6 @@ function degrees(graph: ReactiveGraph): {
   return { inDegree, outDegree };
 }
 
-/** Effects with at least `maxDeps` distinct dependencies (incoming edges), in node order. */
 function overconnectedEffects(graph: ReactiveGraph, maxDeps: number): ReactiveProblems['effects'] {
   const { inDegree } = degrees(graph);
   const effects: ReactiveProblems['effects'] = [];
@@ -198,16 +191,9 @@ function overconnectedEffects(graph: ReactiveGraph, maxDeps: number): ReactivePr
 
 export interface ReactiveProblems {
   effects: Array<{ id: string; name: string; file: string; depCount: number }>;
-  /**
-   * `$derived` values nothing has read so far (never evaluated). A derived
-   * read only imperatively (event handler, plain function) is evaluated and
-   * is not listed: having no effect/markup reader is not "unused".
-   */
+  /** Never evaluated so far: a derived read only imperatively is not "unused", so it is not listed. */
   orphanDeriveds: Array<{ id: string; name: string; file: string }>;
-  /**
-   * Nodes without any dependency or tracked reader (markup reads included).
-   * A node depending only on untracked signals (`untrackedDeps`) is not listed.
-   */
+  /** Markup reads count as readers; a node depending only on untracked signals is not listed. */
   isolatedNodes: Array<{ id: string; name: string; type: string; file: string }>;
 }
 

@@ -51,7 +51,6 @@ function insertedHint(code: string, out: string): string {
   return hint;
 }
 
-/** Compile generated code into a function of `window` (executing it is the point). */
 function asFunction(code: string): (window?: unknown) => void {
   // oxlint-disable-next-line typescript/no-implied-eval -- running the generated code under test
   return new Function('window', code) as (window?: unknown) => void;
@@ -72,10 +71,6 @@ const AWKWARD_IDS = [
   '/app/src/lib/</script>.svelte',
   '/app/src/lib/`${tpl}`.svelte',
 ];
-
-// =====================================================================
-// injectComponentTracking (compiled client components)
-// =====================================================================
 
 describe('injectComponentTracking', () => {
   it.each(AWKWARD_IDS)('names the component file %j exactly, as JSON-safe JS', id => {
@@ -166,10 +161,6 @@ describe('injectComponentTracking', () => {
   });
 });
 
-// =====================================================================
-// injectModuleTracking (.svelte.js / .svelte.ts modules)
-// =====================================================================
-
 /** Run a transformed (import-free) module body against a fake window. */
 function runModule(out: string, window?: unknown) {
   expect(out.startsWith(RUNTIME_IMPORT)).toBe(true);
@@ -234,10 +225,6 @@ describe('isSvelteModule', () => {
   });
 });
 
-// =====================================================================
-// Tracking plugin (which modules get which transform)
-// =====================================================================
-
 function plugin(name: string, options = {}, config: Record<string, unknown> = {}): Plugin {
   const plugins = svelteDevtools(options);
   resolvePlugins(plugins, config);
@@ -293,10 +280,6 @@ describe('trackingPlugin transform', () => {
     expect(callHook(tracking(options, config).transform, ...args)).toBeNull();
   });
 });
-
-// =====================================================================
-// Load profiling (SvelteKit load functions): executed, not grepped
-// =====================================================================
 
 const loadProfile = (config = {}) =>
   plugin(

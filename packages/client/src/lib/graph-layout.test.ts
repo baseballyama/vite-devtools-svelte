@@ -56,7 +56,6 @@ function boxAround(boxes: Box[], file: string, x: number): Box | undefined {
   return boxes.find(b => b.componentFile === file && b.x < x && x < b.x + b.w);
 }
 
-/** Pairs of boxes in one column that overlap vertically. */
 function overlappingBoxes(boxes: Box[]): [Box, Box][] {
   return boxes.flatMap((a, i) =>
     boxes

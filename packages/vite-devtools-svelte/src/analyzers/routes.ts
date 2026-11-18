@@ -52,16 +52,14 @@ function scanDirectory(dir: string, rootDir: string, routes: RouteInfo[]): void 
 }
 
 /**
- * SvelteKit's route files. Modules use the default `kit.moduleExtensions`
- * (`.js`, `.ts`). Components may carry a layout reset (`+page@.svelte`,
- * `+page@(group).svelte`, `+layout@item.svelte`, …): those were not
- * recognised before, so a route whose page resets its layout vanished.
+ * Modules use the default `kit.moduleExtensions` (`.js`, `.ts`). Components may
+ * carry a layout reset (`+page@.svelte`, `+page@(group).svelte`, `+layout@item.svelte`).
  */
 export function classifyFile(name: string): RouteFile['type'] | null {
   const dot = name.lastIndexOf('.');
   const ext = name.slice(dot + 1);
   if (!name.startsWith('+') || (ext !== 'svelte' && ext !== 'js' && ext !== 'ts')) return null;
-  let stem = name.slice(1, dot); // `page@(group)`, `layout.server`, …
+  let stem = name.slice(1, dot);
   const server = stem.endsWith('.server');
   if (server) stem = stem.slice(0, -'.server'.length);
   const at = stem.indexOf('@');
@@ -78,12 +76,11 @@ export function classifyFile(name: string): RouteFile['type'] | null {
   if (kind === 'server') return server ? null : 'endpoint';
   if (kind === 'page') return server ? 'page-load-server' : 'page-load';
   if (kind === 'layout') return server ? 'layout-load-server' : 'layout-load';
-  return null; // `+error.js`
+  return null;
 }
 
 /**
- * URL pattern and params of a route id (`/`-separated, relative to
- * the routes directory), following SvelteKit's routing rules:
+ * Follows SvelteKit's routing rules:
  * - `(group)` segments are not part of the URL;
  * - `[p]` → `:p`, `[[p]]` → `:p?`, `[...p]` → `*p`; a `=matcher` goes to
  *   `params[].matcher`, not into the pattern;
@@ -123,10 +120,7 @@ function parseSegment(segment: string, params: ParamInfo[]): string {
   return result + segment.slice(i);
 }
 
-/**
- * Inside brackets: `name` or `...name`, each with an optional `=matcher`.
- * Records the param and returns its pattern; null when `inner` is not one.
- */
+/** `name` or `...name`, each with an optional `=matcher`; null when `inner` is not one. */
 function parseParam(inner: string, optional: boolean, params: ParamInfo[]): string | null {
   const rest = inner.startsWith('...');
   const [name = '', matcher, extra] = inner.slice(rest ? 3 : 0).split('=');
@@ -139,7 +133,6 @@ function parseParam(inner: string, optional: boolean, params: ParamInfo[]): stri
   return rest ? `*${name}` : `:${name}${optional ? '?' : ''}`;
 }
 
-/** The character of an `x+nn` / `u+nnnn` escape, or null when `inner` is not one. */
 function decodeEscape(inner: string): string | null {
   const prefix = inner.slice(0, 2).toLowerCase();
   const hex = inner.slice(2);

@@ -120,7 +120,6 @@ describe('Components: live tree', () => {
     const aside = screen.getByRole('complementary', { name: '<Page> details' });
     expect(within(aside).getByText('mounted')).toBeTruthy();
     expect(within(aside).getByText('#3')).toBeTruthy();
-    // Ancestors breadcrumb.
     expect(within(aside).getByRole('button', { name: 'App' })).toBeTruthy();
     expect(within(aside).getByRole('button', { name: 'Layout' })).toBeTruthy();
     // Children and static imports (relations load once something is selected).
@@ -132,7 +131,6 @@ describe('Components: live tree', () => {
     await userEvent.click(within(aside).getByRole('button', { name: 'Open in editor' }));
     expect(rpc.openInEditor).toHaveBeenLastCalledWith('src/routes/+page.svelte');
 
-    // Reveal an ancestor from the breadcrumb.
     await userEvent.click(within(aside).getByRole('button', { name: 'Layout' }));
     await settle();
     expect(row('Layout').getAttribute('aria-selected')).toBe('true');

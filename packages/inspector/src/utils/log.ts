@@ -1,4 +1,4 @@
-// vite-devtools-svelte: a reduced copy of vite-plugin-svelte's `src/utils/log.js`
+// A reduced copy of vite-plugin-svelte's `src/utils/log.js`
 // with only what the inspector plugin calls (`debug`, `warn`).
 
 import { createDebug } from 'obug';

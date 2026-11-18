@@ -3,14 +3,9 @@
 
   import { persisted } from '../lib/persisted.svelte.js';
 
-  /**
-   * Main content + resizable side pane. Side-by-side when wide; stacks the
-   * side pane below the main content in narrow containers (the DevTools dock
-   * is often a short, wide strip or a tall, thin column).
-   */
+  /** Stacks in narrow containers: the DevTools dock is often a short, wide strip or a tall, thin column. */
   interface Props {
     id: string;
-    /** Whether the side pane is shown. */
     open?: boolean;
     initial?: number;
     min?: number;

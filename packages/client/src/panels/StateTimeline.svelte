@@ -18,14 +18,13 @@
   import type { StateChange, StateTimelineEntry } from '../lib/types.js';
   import { datasetVersion } from '../lib/versions.js';
 
-  /** Mirrors the server buffer (docs/devframe-migration.md §6.4). */
+  /** Mirrors the server buffer. */
   const MAX_ENTRIES = 500;
 
-  // Cursor-based pulls: the server answers from its own buffer (never pulls
-  // the app) and only sends entries after `cursor`; for a cursor it cannot
-  // continue (a clear, an evicted page load, a restart) it answers with the
-  // whole buffer and `reset`. The fetcher returns the same array when nothing
-  // arrived, so the resource skips re-deriving without serialising the buffer.
+  // The server answers from its own buffer (never pulls the app); for a cursor
+  // it cannot continue (clear, evicted page load, restart) it sends the whole
+  // buffer with `reset`. The fetcher returns the same array when
+  // nothing arrived, so the resource skips re-deriving.
   let cursor: number | undefined;
   let buffer: StateTimelineEntry[] = [];
 
@@ -70,7 +69,6 @@
     return p;
   }
 
-  /** Newest first, filtered. */
   const entries = $derived.by(() => {
     const m = haystackMatcher(query);
     const newest = timeline.data.toReversed();

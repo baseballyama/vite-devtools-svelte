@@ -26,7 +26,7 @@ const MARKERS = [
   'virtual:svelte-devtools',
   '__svelte_devtools_record_load',
   '@vitejs/devtools/client/inject',
-  // hub inject used by the SvelteKit template injector since fp 63
+  // hub inject used by the SvelteKit template injector
   '/__devtools/embedded.js',
   '__devtools',
 ];
@@ -96,12 +96,10 @@ async function devMarkers() {
   }
 }
 
-// Fixture hygiene: any marker in the *generated sources* would make a prod
-// hit ambiguous (fixture vs. plugin leak). Fail separately (exit 3) so the
-// production scan below can only be explained by plugin-emitted code.
-// Known trap: concatenations like '__SVELTE_' + 'DEVTOOLS__' are folded back
-// into the marker by the minifier — this check covers literals, the fixture
-// code avoids foldable forms (see generate-large-app.mjs).
+// A marker in the generated sources would make a prod hit ambiguous (fixture
+// vs. plugin leak), so it fails separately (exit 3). Only literals are checked:
+// the minifier folds '__SVELTE_' + 'DEVTOOLS__' back into the marker, so the
+// fixture avoids foldable forms (see generate-large-app.mjs).
 function fixtureHits() {
   const hits = [];
   const walk = d => {

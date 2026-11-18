@@ -1,11 +1,5 @@
-/**
- * Dev-only synthetic backend: every `svelte-devtools:*` RPC answered with
- * large, deterministic data so the client UI can be developed and
- * stress-tested without a SvelteKit app. Transport-agnostic — see
- * `vite.mock.config.ts` for how it is mounted (devframe WS or legacy HTTP).
- *
- * Never bundled: only `dev/vite.mock.config.ts` imports it.
- */
+// Large, deterministic data so the client UI can be stress-tested without a
+// SvelteKit app. Never bundled: only `dev/vite.mock.config.ts` imports it.
 import { compile } from 'svelte/compiler';
 
 import type {
@@ -39,7 +33,6 @@ export const MOCK_API_BASE = '/__mock-api';
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-/** Echo side-effect RPCs (open-in-editor, …) to the dev server terminal. */
 function log(...args: unknown[]): void {
   // oxlint-disable-next-line no-console -- the dev server terminal is this mock's only output for side-effect calls
   console.log('[mock]', ...args);
@@ -50,7 +43,6 @@ export function createMockBackend(scale = 5000) {
   const pick = <T>(a: readonly T[]) => a.at(Math.floor(r() * a.length))!;
   const root = '/Users/dev/acme-store';
 
-  // ---- component files & relations
   const fileCount = Math.max(40, Math.round(scale / 4));
   const files: { file: string; name: string }[] = [];
   const used = new Set<string>();
@@ -74,7 +66,6 @@ export function createMockBackend(scale = 5000) {
     ).filter((v, j, a) => a.indexOf(v) === j && v !== f.file),
   }));
 
-  // ---- live instance tree (wide + deep), mutated on every poll
   let nextId = 1;
   let live: ComponentInstance[] = [];
   const grow = (parentId: number | null, depth: number) => {
@@ -89,7 +80,6 @@ export function createMockBackend(scale = 5000) {
   while (live.length < scale) grow(null, 0);
 
   function churn() {
-    // Unmount a few leaves, mount a few new ones under random parents.
     const n = Math.max(1, Math.round(scale * 0.002));
     const parents = new Set(live.map(c => c.parentId));
     const leaves = live.filter(c => !parents.has(c.id));
@@ -102,7 +92,6 @@ export function createMockBackend(scale = 5000) {
     }
   }
 
-  // ---- routes (nested, with params / groups)
   const routes: RouteInfo[] = [
     {
       id: '/',
@@ -181,7 +170,6 @@ export function createMockBackend(scale = 5000) {
     });
   }
 
-  // ---- modules (with a few cycles)
   const modCount = Math.max(200, Math.round(scale * 1.2));
   const types: ModuleNode['type'][] = ['svelte', 'ts', 'ts', 'js', 'css', 'other'];
   const modules: ModuleNode[] = [];
@@ -221,7 +209,6 @@ export function createMockBackend(scale = 5000) {
     cycles.push([a.id, b.id, d.id, a.id]);
   }
 
-  // ---- assets
   const assetTypes = [
     ['png', 'image/png'],
     ['svg', 'image/svg+xml'],
@@ -245,7 +232,6 @@ export function createMockBackend(scale = 5000) {
     };
   });
 
-  // ---- reactive graph
   const rnodes: ReactiveGraph['nodes'] = [];
   const redges: ReactiveGraph['edges'] = [];
   // MOCK_GRAPH_SCALE=N: grow the graph to ≥ N signals (e.g. 2500 to exercise
@@ -277,8 +263,7 @@ export function createMockBackend(scale = 5000) {
     }
   }
 
-  // ---- misc
-  // Server-side ring with monotonically increasing `seq` (collector §6.4).
+  // Server-side ring with monotonically increasing `seq`.
   let timeline: (StateChange & { seq: number })[] = [];
   let seq = 0;
   const stateNodes = rnodes.filter(x => x.type === 'state');
@@ -490,7 +475,7 @@ export function createMockBackend(scale = 5000) {
     'svelte-devtools:get-component-relations': () => relations,
     'svelte-devtools:get-live-components': () => headCapped(live),
     'svelte-devtools:get-render-profiles': () => capped(profiles()),
-    // §6.7 A: scoped to one instance (its nodes + direct neighbours) or the
+    // scoped to one instance (its nodes + direct neighbours) or the
     // whole app within maxNodes / maxEdges, with totals and truncation.
     'svelte-devtools:get-reactive-graph': (args?: {
       componentId?: number;
@@ -528,7 +513,7 @@ export function createMockBackend(scale = 5000) {
         computedAt: Date.now(),
       };
     },
-    // §6.7 I: per-instance counters over a window, top-K + the rest as `other`.
+    // per-instance counters over a window, top-K + the rest as `other`.
     'svelte-devtools:get-reactive-summary': (args?: { topK?: number; windowMs?: number }) => {
       const topK = args?.topK ?? 50;
       const windowMs = args?.windowMs ?? 10000;
@@ -644,7 +629,6 @@ export function createMockBackend(scale = 5000) {
   return handlers;
 }
 
-/** Placeholder image served for every mock asset URL. */
 export const MOCK_ASSET_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"><rect width="100%" height="100%" fill="#ff3e00"/><text x="50%" y="55%" font-size="28" text-anchor="middle" fill="#fff" font-family="sans-serif">mock asset</text></svg>';
 

@@ -248,7 +248,7 @@ export default defineConfig({
     padding: 1.4rem 1.6rem;
   }
 
-  /* Same look as the old h4 label; h2 keeps the heading order under the page h1. */
+  /* h2 keeps the heading order under the page h1. */
   .req-title {
     margin: 0 0 1rem;
     font-family: var(--font-mono);

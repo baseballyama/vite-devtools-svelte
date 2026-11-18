@@ -1,5 +1,3 @@
-// Re-export all types from the server-side types module (single source of truth).
-// This avoids type duplication between server and client.
 export type {
   RouteInfo,
   RouteFile,

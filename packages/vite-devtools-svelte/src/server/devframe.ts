@@ -31,9 +31,8 @@ import type { Collector } from './collector.js';
 import { resolveWithinRoot } from './security.js';
 
 export const DEVFRAME_ID = 'svelte-devtools';
-/** Mount base for both hosts (standalone and Vite DevTools), so the SPA URL never changes. */
+/** Same base for both hosts (standalone and Vite DevTools), so the SPA URL never changes. */
 export const DEVFRAME_BASE = '/.svelte-devtools/';
-/** Client RPC (server → DevTools UI) announcing an element picked on the app page. */
 export const PICK_BROADCAST = 'element-picked';
 
 // Self-reference by name: resolves to this package's root both from the
@@ -48,40 +47,25 @@ const pkg = require(pkgJsonPath) as {
 };
 const clientAssets = path.join(path.dirname(pkgJsonPath), 'dist/client');
 
-/**
- * Everything the portable devframe needs from whatever hosts it. The Vite
- * plugin implements this over its dev server; tests implement it directly.
- * Getters are lazy because the host resolves config after construction.
- */
+// Getters are lazy because the host resolves config after construction.
 export interface SvelteDevtoolsHost {
   collector: Collector;
-  /** Absolute project root. */
   root: () => string;
-  /** SvelteKit's routes directory; `undefined` without SvelteKit (no routes). */
   routesDir: () => string | undefined;
-  /** Public base the dev server serves the app (and static files) under. */
   publicBase: () => string;
-  /** Every module the dev server currently knows about, across environments. */
   modules: () => GraphModuleLike[];
-  /** Compile a project file through the dev server's pipeline (absent without a server). */
   transformRequest?: (file: string) => Promise<{
     code: string;
     map?: { mappings?: string; sources?: string[] } | string | null;
   } | null>;
-  /**
-   * Resolve an import the way the app's server code does (aliases such as
-   * `$lib` included); absent without a server.
-   */
   resolveFile?: ResolveFile;
-  /** Origins the dev server itself is reachable at (the OG preview may call them). */
+  /** The OG preview may call these. */
   serverOrigins: () => string[];
-  /** Open `file[:line]` in the user's editor. */
   openInEditor: (target: string) => void;
 }
 
 const filePath = z.string().min(1).max(4096);
 
-/** A JSON-serializable RPC function without arguments. */
 function plain<N extends string, R>(type: 'query' | 'action', name: N, handler: () => R) {
   return defineRpcFunction({ name, type, jsonSerializable: true, handler });
 }
@@ -154,8 +138,7 @@ export function createRpcFunctions(host: SvelteDevtoolsHost) {
       name: 'get-reactive-graph',
       type: 'query',
       jsonSerializable: true,
-      // Omitted = whole app (older clients). Scoped requests are built by the
-      // runtime within the caps (docs/devframe-migration.md §6.7 A).
+      // Omitted by older clients: whole app.
       args: [
         z
           .object({
@@ -173,7 +156,7 @@ export function createRpcFunctions(host: SvelteDevtoolsHost) {
       name: 'get-reactive-summary',
       type: 'query',
       jsonSerializable: true,
-      // Overview aggregate from runtime counters; never captures the graph (§6.7 I).
+      // Aggregated from runtime counters; never captures the graph.
       args: [
         z
           .object({
@@ -229,7 +212,6 @@ export function createRpcFunctions(host: SvelteDevtoolsHost) {
   ] as const;
 }
 
-/** A project file's source and its compiled output (with source map) from the dev server. */
 async function inspectFile(host: SvelteDevtoolsHost, file: string): Promise<InspectResult> {
   let resolved: string;
   let source: string;
@@ -255,12 +237,6 @@ async function inspectFile(host: SvelteDevtoolsHost, file: string): Promise<Insp
   }
 }
 
-/**
- * The portable Svelte DevTools tool. Host-agnostic: the same definition is
- * mounted standalone (`initDevframe`) or inside Vite DevTools
- * (`createPluginFromDevframe`); the SPA in `dist/client` connects with
- * `connectDevframe()` either way.
- */
 export function createSvelteDevframe(host: SvelteDevtoolsHost): DevframeDefinition {
   // A host may run setup again (dev-server restart): one picker subscription at a time.
   let detachPicker: (() => void) | undefined;
@@ -288,14 +264,12 @@ export function createSvelteDevframe(host: SvelteDevtoolsHost): DevframeDefiniti
         void scoped.rpc
           .broadcast({ method: PICK_BROADCAST, args: [pick], event: true, optional: true })
           .catch(() => {});
-        // inside the Vite DevTools dock: show the Svelte panel
         docks?.activate?.(DEVFRAME_ID);
       });
     },
   });
 }
 
-/** The `mappings` / `sources` of a transform's source map (object or JSON string). */
 function parseSourceMap(
   map: { mappings?: string; sources?: string[] } | string | null | undefined,
 ): { mappings?: string; sources?: string[] } | undefined {

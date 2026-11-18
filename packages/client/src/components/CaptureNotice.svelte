@@ -3,11 +3,8 @@
   import Icon from './Icon.svelte';
 
   /**
-   * Disclosure pill for bounded data (docs/devframe-migration.md §6.7 B):
-   * "Showing N of M" when the server's capture cut items (M may be unknown),
-   * entries dropped before they were stored, and `stale` when the app did not
-   * answer and an earlier reply is shown. `detached` reports a UI-side symptom
-   * (tree nodes whose parent fell outside the capture).
+   * The total M may be unknown. `detached` is a UI-side symptom: tree nodes
+   * whose parent fell outside the capture.
    */
   let {
     info,

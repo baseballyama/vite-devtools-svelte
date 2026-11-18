@@ -92,7 +92,6 @@ ${children}
 }
 
 function routeSegments(i, rand) {
-  // Mix of static, nested, dynamic, optional, rest and grouped segments.
   const kind = i % 10;
   const base = `section-${Math.floor(i / 10)}`;
   switch (kind) {
@@ -115,12 +114,9 @@ function routeSegments(i, rand) {
   }
 }
 
-// Major version of the @sveltejs/kit that resolves from `dir` (playground's,
-// for anything under playground/). The fixture follows it so that a checkout
-// from before the Kit 3 move still generates the Kit 2 shape it was measured
-// with: Kit 2 reads svelte.config.js and `$lib`; Kit 3 takes its config from
-// the Vite plugin and uses the `#lib` subpath import. Run-paired refuses
-// B/F pairs whose fixture sources differ, so the two shapes never mix.
+// The fixture follows the Kit major that resolves from `dir`, so an older
+// checkout still generates the Kit 2 shape it was measured with. Run-paired
+// refuses B/F pairs whose fixture sources differ, so the two shapes never mix.
 function kitMajor(dir) {
   for (let d = path.resolve(dir); ; d = path.dirname(d)) {
     const file = path.join(d, 'node_modules/@sveltejs/kit/package.json');
@@ -135,13 +131,11 @@ function kitMajor(dir) {
   }
 }
 
-// Fixture shape for the Kit that resolves from `dir`.
 export function kitShape(dir) {
   return kitMajor(dir) >= 3 ? 'kit3' : 'kit2';
 }
 
-// Shape of an existing fixture in `out` (null: none), to detect one generated
-// for another Kit major.
+// Detects a fixture generated for another Kit major (null: none).
 export function fixtureShape(out) {
   if (!fs.existsSync(path.join(out, 'package.json'))) return null;
   return fs.existsSync(path.join(out, 'svelte.config.js')) ? 'kit2' : 'kit3';
@@ -283,7 +277,6 @@ export const params = defineParams({
     );
   }
 
-  // --- generated components with a sparse DAG import graph (j > i only) ---
   const compDir = path.join(out, 'src/lib/components/gen');
   for (let i = 0; i < opts.components; i++) {
     const imports = [];
@@ -295,7 +288,6 @@ export const params = defineParams({
     write(path.join(compDir, `C${pad(i)}.svelte`), componentSource(i, imports));
   }
 
-  // --- bench components ---
   write(
     path.join(out, 'src/lib/bench/Row.svelte'),
     `<script lang="ts">
@@ -458,7 +450,6 @@ export const params = defineParams({
 `,
   );
 
-  // --- routes ---
   for (let i = 0; i < opts.routes; i++) {
     const segs = routeSegments(i, rand);
     const dir = path.join(out, 'src/routes', ...segs);
@@ -503,7 +494,6 @@ export async function POST({ request }) {
     }
   }
 
-  // --- static assets ---
   const exts = ['svg', 'json', 'txt', 'css', 'png'];
   for (let i = 0; i < opts.assets; i++) {
     const ext = exts[i % exts.length];

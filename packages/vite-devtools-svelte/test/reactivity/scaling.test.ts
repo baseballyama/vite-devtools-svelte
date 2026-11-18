@@ -6,7 +6,7 @@ import { render, instances, graph, type Graph } from './harness.js';
 
 // Every row holds a proxy with the same name ('local') and reads its parent's
 // 'rows' (same values in every row): resolving each read must not scan all
-// same-named nodes (that was O(rows^2) for a global graph). Work is counted
+// same-named nodes (O(rows^2) for a global graph). Work is counted
 // as visited elements (deterministic), not wall-clock time.
 function build(n: number) {
   const r = render(BigList, { n });

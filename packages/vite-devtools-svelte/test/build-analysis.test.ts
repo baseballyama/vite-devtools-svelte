@@ -2,7 +2,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-/** Build output scan over generated temp roots (one per test: no shared state). */
 import { describe, it, expect, afterAll, vi, afterEach } from 'vitest';
 
 import { analyzeBuild } from '../src/analyzers/build.js';

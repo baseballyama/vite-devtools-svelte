@@ -66,7 +66,6 @@
     document.title = `${panelById(id).label} · Svelte DevTools`;
   });
 
-  // An element picked on the app page opens its instance in Components.
   $effect(() =>
     onElementPicked(pick => {
       elementPick.set(pick);
@@ -163,7 +162,6 @@
         search.select();
       }
     } else if (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
-      // Alt+↑/↓ steps through panels without touching the mouse.
       e.preventDefault();
       const down = e.key === 'ArrowDown';
       // From a panel that is not listed (yet), ↓ starts at the top, ↑ at the bottom.
@@ -440,7 +438,6 @@
     border-top: 1px solid var(--border);
   }
 
-  /* Icon rail */
   .collapsed .nav-text,
   .collapsed .brand-name,
   .collapsed .group-label {
