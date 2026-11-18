@@ -22,8 +22,6 @@ export interface ResourceOptions<T> {
   initial: T;
   /** Poll interval in ms. Omit for load-once resources. */
   interval?: number;
-  /** Start with polling paused (user can resume via `live = true`). */
-  paused?: boolean;
   /** Extra gate (reactive): only load/poll while this returns true. */
   when?: () => boolean;
   /**
@@ -47,9 +45,6 @@ export interface Resource<T> {
   readonly loading: boolean;
   /** True while data is being fetched (not while a poll only checks `version`). */
   readonly busy: boolean;
-  readonly updatedAt: number | null;
-  /** Whether interval polling is enabled (user-togglable). */
-  live: boolean;
   /**
    * Fetch now (bypasses the version check). An in-flight request's answer is
    * dropped and a new request follows it.
@@ -74,8 +69,6 @@ export function resource<T>(fetcher: () => Promise<T>, opts: ResourceOptions<T>)
   let error = $state<string | null>(null);
   let loading = $state(true);
   let busy = $state(false);
-  let updatedAt = $state<number | null>(null);
-  let live = $state(!opts.paused);
   let inflight: Promise<void> | null = null;
   // Serialised form of the current data, kept so each tick costs a single
   // O(payload) pass (the new payload) instead of re-serialising both sides.
@@ -123,7 +116,6 @@ export function resource<T>(fetcher: () => Promise<T>, opts: ResourceOptions<T>)
           }
         }
         error = null;
-        updatedAt = Date.now();
       } catch (e) {
         if (started === generation) error = errorMessage(e);
         else stale = true;
@@ -155,7 +147,7 @@ export function resource<T>(fetcher: () => Promise<T>, opts: ResourceOptions<T>)
     if (isActive() && (!opts.when || opts.when())) {
       // `load` settles every failure into `error`, so it never rejects.
       untrack(() => void load(false));
-      if (opts.interval && live) stop = startPolling(opts.interval);
+      if (opts.interval) stop = startPolling(opts.interval);
     }
     return () => stop?.();
   });
@@ -172,15 +164,6 @@ export function resource<T>(fetcher: () => Promise<T>, opts: ResourceOptions<T>)
     },
     get busy() {
       return busy;
-    },
-    get updatedAt() {
-      return updatedAt;
-    },
-    get live() {
-      return live;
-    },
-    set live(v: boolean) {
-      live = v;
     },
     refresh,
     set(next: T) {

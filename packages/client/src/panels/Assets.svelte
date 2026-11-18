@@ -103,7 +103,7 @@
   }
 </script>
 
-<Panel title="Assets" count={assets.data.length}>
+<Panel title="Assets">
   {#snippet toolbar()}
     <Segmented label="Asset type" bind:value={cat} options={catOptions} />
     <SearchField bind:value={query} placeholder="Filter assets…" count={rows.length} />

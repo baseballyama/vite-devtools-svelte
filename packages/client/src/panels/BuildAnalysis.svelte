@@ -81,7 +81,7 @@
   ];
 </script>
 
-<Panel title="Build" count={chunks.length}>
+<Panel title="Build">
   {#snippet toolbar()}
     <Segmented
       label="Chunk type"

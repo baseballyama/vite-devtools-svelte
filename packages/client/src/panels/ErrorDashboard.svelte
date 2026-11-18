@@ -5,7 +5,6 @@
   import Highlight from '../components/Highlight.svelte';
   import Icon from '../components/Icon.svelte';
   import Inspector from '../components/Inspector.svelte';
-  import LiveControls from '../components/LiveControls.svelte';
   import Panel from '../components/Panel.svelte';
   import ResourceEmpty from '../components/ResourceEmpty.svelte';
   import SearchField from '../components/SearchField.svelte';
@@ -100,7 +99,7 @@
       : '';
 </script>
 
-<Panel title="Problems" count={all.length}>
+<Panel title="Problems">
   {#snippet toolbar()}
     <Segmented
       label="Severity"
@@ -131,7 +130,7 @@
     {/each}
   {/snippet}
   {#snippet actions()}
-    <LiveControls res={problems} onclear={clear} />
+    <Button icon="trash" variant="ghost" label="Clear recorded data" onclick={clear} />
   {/snippet}
 
   <SplitView id="problems" open={!!current}>

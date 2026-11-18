@@ -11,8 +11,8 @@ import EmptyState from './EmptyState.svelte';
 import Highlight from './Highlight.svelte';
 import Icon from './Icon.svelte';
 import Inspector from './Inspector.svelte';
-import LiveControls from './LiveControls.svelte';
 import Panel from './Panel.svelte';
+import RefreshButton from './RefreshButton.svelte';
 
 const html = (markup: string) => createRawSnippet(() => ({ render: () => markup }));
 
@@ -114,29 +114,26 @@ describe('EmptyState', () => {
 });
 
 describe('Panel', () => {
-  it('is a labelled region with a heading, count, toolbar and actions', () => {
+  it('is a labelled region with a heading, toolbar and actions', () => {
     render(Panel, {
       title: 'Routes',
-      count: 12,
       toolbar: html('<input aria-label="Filter routes">'),
       actions: html('<button type="button">Refresh</button>'),
       children: html('<p>Body</p>'),
     });
     const region = screen.getByRole('region', { name: 'Routes' });
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('Routes');
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('12');
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Routes');
     expect(region.contains(screen.getByRole('textbox', { name: 'Filter routes' }))).toBe(true);
     expect(screen.getByRole('button', { name: 'Refresh' })).toBeTruthy();
     expect(screen.getByText('Body').closest('.body')!.classList.contains('scroll')).toBe(false);
   });
 
-  it('omits the count, toolbar and actions when not given', () => {
+  it('omits the toolbar and actions when not given', () => {
     const { container } = render(Panel, {
       title: 'Empty',
       scroll: true,
       children: html('<p>Body</p>'),
     });
-    expect(container.querySelector('.count')).toBeNull();
     expect(container.querySelector('.toolbar')).toBeNull();
     expect(container.querySelector('.actions')).toBeNull();
     expect(screen.getByText('Body').closest('.body')!.classList.contains('scroll')).toBe(true);
@@ -305,51 +302,16 @@ describe('CaptureNotice', () => {
   });
 });
 
-describe('LiveControls', () => {
-  it('toggles live updates and refreshes on demand', async () => {
-    const res = fakeResource([], { updatedAt: Date.now() });
-    render(LiveControls, { res });
-    const live = screen.getByRole('button', { name: 'Live' });
-    expect(live.getAttribute('type')).toBe('button');
-    expect(live.getAttribute('aria-pressed')).toBe('true');
-    await fireEvent.click(live);
-    expect(res.live).toBe(false);
-    expect(live.textContent.trim()).toBe('Paused');
-    expect(live.getAttribute('aria-pressed')).toBe('false');
-    await fireEvent.click(live);
-    expect(res.live).toBe(true);
-
-    await fireEvent.click(screen.getByRole('button', { name: /^Refresh \(updated / }));
-    expect(res.refresh).toHaveBeenCalledOnce();
-    // Nothing to clear without a handler.
-    expect(screen.queryByRole('button', { name: 'Clear recorded data' })).toBeNull();
-  });
-
-  it('disables refresh while busy and offers clearing', async () => {
+describe('RefreshButton', () => {
+  it('refreshes on click and is disabled while busy', async () => {
     const res = fakeResource([], { busy: true });
-    const onclear = vi.fn();
-    render(LiveControls, { res, onclear });
-    const refresh = screen.getByRole('button', { name: /^Refresh/ });
+    render(RefreshButton, { res, label: 'Rescan' });
+    const refresh = screen.getByRole('button', { name: 'Rescan' });
     expect(refresh.hasAttribute('disabled')).toBe(true);
     res.busy = false;
     flushSync();
     expect(refresh.hasAttribute('disabled')).toBe(false);
-    await fireEvent.click(screen.getByRole('button', { name: 'Clear recorded data' }));
-    expect(onclear).toHaveBeenCalledOnce();
-  });
-
-  it('ages the "updated" label over time', () => {
-    vi.useFakeTimers();
-    try {
-      const res = fakeResource([], { updatedAt: Date.now() });
-      render(LiveControls, { res });
-      const before = screen.getByRole('button', { name: /^Refresh/ }).getAttribute('aria-label');
-      vi.advanceTimersByTime(120_000);
-      flushSync();
-      const after = screen.getByRole('button', { name: /^Refresh/ }).getAttribute('aria-label');
-      expect(after).not.toBe(before);
-    } finally {
-      vi.useRealTimers();
-    }
+    await fireEvent.click(refresh);
+    expect(res.refresh).toHaveBeenCalledOnce();
   });
 });

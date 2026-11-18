@@ -13,7 +13,7 @@ import type {
   ReactiveSummaryRow,
   StateTimelineEntry,
 } from '../lib/types.js';
-import { layout, settle } from '../test/dom.js';
+import { fakePollClock, layout, nextPoll, settle } from '../test/dom.js';
 import { emptyGraph, emptySummary } from '../test/fake-rpc.js';
 import ReactiveGraph from './ReactiveGraph.svelte';
 
@@ -111,7 +111,6 @@ const byText = (a = '', b = '') => a.localeCompare(b);
 
 /** Page text with whitespace collapsed (markup wraps text across lines). */
 const text = () => (document.body.textContent ?? '').replaceAll(/\s+/g, ' ');
-const panelHeading = () => screen.getByRole('heading', { level: 1 });
 const radio = (group: string, name: string | RegExp) =>
   within(screen.getByRole('radiogroup', { name: group })).getByRole('radio', { name });
 const options = (list: string) =>
@@ -187,7 +186,6 @@ describe('ReactiveGraph: components overview', () => {
     await settle();
     expect(rpc.getReactiveSummary).toHaveBeenCalledWith({ topK: 50, windowMs: 10000 });
     expect(rpc.getReactiveGraph).not.toHaveBeenCalled();
-    expect(panelHeading().textContent).toContain('3');
     // one short line; coverage and capability details stay in the MCP answer
     expect(text()).toMatch(/3 components · 3 active\s+in the last 10 s/);
     expect(text()).not.toMatch(/Window|Coverage|Not available yet/);
@@ -330,7 +328,6 @@ describe('ReactiveGraph: states overview', () => {
     });
     await states();
     expect(rpc.getStateTimelineDelta).toHaveBeenCalledWith(undefined);
-    expect(panelHeading().textContent).toContain('2');
     const rows = options('Most changed states in the timeline buffer');
     expect(rows.map(r => r.querySelector('.name')?.textContent)).toEqual(['count', 'loose']);
     expect(rows[0]!.textContent).toContain('≥ 2');
@@ -397,13 +394,13 @@ describe('ReactiveGraph: states overview', () => {
   });
 
   it('shows an empty buffer and a failing timeline', async () => {
+    fakePollClock();
     await states();
     expect(screen.getByText('No $state changes in the buffer')).toBeTruthy();
     expect(screen.getByText(/since\s+unknown \(buffer empty\)/)).toBeTruthy();
 
     vi.mocked(rpc.getStateTimelineDelta).mockRejectedValue(new Error('timeline down'));
-    await userEvent.click(screen.getByRole('button', { name: /^Refresh/ }));
-    await settle();
+    await nextPoll(2000);
     expect(screen.getByText('State timeline not available')).toBeTruthy();
     expect(text()).toContain('timeline down');
   });
@@ -446,7 +443,6 @@ describe('ReactiveGraph: component scope', () => {
       maxNodes: 5000,
       maxEdges: 20000,
     });
-    expect(panelHeading().textContent).toContain('7');
     expect(screen.getByText(/<Counter>/, { selector: 'strong' })).toBeTruthy();
     expect(text()).toContain('2 edges to signals outside the loaded set are not shown.');
     expect(text()).toMatch(/Built \d\d:\d\d:\d\d/);
@@ -551,11 +547,11 @@ describe('ReactiveGraph: component scope', () => {
   });
 
   it('flashes values that changed since the last poll', async () => {
+    fakePollClock();
     await scoped();
     expect(document.querySelector('.flash')).toBeNull();
     counterValue = 2;
-    await userEvent.click(screen.getByRole('button', { name: /^Refresh/ }));
-    await settle();
+    await nextPoll(5000);
     const count = signals().find(r => r.textContent?.includes('count'))!;
     expect(count.querySelector('.name.flash')).toBeTruthy();
     expect(count.querySelector('.value')?.textContent).toBe('2');
@@ -631,7 +627,8 @@ describe('ReactiveGraph: full graph', () => {
     expect(radio('Layout', 'List').getAttribute('aria-checked')).toBe('true');
   });
 
-  it('pauses auto-refresh for very large graphs and discloses the cap', async () => {
+  it('keeps polling very large graphs and discloses the cap', async () => {
+    fakePollClock();
     vi.mocked(rpc.getReactiveGraph).mockImplementation(req =>
       Promise.resolve(
         graph(req, {
@@ -645,15 +642,12 @@ describe('ReactiveGraph: full graph', () => {
       ),
     );
     await full();
-    expect(screen.getByText(/Paused: 2,001 of 9,000 signals/)).toBeTruthy();
-    const live = screen.getByRole('button', { name: /Paused/ });
-    expect(live.getAttribute('aria-pressed')).toBe('false');
     const notice = screen.getAllByRole('status').map(s => s.textContent);
     expect(notice.some(t => /Showing\s+global-head\s+2,001\s+of\s+9,000.*stale/s.test(t))).toBe(
       true,
     );
-    // Resuming is respected.
-    await userEvent.click(live);
-    expect(screen.queryByText(/Paused: 2,001/)).toBeNull();
+    const calls = vi.mocked(rpc.getReactiveGraph).mock.calls.length;
+    await nextPoll(5000);
+    expect(vi.mocked(rpc.getReactiveGraph).mock.calls.length).toBeGreaterThan(calls);
   });
 });

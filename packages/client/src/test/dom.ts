@@ -2,12 +2,16 @@
  * Layout stand-ins for happy-dom, which computes no layout: every element
  * reports a 0 × 0 box unless a test says otherwise.
  */
-import { afterEach } from 'vitest';
+import { afterEach, vi } from 'vitest';
+
+import * as rpc from '../lib/rpc.js';
+import { versions } from './fake-rpc.js';
 
 const restores: (() => void)[] = [];
 
 afterEach(() => {
   for (const restore of restores.splice(0).toReversed()) restore();
+  vi.useRealTimers();
 });
 
 function stubGetter(proto: object, prop: string, get: (this: HTMLElement) => number): void {
@@ -67,4 +71,30 @@ export async function settle(): Promise<void> {
     });
     await tick();
   }
+}
+
+/**
+ * Fake the poll clock (`setInterval` and `Date`) for the rest of the test so
+ * `nextPoll` can step a panel to its next poll. `setTimeout` stays real, so
+ * `settle` still works. Call before rendering; real timers come back after each test.
+ */
+export function fakePollClock(): void {
+  vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+}
+
+let pollStep = 0;
+
+/**
+ * Run the next poll of a panel that polls every `interval` ms (after
+ * `fakePollClock`), with every dataset counter moved so the poll refetches,
+ * and let its answer render.
+ */
+export async function nextPoll(interval: number): Promise<void> {
+  pollStep++;
+  const moved = Object.fromEntries(
+    Object.keys(versions).map(k => [k, pollStep]),
+  ) as unknown as typeof versions;
+  vi.mocked(rpc.getVersions).mockResolvedValue(moved);
+  await vi.advanceTimersByTimeAsync(interval);
+  await settle();
 }

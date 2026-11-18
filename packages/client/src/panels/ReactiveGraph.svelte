@@ -7,7 +7,6 @@
   import EmptyState from '../components/EmptyState.svelte';
   import GraphView from '../components/GraphView.svelte';
   import Highlight from '../components/Highlight.svelte';
-  import LiveControls from '../components/LiveControls.svelte';
   import Panel from '../components/Panel.svelte';
   import SearchField from '../components/SearchField.svelte';
   import Segmented from '../components/Segmented.svelte';
@@ -31,7 +30,6 @@
     sameGraph,
     sameValue,
     staleLabel,
-    totalLabel,
   } from '../lib/reactive.js';
   import { resource } from '../lib/resource.svelte.js';
   import { router } from '../lib/router.svelte.js';
@@ -63,8 +61,6 @@
   const GRAPH_LIMIT = 400;
   /** Every graph poll makes the app walk the requested scope: slow, visible-only. */
   const POLL_MS = 5000;
-  /** The full graph stops auto-refreshing above this many nodes; refresh / resume still work. */
-  const AUTO_PAUSE_ABOVE = 2000;
   const SUMMARY = { topK: 50, windowMs: 10000 } as const;
   const SUMMARY_POLL_MS = 2000;
 
@@ -161,22 +157,6 @@
       selected = null;
       builtAt = null;
       if (r !== undefined) void graph.refresh();
-    });
-  });
-
-  // The full graph pauses once it grows past the threshold; if the user
-  // resumes, respect that for the rest of the session.
-  let autoPaused = $state(false);
-  let userResumed = false;
-  $effect(() => {
-    if (autoPaused && graph.live) userResumed = true;
-  });
-  $effect(() => {
-    if (tab !== 'full' || userResumed || autoPaused || graph.data.nodes.length <= AUTO_PAUSE_ABOVE)
-      return;
-    untrack(() => {
-      graph.live = false;
-      autoPaused = true;
     });
   });
 
@@ -311,14 +291,7 @@
   }
 </script>
 
-<Panel
-  title="Reactivity"
-  count={tab !== 'overview'
-    ? data.nodes.length
-    : overviewOf === 'states'
-      ? states.length
-      : (summary.data?.components.total ?? undefined)}
->
+<Panel title="Reactivity">
   {#snippet toolbar()}
     <Segmented
       label="Reactivity view"
@@ -385,14 +358,6 @@
         noun="signals"
         stale={staleLabel(data)}
       />
-      {#if autoPaused && !graph.live && tab === 'full'}
-        <span
-          class="hint"
-          title="Polling makes the app rebuild the whole graph; large graphs start paused."
-        >
-          Paused: {data.nodes.length.toLocaleString()} of {totalLabel(data.total?.nodes)} signals
-        </span>
-      {/if}
       <Segmented
         label="Layout"
         bind:value={view.value}
@@ -402,13 +367,6 @@
           { value: 'list', label: 'List' },
         ]}
       />
-    {/if}
-  {/snippet}
-  {#snippet actions()}
-    {#if tab === 'overview'}
-      <LiveControls res={overviewOf === 'states' ? timeline : summary} />
-    {:else if request !== undefined}
-      <LiveControls res={graph} />
     {/if}
   {/snippet}
 
@@ -545,11 +503,6 @@
 <style>
   .scope {
     max-width: 200px;
-  }
-  .hint {
-    font-size: var(--fs-xs);
-    color: var(--fg-faint);
-    white-space: nowrap;
   }
   .local {
     display: flex;

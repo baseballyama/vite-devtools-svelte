@@ -126,14 +126,3 @@ export function prettyValue(v: unknown): string {
     return toText(v);
   }
 }
-
-/** Relative "x s ago" label for freshness indicators. */
-export function formatAgo(ts: number | null, now = Date.now()): string {
-  if (ts === null) return 'never';
-  const s = Math.max(0, Math.round((now - ts) / 1000));
-  if (s < 2) return 'just now';
-  if (s < 60) return `${s}s ago`;
-  const m = Math.round(s / 60);
-  if (m < 60) return `${m}m ago`;
-  return `${Math.round(m / 60)}h ago`;
-}

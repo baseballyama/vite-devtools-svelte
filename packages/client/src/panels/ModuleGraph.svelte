@@ -111,7 +111,7 @@
   }
 </script>
 
-<Panel title="Modules" count={graph.data.modules.length}>
+<Panel title="Modules">
   {#snippet toolbar()}
     <Segmented label="Module type" bind:value={type} options={typeOptions} />
     <SearchField bind:value={query} placeholder="Filter modules…" count={rows.length} />

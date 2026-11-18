@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import * as rpc from '../lib/rpc.js';
 import type { FpsSample } from '../lib/types.js';
-import { settle } from '../test/dom.js';
+import { fakePollClock, nextPoll, settle } from '../test/dom.js';
 import FpsMonitor from './FpsMonitor.svelte';
 
 /** One sample per 500 ms ending at `end`, with the given frame rates. */
@@ -112,6 +112,7 @@ describe('FpsMonitor', () => {
   });
 
   it('records a window and summarises it after stopping', async () => {
+    fakePollClock();
     const user = userEvent.setup();
     vi.mocked(rpc.getFps).mockResolvedValue(samples([60, 60], 100_000));
     const { container } = render(FpsMonitor);
@@ -127,8 +128,7 @@ describe('FpsMonitor', () => {
       ...samples([60, 60], 100_000),
       ...samples([50, 20, 45], 101_500),
     ]);
-    await user.click(screen.getByRole('button', { name: /^Refresh/ }));
-    await settle();
+    await nextPoll(500);
     expect(container.querySelector('rect.region')).not.toBeNull();
     expect(screen.queryByRole('region', { name: 'Recording result' })).toBeNull();
 
@@ -171,7 +171,7 @@ describe('FpsMonitor', () => {
     expect(screen.getByRole('status').textContent).toContain('No frame samples yet');
   });
 
-  it('polls twice a second while live and stops when paused', async () => {
+  it('polls twice a second', async () => {
     vi.useFakeTimers();
     let version = 0;
     vi.mocked(rpc.getVersions).mockImplementation(() =>
@@ -192,16 +192,5 @@ describe('FpsMonitor', () => {
     const calls = vi.mocked(rpc.getFps).mock.calls.length;
     await vi.advanceTimersByTimeAsync(1100);
     expect(vi.mocked(rpc.getFps).mock.calls.length).toBeGreaterThan(calls);
-
-    const live = screen.getByRole('button', { name: 'Live' });
-    expect(live.getAttribute('aria-pressed')).toBe('true');
-    live.click();
-    await vi.advanceTimersByTimeAsync(0);
-    expect(screen.getByRole('button', { name: 'Paused' }).getAttribute('aria-pressed')).toBe(
-      'false',
-    );
-    const paused = vi.mocked(rpc.getFps).mock.calls.length;
-    await vi.advanceTimersByTimeAsync(2000);
-    expect(vi.mocked(rpc.getFps).mock.calls.length).toBe(paused);
   });
 });

@@ -4,7 +4,6 @@
   import CaptureNotice from '../components/CaptureNotice.svelte';
   import Highlight from '../components/Highlight.svelte';
   import Inspector from '../components/Inspector.svelte';
-  import LiveControls from '../components/LiveControls.svelte';
   import Panel from '../components/Panel.svelte';
   import ResourceEmpty from '../components/ResourceEmpty.svelte';
   import SearchField from '../components/SearchField.svelte';
@@ -97,7 +96,7 @@
   }
 </script>
 
-<Panel title="State timeline" count={timeline.data.length}>
+<Panel title="State timeline">
   {#snippet toolbar()}
     <SearchField
       bind:value={query}
@@ -115,7 +114,7 @@
     </span>
   {/snippet}
   {#snippet actions()}
-    <LiveControls res={timeline} onclear={clear} />
+    <Button icon="trash" variant="ghost" label="Clear recorded data" onclick={clear} />
   {/snippet}
 
   <SplitView id="timeline" open={!!current}>

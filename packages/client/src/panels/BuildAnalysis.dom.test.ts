@@ -76,7 +76,6 @@ describe('BuildAnalysis', () => {
       'assets/index.css',
       'assets/logo.svg',
     ]);
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('4');
     const composition = screen.getByRole('group', { name: 'Bundle composition' });
     expect(composition.textContent).toContain('441.4 KB');
     expect(within(composition).getByRole('img').getAttribute('aria-label')).toBe(

@@ -61,7 +61,6 @@ describe('Inspect', () => {
     expect(within(list).getAllByRole('option')).toHaveLength(2);
     expect(within(list).getByText('src/lib/Card.svelte')).toBeTruthy();
     expect(screen.getByText('Pick a component')).toBeTruthy();
-    expect(screen.getByRole('heading', { name: /Compiled output/ }).textContent).toContain('2');
   });
 
   it('filters files and shows a no-match state', async () => {

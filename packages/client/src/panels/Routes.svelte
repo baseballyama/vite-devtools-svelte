@@ -111,7 +111,7 @@
   }
 </script>
 
-<Panel title="Routes" count={routes.data.length}>
+<Panel title="Routes">
   {#snippet toolbar()}
     <Segmented
       label="Route kind"

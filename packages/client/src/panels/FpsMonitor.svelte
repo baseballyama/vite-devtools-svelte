@@ -1,7 +1,6 @@
 <script lang="ts">
   import Badge from '../components/Badge.svelte';
   import Button from '../components/Button.svelte';
-  import LiveControls from '../components/LiveControls.svelte';
   import Panel from '../components/Panel.svelte';
   import ResourceEmpty from '../components/ResourceEmpty.svelte';
   import Segmented from '../components/Segmented.svelte';
@@ -127,7 +126,7 @@
     </Button>
   {/snippet}
   {#snippet actions()}
-    <LiveControls res={fps} onclear={clear} />
+    <Button icon="trash" variant="ghost" label="Clear recorded data" onclick={clear} />
   {/snippet}
 
   {#if fps.data.length === 0}

@@ -1,9 +1,9 @@
 <script lang="ts">
+  import Button from '../components/Button.svelte';
   import CaptureNotice from '../components/CaptureNotice.svelte';
   import DataTable from '../components/DataTable.svelte';
   import Highlight from '../components/Highlight.svelte';
   import Icon from '../components/Icon.svelte';
-  import LiveControls from '../components/LiveControls.svelte';
   import Panel from '../components/Panel.svelte';
   import ResourceEmpty from '../components/ResourceEmpty.svelte';
   import SearchField from '../components/SearchField.svelte';
@@ -110,7 +110,7 @@
   }
 </script>
 
-<Panel title="Load functions" count={loads.data.length}>
+<Panel title="Load functions">
   {#snippet toolbar()}
     <Segmented
       label="Load type"
@@ -125,7 +125,7 @@
     <CaptureNotice info={capture.data.loadProfiles} noun="load calls" />
   {/snippet}
   {#snippet actions()}
-    <LiveControls res={loads} onclear={clear} />
+    <Button icon="trash" variant="ghost" label="Clear recorded data" onclick={clear} />
   {/snippet}
 
   <div class="layout">
