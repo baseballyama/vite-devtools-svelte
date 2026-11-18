@@ -333,7 +333,7 @@
       <Button
         icon="pick"
         title={pickError ??
-          'Turns on the Svelte Inspector in the app: click an element to select its component here and open it in your editor (Esc cancels)'}
+          'Turns on the Svelte Inspector in the app: right-click an element and choose Inspect to select its component here; a click opens it in your editor (Esc cancels)'}
         onclick={() => pickElement(startPicker)}>Pick element</Button
       >
     {/if}
