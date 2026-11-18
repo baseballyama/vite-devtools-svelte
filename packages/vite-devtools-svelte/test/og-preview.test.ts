@@ -297,7 +297,9 @@ describe('getOGPreview', () => {
     serve(head + 'x'.repeat(MAX_PAGE_BYTES));
     const r = await getOGPreview(PAGE);
     expect(r.title).toBe('Big');
-    expect(r.issues).toContain('Page is larger than 5 MB; read its start only');
+    expect(r.issues).toContain(
+      'Page is larger than 1 MB; read its start only (crawlers ignore tags past it)',
+    );
   });
 
   it('reports a redirect without location', async () => {

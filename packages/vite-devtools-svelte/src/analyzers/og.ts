@@ -5,10 +5,12 @@ import { HTML_WHITESPACE, collapseWhitespace, decodeEntities, htmlTags } from '.
 import { fetchWithTimeout, readCapped } from './http.js';
 
 /**
- * Most of a page read for its tags (they live in `<head>`). A larger or
- * endless body is cut here instead of filling the dev server's memory.
+ * How much of a page is read for its tags: 1 MB, the cutoff Meta documents
+ * for its crawler (the most generous documented one), so a tag the preview
+ * finds is one a crawler can find. It also keeps a large or endless body
+ * from filling the dev server's memory.
  */
-export const MAX_PAGE_BYTES = 5 * 1024 * 1024;
+export const MAX_PAGE_BYTES = 1024 * 1024;
 
 /**
  * Sent with the request, as a browser would. Some sites refuse a request
@@ -158,7 +160,7 @@ export async function getOGPreview(
     if (page.status >= 400) preview.issues.push(`Responded with HTTP ${page.status}`);
     if (page.truncated) {
       preview.issues.push(
-        `Page is larger than ${MAX_PAGE_BYTES / 1024 / 1024} MB; read its start only`,
+        `Page is larger than ${MAX_PAGE_BYTES / 1024 / 1024} MB; read its start only (crawlers ignore tags past it)`,
       );
     }
     const html = page.html;
