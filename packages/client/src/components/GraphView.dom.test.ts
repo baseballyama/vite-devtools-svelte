@@ -230,6 +230,47 @@ describe('GraphView', () => {
     expect(viewBox(container)).not.toBe('0 0 800 400');
   });
 
+  it('refits when the panel resizes it, unless the user zoomed', async () => {
+    let size = { width: 800, height: 400 };
+    layout(() => size);
+    const resized: Array<() => void> = [];
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(fn: () => void) {
+          resized.push(fn);
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+    try {
+      const { container } = render(GraphView, { nodes, edges });
+      await settle();
+      const wide = viewBox(container);
+      size = { width: 800, height: 1600 };
+      for (const fn of resized) fn();
+      await settle();
+      const [, , w, h] = viewBox(container).split(' ').map(Number) as [
+        number,
+        number,
+        number,
+        number,
+      ];
+      expect(w / h).toBeCloseTo(0.5);
+
+      await userEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+      const zoomed = viewBox(container);
+      size = { width: 800, height: 400 };
+      for (const fn of resized) fn();
+      await settle();
+      expect(viewBox(container)).toBe(zoomed);
+      expect(zoomed).not.toBe(wide);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('caps the zoom-out so a huge graph stays legible', async () => {
     layout(() => ({ width: 200, height: 100 }));
     const many = Array.from({ length: 30 }, (_, i) =>
