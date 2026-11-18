@@ -105,7 +105,7 @@
 
   const tiles = $derived.by<Tile[]>(() => {
     const s = stats.data;
-    const all: Tile[] = [
+    return [
       {
         panel: 'routes',
         icon: 'routes',
@@ -145,7 +145,6 @@
         tone: s?.errors ? 'red' : s?.warnings ? 'yellow' : undefined,
       },
     ];
-    return all;
   });
 </script>
 

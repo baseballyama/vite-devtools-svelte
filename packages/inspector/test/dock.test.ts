@@ -159,7 +159,7 @@ describe('the dock', () => {
       '<circle cx="9.5" cy="9.5"',
     );
     expect(settings).toMatchObject({
-      title: 'Settings',
+      title: 'Inspector settings',
       icon: 'ph:gear-duotone',
       category: 'default',
       defaultOrder: 50,

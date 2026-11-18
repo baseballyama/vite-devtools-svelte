@@ -34,19 +34,6 @@ function createDock(clientType: 'embedded' | 'standalone' = 'embedded') {
       },
     },
     docks: {
-      entries: [
-        { id: 'svelte:inspector', title: 'Pick element' },
-        { id: 'other:overview', title: 'Overview' },
-      ],
-      getStateById(id: string) {
-        return id === 'svelte:inspector'
-          ? {
-              get isActive() {
-                return active;
-              },
-            }
-          : undefined;
-      },
       async setActionActive(_id: string, on: boolean) {
         if (active === on) return false;
         if (on) {
@@ -62,7 +49,6 @@ function createDock(clientType: 'embedded' | 'standalone' = 'embedded') {
       toggleEntry(id: string) {
         return ctx.docks.setActionActive(id, !active);
       },
-      switchEntry: vi.fn(() => Promise.resolve(true)),
     },
     rpc: { call: vi.fn<(name: string, ...args: unknown[]) => Promise<unknown>>(async () => {}) },
     commands: { register: vi.fn(() => unregister) },
@@ -87,15 +73,10 @@ function component(file = 'src/A.svelte') {
 }
 
 /** The dock's own ui, rendered in the page like `<devframes-dock-embedded>` */
-function dockUi(label?: string) {
+function dockUi() {
   const host = document.createElement('devframes-dock-embedded');
   const button = document.createElement('button');
-  button.className = 'text-primary';
-  if (label) button.setAttribute('aria-label', label);
-  const entry = document.createElement('div');
-  entry.className = 'devframes-dock-entry';
-  entry.append(button);
-  host.attachShadow({ mode: 'open' }).append(entry);
+  host.attachShadow({ mode: 'open' }).append(button);
   document.body.append(host);
   return button;
 }
@@ -121,19 +102,6 @@ function start(clientType?: 'embedded' | 'standalone') {
   setup(dock.ctx);
   return dock;
 }
-
-it('keeps active pinned Svelte entries orange without styling unrelated entries', async () => {
-  const button = dockUi('Pick element');
-  const unrelated = document.createElement('button');
-  unrelated.className = 'text-primary';
-  unrelated.setAttribute('aria-label', 'Overview');
-  button.parentElement?.append(unrelated);
-  const { ctx } = start();
-  await ctx.docks.setActionActive('svelte:inspector', true);
-  await settle();
-  expect(button.style.getPropertyValue('color')).toBe('#ff3e00');
-  expect(unrelated.style.getPropertyValue('color')).toBe('');
-});
 
 /** A pointer move to (`at`, `at`); happy-dom leaves out `x` / `y`, which the inspector reads */
 function move(at: number) {
@@ -202,7 +170,6 @@ describe('the dock action', () => {
           element: el,
         },
       ]);
-      expect(ctx.docks.switchEntry).toHaveBeenCalledWith('svelte-devtools:inspect');
     } finally {
       window.removeEventListener('svelte-inspector:pick', listener);
     }

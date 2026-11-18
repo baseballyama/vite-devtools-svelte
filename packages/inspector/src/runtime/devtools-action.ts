@@ -23,10 +23,7 @@ interface DockContext {
     };
   };
   docks: {
-    entries: Array<{ id: string; title: string }>;
-    getStateById(id: string): { isActive: boolean } | undefined;
     setActionActive(id: string, active: boolean): Promise<boolean>;
-    switchEntry(id: string): Promise<boolean>;
     toggleEntry(id: string): Promise<boolean>;
   };
   rpc: { call(name: string, ...args: unknown[]): Promise<unknown> };
@@ -78,112 +75,16 @@ function fromDock(e: Event): boolean {
     .some(node => node instanceof Element && node.tagName.startsWith('DEVFRAMES-'));
 }
 
-const SVELTE_DOCK_ENTRIES = [
-  ['svelte-devtools:overview', 'Overview'],
-  ['svelte-devtools:problems', 'Problems'],
-  ['svelte-devtools:inspect', 'Inspect'],
-  ['svelte-devtools:profile', 'Profile'],
-  ['svelte-devtools:project', 'Project'],
-  ['svelte:inspector-settings', 'Settings'],
-  ['svelte:inspector', 'Pick element'],
-] as const;
-
-function installDockAccent(ctx: DockContext): () => void {
-  const observers: MutationObserver[] = [];
-  const roots = new Set<Document | ShadowRoot>();
-  const accented = new Map<HTMLElement, { value: string; priority: string }>();
-
-  const sync = () => {
-    for (const [button, color] of accented) {
-      button.style.setProperty('color', color.value, color.priority);
-    }
-    accented.clear();
-    for (const [id, title] of SVELTE_DOCK_ENTRIES) {
-      if (!ctx.docks.getStateById(id)?.isActive) continue;
-      if (
-        ctx.docks.entries.some(
-          entry =>
-            entry.id !== id && entry.title === title && ctx.docks.getStateById(entry.id)?.isActive,
-        )
-      ) {
-        continue;
-      }
-      for (const root of roots) {
-        for (const button of root.querySelectorAll<HTMLElement>(
-          `.devframes-dock-entry button[aria-label="${title}"].text-primary`,
-        )) {
-          accented.set(button, {
-            value: button.style.getPropertyValue('color'),
-            priority: button.style.getPropertyPriority('color'),
-          });
-          button.style.setProperty('color', '#ff3e00', 'important');
-        }
-      }
-    }
-  };
-
-  function discover(node: Document | Element) {
-    const docks = [
-      ...(node instanceof Element &&
-      node.matches('devframes-dock-embedded, devframes-dock-standalone')
-        ? [node]
-        : []),
-      ...node.querySelectorAll('devframes-dock-embedded, devframes-dock-standalone'),
-    ];
-    for (const dock of docks) {
-      if (dock.shadowRoot) observe(dock.shadowRoot);
-    }
-  }
-
-  function observe(root: Document | ShadowRoot) {
-    if (roots.has(root)) return;
-    roots.add(root);
-    const observer = new MutationObserver(mutations => {
-      for (const mutation of mutations) {
-        for (const node of mutation.addedNodes) {
-          if (node instanceof Element) discover(node);
-        }
-      }
-      sync();
-    });
-    observer.observe(root, {
-      childList: true,
-      subtree: true,
-      ...(root === document ? {} : { attributes: true, attributeFilter: ['class'] }),
-    });
-    observers.push(observer);
-  }
-
-  observe(document);
-  discover(document);
-  sync();
-
-  return () => {
-    for (const observer of observers) observer.disconnect();
-    for (const [button, color] of accented) {
-      button.style.setProperty('color', color.value, color.priority);
-    }
-  };
-}
-
 /** What the last run of `setup` mounted, torn down when the hub runs the script again */
 let teardown: (() => void) | undefined;
 
 export default function setup(ctx: DockContext): void {
+  // the hub also runs eager scripts in its standalone page
+  if (ctx.clientType !== 'embedded') return;
   // e.g. a new RPC client after a reconnect: one inspector, wired to the latest context
   teardown?.();
-  const removeDockAccent = installDockAccent(ctx);
-  // the hub also runs eager scripts in its standalone page
-  if (ctx.clientType !== 'embedded') {
-    teardown = removeDockAccent;
-    return;
-  }
   const id = ctx.current.entryMeta.id;
   const { docks } = ctx;
-  const openInspect = () => {
-    docks.switchEntry('svelte-devtools:inspect').catch(report('open Inspect'));
-  };
-  window.addEventListener('svelte-inspector:pick', openInspect);
 
   const target = document.createElement('div');
   target.setAttribute('id', 'svelte-inspector-host');
@@ -231,8 +132,6 @@ export default function setup(ctx: DockContext): void {
     offActivated();
     offDeactivated();
     unregister();
-    window.removeEventListener('svelte-inspector:pick', openInspect);
-    removeDockAccent();
     void unmount(inspector);
     target.remove();
   };

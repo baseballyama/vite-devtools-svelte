@@ -217,7 +217,7 @@ export function svelteInspector(options: InspectorOptions = {}): InspectorPlugin
 
         ctx.docks.register({
           id: 'svelte:inspector-settings',
-          title: 'Settings',
+          title: 'Inspector settings',
           description: 'Your shortcut, keys and styles for the Svelte Inspector',
           icon: 'ph:gear-duotone',
           groupId: SVELTE_DOCK_GROUP,
