@@ -12,7 +12,7 @@
       "ignore": ["test/fixtures/**"]
     },
     "packages/inspector": {
-      "entry": ["src/runtime/load-inspector.ts", "src/runtime/Inspector.svelte", "test/**/*.ts"],
+      "entry": ["src/runtime/devtools-action.ts", "src/runtime/*.svelte", "test/**/*.ts"],
       "project": ["src/**/*.{ts,svelte}", "test/**/*.ts"]
     },
     "packages/client": {

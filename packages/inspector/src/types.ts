@@ -57,18 +57,6 @@ export interface InspectorOptions {
   holdMode?: boolean;
 
   /**
-   * when to show the toggle button
-   * @default 'active'
-   */
-  showToggleButton?: 'always' | 'active' | 'never';
-
-  /**
-   * where to display the toggle button
-   * @default 'top-right'
-   */
-  toggleButtonPos?: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
-
-  /**
    * inject custom styles when inspector is active
    */
   customStyles?: boolean;
@@ -80,5 +68,8 @@ export interface InspectorOptions {
   __internal?: {
     // vite base url
     base: string;
+    // the directory Svelte makes `__svelte_meta.loc.file` relative to (its `rootDir`, which
+    // defaults to process.cwd()), to open files by absolute path through Vite DevTools
+    cwd?: string;
   };
 }

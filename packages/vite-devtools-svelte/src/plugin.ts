@@ -10,6 +10,8 @@ import { analyzeComponents } from './analyzers/components.js';
 import type { GraphModuleLike } from './analyzers/module-graph.js';
 import { analyzeProject } from './analyzers/project.js';
 import { analyzeRoutes } from './analyzers/routes.js';
+import { inspectorPlugin, isInspectorRuntime } from './inspector.js';
+import type { InspectorOptions } from './inspector.js';
 import { createMcpMiddleware, MCP_PATH } from './mcp/http.js';
 import { buildMcpServer } from './mcp/server.js';
 import { SessionStore } from './mcp/sessions.js';
@@ -53,6 +55,14 @@ export interface SvelteDevtoolsOptions {
    * @default true
    */
   clientAuth?: boolean;
+  /**
+   * The Svelte Inspector: hold the toggle key combo (`alt-x` by default) and
+   * click an element to open its source in your editor. It only runs in the
+   * Vite DevTools dock (`@vitejs/devtools`). The dev server fails to start when
+   * vite-plugin-svelte's built-in inspector is configured too (`vitePlugin.inspector`):
+   * turn that one off.
+   */
+  inspector?: InspectorOptions;
 }
 
 /** Name of `@vitejs/devtools`' config plugin; its presence means the hub will call our `devtools.setup`. */
@@ -246,6 +256,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
         id === 'svelte/internal/client' &&
         importer &&
         !importer.includes('node_modules') &&
+        !isInspectorRuntime(importer) &&
         !importer.startsWith('\0')
       ) {
         return WRAPPER_MODULE_ID;
@@ -303,7 +314,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
 
     transform(code, id, transformOptions) {
       if (!componentTracking || !serving()) return null;
-      if (id.includes('node_modules')) return null;
+      if (id.includes('node_modules') || isInspectorRuntime(id)) return null;
       // Client modules only: the runtime is browser code, and a server
       // render has no devtools to report to.
       if (transformOptions?.ssr) return null;
@@ -361,5 +372,11 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     },
   };
 
-  return [mainPlugin, trackingPlugin, loadProfilePlugin, warningCapturePlugin];
+  return [
+    mainPlugin,
+    trackingPlugin,
+    loadProfilePlugin,
+    warningCapturePlugin,
+    inspectorPlugin(options.inspector),
+  ];
 }

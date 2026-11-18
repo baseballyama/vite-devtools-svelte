@@ -13,8 +13,6 @@ export const defaultInspectorOptions: InspectorOptions = {
   openKey: 'Enter',
   openMenuKey: ' ',
   holdMode: true,
-  showToggleButton: 'active',
-  toggleButtonPos: 'top-right',
   customStyles: true,
 };
 

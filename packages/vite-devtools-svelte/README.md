@@ -7,6 +7,7 @@ Svelte DevTools for Vite, built on [Devframe](https://devfra.me/). Provides 15 s
 ## Features
 
 - **Component Inspector** — View component hierarchy, props, state, and reactive values in real-time
+- **Svelte Inspector** — Hold `alt-x` in your app and click an element to open its source in your editor (a fork of vite-plugin-svelte's inspector, included and on by default)
 - **Reactivity** — A whole-app overview of the busiest components, then the current dependencies of one component's `$state`, `$derived` and `$effect` signals (signals created during component init and shared `.svelte.js/.ts` module state, plus a _markup_ node for reads from the template; edges are "can affect", not a recorded cause, and not the complete app graph)
 - **Render Profiler** — Track component render counts, render times, and identify bottlenecks
 - **Route Viewer** — Explore SvelteKit file-based routing structure with dynamic parameters
@@ -220,8 +221,18 @@ svelteDevtools({
   // Require the one-time code for the standalone DevTools (default: true).
   // In the Vite DevTools dock use DevTools({ clientAuth: false }) instead.
   clientAuth: true,
+  // Options of the Svelte Inspector, which runs in the Vite DevTools dock.
+  inspector: { toggleKeyCombo: 'alt-x', holdMode: true },
 });
 ```
+
+### Svelte Inspector
+
+`svelteDevtools()`: hold the toggle key combo (`alt-x` by default) in your app and click an element to open its source in your editor. It only runs in the Vite DevTools dock, and loads once the browser is authorized there.
+
+`inspector` takes the options (`toggleKeyCombo`, `navKeys`, `openKey`, `openMenuKey`, `escapeKeys`, `holdMode`, `customStyles`).
+
+`SVELTE_INSPECTOR_TOGGLE` and an options object in `SVELTE_INSPECTOR_OPTIONS` (shell or `.env` files) take precedence over them, for personal preferences.
 
 ## How It Works
 

@@ -1,14 +1,49 @@
+import process from 'node:process';
+
 import { normalizePath } from 'vite';
 import type { Plugin } from 'vite';
 
 import { defaultInspectorOptions, parseEnvironmentOptions } from './options.js';
+import { INSPECTOR_ICON_SVG } from './runtime/icon.js';
 import type { InspectorOptions } from './types.js';
 import { log } from './utils/log.js';
 
-/** name of the inspector plugin that ships inside vite-plugin-svelte 7 */
+/** name of the inspector plugin that ships inside vite-plugin-svelte */
 const BUILTIN_INSPECTOR_NAME = 'vite-plugin-svelte-inspector';
+/** name of vite-plugin-svelte's config plugin, whose `api.options` holds the resolved options */
+const SVELTE_CONFIG_PLUGIN_NAME = 'vite-plugin-svelte:config';
 
-function getInspectorPath(): string {
+/**
+ * Whether the user turned on vite-plugin-svelte's inspector in its options. Unknown (`true`)
+ * when vite-plugin-svelte no longer exposes them, so the startup error stays the default.
+ */
+function builtinConfigured(plugins: readonly Plugin[]): boolean {
+  const api = plugins.find(p => p.name === SVELTE_CONFIG_PLUGIN_NAME)?.api as
+    | { options?: { inspector?: unknown } }
+    | undefined;
+  return api?.options === undefined || Boolean(api.options.inspector);
+}
+
+// vite-devtools-svelte: the inspector lives in the Vite DevTools dock
+/** name of `@vitejs/devtools`' config plugin (the same check as svelteDevtools()) */
+const VITE_DEVTOOLS_PLUGIN = 'vite:devtools';
+const DOCK_MODULE_ID = '\0virtual:vite-devtools-svelte-inspector-dock';
+
+/** The parts of the Vite DevTools node context (`DevToolsNodeContext`) the inspector uses */
+interface DevtoolsContext {
+  docks: { register(entry: Record<string, unknown>): void };
+}
+
+/** The inspector plugin, with the hook Vite DevTools (`@vitejs/devtools`) calls */
+export type InspectorPlugin = Omit<Plugin, 'devtools'> & {
+  devtools: { setup(ctx: DevtoolsContext): void };
+};
+
+/** `svg` as a data url */
+const dataUrl = (svg: string) => `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+
+/** The directory of the browser runtime the plugin serves, with a trailing `/` */
+export function getInspectorPath(): string {
   // vite-devtools-svelte: the runtime sits next to this file instead of under
   // vite-plugin-svelte's `src/plugins/inspector/`.
   const pluginPath = normalizePath(import.meta.dirname);
@@ -16,20 +51,27 @@ function getInspectorPath(): string {
 }
 
 /**
- * Svelte Inspector as a standalone Vite plugin.
+ * Svelte Inspector as a Vite plugin for the Vite DevTools (`@vitejs/devtools`) dock.
  *
- * It is always enabled once added (during `vite dev`), and it turns off the built-in
- * inspector of vite-plugin-svelte so the two never run together. To turn it off, leave the
- * plugin out.
+ * It only runs in the dock: without Vite DevTools in the Vite config the plugin does nothing.
+ * When vite-plugin-svelte's built-in inspector is configured and both would run, the dev
+ * server fails to start with an error that says to turn that one off. When only the
+ * environment variables switched it on, it is turned off instead.
  *
  * vite-devtools-svelte: options come from the plugin argument instead of
  * vite-plugin-svelte's `inspector` option (see `configResolved`).
  */
-export function svelteInspector(options: InspectorOptions = {}): Plugin {
+export function svelteInspector(options: InspectorOptions = {}): InspectorPlugin {
   const inspectorPath = getInspectorPath();
   log.debug(`svelte inspector path: ${inspectorPath}`, null, 'inspector');
 
   let inspectorOptions: InspectorOptions | undefined;
+  /** Vite DevTools is installed, so the dock mounts the inspector */
+  let dock = false;
+  /** the inspector plugin of vite-plugin-svelte, always in the config but not always on */
+  let builtin: Plugin | undefined;
+
+  const base = () => inspectorOptions?.__internal?.base ?? '';
 
   return {
     name: 'vite-devtools-svelte-inspector',
@@ -37,10 +79,30 @@ export function svelteInspector(options: InspectorOptions = {}): Plugin {
     enforce: 'pre',
 
     applyToEnvironment(env) {
-      return env.config.consumer === 'client';
+      if (env.config.consumer !== 'client') return false;
+      // decided here, not in `configResolved`: the built-in inspector only knows whether
+      // it is on once its own `configResolved` has run
+      if (dock && builtin && (builtin.applyToEnvironment?.(env) ?? true) !== false) {
+        throw new Error(
+          "[vite-devtools-svelte] svelteDevtools() includes the Svelte Inspector, but vite-plugin-svelte's own inspector is enabled as well. " +
+            'Turn that one off: remove `inspector` from `vitePlugin` in svelte.config.js (or from the options of `svelte()`).',
+        );
+      }
+      return true;
     },
 
     configResolved(config) {
+      dock = config.plugins.some(p => p.name === VITE_DEVTOOLS_PLUGIN);
+      builtin = config.plugins.find(p => p.name === BUILTIN_INSPECTOR_NAME);
+      // `SVELTE_INSPECTOR_OPTIONS` / `SVELTE_INSPECTOR_TOGGLE` are personal preferences for this
+      // inspector, but they switch the built-in one on too. When nothing else turned it on, keep
+      // it out of every environment (Vite applies `applyToEnvironment` after `configResolved`)
+      // instead of failing to start.
+      if (dock && builtin && !builtinConfigured(config.plugins)) {
+        builtin.applyToEnvironment = () => false;
+        log.debug('disabled the built-in inspector of vite-plugin-svelte', null, 'inspector');
+      }
+
       // vite-devtools-svelte: this plugin is always on once it is added, so
       // `SVELTE_INSPECTOR_OPTIONS=true|false` does not toggle it; an options
       // object or `SVELTE_INSPECTOR_TOGGLE` still applies as a personal preference.
@@ -52,25 +114,37 @@ export function svelteInspector(options: InspectorOptions = {}): Plugin {
         ...(typeof environmentOptions === 'object' ? environmentOptions : {}),
         __internal: {
           base: config.base.endsWith('/') ? config.base.slice(0, -1) : config.base,
+          cwd: process.cwd(),
         },
       };
-
-      // vite-devtools-svelte: vite-plugin-svelte's built-in inspector would mount a
-      // second `#svelte-inspector-host` (and throw) when it is enabled through
-      // `vitePlugin.inspector` or the same environment variables. Vite applies
-      // `applyToEnvironment` after `configResolved`, so this keeps it out of every
-      // environment.
-      const builtin = config.plugins.find(p => p.name === BUILTIN_INSPECTOR_NAME);
-      if (builtin) {
-        builtin.applyToEnvironment = () => false;
-        log.debug('disabled the built-in inspector of vite-plugin-svelte', null, 'inspector');
-      }
+    },
+    devtools: {
+      setup(ctx: DevtoolsContext) {
+        ctx.docks.register({
+          id: 'svelte:inspector',
+          title: 'Svelte Inspector',
+          description: 'Pick an element to open its source in your editor',
+          icon: dataUrl(INSPECTOR_ICON_SVG),
+          type: 'action',
+          toggle: true,
+          action: {
+            // so the key combo works before the first click; the hub loads it once it trusts
+            // the browser, so the inspector needs Vite DevTools to be authorized first
+            eager: true,
+            // a url: the host would read `virtual:` as a url scheme
+            importFrom: `${base()}/@id/__x00__${DOCK_MODULE_ID.slice(1)}`,
+          },
+        });
+      },
     },
     resolveId: {
       filter: {
-        id: /^virtual:vite-devtools-svelte-inspector-/,
+        id: /^\0?virtual:vite-devtools-svelte-inspector-/,
       },
       handler(id) {
+        if (id === DOCK_MODULE_ID || id === DOCK_MODULE_ID.slice(1)) {
+          return DOCK_MODULE_ID;
+        }
         if (id === 'virtual:vite-devtools-svelte-inspector-options') {
           return id;
         }
@@ -80,30 +154,24 @@ export function svelteInspector(options: InspectorOptions = {}): Plugin {
         return null;
       },
     },
-    // vite-devtools-svelte: only the virtual options module. Runtime files are read by Vite
+    // vite-devtools-svelte: only the virtual modules. Runtime files are read by Vite
     // itself: it lets through files reached by imports even outside `server.fs.allow`, and its
     // own read keeps them watched. (Upstream's disk-reading branch never ran: its glob was
     // `<runtime>//**`.)
     load: {
       filter: {
-        id: /^virtual:vite-devtools-svelte-inspector-options$/,
+        id: {
+          include: [
+            /^virtual:vite-devtools-svelte-inspector-options$/,
+            /^\0virtual:vite-devtools-svelte-inspector-dock$/,
+          ],
+        },
       },
-      handler() {
+      handler(id) {
+        if (id === DOCK_MODULE_ID) {
+          return 'export { default } from "virtual:vite-devtools-svelte-inspector-path:devtools-action.ts";';
+        }
         return `export default ${JSON.stringify(inspectorOptions ?? {})}`;
-      },
-    },
-    transform: {
-      // Vite+ projects install vite@npm:@voidzero-dev/vite-plus-core@latest which
-      // changes the path from `vite/dist/client/client.mjs` to `vite/dist/vite/client/client.mjs`
-      // Injected here rather than through transformIndexHtml, which does not reach
-      // SSR-rendered pages.
-      filter: {
-        id: /(?:vite\/dist|vite\/dist\/vite|vite-plus-core\/dist\/vite)\/client\/client\.mjs(?:\?|$)/,
-      },
-      handler(code) {
-        return {
-          code: `${code}\nimport('virtual:vite-devtools-svelte-inspector-path:load-inspector.ts')`,
-        };
       },
     },
   };

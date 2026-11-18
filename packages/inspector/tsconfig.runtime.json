@@ -4,5 +4,5 @@
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "types": []
   },
-  "include": ["src/runtime/**/*.ts", "src/runtime/**/*.svelte"]
+  "include": ["src/runtime/**/*.ts", "src/runtime/**/*.svelte", "test/runtime/**/*.ts"]
 }

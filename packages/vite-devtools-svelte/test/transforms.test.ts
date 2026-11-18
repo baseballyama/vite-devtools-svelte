@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { compile } from 'svelte/compiler';
 import type { Plugin } from 'vite';
@@ -276,6 +276,15 @@ describe('trackingPlugin transform', () => {
     ['server-side rendering (component)', [COUNTER, '/app/src/A.svelte', { ssr: true }], {}, {}],
     ['server-side rendering (module)', [MODULE_CODE, '/app/a.svelte.ts', { ssr: true }], {}, {}],
     ['node_modules', [COUNTER, '/app/node_modules/lib/A.svelte'], {}, {}],
+    [
+      'the bundled inspector',
+      [
+        COUNTER,
+        fileURLToPath(new URL('../../inspector/src/runtime/Inspector.svelte', import.meta.url)),
+      ],
+      {},
+      {},
+    ],
     ['componentTracking: false', [COUNTER, '/app/src/A.svelte'], { componentTracking: false }, {}],
     ['vite build', [COUNTER, '/app/src/A.svelte'], {}, { command: 'build' }],
     ['a plain module', ['export const x = 1', '/app/src/a.ts'], {}, {}],
