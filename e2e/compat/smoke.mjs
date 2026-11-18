@@ -125,6 +125,7 @@ const PLAN = [
   'T2 get_reactive_summary: policy/coverage, rows + other = total',
   'T2 scripted state change appears in get_state_timeline',
   'T2 DevTools UI first view (authorized, fixture components rendered)',
+  'T2 Svelte Inspector: dock toggle, hover shows the source; not mounted without the dock',
   'T2 HMR: page updates without reload, fixture components still listed',
   'T2 restart: same browser reconnects (app + UI), runtime resyncs',
   'T2 Kit SSR HTML',
@@ -1343,6 +1344,69 @@ async function tier2(p, getSrv, restart, app) {
       if (mode === 'dock') return dockUi(page, getSrv(), p);
       ui = await openStandaloneUi(ctx, getSrv());
       return { authorized: 'own gate', components: await uiShowsFixture(ui, p) };
+    },
+  );
+
+  // The inspector only runs in the dock, once the hub trusts the browser (it loads the eager
+  // action script then). Toggled on and off from its dock button; turning it off brings back
+  // the Svelte panel the next steps read. Hover only: a click would open an editor.
+  await step(
+    'T2 Svelte Inspector: dock toggle, hover shows the source; not mounted without the dock',
+    45_000,
+    async () => {
+      const host = page.locator('#svelte-inspector-host');
+      if (mode !== 'dock') {
+        if ((await host.count()) > 0) throw new Error('inspector mounted without Vite DevTools');
+        return { mounted: false };
+      }
+      if (!p.targets.hmr) return { notRun: 'matrix.json has no smoke.hmr (its <h1> is hovered)' };
+      await host.waitFor({ state: 'attached', timeout: 15_000 });
+      const enabled = () =>
+        page.evaluate(() => document.body.classList.contains('svelte-inspector-enabled'));
+      const button = page.getByRole('button', { name: 'Svelte Inspector', exact: true });
+      await withDockDump(page, () => clickInDock(page, button));
+      await page.waitForFunction(
+        () => document.body.classList.contains('svelte-inspector-enabled'),
+        null,
+        {
+          timeout: 5_000,
+        },
+      );
+      await page.locator('body h1').first().hover({ timeout: 5_000 });
+      const overlay = page.locator('#svelte-inspector-overlay');
+      await overlay.waitFor({ timeout: 5_000 });
+      const text = (await overlay.textContent()) ?? '';
+      if (!text.includes(`${p.targets.hmr.file}:`))
+        throw new Error(`overlay does not name ${p.targets.hmr.file}: ${text.slice(0, 120)}`);
+      await withDockDump(page, () => clickInDock(page, button));
+      await poll(enabled, on => on === false, 5_000);
+      await page.locator(DOCK_FRAME).waitFor({ state: 'attached', timeout: 10_000 });
+      // the hub runs eager scripts in its own standalone page too, which has no app to inspect
+      const standalone = await ctx.newPage();
+      try {
+        await standalone.goto(getSrv().base + '/__devtools/', {
+          waitUntil: 'load',
+          timeout: 30_000,
+        });
+        await standalone.waitForFunction(
+          () => '__DEVFRAME_HUB_CLIENT_CONTEXT__' in globalThis,
+          null,
+          {
+            timeout: 15_000,
+          },
+        );
+        await sleep(3_000);
+        if ((await standalone.locator('#svelte-inspector-host').count()) > 0)
+          throw new Error('inspector mounted in the standalone DevTools page');
+      } finally {
+        await standalone.close();
+      }
+      return {
+        mounted: true,
+        overlay: text.trim().slice(0, 80),
+        toggledOff: true,
+        standalonePage: 'not mounted',
+      };
     },
   );
 
