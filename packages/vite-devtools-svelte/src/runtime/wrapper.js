@@ -59,6 +59,7 @@ export function push() {
   try {
     const dt = __dt();
     if (dt) {
+      dt._FILENAME ??= __svelte_original.FILENAME;
       const file = dt._pendingFile ?? 'Unknown';
       dt._pendingFile = null;
       dt._pendingParent = parentHint;

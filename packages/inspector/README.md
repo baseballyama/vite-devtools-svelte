@@ -23,7 +23,7 @@ except for what running in the Vite DevTools dock needs:
 - runtime files are read by Vite itself; upstream's own disk read for them never ran (its filter glob ended in `//**`) and is removed
 - `src/utils/log.ts` is a reduced copy of upstream's logger
 - `src/types.ts` holds only `InspectorOptions`
-- it dispatches `svelte-inspector:pick` and `svelte-inspector:describe` events and marks its components with `Symbol.for('svelte.devtools.ignore')` (see [below](#events)); this part is new, not copied from upstream
+- it dispatches `svelte-inspector:pick` and `svelte-inspector:describe` events, has Inspect and Open buttons in the context menu when a tool names its rows, and marks its components with `Symbol.for('svelte.devtools.ignore')` (see [below](#events)); this part is new, not copied from upstream
 
 ## Setup
 
@@ -157,9 +157,11 @@ Every time an element is opened, the inspector dispatches a `svelte-inspector:pi
 
 ```js
 window.addEventListener('svelte-inspector:pick', e => {
-  // e.detail.loc: { file, line, column } of the element
+  // e.detail.loc: { file, line, column } of the element, or of the context menu row chosen
   // e.detail.stack: the element and the components it is rendered in, innermost first
-  // e.detail.element: the element, or null when a component was chosen from the context menu
+  // e.detail.element: the element, or null when a context menu row opens the editor
+  // e.detail.entry: only for a row's "Inspect": the row's `__svelte_meta.parent` entry,
+  //   null for the element's own row
 });
 ```
 
@@ -169,8 +171,12 @@ When an element is selected (with the pointer or the keyboard), the inspector di
 window.addEventListener('svelte-inspector:describe', e => {
   // e.detail.element: the selected element
   e.detail.name = 'Row';
+  // when the context menu opens, e.detail.parents is a Map: set a name for each
+  // `__svelte_meta.parent` entry of the element whose component instance is known
 });
 ```
+
+When a tool names any row of the context menu, each row gets two buttons: **Inspect** (on named rows) and **Open**. Inspect dispatches a cancelable `svelte-inspector:pick` with `element` and the row's `entry`; a tool that takes it calls `e.preventDefault()`, and the editor opens otherwise. Open opens the editor. Without names the menu is upstream's: each row opens the editor.
 
 ### Devtools UIs
 

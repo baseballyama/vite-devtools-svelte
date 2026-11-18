@@ -230,6 +230,8 @@ svelteDevtools({
 
 With Svelte 5.58 or later, which records the component on each element in development, the label shows the element's component instance, and the Svelte panel opens with that instance selected in Components.
 
+In the right-click menu, **Inspect** selects the instance of that row (the element or a component around it) without opening the editor, and **Open** opens the editor.
+
 `inspector` takes the options (`toggleKeyCombo`, `navKeys`, `openKey`, `openMenuKey`, `escapeKeys`, `holdMode`, `customStyles`).
 
 `SVELTE_INSPECTOR_TOGGLE` and an options object in `SVELTE_INSPECTOR_OPTIONS` (shell or `.env` files) take precedence over them, for personal preferences.

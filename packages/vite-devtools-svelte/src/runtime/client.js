@@ -113,6 +113,9 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     _idByProxy: new WeakMap(),
     // Set by the wrapper on mount.
     _idByContext: new WeakMap(),
+    // Svelte's FILENAME symbol, set by the wrapper: `ctx.function[_FILENAME]` is
+    // relative like `__svelte_meta` files.
+    _FILENAME: null,
     // Names declared more than once per instance ({@const} in {#each} items,
     // several $state class instances).
     _nameSeq: new Map(),
@@ -1671,13 +1674,58 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     }
     return id === undefined ? undefined : __SVELTE_DT._instances.get(id);
   };
+  // Entries carry no component reference, so component entries are paired with
+  // the context chain in order. A pair counts only when the instance is named
+  // like the tag and its parent context's file is the caller's file, which
+  // rules out aliased and dynamic tags and pairs shifted by an entry-less call
+  // (css custom properties), except inside a self-recursive component.
+  const parentInstances = element => {
+    const calls = [];
+    let last = null;
+    for (let entry = element?.__svelte_meta?.parent ?? null; entry; entry = entry.parent) {
+      if (entry.type === 'component') {
+        if (calls.length > 0) calls.at(-1).caller = last.file;
+        calls.push({ entry, caller: null });
+      }
+      last = entry;
+    }
+    if (calls.length > 0) calls.at(-1).caller = last.file;
+
+    const found = new Map();
+    const FILENAME = __SVELTE_DT._FILENAME;
+    let ctx = element?.__svelte_meta?.component ?? null;
+    for (const { entry, caller } of calls) {
+      if (!ctx || !FILENAME) break;
+      const parent = ctx.p ?? null;
+      const id = __SVELTE_DT._idByContext.get(ctx);
+      const instance = id === undefined ? undefined : __SVELTE_DT._instances.get(id);
+      if (
+        instance?.name === entry.componentTag &&
+        parent !== null &&
+        parent.function?.[FILENAME] === caller
+      ) {
+        found.set(entry, instance);
+      }
+      ctx = parent;
+    }
+    return found;
+  };
   window.addEventListener('svelte-inspector:describe', event => {
-    const instance = instanceOf(event.detail?.element);
-    if (instance) event.detail.name = instance.name;
+    const detail = event.detail;
+    const instance = instanceOf(detail?.element);
+    if (instance) detail.name = instance.name;
+    if (detail?.parents instanceof Map) {
+      for (const [entry, found] of parentInstances(detail.element)) {
+        detail.parents.set(entry, found.name);
+      }
+    }
   });
   window.addEventListener('svelte-inspector:pick', event => {
-    const instance = instanceOf(event.detail?.element);
+    const { element, entry } = event.detail ?? {};
+    const instance = entry ? parentInstances(element).get(entry) : instanceOf(element);
     if (!instance) return;
+    // the inspector then opens no editor
+    if (event.cancelable) event.preventDefault();
     __SVELTE_DT._send('svelte-devtools:element-picked', {
       epoch: __SVELTE_DT._epoch,
       componentId: instance.id,
