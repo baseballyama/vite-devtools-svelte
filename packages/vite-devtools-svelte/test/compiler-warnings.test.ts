@@ -48,6 +48,7 @@ describe('compiler warnings from vite-plugin-svelte', () => {
       scope: (id: string) => ({
         rpc: { register: (fn: any) => handlers.set(`${id}:${fn.name}`, fn.handler) },
       }),
+      agent: { registerTool: () => ({ unregister: () => {} }) },
     });
     const warnings = await handlers.get('svelte-devtools:get-compiler-warnings')!();
     expect(warnings).toEqual([

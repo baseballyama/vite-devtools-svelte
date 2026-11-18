@@ -62,7 +62,6 @@ export function mountStandalone(
       base: DEVFRAME_BASE,
       ws: false,
       sse: true,
-      mcp: false,
       auth,
     });
     instance = created;
@@ -82,7 +81,6 @@ export function mountStandalone(
       // Vite's https server is an HTTP/2 server with HTTP/1 fallback; it emits
       // the same `upgrade` events devframe listens for.
       server: httpServer as Server,
-      mcp: false,
       auth,
       // The auth banner's magic link is built from `origin`; point it at the
       // SPA so opening it authenticates (the app root has no devframe client).

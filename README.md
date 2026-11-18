@@ -298,6 +298,10 @@ Inside a container, make Vite listen beyond loopback (`server.host`) and publish
 
 The stdio server talks to the dev server's HTTP endpoint (`/__svelte-devtools/mcp`), which MCP clients can also use directly with `--transport http` and the `x-svelte-devtools-token` header. It is gated by the per-process random token (MCP clients are local processes, not browser tabs, so they don't use the browser login). The endpoint is served wherever your Vite dev server listens. With the default (`localhost`) only local processes can reach it; with `server.host` set to `true` or `0.0.0.0`, other machines on your network can reach it too and only the token protects it. There is no separate Host/Origin check.
 
+### Devframe's MCP route
+
+The same tools are also on Devframe's MCP route, named `svelte-devtools_<tool>`: inside Vite DevTools (`@vitejs/devtools`) on its shared endpoint `/__devtools/__mcp`, otherwise on `/.svelte-devtools/__mcp`. Devframe answers loopback callers only and rejects a request without an `Origin` header, so most native MCP clients reach it through `npx devframe connect` rather than a URL. Vite DevTools' endpoint also lists its own tools, and some of them run or stop commands (`devframes_plugin_terminals_spawn`, `_terminate`, `_remove`): an agent registered on it gets those too.
+
 ### Tools exposed
 
 | Tool                                               | Purpose                                                                                                                                                                                                                                                                                                                                                                                            |

@@ -25,6 +25,8 @@ vi.mock('node:dns/promises', () => ({
 
 const FIXTURES_DIR = path.resolve(import.meta.dirname, 'fixtures');
 const COUNTER = path.join(FIXTURES_DIR, 'src/lib/components/Counter.svelte');
+/** The MCP tools register on the agent host; these tests only look at RPC. */
+const NO_AGENT = { registerTool: () => ({ unregister: () => {} }) };
 
 /** Reads (get-*, inspect-*) are queries, except the outbound OG fetch. */
 function expectedRpcType(name: string): 'query' | 'action' {
@@ -56,6 +58,7 @@ describe('devframe definition', () => {
       scope: (id: string) => ({
         rpc: { register: (fn: { name: string }) => registered.push(`${id}:${fn.name}`) },
       }),
+      agent: NO_AGENT,
     } as any);
     expect(registered).toContain('svelte-devtools:get-project');
     expect(registered).toContain('svelte-devtools:get-state-timeline-delta');
@@ -495,6 +498,7 @@ async function setUp(host = createTestHost(FIXTURES_DIR)) {
         },
       },
     }),
+    agent: NO_AGENT,
   };
   await def.setup(ctx as any);
   const channel = hotChannel();
@@ -543,6 +547,7 @@ describe('element picker', () => {
         rpc: { register: () => {}, broadcast: () => Promise.reject(new Error('x')) },
       }),
       docks: { activate: (id: string) => activated.push(id) },
+      agent: NO_AGENT,
     };
     await def.setup(ctx as any);
     const channel = hotChannel();
