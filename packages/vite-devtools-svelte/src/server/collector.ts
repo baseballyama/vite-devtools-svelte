@@ -14,6 +14,7 @@ import type {
   StateTimelineDelta,
   StateTimelineEntry,
   DatasetVersions,
+  ElementPick,
 } from '../types.js';
 import { arrayOf, asPayload, clampInt, finiteOrNull } from './payload.js';
 import type { Payload } from './payload.js';
@@ -81,7 +82,28 @@ export const HOT_EVENTS = {
   runtimeReady: 'svelte-devtools:runtime-ready',
   /** server → runtime(s): `{ active: boolean }` — whether any consumer is watching. */
   subscription: 'svelte-devtools:subscription',
+  /** runtime → server: `{ epoch, componentId }` — an element was picked in the inspector. */
+  elementPicked: 'svelte-devtools:element-picked',
 } as const;
+
+/**
+ * How long a pick stays "recent": a DevTools UI that connects within this
+ * time after it (the dock opening the Svelte panel for it) still gets it.
+ */
+export const RECENT_PICK_MS = 10_000;
+
+/** Longest epoch accepted in a pick. */
+const MAX_EPOCH = 200;
+
+/** A pick from the runtime, or null when malformed. */
+function parseElementPick(value: unknown): ElementPick | null {
+  const { epoch, componentId } = asPayload(value) ?? {};
+  if (typeof epoch !== 'string' || epoch.length === 0 || epoch.length > MAX_EPOCH) return null;
+  if (typeof componentId !== 'number' || !Number.isSafeInteger(componentId) || componentId < 0) {
+    return null;
+  }
+  return { epoch, componentId };
+}
 
 interface EpochState {
   /** Insertion order = registration order (parents first). */
@@ -188,6 +210,9 @@ export class Collector {
   private active = false;
   private sweepTimer: ReturnType<typeof setTimeout> | undefined;
 
+  private readonly pickListeners = new Set<(pick: ElementPick) => void>();
+  private lastPick: { pick: ElementPick; at: number } | null = null;
+
   private readonly hooks: CollectorHooks;
   constructor(hooks: CollectorHooks = {}) {
     this.hooks = hooks;
@@ -232,6 +257,13 @@ export class Collector {
       ],
       [HOT_EVENTS.reactiveGraph, d => this.ingestReactiveGraph(asPayload(d))],
       [HOT_EVENTS.reactiveSummary, d => this.ingestReactiveSummary(asPayload(d))],
+      [
+        HOT_EVENTS.elementPicked,
+        d => {
+          const pick = parseElementPick(d);
+          if (pick) this.ingestPick(pick);
+        },
+      ],
     ];
     for (const [event, listener] of listeners) hot.on(event, listener);
     this.detachHot = () => {
@@ -370,6 +402,32 @@ export class Collector {
     if (this.servedEpoch !== undefined) this.bump('components', 'renderProfiles');
     this.servedEpoch = epoch;
     this.liveCache = undefined;
+  }
+
+  // --- element picker ---
+
+  /** Subscribe to elements picked in the app page's inspector; returns an unsubscribe function. */
+  onElementPicked(listener: (pick: ElementPick) => void): () => void {
+    this.pickListeners.add(listener);
+    return () => {
+      this.pickListeners.delete(listener);
+    };
+  }
+
+  /**
+   * A pick: its page load becomes the served one (when its tree is known),
+   * so the instance id resolves in the components the UI reads next.
+   */
+  ingestPick(pick: ElementPick): void {
+    if (this.epochs.has(pick.epoch)) this.touchEpoch(pick.epoch);
+    this.lastPick = { pick, at: Date.now() };
+    for (const listener of this.pickListeners) listener(pick);
+  }
+
+  /** The last pick when it was made within `RECENT_PICK_MS`, else null. */
+  get recentPick(): ElementPick | null {
+    const last = this.lastPick;
+    return last && Date.now() - last.at <= RECENT_PICK_MS ? last.pick : null;
   }
 
   // --- consumers ---

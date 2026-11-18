@@ -7,6 +7,7 @@ export type {
   ProjectInfo,
   ComponentRelation,
   ComponentInstance,
+  ElementPick,
   RenderProfile,
   ReactiveNode,
   ReactiveEdge,

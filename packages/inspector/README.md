@@ -159,6 +159,7 @@ Every time an element is opened, the inspector dispatches a `svelte-inspector:pi
 window.addEventListener('svelte-inspector:pick', e => {
   // e.detail.loc: { file, line, column } of the element
   // e.detail.stack: the element and the components it is rendered in, innermost first
+  // e.detail.element: the element, or null when a component was chosen from the context menu
 });
 ```
 

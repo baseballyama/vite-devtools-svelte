@@ -1774,6 +1774,27 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     });
   });
 
+  // An element opened in the Svelte Inspector: its component instance is
+  // selected in the DevTools. Svelte (5.58+) records the component context
+  // an element was rendered in as `__svelte_meta.component`; library
+  // components and the context `mount` creates are not tracked, so the
+  // nearest tracked ancestor (`ctx.p`, Svelte's parent context) is picked.
+  window.addEventListener('svelte-inspector:pick', event => {
+    let id;
+    for (
+      let ctx = event.detail?.element?.__svelte_meta?.component;
+      ctx && id === undefined;
+      ctx = ctx.p
+    ) {
+      id = __SVELTE_DT._idByContext.get(ctx);
+    }
+    if (id === undefined || !__SVELTE_DT._instances.has(id)) return;
+    __SVELTE_DT._send('svelte-devtools:element-picked', {
+      epoch: __SVELTE_DT._epoch,
+      componentId: id,
+    });
+  });
+
   // Pull requests from the server are answered regardless of the
   // subscription state.
   if (import.meta.hot) {

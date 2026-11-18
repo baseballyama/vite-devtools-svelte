@@ -6,9 +6,15 @@ import type { ConnectionState } from './rpc.js';
 type Status = 'connecting' | 'connected' | 'unauthorized' | 'disconnected' | 'error';
 function fakeClient(status: Status = 'connected', meta: Record<string, unknown> = {}) {
   const handlers: ((s: Status) => void)[] = [];
-  const call = vi.fn((_method: string, ..._args: unknown[]): Promise<unknown> =>
-    Promise.resolve('ok'),
+  // no recent element pick unless a test says so
+  const call = vi.fn((method: string, ..._args: unknown[]): Promise<unknown> =>
+    Promise.resolve(method === 'get-recent-element-pick' ? null : 'ok'),
   );
+  // Client (server → UI) functions this client registered, by bare name.
+  const registered = new Map<string, { type?: string; handler: (...args: any[]) => void }>();
+  const register = vi.fn((fn: { name: string; type?: string; handler: () => void }) => {
+    registered.set(fn.name, fn);
+  });
   const c = {
     status,
     connectionMeta: meta,
@@ -19,7 +25,8 @@ function fakeClient(status: Status = 'connected', meta: Record<string, unknown> 
         return () => {};
       },
     },
-    scope: vi.fn((_ns: string) => ({ rpc: { call } })),
+    scope: vi.fn((_ns: string) => ({ rpc: { call, register } })),
+    registered,
     close: vi.fn(),
     requestAuthCode: vi.fn((_options?: { reissue?: boolean }) => Promise.resolve()),
     requestTrustWithCode: vi.fn((_code: string) => Promise.resolve(true)),
@@ -330,6 +337,68 @@ describe('calls', () => {
       await fn();
       expect(c.call).toHaveBeenLastCalledWith(method);
     }
+  });
+});
+
+describe('element picks', () => {
+  const pick = { epoch: 'e1', componentId: 4 };
+
+  it('each connection listens for picks; subscribers get them until they unsubscribe', async () => {
+    const c = fakeClient();
+    connectDevframe.mockResolvedValue(c);
+    const rpc = await load();
+    const a = vi.fn<(pick: unknown) => void>();
+    const b = vi.fn<(pick: unknown) => void>();
+    const offA = rpc.onElementPicked(a);
+    rpc.onElementPicked(b);
+    await settle();
+    expect(c.scope).toHaveBeenCalledWith('svelte-devtools');
+    const fn = c.registered.get('element-picked')!;
+    expect(fn.type).toBe('event');
+    fn.handler(pick);
+    offA();
+    fn.handler(pick);
+    expect(a.mock.calls).toEqual([[pick]]);
+    expect(b.mock.calls).toEqual([[pick], [pick]]);
+  });
+
+  it('a pick made just before connecting is delivered once, to subscribers still listening', async () => {
+    const c = fakeClient();
+    // (the only calls: one per subscriber)
+    c.call.mockResolvedValue(pick);
+    connectDevframe.mockResolvedValue(c);
+    const rpc = await load();
+    const cb = vi.fn<(pick: unknown) => void>();
+    const gone = vi.fn<(pick: unknown) => void>();
+    rpc.onElementPicked(cb);
+    rpc.onElementPicked(gone)();
+    await settle();
+    expect(c.call).toHaveBeenCalledWith('get-recent-element-pick');
+    expect(cb.mock.calls).toEqual([[pick]]);
+    expect(gone).not.toHaveBeenCalled();
+  });
+
+  it('subscribing while the server is unreachable does not throw', async () => {
+    connectDevframe.mockRejectedValue(new Error('down'));
+    const rpc = await load();
+    const off = rpc.onElementPicked(() => {});
+    await settle();
+    expect(rpc.getConnectionState().status).toBe('error');
+    off();
+  });
+
+  it('a reconnected client registers again', async () => {
+    const first = fakeClient();
+    const second = fakeClient();
+    connectDevframe.mockResolvedValueOnce(first).mockResolvedValueOnce(second);
+    const rpc = await load();
+    const cb = vi.fn<(pick: unknown) => void>();
+    rpc.onElementPicked(cb);
+    await settle();
+    first.emit('disconnected');
+    await vi.advanceTimersByTimeAsync(1000);
+    second.registered.get('element-picked')!.handler(pick);
+    expect(cb).toHaveBeenCalledWith(pick);
   });
 });
 

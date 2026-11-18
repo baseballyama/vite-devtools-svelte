@@ -11,6 +11,7 @@
 import { configure } from '@testing-library/svelte';
 import { beforeEach, vi } from 'vitest';
 
+import { elementPick } from '../lib/element-pick.svelte.js';
 import { resetFakeRpc } from './fake-rpc.js';
 
 vi.mock('../lib/rpc.js', () => import('./fake-rpc.js'));
@@ -19,6 +20,9 @@ configure({ asyncUtilTimeout: 5000 });
 
 beforeEach(() => {
   resetFakeRpc();
+  // a pick a failed test left pending
+  const pick = elementPick.pending;
+  if (pick) elementPick.done(pick);
   localStorage.clear();
   history.replaceState(null, '', '/');
 });
