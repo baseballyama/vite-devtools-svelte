@@ -5,7 +5,7 @@ import path from 'node:path';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { createLogger, createServer } from 'vite';
 import type { DevEnvironment, InlineConfig, PluginOption, ViteDevServer } from 'vite';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { svelteInspector } from '../src/index.js';
 import type { InspectorOptions } from '../src/index.js';
@@ -14,6 +14,12 @@ const OPTIONS_ID = 'virtual:vite-devtools-svelte-inspector-options';
 
 const servers: ViteDevServer[] = [];
 const dirs: string[] = [];
+
+// Inspector variables set in the shell would otherwise leak into every server.
+beforeEach(() => {
+  vi.stubEnv('SVELTE_INSPECTOR_OPTIONS', '');
+  vi.stubEnv('SVELTE_INSPECTOR_TOGGLE', '');
+});
 
 afterEach(async () => {
   await Promise.all(servers.splice(0).map(server => server.close()));
