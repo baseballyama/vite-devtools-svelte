@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    %sveltekit.head%
+  </head>
+  <body>
+    <p class="host-chrome">
+      Host page chrome outside the app (embedded: true listens on the app's parent, not window)
+    </p>
+    <div id="svelte-app" data-sveltekit-preload-data="hover">%sveltekit.body%</div>
+  </body>
+</html>

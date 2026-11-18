@@ -4,10 +4,13 @@ import { svelteDevtools } from '@sveltejs/vite-devtools-svelte';
 import { DevTools } from '@vitejs/devtools';
 import { defineConfig } from 'vite';
 
+// SVELTE_DEVTOOLS_CLIENT_AUTH=0 (set by scripts/examples.mjs) turns the one-time code off.
+const clientAuth = process.env.SVELTE_DEVTOOLS_CLIENT_AUTH !== '0';
+
 export default defineConfig({
   plugins: [
-    svelteDevtools(),
-    DevTools(),
+    svelteDevtools({ clientAuth }),
+    DevTools({ clientAuth }),
     sveltekit({
       adapter: adapter(),
       // Strict CSP — designed to surface every cross-origin request that

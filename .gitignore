@@ -98,6 +98,9 @@ dist
 # Sveltekit cache directory
 .svelte-kit/
 
+# adapter-static output of the example apps
+examples/*/build/
+
 # svelte-check --tsgo output directory
 .svelte-check/
 

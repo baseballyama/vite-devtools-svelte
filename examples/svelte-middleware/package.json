@@ -1,0 +1,24 @@
+{
+  "name": "svelte-middleware",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Plain Svelte served by a custom Node server with Vite in middleware mode (SSE transport), server-rendered and hydrated",
+  "type": "module",
+  "scripts": {
+    "dev": "node server.js",
+    "check": "svelte-check --tsconfig ./tsconfig.json"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-devtools-svelte": "workspace:*",
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "@vitejs/devtools": "^0.8.0",
+    "svelte": "^5.57.3",
+    "svelte-check": "^4.7.8",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.5"
+  },
+  "devtoolsExample": {
+    "port": 5205,
+    "server": "server.js"
+  }
+}

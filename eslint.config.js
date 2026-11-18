@@ -15,6 +15,8 @@ export default defineConfig(
       'e2e/compat/kit3/**',
       // Fixture components are inputs to analyzers and compiler tests.
       'packages/vite-devtools-svelte/test/**/fixtures/**',
+      // Plays a published library: plain JS components with JSDoc, as on npm.
+      'examples/ui-lib/**',
       // oxlint covers scripts and modules (including `.svelte.ts`).
       '**/*.{js,mjs,cjs,ts,mts,cts}',
     ],
@@ -60,6 +62,16 @@ export default defineConfig(
       'svelte/prefer-svelte-reactivity': 'error',
       'svelte/prefer-writable-derived': 'error',
       'svelte/no-unnecessary-state-wrap': 'error',
+    },
+  },
+  {
+    // SvelteKit 3 sets `compilerOptions.experimental.async` in vite.config.ts,
+    // which the linter does not read: tell it, so `await` in markup compiles.
+    files: ['examples/kit-remote/**/*.svelte'],
+    languageOptions: {
+      parserOptions: {
+        svelteConfig: { compilerOptions: { experimental: { async: true } } },
+      },
     },
   },
 );

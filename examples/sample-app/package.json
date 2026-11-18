@@ -2,6 +2,7 @@
   "name": "sample-app",
   "version": "0.0.1",
   "private": true,
+  "description": "SvelteKit SSR demo shop: server loads, endpoints, heavy lists, FPS canvas (screenshots, MCP examples)",
   "type": "module",
   "imports": {
     "#lib/*": "./src/lib/*"
@@ -22,5 +23,9 @@
     "svelte-check": "^4.7.8",
     "typescript": "^6.0.3",
     "vite": "^8.3.5"
+  },
+  "devtoolsExample": {
+    "port": 5202,
+    "dock": true
   }
 }

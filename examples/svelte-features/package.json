@@ -1,0 +1,33 @@
+{
+  "name": "svelte-features",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Plain Svelte + Vite: every Svelte feature that shapes the component tree and reactivity (several mount roots, legacy + runes, custom element, library components)",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-check --tsconfig ./tsconfig.json"
+  },
+  "dependencies": {
+    "examples-ui-lib": "workspace:*"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-devtools-svelte": "workspace:*",
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "@vitejs/devtools": "^0.8.0",
+    "svelte": "^5.57.3",
+    "svelte-check": "^4.7.8",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.5"
+  },
+  "dependenciesMeta": {
+    "examples-ui-lib": {
+      "injected": true
+    }
+  },
+  "devtoolsExample": {
+    "port": 5204
+  }
+}
