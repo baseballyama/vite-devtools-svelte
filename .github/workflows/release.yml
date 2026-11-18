@@ -45,22 +45,18 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
-
       # Use Node 24 here, not 22. `changeset publish` shells out to
       # `npm publish`, and OIDC Trusted Publishers require npm CLI >= 11.5.1.
       # Node 22 ships with npm 10.x; Node 24 ships with npm 11.x, so the OIDC
       # publish path works out of the box without a separate npm install step.
       #
-      # Note: do NOT set `registry-url` here — it would have setup-node write
-      # `_authToken=${NODE_AUTH_TOKEN}` into .npmrc, which forces token auth
-      # and blocks the OIDC code path used by Trusted Publishers.
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+      # Note: the setup action does not set `registry-url` — it would have
+      # setup-node write `_authToken=${NODE_AUTH_TOKEN}` into .npmrc, which
+      # forces token auth and blocks the OIDC code path used by Trusted
+      # Publishers.
+      - uses: ./.github/actions/setup
         with:
-          node-version: 24
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
+          node-version: '24'
 
       # Same order as ci.yml: the apps' tsconfigs extend files that
       # `svelte-kit sync` generates, and sync loads vite.config files that

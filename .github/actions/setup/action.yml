@@ -1,0 +1,36 @@
+name: Setup
+description: pnpm, Node and the workspace dependencies; optionally Chromium for browser tests.
+
+inputs:
+  node-version:
+    description: Node version for actions/setup-node.
+    default: '22'
+  chromium:
+    description: "'true' to install Chromium for the workspace playwright-core."
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: pnpm
+
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile
+
+    # The runner image already has Chrome's system libraries, so apt (whose
+    # mirrors have stalled jobs until their timeout) is only used when the
+    # downloaded browser cannot start without it.
+    - name: Install Chromium (workspace playwright-core)
+      if: ${{ inputs.chromium == 'true' }}
+      shell: bash
+      run: |
+        pnpm exec playwright-core install chromium
+        if ! node -e "require('playwright-core').chromium.launch().then(b => b.close())"; then
+          pnpm exec playwright-core install-deps chromium
+        fi

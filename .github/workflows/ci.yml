@@ -1,5 +1,8 @@
 name: CI
 
+# Every job is independent and starts at once; the slowest one sets the
+# wall-clock time. Shared setup lives in .github/actions/setup.
+
 on:
   push:
     branches: [main]
@@ -10,25 +13,18 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  lint:
-    name: Lint + format + dead code
+  # Static checks: lint, format, dead code, workspace consistency, types.
+  check:
+    name: Lint + typecheck
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
-
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup
 
       # Type-aware lint resolves each SvelteKit app's tsconfig, which extends
       # the generated .svelte-kit/tsconfig.json; sync loads each app's
@@ -38,14 +34,14 @@ jobs:
           pnpm build:plugin
           pnpm sync:kit
 
-      - name: Lint (oxlint, type-aware)
+      - name: oxlint (type-aware)
         run: pnpm exec oxlint
 
-      - name: Lint Svelte components (ESLint + eslint-plugin-svelte)
+      - name: ESLint (eslint-plugin-svelte)
         if: ${{ !cancelled() }}
         run: pnpm exec eslint .
 
-      - name: Format check (oxfmt)
+      - name: Format (oxfmt)
         if: ${{ !cancelled() }}
         run: pnpm format:check
 
@@ -57,165 +53,45 @@ jobs:
         if: ${{ !cancelled() }}
         run: pnpm sherif
 
-  typecheck:
-    name: Typecheck
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
-
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Plugin + tests (tsc)
-        run: pnpm exec tsc -p packages/vite-devtools-svelte/tsconfig.json
-
-      - name: Client node-side code (tsc)
+      - name: Typecheck (plugin, client, inspector)
         if: ${{ !cancelled() }}
-        run: pnpm exec tsc -p packages/client/tsconfig.node.json
-
-      - name: Client UI (svelte-check)
-        if: ${{ !cancelled() }}
-        run: pnpm -C packages/client run check
-
-      - name: Inspector (tsc + svelte-check)
-        if: ${{ !cancelled() }}
-        run: pnpm -C packages/inspector run check
+        run: pnpm typecheck
 
       # Additive TypeScript 7 check (plugin + client only). The packages keep
       # typescript ^6.0.3 for peers and API consumers; the TS 7 native compiler
       # is the root @typescript/native alias, which svelte-check finds via --tsgo.
-      - name: Client UI (svelte-check --tsgo, TypeScript 7, additive)
+      - name: Typecheck with TypeScript 7 (additive)
         if: ${{ !cancelled() }}
         run: |
           node node_modules/@typescript/native/bin/tsc -v
+          node node_modules/@typescript/native/bin/tsc -p packages/vite-devtools-svelte/tsconfig.json
           pnpm -C packages/client exec svelte-check --tsgo --tsconfig ./tsconfig.app.json
 
-      - name: Plugin + tests (tsc, TypeScript 7, additive)
-        if: ${{ !cancelled() }}
-        run: node node_modules/@typescript/native/bin/tsc -p packages/vite-devtools-svelte/tsconfig.json
-
+  # Unit tests, the published packages, and production builds of the apps.
   test:
-    name: Tests + build
+    name: Tests + builds
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup
 
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
-
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build plugin
-        run: pnpm -C packages/vite-devtools-svelte build
-
-      # Coverage thresholds are enforced per package (vitest.config.ts).
-      - name: Run tests with coverage (plugin + client + inspector)
-        run: pnpm test:coverage
-
-      - name: Build client UI
-        run: pnpm build:client
-
-      - name: Build inspector
-        run: pnpm build:inspector
-
-      # The published package: exports, files and types as consumers see them.
-      - name: Package lint (publint + are-the-types-wrong)
-        run: pnpm publint
-
-  build-site:
-    name: Site build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
-
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      # Sanity build — ensures the public-facing site stays buildable
-      # on every PR, mirroring the production deploy workflow.
-      - name: Build site
-        working-directory: site
-        env:
-          NODE_ENV: production
-          BASE_PATH: /vite-devtools-svelte
+      - name: Build plugin, inspector and client UI
         run: pnpm build
 
-      # The build does not type-check. The site has no svelte-check of its
-      # own; use the workspace's official svelte-check (installed in the
-      # sample-app example) against the site's tsconfig, after
-      # svelte-kit sync.
-      - name: Site typecheck (svelte-check)
-        run: |
-          pnpm -C site exec svelte-kit sync
-          pnpm -C examples/sample-app exec svelte-check --workspace ../../site --tsconfig ./tsconfig.json
+      # Coverage thresholds are enforced per package (vitest.config.ts).
+      - name: Tests with coverage (plugin + client + inspector)
+        run: pnpm test:coverage
 
-      # Screenshots of the built site (desktop / mobile, dark / light) with
-      # QA: links and anchors, overflow, contrast, one h1, alt text, focus
-      # styles, reduced motion, copy buttons, privacy. Any problem on the
-      # built site fails the step. The live site ('before') and vite.dev
-      # ('reference') are captured best effort for comparison only.
-      - name: Install Chromium (workspace playwright-core)
-        # The runner image already has Chrome's system libraries, so apt (whose
-        # mirrors have stalled jobs until their timeout) is only used when
-        # the downloaded browser cannot start without it.
-        run: |
-          pnpm exec playwright-core install chromium
-          if ! node -e "require('playwright-core').chromium.launch().then(b => b.close())"; then
-            pnpm exec playwright-core install-deps chromium
-          fi
+      # The published packages: exports, files and types as consumers see them.
+      - name: Package lint (publint + are-the-types-wrong)
+        if: ${{ !cancelled() }}
+        run: pnpm publint
 
-      - name: Site screenshots + QA
-        run: node site/scripts/capture.mjs --out=site-shots --build=site/build
-
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always()
-        with:
-          name: site-shots
-          path: site-shots/
-          retention-days: 7
-
-  build-playground:
-    name: Playground production build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
-
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build plugin (consumed by playground)
-        run: pnpm -C packages/vite-devtools-svelte build
-
-      # Asserts the dev-only virtual modules don't leak into a production
-      # bundle. If they ever do, this step fails — guarding against
-      # regressions of the resolveId/load dev-only gates.
-      - name: Build playground & assert no devtools runtime in output
+      # The dev-only virtual modules must not leak into a production bundle
+      # (guards the resolveId/load dev-only gates).
+      - name: Playground production build has no devtools runtime
+        if: ${{ !cancelled() }}
         working-directory: playground
         env:
           NODE_ENV: production
@@ -228,7 +104,8 @@ jobs:
 
       # The example exists to enforce a nonce-based CSP; check that the built
       # app actually sends it. Only the preview server started here is stopped.
-      - name: Build strict-csp-app & check its CSP response header
+      - name: strict-csp-app sends its nonce-based CSP header
+        if: ${{ !cancelled() }}
         working-directory: examples/strict-csp-app
         timeout-minutes: 3
         run: |
@@ -249,10 +126,9 @@ jobs:
           fi
           grep -i '^content-security-policy:' <<< "$headers"
 
-      # Same approach as the site typecheck: the workspace's svelte-check
-      # (from the sample-app example) against each app's tsconfig, after sync.
+      # The apps have no svelte-check of their own: use the workspace's
+      # (installed in the sample-app example) against each app's tsconfig.
       - name: Playground & strict-csp-app typecheck (svelte-check)
-        # independent of the build/CSP step above: report both on one run
         if: ${{ !cancelled() }}
         run: |
           pnpm -C playground exec svelte-kit sync
@@ -260,168 +136,97 @@ jobs:
           pnpm -C examples/strict-csp-app exec svelte-kit sync
           pnpm -C examples/sample-app exec svelte-check --workspace ../strict-csp-app --tsconfig ./tsconfig.json
 
-  # Compatibility smoke tests (e2e/compat/README.md): the plugin in a plain
-  # Svelte + Vite app and a SvelteKit 3 fixture, each standalone and inside
-  # the Vite DevTools dock. One profile at a time; every step is bounded.
-  compat:
-    name: Compat (${{ matrix.profile }}, ${{ matrix.mode }})
+  # The public site: build (as deployed by site.yml), typecheck, and
+  # screenshots + QA of the built site (links and anchors, overflow, contrast,
+  # one h1, alt text, focus styles, reduced motion, copy buttons, privacy).
+  # The live site ('before') and vite.dev ('reference') are captured best
+  # effort for comparison only.
+  site:
+    name: Site
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    concurrency:
-      group: compat-${{ github.ref }}-${{ matrix.profile }}-${{ matrix.mode }}
-      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup
+        with:
+          chromium: 'true'
+
+      - name: Build site
+        working-directory: site
+        env:
+          NODE_ENV: production
+          BASE_PATH: /vite-devtools-svelte
+        run: pnpm build
+
+      - name: Site typecheck (svelte-check)
+        run: |
+          pnpm -C site exec svelte-kit sync
+          pnpm -C examples/sample-app exec svelte-check --workspace ../../site --tsconfig ./tsconfig.json
+
+      - name: Site screenshots + QA
+        run: node site/scripts/capture.mjs --out=site-shots --build=site/build
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: site-shots
+          path: site-shots/
+          retention-days: 7
+
+  # Browser tests, one runner each:
+  # - compat: the plugin in a plain Svelte + Vite app and a SvelteKit 3
+  #   fixture, standalone and inside the Vite DevTools dock (e2e/compat/README.md)
+  # - reactivity: the playground's /lab page through MCP (component tree,
+  #   graph edges, problems, timeline, HMR) (e2e/reactivity.mjs)
+  # - screenshots: the reactivity UI on the SvelteKit sample app, and real MCP
+  #   request/response examples for the MCP guide. Output is scanned for
+  #   machine paths, codes and tokens; a hit fails instead of being written.
+  e2e:
+    name: E2E (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
-      max-parallel: 1
       matrix:
-        profile: [plain-svelte, kit3]
-        mode: [standalone, dock]
+        include:
+          - name: compat plain-svelte, standalone
+            run: node e2e/compat/prepare.mjs plain-svelte && node e2e/compat/smoke.mjs plain-svelte --tier=2
+          - name: compat plain-svelte, dock
+            run: node e2e/compat/prepare.mjs plain-svelte && node e2e/compat/smoke.mjs plain-svelte --dock --tier=2
+          - name: compat kit3, standalone
+            run: node e2e/compat/prepare.mjs kit3 && node e2e/compat/smoke.mjs kit3 --tier=2
+          - name: compat kit3, dock
+            run: node e2e/compat/prepare.mjs kit3 && node e2e/compat/smoke.mjs kit3 --dock --tier=2
+          - name: reactivity (MCP)
+            run: node e2e/reactivity.mjs
+          - name: screenshots
+            run: |
+              node scripts/screenshots/reactivity.mjs --out=e2e-out/reactivity-shots
+              node scripts/screenshots/mcp-examples.mjs --out=e2e-out/mcp-examples
+            artifact: reactivity-shots
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
-
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+      - uses: ./.github/actions/setup
         with:
-          # SvelteKit 3 needs Node >= 22.17; `22` resolves to the newest 22.x.
-          node-version: 22
-          cache: pnpm
+          chromium: 'true'
 
-      - name: Tool versions
-        run: |
-          node --version
-          pnpm --version
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build plugin and client UI
+      - name: Build plugin, inspector and client UI
         run: pnpm build
 
-      - name: Prepare profile
-        run: node e2e/compat/prepare.mjs ${{ matrix.profile }}
-
-      - name: Install Chromium (workspace playwright-core)
-        # The runner image already has Chrome's system libraries, so apt (whose
-        # mirrors have stalled jobs until their timeout) is only used when
-        # the downloaded browser cannot start without it.
-        run: |
-          pnpm exec playwright-core install chromium
-          if ! node -e "require('playwright-core').chromium.launch().then(b => b.close())"; then
-            pnpm exec playwright-core install-deps chromium
-          fi
-
-      - name: Smoke test
-        run: node e2e/compat/smoke.mjs ${{ matrix.profile }} ${{ matrix.mode == 'dock' && '--dock' || '' }} --tier=2
-
-      # The smoke test must leave the repo as it found it: the workspace
-      # lockfile and the existing examples untouched. (e2e/compat/kit3's own
-      # lockfile entry for the freshly packed plugin tarball is expected to
-      # change in CI and is not checked here.)
-      - name: Repo unchanged
-        if: always()
-        run: git diff --exit-code -- pnpm-lock.yaml examples/ playground/ packages/
-
-  # Reactivity end to end through MCP (e2e/reactivity.mjs): the
-  # playground's /lab page (module/class state, context, props, bind:,
-  # {#each}/{@const}, snippets, {#key}, {#await}, <svelte:boundary>, HMR) in
-  # Chromium; checks the component tree, graph edges, problems and timeline.
-  reactivity-e2e:
-    name: Reactivity e2e (MCP)
-    needs: [test]
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
-
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build plugin and client UI
-        run: pnpm build
-
-      - name: Install Chromium (workspace playwright-core)
-        # The runner image already has Chrome's system libraries, so apt (whose
-        # mirrors have stalled jobs until their timeout) is only used when
-        # the downloaded browser cannot start without it.
-        run: |
-          pnpm exec playwright-core install chromium
-          if ! node -e "require('playwright-core').chromium.launch().then(b => b.close())"; then
-            pnpm exec playwright-core install-deps chromium
-          fi
-
-      - name: Reactivity e2e
-        run: node e2e/reactivity.mjs
-
-      # the HMR edit is undone by the script
-      - name: Repo unchanged
-        if: always()
-        run: git diff --exit-code -- pnpm-lock.yaml examples/ playground/ packages/
-
-  # Screenshots of the reactivity UI on the SvelteKit sample app with the real
-  # runtime (scripts/screenshots/reactivity.mjs). Images are scanned for
-  # machine paths, codes and tokens before being written; a hit fails the
-  # case instead of writing the image.
-  reactivity-shots:
-    name: Reactivity UI screenshots
-    needs: [test, compat]
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
-
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build plugin and client UI
-        run: pnpm build
-
-      - name: Install Chromium (workspace playwright-core)
-        # The runner image already has Chrome's system libraries, so apt (whose
-        # mirrors have stalled jobs until their timeout) is only used when
-        # the downloaded browser cannot start without it.
-        run: |
-          pnpm exec playwright-core install chromium
-          if ! node -e "require('playwright-core').chromium.launch().then(b => b.close())"; then
-            pnpm exec playwright-core install-deps chromium
-          fi
-
-      - name: Capture
-        run: node scripts/screenshots/reactivity.mjs --out=reactivity-shots
+      - name: Run
+        run: ${{ matrix.run }}
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always()
+        if: ${{ always() && matrix.artifact }}
         with:
-          name: reactivity-shots
-          path: reactivity-shots/
+          name: ${{ matrix.artifact }}
+          path: e2e-out/
           retention-days: 7
 
-      # Real MCP request/response examples for the MCP guide (token never
-      # written; machine paths redacted, scanned, and fail the step if found).
-      - name: MCP examples
-        run: node scripts/screenshots/mcp-examples.mjs --out=mcp-examples
-
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always()
-        with:
-          name: mcp-examples
-          path: mcp-examples/
-          retention-days: 7
-
+      # The tests must leave the repo as they found it: the workspace lockfile
+      # and the existing apps untouched (the HMR edit is undone by the script;
+      # e2e/compat/kit3's own lockfile entry for the freshly packed plugin
+      # tarball is expected to change and is not checked here).
       - name: Repo unchanged
         if: always()
         run: git diff --exit-code -- pnpm-lock.yaml examples/ playground/ packages/
@@ -432,26 +237,14 @@ jobs:
     name: Release dry run (no publish)
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    permissions:
-      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
-
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
-
       # Same Node major as release.yml.
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+      - uses: ./.github/actions/setup
         with:
-          node-version: 24
-          cache: pnpm
-
-      - name: Tool versions
-        run: node --version && pnpm --version && pnpm changeset --version
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+          node-version: '24'
 
       # The release plan's input. (`changeset status` is not used: it fails
       # on any PR that changes a package without a changeset, and with
@@ -477,7 +270,7 @@ jobs:
           echo "version: $(node -p "require('./packages/vite-devtools-svelte/package.json').version")"
           sed -n 1,12p packages/vite-devtools-svelte/CHANGELOG.md
 
-      - name: Build plugin and client UI
+      - name: Build plugin, inspector and client UI
         run: pnpm build
 
       - name: Package contents (pnpm pack, not published)
