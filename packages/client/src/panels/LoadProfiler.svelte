@@ -1,5 +1,4 @@
 <script lang="ts">
-  import Badge from '../components/Badge.svelte';
   import CaptureNotice from '../components/CaptureNotice.svelte';
   import DataTable from '../components/DataTable.svelte';
   import Highlight from '../components/Highlight.svelte';
@@ -13,7 +12,7 @@
   import type { Column, SortState, Stat, TableRowState } from '../components/types.js';
   import { captureInfo } from '../lib/capture.svelte.js';
   import { uniqueKeys } from '../lib/collections.js';
-  import { formatBytes, formatClock, formatMs } from '../lib/format.js';
+  import { basename, formatBytes, formatClock, formatMs } from '../lib/format.js';
   import { matcher } from '../lib/match.js';
   import { resource } from '../lib/resource.svelte.js';
   import { getLoadProfiles, clearLoadProfiles, openInEditor } from '../lib/rpc.js';
@@ -35,14 +34,14 @@
   let selected = $state<string | null>(null);
 
   const keyed = $derived.by(() => {
-    const keys = uniqueKeys(loads.data, p => `${p.timestamp}:${p.route}:${p.type}`);
-    return loads.data.map((p, i) => ({ ...p, key: keys[i]! }));
+    const keys = uniqueKeys(loads.data, p => `${p.timestamp}:${p.route}:${p.file}`);
+    return loads.data.map((p, i) => ({ ...p, name: basename(p.file), key: keys[i]! }));
   });
   type Row = (typeof keyed)[number];
 
   const rows = $derived.by(() => {
     const m = matcher(query);
-    return keyed.filter(p => (type === 'all' || p.type === type) && (!m || m(p.route, p.file)));
+    return keyed.filter(p => (type === 'all' || p.type === type) && (!m || m(p.route, p.name)));
   });
 
   const stats = $derived.by<Stat[] | null>(() => {
@@ -67,16 +66,15 @@
     {
       id: 'route',
       label: 'Route',
-      width: 'minmax(0, 0.7fr)',
+      width: 'minmax(0, 1fr)',
       sort: (a, b) => a.route.localeCompare(b.route),
     },
     {
       id: 'file',
       label: 'File',
-      width: 'minmax(0, 1fr)',
-      sort: (a, b) => a.file.localeCompare(b.file),
+      width: 'minmax(0, 168px)',
+      sort: (a, b) => a.name.localeCompare(b.name),
     },
-    { id: 'type', label: 'Type', width: '84px', sort: (a, b) => a.type.localeCompare(b.type) },
     {
       id: 'duration',
       label: 'Duration',
@@ -154,12 +152,11 @@
               title="Open in editor: {p.file}"
               onmousedown={e => e.preventDefault()}
               onclick={e => (e.stopPropagation(), open(p))}
-              ><Icon name="editor" size={12} /><span class="path mono"
-                ><span dir="ltr"><Highlight text={p.file} {query} /></span></span
+              ><Icon name="editor" size={12} /><span class="name mono"
+                ><Highlight text={p.name} {query} /></span
               ></button
             >
           </span>
-          <span><Badge tone={p.type === 'server' ? 'blue' : 'cyan'}>{p.type}</Badge></span>
           <span class="dur">
             <span class="track"
               ><span
@@ -222,14 +219,11 @@
     font-size: var(--fs-xs);
     cursor: pointer;
   }
-  /* Long paths lose their start, not the file name: the ellipsis goes on
-     the left (rtl box) while the path itself still reads left to right. */
-  .path {
+  .name {
     min-width: 0;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
-    direction: rtl;
   }
   .file:hover {
     border-color: var(--border-strong);

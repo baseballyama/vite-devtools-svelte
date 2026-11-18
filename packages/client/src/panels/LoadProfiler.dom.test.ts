@@ -96,7 +96,6 @@ describe('LoadProfiler', () => {
     expect(screen.getAllByRole('columnheader').map(h => h.textContent.trim())).toEqual([
       'Route',
       'File',
-      'Type',
       'Duration',
       'Data',
       'At',
@@ -112,7 +111,6 @@ describe('LoadProfiler', () => {
     expect(screen.getAllByRole('columnheader').map(h => h.textContent.trim())).toEqual([
       'Route',
       'File',
-      'Type',
       'Duration',
     ]);
     expect(screen.queryByText('2.0 KB')).toBeNull();
@@ -132,7 +130,7 @@ describe('LoadProfiler', () => {
     expect(routes()).toEqual(['/about', '/', '/blog/[slug]']);
   });
 
-  it('sorts by route, type and data size', async () => {
+  it('sorts by route, file name and data size', async () => {
     const user = userEvent.setup();
     vi.mocked(rpc.getLoadProfiles).mockResolvedValue(loads);
     render(LoadProfiler);
@@ -141,7 +139,7 @@ describe('LoadProfiler', () => {
       user.click(within(screen.getByRole('columnheader', { name })).getByRole('button'));
     await sortBy('Route');
     expect(routes()).toEqual(['/', '/about', '/blog/[slug]']);
-    await sortBy('Type');
+    await sortBy('File');
     expect(routes().at(-1)).toBe('/about');
     await sortBy('Data');
     expect(screen.getByRole('columnheader', { name: 'Data' }).getAttribute('aria-sort')).toBe(
@@ -178,8 +176,9 @@ describe('LoadProfiler', () => {
     vi.mocked(rpc.getLoadProfiles).mockResolvedValue(loads);
     render(LoadProfiler);
     await settle();
-    const chip = screen.getByRole('button', { name: 'src/routes/about/+page.ts' });
-    // The tooltip carries the full path when the chip truncates it.
+    // The route names the directory, so the chip shows only the file name.
+    const chip = screen.getByRole('button', { name: '+page.ts' });
+    // The tooltip carries the full path.
     expect(chip.title).toBe('Open in editor: src/routes/about/+page.ts');
     // Only the chip opens the editor: the row itself just selects.
     const list = screen.getByRole('listbox', { name: 'Load function calls' });
@@ -201,12 +200,24 @@ describe('LoadProfiler', () => {
     await user.keyboard('{Enter}');
     expect(rpc.openInEditor).toHaveBeenCalledWith('src/routes/about/+page.ts');
     // Navigation still works after the chip was clicked: it takes no focus.
-    await user.click(screen.getByRole('button', { name: 'src/routes/about/+page.ts' }));
+    await user.click(screen.getByRole('button', { name: '+page.ts' }));
     await user.keyboard('{ArrowDown}{Enter}');
     expect(rpc.openInEditor).toHaveBeenLastCalledWith('src/routes/+page.server.ts');
   });
 
-  it('filters by file path too', async () => {
+  it('tells a layout load from a page load on the same route', async () => {
+    vi.mocked(rpc.getLoadProfiles).mockResolvedValue([
+      { ...loads[0]!, route: '/blog', file: 'src/routes/blog/+layout.server.ts', timestamp: 5_000 },
+      { ...loads[0]!, route: '/blog', file: 'src/routes/blog/+page.server.ts', timestamp: 5_000 },
+    ]);
+    render(LoadProfiler);
+    await settle();
+    expect(routes()).toEqual(['/blog', '/blog']);
+    expect(screen.getByRole('button', { name: '+layout.server.ts' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '+page.server.ts' })).toBeTruthy();
+  });
+
+  it('filters by file name too', async () => {
     const user = userEvent.setup();
     vi.mocked(rpc.getLoadProfiles).mockResolvedValue(loads);
     render(LoadProfiler);
