@@ -89,6 +89,7 @@ Progress line: `Chunk 2/7 (plugin: src/server/) · round 1`.
    ```
    Add `pnpm build && pnpm publint` when the package contents or exports change, and `pnpm perf:noop` when plugin hooks or injection change.
 2. Changeset: needed for any user-visible change to `@sveltejs/vite-devtools-svelte`, including the DevTools UI and shipped skills. Not needed for tests, CI, tooling, docs-only, or private packages (`svelte-devtools-client`, `vite-devtools-svelte-inspector`, `playground`, `site`). Each changeset is **one or two sentences**: what changed for users, plus the action they must take if any. No implementation details, internal rationale, or numbers. Shorten any changeset that does more.
+3. Screenshot: when the branch changes what the DevTools UI shows (`packages/client`, or anything the panels render), capture the changed view from `playground/` with real data and put it in the PR body (`gh pr edit <n> --attach ./shot.png`). A UI PR without one is not ready.
 
 ## Phase 5: Summary
 
@@ -103,6 +104,7 @@ Base: origin/main · 12 files · 4 chunks · Codex skipped (not installed)
 | Implementation | OK | 2 Major, 3 Minor | 1 Minor |
 | Gates | all pass | – | – |
 | Changeset | added / shortened / not needed | – | – |
+| Screenshot | attached / not a UI change | – | – |
 
 Waived: <finding — user's reason>
 Manual checks for the owner: <e.g. try it in playground/, the Vite DevTools dock and the standalone UI>
