@@ -1,7 +1,12 @@
 import { disable, enable } from 'obug';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { log } from '../src/utils/log.js';
+
+// A `DEBUG` set in the shell would otherwise enable the namespaces under test.
+beforeEach(() => {
+  disable();
+});
 
 afterEach(() => {
   disable();
