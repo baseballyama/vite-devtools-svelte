@@ -1,36 +1,18 @@
 #!/usr/bin/env node
-// Compatibility smoke test for one profile of e2e/compat/matrix.json (bounded,
-// deterministic). Contract: e2e/compat/README.md "What is checked".
+// Compatibility smoke test for one profile of e2e/compat/matrix.json.
+// Contract: e2e/compat/README.md "What is checked".
 //
 //   node e2e/compat/smoke.mjs <profile> [--dock] [--tier=1|2]
 //        [--max-min=10] [--json=<file>] [--keep-home]
 //
-// matrix.json (owner p1) is the only source of profiles: id, dir, framework
-// ('svelte' | 'kit'), modes, configs[mode] (passed as --config), versions
-// (expected get_project_info values; plain Svelte expects kit 'unknown'),
-// smoke {hmr, ssr?, load?, components?, stateChange?, summaryFile?}. The Vite
-// child gets SVELTE_DEVTOOLS_DOCK=1|0. Nothing is installed here.
+// Expected values come from matrix.json and the fixture, never from plugin
+// source constants. N/A (a step that does not apply to the profile) is never
+// a PASS. Exit 0 only if every step is PASS or N/A; 1 on any FAIL; 3
+// otherwise; 4 watchdog.
 //
-// Expected values come from matrix.json and the fixture (file names, a
-// scripted change), never from plugin source constants (review X-6).
-//
-// Ledger: every planned step ends as PASS / FAIL / NOT RUN / NOT CHECKED /
-// EXPECTED-FAIL / UNVERIFIED / N/A with its evidence. N/A = the step does not
-// apply to the profile (Kit-only steps on plain Svelte); it is never a PASS.
-// Exit 0 only if every step is PASS or N/A; 1 on any FAIL; 3 otherwise
-// (something not run / not checked / expected-fail); 4 watchdog.
-//
-// Safety (review X-1..X-5): the child's output stays in memory and is only
-// ever shown as a redacted tail (code, OTP links, token header, the
-// `claude mcp add` line, UUIDs/hex masked); Playwright errors are masked; no
-// trace/video/HAR/screenshots/artifacts. Isolated HOME/USERPROFILE/XDG for
-// the Vite child only, deleted in finally (also on timeout/signal). Explicit
-// `--host 127.0.0.1 --strictPort`, and the resolved URL is asserted to be
-// loopback. vite.js is spawned directly in its own process group, killed
-// SIGTERM → SIGKILL as a group; per-step timeouts + a global watchdog. No
-// install, and the final step checks that the run left pnpm-lock.yaml and
-// the profile dir as it found them. The HMR edit is undone in finally and on
-// exit; a crash leaves `<file>.smoke-backup`, restored by the next run.
+// Output can end up in public CI logs: the child's output is only shown as a
+// masked tail and no trace/video/HAR/screenshots are written. A crash during
+// the HMR edit leaves `<file>.smoke-backup`, restored by the next run.
 
 import { spawn, spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
@@ -44,7 +26,6 @@ import { pathToFileURL } from 'node:url';
 
 const repoRoot = path.resolve(import.meta.dirname, '../..');
 
-// ------------------------------------------------------------------ options
 const argv = process.argv.slice(2);
 const flag = n => argv.includes(`--${n}`);
 const opt = (n, d) => {
@@ -59,12 +40,7 @@ const tier = Number(opt('tier', '2'));
 const maxMin = Number(opt('max-min', '10'));
 const jsonOut = opt('json');
 
-// Tools the compat contract relies on (must be present; additional tools are
-// allowed and must not break listing). Not imported from src (X-6). For the
-// record (12:5x): the uncommitted working tree registers 20 tools, the PR #79
-// head ee3a716 registers 16 (without the four reactive/capture tools below).
-// Asserted by name (extra tools are fine): the 16 of PR #79 head ee3a716 +
-// the 4 added by the redesign.
+// Not imported from src; extra tools are allowed and must not break listing.
 const REQUIRED_TOOLS = [
   'compare_sessions',
   'delete_session',
@@ -110,7 +86,6 @@ function loadProfile(id) {
   };
 }
 
-// ------------------------------------------------------------------ ledger
 const PLAN = [
   'T1 dev server starts on loopback',
   'T1 mode is the requested one',
@@ -144,9 +119,8 @@ function say(line) {
   console.log(line);
 }
 
-// Ledger fields are owned by the ledger: a fact with one of these names is
-// kept under facts.<name> instead of overwriting the step's status (run 161
-// recorded status: 200 for a PASS step).
+// A fact named like a ledger field goes under facts.<name> so it cannot
+// overwrite the step's status.
 const LEDGER_KEYS = new Set(['step', 'status', 'ms', 'error', 'reason']);
 function set(stepName, status, detail = {}) {
   const own = {};
@@ -182,17 +156,15 @@ async function withTimeout(label, ms, fn) {
   }
 }
 
-// fn returns evidence (PASS) or
-// one of { unverified | notChecked | notRun | expectedFail: '<why>' }; a
-// throw is FAIL.
-// The step running now (diagnostics: page errors carry the phase they hit).
+// fn returns evidence (PASS) or one of
+// { unverified | notChecked | notRun | expectedFail: '<why>' }; a throw is FAIL.
 let currentStep = null;
 let lastStep = null;
 
 async function step(name, ms, fn) {
   if (!ledger.has(name)) throw new Error(`step not in PLAN: ${name}`);
   currentStep = name;
-  let result; // undefined on FAIL
+  let result;
   try {
     const r = (await withTimeout(name, ms, fn)) ?? {};
     if (r.unverified) set(name, 'UNVERIFIED', { reason: r.unverified });
@@ -210,9 +182,7 @@ async function step(name, ms, fn) {
   return result;
 }
 
-// --- page error diagnostics (bounded, masked; never change a status)
 const phase = () => currentStep ?? `between steps (after: ${lastStep ?? 'start'})`;
-// a URL reduced to its path: no origin, query (?t= / ?v=) or hash
 const urlPath = u => {
   try {
     return new URL(u).pathname;
@@ -249,7 +219,6 @@ function consoleErrorEntry(m) {
   };
 }
 
-// ------------------------------------------------------------------ secrets
 const secrets = new Set();
 function mask(text) {
   let t = String(text);
@@ -265,7 +234,7 @@ function mask(text) {
     .replaceAll(os.tmpdir(), '<tmp>')
     .replaceAll(/\/Users\/[^/\s]+|\/home\/[^/\s]+|[A-Za-z]:\\Users\\[^\\\s]+/g, '<home>');
 }
-// CI workspace / temp dirs (public CI logs): GitHub's runner paths when set.
+// CI logs are public: mask the runner's workspace and temp paths.
 const CI_DIRS = new RegExp(
   ['GITHUB_WORKSPACE', 'RUNNER_TEMP', 'RUNNER_TOOL_CACHE']
     .map(k => process.env[k])
@@ -275,10 +244,7 @@ const CI_DIRS = new RegExp(
   'g',
 );
 
-// ------------------------------------------------------------------ processes
 const cleanup = [];
-// Runs (and empties) the cleanup stack, newest first; a failing entry never
-// stops the rest.
 async function runCleanup() {
   for (const fn of cleanup.splice(0).toReversed()) {
     try {
@@ -407,7 +373,6 @@ function lastAuthCode(log) {
   return code;
 }
 
-// ------------------------------------------------------------------ MCP (Streamable HTTP, stateless, JSON responses)
 let rpcId = 0;
 async function mcp(
   srv,
@@ -465,7 +430,6 @@ async function poll(fn, ok, ms) {
   throw new Error(`not reached; last ${JSON.stringify(last)?.slice(0, 200)}`);
 }
 
-// ------------------------------------------------------------------ prod no-op
 function scanDir(dir, hits, root = dir) {
   if (!fs.existsSync(dir)) return;
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -492,7 +456,6 @@ function prodBuild(p, home) {
     timeout: 180_000,
   });
   if (res.status !== 0)
-    // stderr when it has anything, else stdout
     throw new Error(
       `vite build exit ${res.status}: ${mask((res.stderr?.length ?? 0) > 0 ? res.stderr : res.stdout).slice(-400)}`,
     );
@@ -501,7 +464,6 @@ function prodBuild(p, home) {
   return hits;
 }
 
-// ------------------------------------------------------------------ HMR edit (always undone)
 function backupPath(p) {
   return path.join(p.appDir, p.targets.hmr.file) + '.smoke-backup';
 }
@@ -542,21 +504,17 @@ function gitStatus(paths) {
   return r.status === 0 ? r.stdout.split('\n').filter(Boolean).toSorted() : null;
 }
 
-// ------------------------------------------------------------------ fixture facts
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const fileBase = f =>
   String(f ?? '')
     .split(/[\\/]/)
     .pop();
 
-// Component files the fixture must show: matrix smoke.components, else the
-// HMR file (it is on the first view in every profile).
+// Falls back to the HMR file: it is on the first view in every profile.
 function expectedComponents(p) {
   return (p.targets.components ?? [p.targets.hmr?.file]).filter(Boolean).map(fileBase);
 }
 
-// get_live_components default answer: a bare ComponentInstance[] (types.ts:
-// {id, file, name, parentId, mounted}); metadata only with includeMeta.
 function listedFiles(list) {
   if (!Array.isArray(list)) throw new TypeError('get_live_components default is not a bare array');
   return new Set(list.map(c => fileBase(c.file)));
@@ -574,22 +532,12 @@ async function fixtureComponentsListed(p, srv, ms) {
   return { expected: want, listed: got.size };
 }
 
-// ------------------------------------------------------------------ UI
 const ANSI = new RegExp(`${String.fromCodePoint(27)}\\[[0-9;]*m`, 'g');
 const DOCK_FRAME = 'iframe[data-iframe-pane="svelte-devtools"]';
 
-// Opens (or re-opens after a reload) the Svelte entry in the dock; the hub's
-// trusted token is kept in localStorage, so no new code is needed.
-// The dock auto-minimizes (hub-ui 1.2.0 embedded.js; run 183 dump): the
-// anchor #devframes-anchor is a 0x0 positioning point with
-// .devframes-minimized (buttons pointer-events: none) unless a mousemove
-// reached its onMousemove (bubbling from children counts) within
-// inactiveTimeout (3 s default) or a panel is open (session.open). The
-// visible target is the 22 px circle #devframes-dock centred on the anchor.
-// So: move the mouse across #devframes-dock in steps (a move to the same
-// coordinates fires no event) until the class is gone, then once more right
-// before each click attempt. Hub settings (inactiveTimeout) are not changed;
-// no forced clicks.
+// The dock auto-minimizes (buttons get pointer-events: none) unless a
+// mousemove reached it within inactiveTimeout (3 s) or a panel is open. A move
+// to the same coordinates fires no event, so move across it in steps.
 async function nudgeDock(page) {
   const box = await page.locator('#devframes-dock').boundingBox();
   if (!box) return false;
@@ -617,13 +565,9 @@ async function expandDock(page) {
   throw new Error('dock stayed minimized after mouse moves over #devframes-dock');
 }
 
-// Run 188: the expanded 'Unauthorized' button (145x23) is visible, enabled
-// and stable, but its centre lies under the dock's 12 px logo (an op0 wrapper
-// that still takes pointer events), so a centre click is intercepted. Pick a
-// point inside the button whose hit-test (elementFromPoint in the button's
-// own root) is the button or a descendant, and click there — a normal
-// Playwright click that still checks the hit target. No force, no JS
-// dispatch. null = no clear point found (the click then fails with the call log).
+// The expanded 'Unauthorized' button's centre lies under the dock's logo (an
+// invisible wrapper that still takes pointer events), so a centre click is
+// intercepted. Pick a point whose hit-test is the button. null = none found.
 function unobscuredPoint(target) {
   return target
     .evaluate(el => {
@@ -648,10 +592,9 @@ function unobscuredPoint(target) {
     .catch(() => null);
 }
 
-// Deterministic: no mouse moves run concurrently with a click (a background
-// keep-alive could race Playwright's own move/press). Each attempt expands,
-// re-nudges right before the click (fresh 3 s window, longer than the 2.5 s
-// click timeout), then clicks; nothing moves the mouse until it returns.
+// No background keep-alive: it could race Playwright's own move/press. Each
+// attempt re-nudges right before the click for a fresh 3 s window, longer than
+// the 2.5 s click timeout.
 async function clickInDock(page, target) {
   let last;
   for (let i = 0; i < 3; i++) {
@@ -672,9 +615,7 @@ async function clickInDock(page, target) {
   throw last;
 }
 
-// Text-only dump of the dock for a failure message: anchor class, button
-// names / aria-expanded / box / opacity / pointer-events, iframe panes and
-// the number of inputs. Never input values, codes or screenshots.
+// Goes into failure messages: never input values, codes or screenshots.
 function dockDump(page) {
   return page
     .evaluate(() => {
@@ -718,15 +659,14 @@ async function withDockDump(page, fn) {
   }
 }
 
-// Opens (or re-opens after a reload) the Svelte entry in the dock; the hub's
-// trusted token is kept in localStorage, so no new code is needed.
+// The hub keeps its trusted token in localStorage, so reopening after a
+// reload needs no new code.
 async function openDockEntry(page) {
   return withDockDump(page, async () => {
     await page.locator('devframes-dock-embedded').waitFor({ state: 'attached', timeout: 20_000 });
     const iframe = page.locator(DOCK_FRAME);
-    // After a reload the hub restores the selected entry with its iframe
-    // (194–196 dumps: Svelte selected, iframe present). Clicking the entry
-    // again would toggle it closed, so click only when no iframe is there.
+    // After a reload the hub restores the selected entry with its iframe;
+    // clicking the entry again would toggle it closed.
     const restored = await iframe.waitFor({ state: 'attached', timeout: 3_000 }).then(
       () => true,
       () => false,
@@ -734,7 +674,7 @@ async function openDockEntry(page) {
     if (!restored)
       await clickInDock(page, page.getByRole('button', { name: 'Svelte', exact: true }));
     await iframe.waitFor({ state: 'attached', timeout: 15_000 });
-    // relative before, absolute with the SPA hash route after a restart (196)
+    // relative at first, absolute with the SPA hash route after a restart
     const src = await iframe.getAttribute('src');
     const u = src ? new URL(src, page.url()) : null;
     if (!u || u.origin !== new URL(page.url()).origin || u.pathname !== '/.svelte-devtools/')
@@ -752,7 +692,6 @@ async function waitCode(srv, from) {
   throw new Error('no one-time code printed');
 }
 
-// Standalone: our page at /.svelte-devtools/ with the one-time-code gate.
 async function openStandaloneUi(ctx, srv) {
   const ui = await ctx.newPage();
   const from = srv.log.length;
@@ -767,7 +706,6 @@ async function openStandaloneUi(ctx, srv) {
   return ui;
 }
 
-// The UI (a page or the dock iframe) shows the fixture's component names.
 async function uiShowsFixture(frame, p) {
   const want = expectedComponents(p).map(f => f.replace(/\.svelte$/, ''));
   await frame
@@ -779,7 +717,6 @@ async function uiShowsFixture(frame, p) {
     try {
       await frame.getByText(name, { exact: false }).first().waitFor({ timeout: 20_000 });
     } catch (e) {
-      // same 20 s wait as before; on a miss, say what the UI showed instead
       throw new Error(
         `${String(e?.message ?? e).slice(0, 600)} | ui: ${JSON.stringify(await uiDump(frame))}`,
         { cause: e },
@@ -789,15 +726,8 @@ async function uiShowsFixture(frame, p) {
   return want;
 }
 
-// Dock — CANDIDATE driver, never executed yet; fail-closed (any miss = FAIL).
-// Read (bundle, approximate lines) from @vitejs/devtools 0.7.6 →
-// @devframes/hub-ui 1.2.0 dist/client/embedded.js: <devframes-dock-embedded>
-// with an OPEN shadow root; dock bar #devframes-dock (hover reveals it); an
-// untrusted dock shows a button "Unauthorized" → panel "Authorize …"; opening
-// it makes the server print a fresh code; six inputs aria-label "Digit N of
-// 6"; submit "Authorize". Our entry: button[aria-label="Svelte"]; its panel
-// is <iframe data-iframe-pane="svelte-devtools" src="/.svelte-devtools/">
-// (same origin). Auth belongs to the hub: our own gate must NOT show inside.
+// Selectors read from @devframes/hub-ui 1.2.0 (embedded.js, open shadow root).
+// In the dock, auth belongs to the hub: our own gate must not show inside.
 async function dockUi(page, srv, p) {
   const submit = await withDockDump(page, async () => {
     await page.locator('devframes-dock-embedded').waitFor({ state: 'attached', timeout: 20_000 });
@@ -813,20 +743,16 @@ async function dockUi(page, srv, p) {
         .catch(() => {
           throw new Error(`code input 'Digit ${i + 1} of 6' not fillable`);
         });
-    // hub-ui 1.2.0 auth form: the OTP field's onComplete submits on the 6th
-    // digit (requestTrustWithCode); on success the panel and the
-    // 'Unauthorized' button go away (run 191). The submit button is only a
-    // fallback when the form is still there, enabled and not submitting.
-    // A mismatch/failure alert is a FAIL.
+    // The OTP field submits itself on the 6th digit; the submit button is only
+    // a fallback while the form is still there and enabled.
     const unauthorized = page.getByRole('button', { name: 'Unauthorized' });
     const authorize = page.getByRole('button', { name: 'Authorize', exact: true });
     const end = Date.now() + 15_000;
     let clicked = false;
     for (;;) {
       if ((await unauthorized.count()) === 0) break;
-      // One atomic, non-waiting read of all alerts (evaluateAll resolves to []
-      // when none match): the panel may vanish between a count() and a later
-      // read once the auto-submit succeeds (CI job 111401817183, Node 22).
+      // One atomic read of all alerts: the panel may vanish between a count()
+      // and a later read once the auto-submit succeeds.
       const text = await page
         .getByRole('alert')
         .evaluateAll(els => els.map(el => el.textContent ?? '').join(' '))
@@ -869,11 +795,9 @@ async function dockUi(page, srv, p) {
   };
 }
 
-// Text-only dump of the standalone UI tab for a failure message: hash route,
-// connection status text, gate presence/visibility, active nav, first 300
-// chars of the body text (masked by the caller). No inputs, no screenshots.
+// Goes into failure messages: no inputs, no screenshots; the caller masks it.
 function uiDump(ui) {
-  // Page or FrameLocator (dock iframe): evaluate on its <html>, never waiting long
+  // Works on a Page and on a FrameLocator (dock iframe).
   return ui
     .locator('html')
     .evaluate(
@@ -917,7 +841,6 @@ async function hubServed(srv) {
   return { served: true };
 }
 
-// Our Devframe SPA (client/index.html): <title>Svelte DevTools</title> + <div id="app">.
 async function uiServed(srv) {
   const r = await fetch(srv.base + '/.svelte-devtools/', {
     headers: { accept: 'text/html' },
@@ -955,7 +878,6 @@ function rawStatus(srv, tokens) {
   });
 }
 
-// ------------------------------------------------------------------ main
 async function main() {
   if (argv.some(a => a.startsWith('--mode')))
     throw new Error('use --dock (single interface with CI)');
@@ -1006,7 +928,7 @@ async function main() {
         throw new Error(`statuses ${none.status} / ${wrong.status} / ${dup}`);
       return { none: none.status, wrong: wrong.status, duplicated: dup };
     });
-    // tier 2: first view before the first authorized MCP call (lease)
+    // Before the first authorized MCP call, which leases (activates) the runtime.
     const app = tier >= 2 ? await openApp(getSrv) : null;
     await step('T1 MCP initialize + required tools present', 15_000, async () => {
       const init = await mcp(srv, 'initialize', {
@@ -1022,13 +944,10 @@ async function main() {
       return { required: REQUIRED_TOOLS.length, listed: names.length };
     });
     await step('T1 MCP session id traversal rejected (C-7)', 20_000, async () => {
-      // C-7 fixed: SESSION_ID_PATTERN (sessions.ts) in the tool's zod input
-      // schema (server.ts). Judged by protocol, not message text: SDK 1.29
-      // (server/mcp.js) turns an input validation McpError(InvalidParams) into
-      // a result with isError: true; a JSON-RPC -32602 error is accepted too. A
-      // result without isError means the handler ran (its not-found answer is
-      // plain text) = FAIL. Read-only probes (never delete_session); invariant:
-      // list_sessions is unchanged around them.
+      // Judged by protocol, not message text: the SDK turns an input
+      // validation error into isError: true; a JSON-RPC -32602 error is
+      // accepted too. Without isError the handler ran = FAIL. Read-only probes
+      // (never delete_session).
       const probes = ['../c7-smoke-probe', '/tmp/c7-smoke-probe', 'a/b', 's_c7smoke_zzzzzz', ''];
       const before = JSON.stringify(await tool(srv, 'list_sessions'));
       for (const id of probes) {
@@ -1112,12 +1031,11 @@ async function main() {
   });
 }
 
-// Page-side probe (serialized by waitForFunction): a DevTools runtime global exists.
 const hasRuntime = () => Object.keys(window).some(k => /^__SVELTE_.*DEVTOOLS__$/.test(k));
 
-// T2 browser + the app's first view. Runs BEFORE any authorized MCP call:
-// those take the collector's 60 s MCP lease (plugin.ts) and would activate
-// the runtime, so "inactive before any consumer" could not be observed.
+// Runs before any authorized MCP call: those take the collector's 60 s lease
+// and activate the runtime, so "inactive before any consumer" could not be
+// observed.
 async function openApp(getSrv) {
   const req = createRequire(path.join(repoRoot, 'package.json'));
   // playwright-core is CJS: some Node versions expose only default.chromium
@@ -1201,7 +1119,6 @@ async function tier2(p, getSrv, restart, app) {
       x => x && x.stale !== true && Array.isArray(x.rows),
       20_000,
     );
-    // ReactiveSummary (types.ts); rows are active instances (top K), other = the rest (runtime.ts)
     if (s.policy !== 'sampled-200ms' || s.coverage !== 'component-init')
       throw new Error(`policy ${s.policy} / coverage ${s.coverage}`);
     if ((s.components?.total ?? null) === null || (s.other ?? null) === null)
@@ -1237,7 +1154,7 @@ async function tier2(p, getSrv, restart, app) {
           .slice(-5)
           .map(c => [c.oldValue, c.newValue]),
       );
-    // Readiness first (review B-2): every tracked $state has its first sample
+    // Readiness first: every tracked $state has its first sample
     // (seed). Seeds record nothing, so a write before that is not observable.
     await poll(
       async () => (await tool(getSrv(), 'get_capture_info'))?.stateTimeline?.baseline,
@@ -1280,8 +1197,8 @@ async function tier2(p, getSrv, restart, app) {
         `expected exactly 1 ${sc.state} entry ${JSON.stringify(sc.from)}->${JSON.stringify(sc.to)}; got ${brief(changes)}`,
       );
     // The collector answers a repeated summary request from its 1 s cache
-    // (PULL_FRESHNESS): one computed before the click (178, 194: sampledActiveMs
-    // 200, withActivity 0). Use only an answer computed after the click.
+    // (PULL_FRESHNESS), possibly computed before the click. Use only an answer
+    // computed after the click.
     const summary = await poll(
       () => tool(getSrv(), 'get_reactive_summary', { windowMs: 10_000 }),
       x => x && x.stale !== true && (x.window?.until ?? 0) >= clickedAt,
@@ -1307,7 +1224,6 @@ async function tier2(p, getSrv, restart, app) {
     // scope of that instance, with the epoch its id came from
     const live = await tool(getSrv(), 'get_live_components', { includeMeta: true });
     const inst = (live?.components ?? []).find(c => fileBase(c.file) === file);
-    // includeMeta shape (server.ts): {epoch, total, captured, truncated, components}
     for (const k of ['epoch', 'total', 'captured', 'truncated', 'components'])
       if (!(k in (live ?? {}))) throw new Error(`get_live_components includeMeta lacks ${k}`);
     if (!inst || (live.epoch ?? null) === null)
@@ -1316,8 +1232,6 @@ async function tier2(p, getSrv, restart, app) {
       componentId: inst.id,
       epoch: live.epoch,
     });
-    // ReactiveGraphResult (types.ts): scope, epoch, nodes, edges, total, truncated,
-    // edgesOmitted, policy, stale?, staleReason? ('epoch-changed' from collector.ts)
     if (scope?.stale) throw new Error(`scope stale: ${scope.staleReason ?? 'no reason'}`);
     if (scope.scope !== inst.id || scope.epoch !== live.epoch)
       throw new Error('scope answered another instance or epoch');
@@ -1477,10 +1391,8 @@ async function tier2(p, getSrv, restart, app) {
       const epochAfter = (await tool(getSrv(), 'get_reactive_summary'))?.epoch ?? null;
       let uiState = 'not open';
       if (ui) {
-        // Same UI tab. Its reconnect backoff is 0.5 → 10 s (rpc.ts
-        // RECONNECT_MAX_DELAY), so first wait ≤ 30 s until it settles: the
-        // status (App.svelte span.conn[role=status]) shows 'connected', or
-        // the gate asks again. Only then judge gate vs fixture.
+        // The reconnect backoff goes up to 10 s: first wait until the status
+        // shows 'connected' or the gate asks again, then judge gate vs fixture.
         try {
           const settled = await poll(
             () =>
@@ -1512,13 +1424,9 @@ async function tier2(p, getSrv, restart, app) {
           );
         }
       } else if (mode === 'dock') {
-        // The app page reloaded; the hub keeps its trust (localStorage) and
-        // restores or reopens the Svelte iframe. No new code may be asked
-        // for: the hub's 'Unauthorized' button or our own gate = FAIL.
-        // Right after the reload the hub may show 'Unauthorized' briefly until
-        // it re-validates the stored trust over WS (CI job 111402586518): wait
-        // ≤ 10 s for it to go away on its own. No code is entered here, so a
-        // pass still means "same trust, no new code".
+        // The hub keeps its trust across the reload, so asking for a new code
+        // is a FAIL. It may show 'Unauthorized' briefly while it re-validates
+        // the stored trust over WS: wait for that to go away, entering no code.
         const t0Auth = Date.now();
         while ((await page.getByRole('button', { name: 'Unauthorized' }).count()) > 0) {
           if (Date.now() - t0Auth > 10_000)
@@ -1594,7 +1502,6 @@ async function tier2(p, getSrv, restart, app) {
   await browser.close();
 }
 
-// ------------------------------------------------------------------ finish
 let finishing = false;
 async function finish(code) {
   if (finishing) return;

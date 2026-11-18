@@ -44,7 +44,6 @@
   let body = $state('');
   let tab = $state<'body' | 'headers'>('body');
   let sending = $state(false);
-  /** Stops the request in flight. */
   let inflight: AbortController | null = null;
   /** Counts sends; a request whose number is no longer current shows nothing. */
   let generation = 0;

@@ -1,20 +1,16 @@
-// Review P-1 Option A: profile pushes while DevTools is open. Contract in
-// docs/performance-status.md "P-1 Option A" (R1 retained set = collector tail,
-// R2 cumulative counters, R3 forced activation/resync, R4 gating, R5 cadence,
-// R6 hard 2 s bound).
 import { describe, expect, it } from 'vitest';
 
 import { Collector, LIMITS } from '../../src/server/collector.js';
 import { createRuntime, mountList, type Harness } from './harness.js';
 
 const zeroClock = () => 0;
-/** The size-term interval the runtime picks for a payload estimate (R5). */
+/** The size-term interval the runtime picks for a payload estimate. */
 const intervalForBytes = (bytes: number) => (bytes > 1_000_000 ? 2000 : 1000);
 
 const profileMsgs = (h: Harness) =>
   h.sent.filter(s => s.event === 'svelte-devtools:profiles').map(s => s.data as any);
 
-describe('P-1 Option A: profiles push', () => {
+describe('profiles push', () => {
   it('R1: sends exactly the collector tail (cap pinned to LIMITS.renderProfiles)', () => {
     expect(createRuntime().dt._profileCap).toBe(LIMITS.renderProfiles);
     const h = createRuntime();
@@ -103,7 +99,7 @@ describe('P-1 Option A: profiles push', () => {
     big.dt._sendProfileUpdate();
     const realBytes = JSON.stringify(profileMsgs(big)[0].profiles).length;
     const est = big.dt._profilesCost.bytes;
-    // the sampled estimate tracks the real payload (the old 160 B/entry guess did not)
+    // the sampled estimate tracks the real payload
     expect(Math.abs(est - realBytes) / realBytes).toBeLessThan(0.3);
     expect(realBytes).toBeGreaterThan(250000);
     big.dt.recordRender(b.ids[0]);

@@ -65,7 +65,7 @@ describe('Collector ingestion caps', () => {
     expect(c.renderProfiles).toHaveLength(LIMITS.renderProfiles);
     expect((c.renderProfiles.at(-1) as any).i).toBe(5999);
 
-    // Edges are kept only between kept nodes, then capped (§6.7 A).
+    // Edges are kept only between kept nodes, then capped.
     c.ingestReactiveGraph({
       nodes: Array.from({ length: 6000 }, (_, i) => ({ id: String(i) })),
       edges: Array.from({ length: 25000 }, (_, i) => ({
@@ -186,7 +186,7 @@ function orphansOf(list: Array<{ parentId: number | null }>, ids: Set<number>) {
   return list.filter(x => x.parentId !== null && !ids.has(x.parentId));
 }
 
-describe('Collector component deltas + per-epoch state (§6.5)', () => {
+describe('Collector component deltas + per-epoch state', () => {
   it('applies the delta form: removed first, then added, parents-first order kept', () => {
     const c = new Collector();
     c.ingestComponents({ epoch: 'a', components: [comp(1), comp(2, 1), comp(3, 1)] });
@@ -258,7 +258,7 @@ describe('Collector component deltas + per-epoch state (§6.5)', () => {
       resync: true,
     });
     c.ingestComponents({ epoch: 'zzz', added: [comp(9)], removed: [] }, client);
-    // neither the base-less epoch 'b' nor the unknown 'zzz' is served (B1): the
+    // neither the base-less epoch 'b' nor the unknown 'zzz' is served: the
     // complete tree of 'a' stays visible instead of an empty one
     expect(c.epochInfo.epoch).toBe('a');
     expect(c.liveComponents.map(x => x.id)).toEqual([1]);
@@ -607,7 +607,7 @@ function served() {
 const requests = (h: ReturnType<typeof fakeHot>) =>
   h.sent.filter(s => s.event === HOT_EVENTS.requestReactiveGraph).map(s => s.payload as any);
 
-describe('Collector scoped graph pulls (§6.7 A, review G5/M1)', () => {
+describe('Collector scoped graph pulls', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
@@ -769,7 +769,7 @@ describe('Collector scoped graph pulls (§6.7 A, review G5/M1)', () => {
   });
 });
 
-describe('Collector capture info (§6.7 B)', () => {
+describe('Collector capture info', () => {
   it('reports runtime and server timeline losses by reason, monotonic until clear', () => {
     const c = new Collector();
     c.ingestStateTimeline({
@@ -853,7 +853,7 @@ describe('Collector capture info (§6.7 B)', () => {
   });
 });
 
-describe('Collector reactive summary pulls (§6.7 I)', () => {
+describe('Collector reactive summary pulls', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
@@ -909,7 +909,7 @@ describe('Collector reactive summary pulls (§6.7 I)', () => {
   });
 });
 
-describe('Collector live snapshot epoch (two app tabs, review M1)', () => {
+describe('Collector live snapshot epoch (two app tabs)', () => {
   it("pairs the served page load's components with that page load's epoch, never merged", () => {
     const c = new Collector();
     c.ingestComponents({
@@ -951,7 +951,7 @@ describe('Collector live snapshot epoch (two app tabs, review M1)', () => {
   });
 });
 
-describe('Collector scoped graph before any page load (review MUST-1)', () => {
+describe('Collector scoped graph before any page load', () => {
   it('fails closed without asking the runtime, with or without a caller epoch', async () => {
     const c = new Collector();
     const h = fakeHot();
@@ -971,7 +971,7 @@ describe('Collector scoped graph before any page load (review MUST-1)', () => {
   });
 });
 
-describe('Collector state timeline baseline disclosure (review B1/B2)', () => {
+describe('Collector state timeline baseline disclosure', () => {
   it('exposes the served page load baseline in capture info, validated', () => {
     const c = new Collector();
     c.ingestComponents({ epoch: 'e1', components: [{ id: 1, parentId: null } as any] });

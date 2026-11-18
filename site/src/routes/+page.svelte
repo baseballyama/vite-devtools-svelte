@@ -279,7 +279,6 @@
     padding-top: calc(var(--band-y) * 1.1);
   }
 
-  /* Two columns split by a hairline, like the frame. */
   .hero-grid {
     display: grid;
     grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);

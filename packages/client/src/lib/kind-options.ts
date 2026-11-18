@@ -1,4 +1,3 @@
-/** One option of a kind filter (`Segmented`). */
 export interface KindOption<K extends string> {
   value: K | 'all';
   label: string;
@@ -6,9 +5,8 @@ export interface KindOption<K extends string> {
 }
 
 /**
- * Options for a kind filter: "All", then each kind of `order` that has
- * items. The `current` choice stays listed even at 0 items — a filter whose
- * option vanished would stay applied with nothing showing it is on.
+ * The `current` choice stays listed even at 0 items: a filter whose option
+ * vanished would stay applied with nothing showing it is on.
  */
 export function kindOptions<K extends string>(
   order: readonly K[],

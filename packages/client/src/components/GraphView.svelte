@@ -20,9 +20,7 @@
     selectedNodeId = $bindable(null),
   }: Props = $props();
 
-  // --- viewBox-based pan & zoom (always sharp, no CSS transform) ---
-  // viewBox = (vbX, vbY, vbW, vbH)
-  // zoom controls vbW/vbH (smaller = zoomed in), pan controls vbX/vbY
+  // Pan and zoom move the viewBox, not a CSS transform, so the graph stays sharp.
   let vbX = $state(0);
   let vbY = $state(0);
   let vbW = $state(800);
@@ -35,10 +33,10 @@
   let containerEl = $state<HTMLDivElement | null>(null);
 
   const ZOOM_FACTOR = 1.2;
-  const ZOOM_MIN_VB = 100; // minimum viewBox dimension (max zoom in)
-  const ZOOM_MAX_VB = 8000; // maximum viewBox dimension (max zoom out)
+  const ZOOM_MIN_VB = 100;
+  const ZOOM_MAX_VB = 8000;
 
-  // Zoom percentage for display (relative to fit-to-view state)
+  // The shown zoom is relative to the fit-to-view state.
   let fitVbW = $state(800);
   const zoomPercent = $derived(Math.round((fitVbW / vbW) * 100));
 
@@ -93,11 +91,8 @@
       targetW = graphH * aspect;
     }
 
-    // Don't zoom out so far that nodes become illegible. Cap the viewBox
-    // so the rendered scale never drops below ~70% of native — a NODE_W=160
-    // box stays at >= ~110px on screen, where the 11px label inside is
-    // still readable. If the graph is genuinely larger than that fits,
-    // the user gets scroll/pan instead of an unreadable thumbnail.
+    // Cap zoom-out so a node stays >= ~110px on screen, where its 11px label
+    // is still readable; a larger graph pans instead of becoming a thumbnail.
     const MIN_NODE_SCREEN_W = 110;
     const maxVbW = (rect.width / MIN_NODE_SCREEN_W) * NODE_W;
     const maxVbH = (rect.height / MIN_NODE_SCREEN_W) * NODE_W;
@@ -113,13 +108,11 @@
     vbW = targetW;
     vbH = targetH;
 
-    // Center the visible window over the graph.
     vbX = (layout.width - vbW) / 2;
     vbY = (layout.height - vbH) / 2;
     fitVbW = vbW;
   }
 
-  // Auto-fit when node count changes
   let prevNodeCount = 0;
   $effect(() => {
     const count = nodes.length;
@@ -140,20 +133,17 @@
     return () => ro.disconnect();
   });
 
-  // Mouse-wheel zoom (centered on cursor)
   function handleWheel(e: WheelEvent) {
     e.preventDefault();
     hasManuallyZoomed = true;
     const factor = e.deltaY > 0 ? ZOOM_FACTOR : 1 / ZOOM_FACTOR;
     if (!containerEl) return;
     const rect = containerEl.getBoundingClientRect();
-    // Convert screen coords to SVG coords
     const mx = vbX + ((e.clientX - rect.left) / rect.width) * vbW;
     const my = vbY + ((e.clientY - rect.top) / rect.height) * vbH;
     applyZoom(factor, mx, my);
   }
 
-  // Drag to pan
   function handlePointerDown(e: PointerEvent) {
     const target = e.target as HTMLElement;
     if (target.closest('.node')) return;
@@ -169,7 +159,6 @@
   function handlePointerMove(e: PointerEvent) {
     if (!dragging || !containerEl) return;
     const rect = containerEl.getBoundingClientRect();
-    // Convert pixel delta to viewBox delta
     const dx = ((e.clientX - dragStartX) / rect.width) * vbW;
     const dy = ((e.clientY - dragStartY) / rect.height) * vbH;
     vbX = vbStartX - dx;
@@ -180,31 +169,25 @@
     dragging = false;
   }
 
-  /** Fits a node label: at most `max` characters. */
   const clip = (s: string, max = 14) => (s.length > max ? s.slice(0, max - 1) + '…' : s);
-  /** Node value label: strings as they are, anything else as compact JSON. */
   const valueLabel = (v: unknown) => clip(typeof v === 'string' ? v : formatValue(v));
 
   const layout = $derived(layoutGraph(nodes, edges));
 
-  // Animation timing constants
   const NODE_GLOW_MS = 300;
   const EDGE_TRAVEL_MS = 400;
 
   const propagation = $derived(propagate(nodes, edges, changedNodeIds));
 
-  // Node glow starts at: depth * (NODE_GLOW_MS + EDGE_TRAVEL_MS)
   function nodeDelayMs(nodeId: string): number {
     return (propagation.depths.get(nodeId) ?? 0) * (NODE_GLOW_MS + EDGE_TRAVEL_MS);
   }
 
-  // Edge animation starts after the source node finishes glowing:
-  //   sourceNodeDelay + NODE_GLOW_MS
   function edgeDelayMs(fromId: string): number {
     return nodeDelayMs(fromId) + NODE_GLOW_MS;
   }
 
-  /** Per kind: theme colour for outlines and edges, and the glow (an SVG filter needs a literal). */
+  /** `glow` is a literal colour: an SVG filter needs one. */
   const KINDS: Record<ReactiveNode['type'], { color: string; glow: string }> = {
     state: { color: 'var(--blue)', glow: '#3b82f6' },
     derived: { color: 'var(--green)', glow: '#22c55e' },
@@ -221,10 +204,8 @@
 
   let pulseKey = $state(0);
   $effect(() => {
-    // Always re-trigger animation when there are changed nodes,
-    // even if the same nodes changed again. This cancels any
-    // in-progress animation ({#key} re-mounts the element) and
-    // starts fresh, so rapid consecutive changes remain visible.
+    // Re-trigger even when the same nodes changed again ({#key} re-mounts
+    // and restarts), so rapid consecutive changes remain visible.
     if (changedNodeIds.size > 0) {
       queueMicrotask(() => {
         pulseKey++;
@@ -276,7 +257,6 @@
         {/each}
       </defs>
 
-      <!-- Component group backgrounds -->
       {#each layout.componentBoxes as box (`${box.x}:${box.componentFile}`)}
         <rect
           x={box.x}
@@ -290,7 +270,6 @@
         <text x={box.x + 6} y={box.y + 11} class="component-label">{box.file}</text>
       {/each}
 
-      <!-- Edges -->
       <!-- The runtime deduplicates edges, so `from→to` is unique. -->
       {#each edges as edge (`${edge.from}→${edge.to}`)}
         {@const fromPos = layout.positions.get(edge.from)}
@@ -305,9 +284,7 @@
           {@const kind = KINDS[nodeMap.get(edge.from)!.type]}
           {@const stroke = isHighlighted ? 'var(--accent)' : kind.color}
           {@const pathD = `M ${x1} ${y1} C ${cx} ${y1}, ${cx} ${y2}, ${x2} ${y2}`}
-          <!-- Base edge line -->
           <path d={pathD} class="edge" class:highlighted={isHighlighted} {stroke} />
-          <!-- Bright overlay that sweeps left-to-right -->
           {#if propagation.edgeKeys.has(`${edge.from}→${edge.to}`)}
             {#key pulseKey}
               <path
@@ -328,7 +305,6 @@
         {/if}
       {/each}
 
-      <!-- Nodes -->
       {#each nodes as node (node.id)}
         {@const pos = layout.positions.get(node.id)}
         {#if pos}
@@ -453,7 +429,6 @@
     display: block;
   }
 
-  /* --- Zoom controls --- */
   .zoom-controls {
     position: absolute;
     top: 8px;
@@ -491,7 +466,6 @@
     font-size: 10px;
   }
 
-  /* --- Component group boxes --- */
   .component-box {
     fill: var(--bg-active);
     stroke: var(--border);
@@ -505,7 +479,6 @@
     font-weight: 600;
   }
 
-  /* --- Node text — themed via CSS vars so light mode flips automatically --- */
   .node-name {
     fill: var(--fg);
   }
@@ -523,7 +496,6 @@
     opacity: 1;
   }
 
-  /* --- Edges --- */
   .edge {
     fill: none;
     stroke-width: 2;
@@ -542,12 +514,11 @@
     opacity: 1;
   }
 
-  /* Light sweep: a bright overlay path that reveals left-to-right via stroke-dashoffset */
   .edge-sweep {
     fill: none;
     stroke-width: 3.5;
     opacity: 0.9;
-    /* Total dash length — must be longer than any edge path. 600 is safe for our layout. */
+    /* Must be longer than any edge path; 600 is safe for our layout. */
     stroke-dasharray: 600;
     stroke-dashoffset: 600;
     stroke-linecap: round;
@@ -565,7 +536,6 @@
     }
   }
 
-  /* --- Nodes --- */
   .node {
     cursor: pointer;
   }

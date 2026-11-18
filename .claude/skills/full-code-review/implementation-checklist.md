@@ -46,7 +46,7 @@ Priority: security > effect on production > correctness > performance > readabil
 
 ## Code
 
-- Comments explain why (constraints, traps), not what the code does; no comments describing a past state of the code.
+- Comments are a short WHY only: a constraint, trap or workaround the code cannot show. Report as Minor ("delete" or a one-line WHY) any comment that restates the code, section banners, JSDoc that repeats the signature, and notes about past versions of the code. Keep suppression reasons and the JSDoc on the public API (plugin options and exported types).
 - No `as unknown as T`; every suppression (`eslint-disable`, `oxlint-disable`, `@ts-expect-error`) states its reason.
 - Prefer string APIs or an AST over regular expressions.
 - Names and file layout follow the neighbors.

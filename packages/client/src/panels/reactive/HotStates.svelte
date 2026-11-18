@@ -10,9 +10,8 @@
   import type { StateTimelineEntry } from '../../lib/types.js';
 
   /**
-   * Hot states: the server's timeline buffer grouped by signal. It is the
-   * latest changes across all signals, sampled every 200 ms, so counts are
-   * "seen in the buffer", not totals or rates.
+   * The buffer holds the latest changes across all signals, sampled every
+   * 200 ms, so counts are "seen in the buffer", not totals or rates.
    */
   let {
     timeline,

@@ -8,7 +8,7 @@
 // Prerequisites (same as the compat job): `pnpm install --frozen-lockfile`,
 // `pnpm build`, `pnpm exec playwright-core install --with-deps chromium`.
 //
-// Cases (docs/ui-status.md "Capture plan"):
+// Cases:
 //   1 Overview → Components   21-reactivity-overview.png
 //   2 Component local graph    22-reactivity-component.png
 //   3 Overview → States        23-reactivity-states.png
@@ -92,7 +92,6 @@ function freePort() {
   });
 }
 
-// ---------------------------------------------------------------- dev server
 const home = mkdtempSync(path.join(os.tmpdir(), 'sdt-shots-home-'));
 cleanup.push(() => rmSync(home, { recursive: true, force: true }));
 const port = await freePort();
@@ -164,7 +163,6 @@ for (let i = 0; ; i++) {
   await sleep(200);
 }
 
-// ------------------------------------------------------------------ browser
 // playwright-core is CJS: some Node versions expose only default.chromium.
 const pwMod = await import(
   pathToFileURL(createRequire(path.join(repoRoot, 'package.json')).resolve('playwright-core')).href
@@ -208,7 +206,6 @@ await dialog.locator('button[type=submit]').click();
 await dialog.waitFor({ state: 'detached', timeout: 15_000 });
 if (/devframe_otp|token=/.test(ui.url())) throw new Error('code or token left in the URL');
 
-// ------------------------------------------------------------------ helpers
 mkdirSync(outDir, { recursive: true });
 const git = (...a) =>
   execFileSync('git', ['-C', repoRoot, ...a])
@@ -301,7 +298,6 @@ async function choose(group, name) {
   if ((await r.getAttribute('aria-checked')) !== 'true')
     throw new Error(`${group} → ${name} not selected`);
 }
-/** Short, masked text of what the visible panel shows (for a failed case). */
 async function panelDump() {
   const t = await ui.evaluate(sel => {
     const h = document.querySelector(sel);
@@ -329,13 +325,12 @@ const step = async (kase, fn) => {
 };
 
 try {
-  // 1 — Overview (Components) after one 10 s window with real activity:
-  // FpsCanvas `running` ($state) toggled three times on the app page.
   await step(1, async () => {
     await go('reactive');
     await choose('Reactivity view', 'Overview');
     await choose('Overview of', 'Components');
     await ui.waitForSelector(`${host} .record`, { timeout: 30_000 });
+    // Let one 10 s overview window pass before the activity.
     await sleep(10_000);
     for (let i = 0; i < 3; i++) {
       await app.getByRole('button', { name: /^(一時停止|再開)$/ }).click();
@@ -349,7 +344,6 @@ try {
     );
   });
 
-  // 3 — Overview (States): the timeline buffer grouped by signal.
   await step(3, async () => {
     await choose('Overview of', 'States');
     await ui
@@ -363,7 +357,6 @@ try {
     );
   });
 
-  // Components → <name> → Show reactivity: the local (component) view of one instance.
   const showComponent = async name => {
     await go('components');
     await ui
@@ -380,12 +373,9 @@ try {
       throw new Error(`component tab not selected: ${await panelDump()}`);
   };
 
-  // 2 — /cart → ReactivePriceChart ($state → $derived → $effect, all created at
-  // component init) → local graph with `taxRate` selected.
   await step(2, async () => {
-    // The cart is module-level $state (not persisted): add an item and reach
-    // /cart by client-side navigation through the app's own header links,
-    // since ReactivePriceChart only renders for a non-empty cart.
+    // ReactivePriceChart only renders for a non-empty cart, and the cart is
+    // module-level $state (not persisted): reach /cart by client-side navigation.
     await app
       .getByRole('link', { name: 'Products', exact: true })
       .first()
@@ -422,7 +412,6 @@ try {
     );
   });
 
-  // 4 — back on / with FpsCanvas selected, the app page reloads.
   await step(4, async () => {
     await app.goto(base + '/', { waitUntil: 'load', timeout: 30_000 });
     await showComponent('FpsCanvas');

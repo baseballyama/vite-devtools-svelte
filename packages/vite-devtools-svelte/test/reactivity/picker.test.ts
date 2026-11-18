@@ -3,11 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import Picked from './fixtures/Picked.svelte';
 import { dt, instances, render } from './harness.js';
 
-// The Svelte Inspector's `svelte-inspector:describe` / `svelte-inspector:pick`
-// events, on real compiled components: the element's `__svelte_meta.component`
-// resolves to the instance the component tree uses, named for the label and
-// reported to the dev server on a pick.
-
 // DOM elements (the package type-checks against Node's lib only).
 type El = object;
 const win = globalThis as unknown as {

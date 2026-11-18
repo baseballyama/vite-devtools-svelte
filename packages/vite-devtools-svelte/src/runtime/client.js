@@ -21,7 +21,6 @@ function __isIdentChar(ch, first) {
   );
 }
 
-// A proxy label path segment ends at `i`: the end, or the next segment.
 function __segmentEnd(label, i) {
   return i === label.length || label[i] === '.' || label[i] === '[';
 }
@@ -46,13 +45,11 @@ function __denseRemove(ids, index, id) {
   }
 }
 
-// Ring slot (0..59) of a whole second in the activity buckets.
 function __slot(sec) {
   return ((sec % 60) + 60) % 60;
 }
 
-// String(value), or a placeholder when it cannot be converted (a
-// null-prototype object, a throwing toString).
+// String() throws for a null-prototype object or a throwing toString.
 function __describe(value) {
   try {
     return String(value);
@@ -61,7 +58,6 @@ function __describe(value) {
   }
 }
 
-// Wire shape of one component in a components message.
 function __componentEntry(instance) {
   return {
     id: instance.id,
@@ -72,12 +68,11 @@ function __componentEntry(instance) {
   };
 }
 
-// Approximate wire size of one component entry (cost-adaptive throttling).
+// Approximate, for cost-adaptive throttling.
 function __componentBytes(instance) {
   return instance.file.length + instance.name.length + 72;
 }
 
-// An integer within [lo, hi], or `d` when `v` is not a finite number.
 function __clampInt(v, lo, hi, d) {
   const n = Math.floor(Number(v));
   return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d;
@@ -98,64 +93,47 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     _pendingFile: null,
     _debounceTimer: null,
 
-    // Render profiling
     _profiles: new Map(),
     _initStartTimes: new Map(),
     _profileDebounceTimer: null,
 
-    // Reactive graph
     _reactiveNodes: new Map(),
     _reactiveProxies: new Map(),
 
-    // componentId -> Set<nodeId>. Lets unmount purge a component's reactive
-    // nodes without scanning every node of the app.
+    // Lets unmount purge a component's nodes without scanning every node.
     _nodesByComponent: new Map(),
 
-    // State timeline
     _stateTimeline: [],
-    // nodeId -> last observed value (primitive or parsed snapshot), and for
-    // objects the compare key (the JSON string, or length+hash when large)
+    // For objects the compare key is the JSON string, or length+hash when large.
     _stateSnapshots: new Map(),
     _stateSnapshotStrs: new Map(),
     _timelineDebounceTimer: null,
-    // signal (or proxy marker) -> nodeId, set at track time and removed by
-    // _forgetNode: a scoped graph resolves dependencies without scanning
-    // every node.
+    // A scoped graph resolves dependencies without scanning every node.
     _idBySignal: new WeakMap(),
-    // proxy -> nodeId (tag_proxy nodes; the marker above is per node)
     _idByProxy: new WeakMap(),
-    // Svelte component context -> component id (set by the wrapper on mount)
+    // Set by the wrapper on mount.
     _idByContext: new WeakMap(),
-    // componentId -> (name -> last suffix) for names declared more than once
-    // per instance ({@const} in {#each} items, several $state class instances)
+    // Names declared more than once per instance ({@const} in {#each} items,
+    // several $state class instances).
     _nameSeq: new Map(),
-    // Module scopes: signals created while a .svelte.js/.ts module body runs
-    // (shared state such as `export const cart = $state(...)`) belong to a
-    // scope per module file. Ids come from the component id counter (never
-    // reused, non-negative) but scopes are not components: they are not in
-    // _instances / the component tree, and live as long as the page.
+    // Signals created while a .svelte.js/.ts module body runs belong to a scope
+    // per module file. Ids come from the component id counter (never reused)
+    // but scopes are not in _instances / the tree, and live as long as the page.
     _modules: new Map(),
     _moduleByFile: new Map(),
-    // $state node name -> (scope id -> Set<nodeId>): resolves a proxy's property source
-    // (labelled '<name>.prop' by Svelte in dev) to the node of its proxy —
-    // a tag_proxy node, or a state signal holding a proxy (reassigned object
-    // state, class fields)
+    // Svelte labels a proxy's property source '<name>.prop' in dev; this resolves
+    // it to its proxy's node (a tag_proxy node, or a state signal holding a proxy).
     _proxyNames: new Map(),
-    // file of the module body running now (set by the module transform)
+    // Set by the module transform.
     _moduleFile: null,
-    // componentId -> { effect, effect_pre } counters: effect names are
-    // numbered per component, so instances of one file match
+    // Effect names are numbered per component, so instances of one file match.
     _effectSeq: new Map(),
-    // Every tracked node id (dense, swap-remove like _pollIds) for the
-    // incremental liveness sweep, and its cursor.
+    // For the incremental liveness sweep.
     _sweepIds: [],
     _sweepIndex: new Map(),
     _sweepCursor: 0,
-    // Polling bookkeeping: $state node ids in a dense array kept up
-    // to date incrementally (_pollIndex: nodeId -> position; removal is
-    // swap-with-last), a cursor carried across ticks, nodes found changed but
-    // not yet serialized (_pollDirty), and per-node change hints
-    // (nodeId -> { ref, wv, nextCheckAt }).
+    // _pollDirty: found changed but not yet serialized. _pollMeta: per-node
+    // change hints ({ ref, wv, nextCheckAt }).
     _pollIds: [],
     _pollIndex: new Map(),
     _pollCursor: 0,
@@ -174,16 +152,13 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     _timelineDropped: { 'runtime-count': 0, 'runtime-bytes': 0 },
     _valueTooLarge: 0,
 
-    // Overview aggregate, O(1) per event: registered nodes per
-    // component and type (+ app totals), and per-component activity in a
-    // ring of 60 one-second buckets (sampled changes, renders, render ms,
-    // plus how long sampling ran in that second).
+    // Overview aggregate, O(1) per event. _activity: a ring of 60 one-second
+    // buckets per component, including how long sampling ran in that second.
     _nodeCounts: new Map(),
     _nodeTotals: { state: 0, derived: 0, effect: 0 },
     _activity: [],
     _epoch: Math.random().toString(36).slice(2) + Date.now().toString(36),
 
-    // Activity subscription
     // Inactive until the server says a DevTools client (UI tab or MCP lease)
     // is watching: no state polling, FPS rAF loop, or periodic HMR sends.
     _active: false,
@@ -199,11 +174,10 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     _profileCap: 5000,
     _sampling: null,
     _baselining: false,
-    // Polled state nodes not observed yet (no seed value). Their first
-    // observation is a seed, not a change: no timeline entry, no activity
-    // count, no drops — the old value is unknown, not null.
+    // A first observation is a seed, not a change (no timeline entry, activity
+    // count or drops): the old value is unknown, not null.
     _unseeded: new Set(),
-    // pendingNodes last sent on a state-timeline message (null = none yet)
+    // pendingNodes on the last state-timeline message; null = none sent yet
     _sentPendingNodes: null,
     _fpsGen: 0,
 
@@ -241,7 +215,6 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       return id;
     },
 
-    // The component's init finished (pop): it leaves the init stack.
     registered(id) {
       const idx = this._stack.indexOf(id);
       if (idx !== -1) this._stack.splice(idx, 1);
@@ -261,7 +234,6 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       this._scheduleUpdate();
     },
 
-    // The instance and its subtree leave the tree.
     _removeInstance(id) {
       const instance = this._instances.get(id);
       if (!instance) return;
@@ -271,7 +243,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     },
 
     // Remounts get a fresh id, so entries keyed by a dead id would otherwise
-    // survive forever — every per-component map must be purged here.
+    // survive forever: every per-component map must be purged here.
     _cleanupComponent(id) {
       // Delta bookkeeping: an id added and removed between two pushes was
       // never sent, so it cancels out.
@@ -323,7 +295,6 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       this._lastSnapshotSize.delete(nodeId);
     },
 
-    // A component instance or a module scope that is still live.
     _scopeLive(id) {
       return this._instances.has(id) || this._modules.has(id);
     },
@@ -358,11 +329,8 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       else this.trackState(target, name, id, null);
     },
 
-    // A node is live while its signal is reachable, its component is mounted,
-    // and the effect it was created in (an {#each} item, an effect run) has
-    // not been destroyed. Svelte nulls effect.fn when it destroys an effect
-    // (internal/client destroy_effect), which is checked instead of the
-    // internal DESTROYED flag value. Returns the signal or null.
+    // Svelte nulls effect.fn when it destroys an effect (destroy_effect); that
+    // is checked instead of the internal DESTROYED flag value.
     _liveSignal(nodeId) {
       const entry = this._reactiveNodes.get(nodeId);
       if (!entry) return null;
@@ -390,9 +358,8 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       __denseRemove(this._sweepIds, this._sweepIndex, nodeId);
     },
 
-    // Liveness of up to `max` nodes, continuing from a cursor (each poll
-    // tick): nodes of destroyed {#each} items / effect runs leave the counts
-    // and the graph without waiting for a graph request or GC.
+    // Nodes of destroyed {#each} items / effect runs leave the counts and the
+    // graph without waiting for a graph request or GC.
     _sweepNodes(max) {
       const ids = this._sweepIds;
       for (let n = 0; n < max && ids.length > 0; n++) {
@@ -403,9 +370,8 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       }
     },
 
-    // Unique node id for a signal: componentId:name, or componentId:name#k
-    // when this instance already holds a live node of that name for another
-    // signal. The same signal (re-tagged) keeps its id.
+    // componentId:name#k when this instance already holds a live node of that
+    // name for another signal. The same signal (re-tagged) keeps its id.
     _nodeIdFor(identity, byIdentity, componentId, name) {
       const known = byIdentity.get(identity);
       if (known !== undefined && this._reactiveNodes.has(known)) return known;
@@ -514,8 +480,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     // Full-list pushes are throttled, not debounced: a pending timer is not
     // reset, so continuous churn still produces updates (a debounce would
     // starve), and the interval adapts to the last push's cost so a 10 000+
-    // instance app can't spend its main thread serializing:
-    // max(min, 20 x last send ms, 1 s when the last payload exceeded ~1 MB).
+    // instance app can't spend its main thread serializing.
     _sendInterval(cost, min) {
       return Math.max(min, 20 * cost.ms, cost.bytes > 1000000 ? 1000 : 0);
     },
@@ -531,12 +496,8 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       );
     },
 
-    // Components push. Full form { epoch, components } replaces the
-    // server's tree for this epoch: sent on activation, when the server does
-    // not advertise componentDeltas, as a periodic checkpoint, or when the
-    // delta would be larger than the tree. Otherwise the delta form
-    // { epoch, added, removed } (removed ids first, ≤ 2 000 entries per
-    // message, added in registration order = parents first).
+    // The full form replaces the server's tree for this epoch. Deltas send
+    // removed ids first, then added in registration order (parents first).
     _sendUpdate(forceFull) {
       // Nobody watching: keep the registry, skip the O(N) payload. A full
       // snapshot is sent on activation.
@@ -588,8 +549,6 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       return Array.from(this._instances.values(), __componentEntry);
     },
 
-    // --- Render profiling ---
-
     startInit(id) {
       this._initStartTimes.set(id, performance.now());
     },
@@ -612,7 +571,6 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       this._scheduleProfileUpdate();
     },
 
-    // A fresh profile for a live instance (null otherwise).
     _newProfile(id, initTime) {
       const instance = this._instances.get(id);
       if (!instance) return null;
@@ -672,7 +630,6 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       // Exactly what the collector retains: its tail, in the same order.
       const profiles =
         all.length > this._profileCap ? all.slice(all.length - this._profileCap) : all;
-      // total = all retained profiles; the message carries the newest-mounted tail
       this._send('svelte-devtools:profiles', { epoch: this._epoch, profiles, total: all.length });
       // Payload size from a small sample (entries differ mainly by file path).
       const k = Math.min(8, profiles.length);
@@ -682,11 +639,8 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       this._profilesCost = { ms: performance.now() - t0, bytes };
     },
 
-    // --- Reactive graph tracking ---
-
-    // `owner` (optional): the effect active when the signal was created; the
-    // node dies with it (an {#each} item's {@const}, a class instance created
-    // in an effect run).
+    // `owner`: the effect active when the signal was created; the node dies
+    // with it (an {#each} item's {@const}, a class instance created in an effect run).
     trackState(signal, name, componentId, owner) {
       const nodeId = this._nodeIdFor(signal, this._idBySignal, componentId, name);
       this._registerNode(nodeId, componentId, 'state', name, new WeakRef(signal), owner);
@@ -715,10 +669,8 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       this._idBySignal.set(signal, nodeId);
     },
 
-    // $effect / $effect.pre being created now (the wrapper). The effect object
-    // may not exist yet (deferred to mount): the node holds a placeholder
-    // until bindEffect() is called on the effect's first run. kind: 'effect'
-    // | 'effect_pre'; names are effect_1, effect_pre_1, ... per component.
+    // The effect object may not exist yet (deferred to mount): the node holds a
+    // placeholder until bindEffect() is called on the effect's first run.
     trackUserEffect(kind, componentId, owner) {
       let seq = this._effectSeq.get(componentId);
       if (!seq) {
@@ -747,11 +699,8 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       if (instance) instance.hook = new WeakRef(effect);
     },
 
-    // Markup effects of a component: the effects of its template
-    // (template_effect, {#if}/{#each}/... blocks, <svelte:head>), i.e. the
-    // effects under the hook's parent created in the component's context
-    // (effect.ctx), without descending into other components or the
-    // tracked $effect nodes. Svelte links child effects via first/next.
+    // Template effects are the ones under the hook's parent created in the
+    // component's context (effect.ctx). Svelte links child effects via first/next.
     _markupEffects(id) {
       const instance = this._instances.get(id);
       const hook = instance?.hook?.deref();
@@ -769,15 +718,11 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       return out;
     },
 
-    // The tracked node a proxy's property source belongs to. Svelte (dev)
-    // labels a proxy's sources after the proxy's path ('todos[0].text',
-    // 'cart.items.length', 'todos version'); the root name is a $state node
-    // name. Many live nodes may share the name (one per instance), so the
-    // candidates are looked up per scope: the reader's component, then its
-    // ancestors (props flow down), then module scopes, then all — each
-    // narrowed by the source's value at that path (identity for objects).
-    // Cost O(label + ancestry depth) for the common cases. null when
-    // unresolved.
+    // Svelte (dev) labels a proxy's sources after the proxy's path
+    // ('todos[0].text', 'todos version'); the root is a $state node name. Many
+    // live nodes may share the name (one per instance), so candidates are looked
+    // up per scope (reader, ancestors since props flow down, modules, then all),
+    // each narrowed by the source's value at that path.
     _sourceOwner(source, readerCid, liveSignal) {
       const label = source.label;
       if (typeof label !== 'string' || this._proxyNames.size === 0) return null;
@@ -815,9 +760,8 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
         const instance = this._instances.get(cid);
         cid = instance ? instance.parentId : null;
       }
-      // Module scopes holding the name. Iterated from the module list, not
-      // from `named`: a name shared by every row of a list (one scope per
-      // instance) made this O(instances) per source, O(n²) per graph build.
+      // Iterated from the module list, not from `named`: a name shared by every
+      // row of a list would make this O(n²) per graph build.
       for (const cid of this._modules.keys()) if (named.has(cid)) scopes.push(cid);
       for (const cid of scopes) {
         const ids = named.get(cid);
@@ -835,10 +779,8 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       return all.find(id => liveSignal(id)) ?? null;
     },
 
-    // '.items[0].text' -> ['items', '0', 'text']; null for ' version' and
-    // anything else that is not a property path. Svelte's labels: `.prop`
-    // for an identifier, `[0]` for an index, `['prop']` otherwise — the
-    // quoted name is not escaped, so it ends at the first `']` that is
+    // Svelte's labels: `.prop` for an identifier, `[0]` for an index, `['prop']`
+    // otherwise. The quoted name is not escaped, so it ends at the first `']`
     // followed by the next segment or the end.
     _labelPath(rest) {
       const path = [];
@@ -950,32 +892,22 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       return node;
     },
 
-    // Reactive graph. Caps are applied while building: past
-    // maxNodes no node objects are created and only edges whose endpoints
-    // are both included are emitted (the rest are counted in edgesOmitted).
-    //  - scoped (componentId): that component's nodes plus the tracked nodes
-    //    directly connected to them (via deps / reactions through untracked
-    //    intermediates). Dependencies are resolved through _idBySignal, so
-    //    the cost is O(scope + neighbours), not O(all nodes). The walk is
-    //    completed even past the cap, so total.nodes/edges are exact.
-    //  - global: nodes in registration order up to maxNodes ('global-head'),
-    //    with their incoming dependency edges. Nodes past the cap are not
-    //    dereferenced; total.nodes is the registered count (may include
-    //    nodes whose signal was already collected, nodesKind 'registered')
-    //    and total.edges is null when the walk stopped early (not guessed).
-    // Template consumers: the compiler turns every dynamic part of the markup
-    // ({expr}, attributes, {#if}/{#each}/{#key}/{#await} conditions,
-    // <svelte:head>) into effects that are not tracked one by one. A read
-    // from such an effect is reported as an edge to the synthetic node
-    // '<componentId>:(template)' (type 'template') of the component the
-    // effect belongs to (effect.ctx), so a value only the markup reads is
-    // not shown without readers.
+    // Caps are applied while building: past maxNodes no node objects are created.
+    //  - scoped: dependencies resolve through _idBySignal, so the cost is
+    //    O(scope + neighbours), not O(all nodes). The walk completes even past
+    //    the cap, so total.nodes/edges are exact.
+    //  - global: nodes past the cap are not dereferenced; total.nodes is the
+    //    registered count (may include collected signals) and total.edges is
+    //    null when the walk stopped early (not guessed).
+    // The compiler turns every dynamic part of the markup into effects that are
+    // not tracked one by one; their reads become edges to a synthetic
+    // '<componentId>:(template)' node (via effect.ctx), so a value only the
+    // markup reads is not shown without readers.
     getReactiveGraph(componentId, caps) {
       const scoped = componentId !== undefined && componentId !== null;
       const maxNodes = this._graphCap(caps?.maxNodes, 5000);
       const maxEdges = this._graphCap(caps?.maxEdges, 20000);
       const live = new Map();
-      // Live signal of a tracked node, or null (forgets dead / unmounted nodes).
       const liveSignal = nodeId => {
         if (live.has(nodeId)) return live.get(nodeId);
         const signal = this._liveSignal(nodeId);
@@ -986,10 +918,8 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
         const id = this._idBySignal.get(dep);
         return id !== undefined && liveSignal(id) === dep ? id : null;
       };
-      // Synthetic template nodes reached in this build: id -> componentId.
       const templates = new Map();
-      // Template node of an untracked effect (no reactions: not a derived),
-      // or null when its component is unknown / unmounted.
+      // No reactions: not a derived.
       const templateOf = effect => {
         if (!effect || 'reactions' in effect || !effect.ctx) return null;
         const cid = this._idByContext.get(effect.ctx);
@@ -1019,15 +949,12 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
         if (inFrom && inTo && edges.length < maxEdges) edges.push({ from, to });
         else edgesOmitted++;
       };
-      // Walk a signal's neighbours (deps or reactions) through untracked
-      // intermediates until tracked nodes are reached. onTemplate (reactions
-      // only) receives the template node of each untracked effect reached.
-      // On the deps side an untracked leaf source (a proxy's property) is
-      // resolved to its proxy's node (readerCid: the reading component).
-      // nodeId -> dependencies on signals devtools does not track (created
-      // in node_modules, e.g. SvelteKit's page state, or outside any
-      // component/module body): reported so such a node is not "isolated"
+      // Signals devtools does not track (created in node_modules, e.g.
+      // SvelteKit's page state, or outside any component/module body):
+      // reported so such a node is not "isolated".
       const untracked = new Map();
+      // Walks through untracked intermediates until tracked nodes are reached;
+      // an untracked leaf source (a proxy's property) resolves to its proxy's node.
       const walk = (start, field, onHit, onTemplate, readerCid, onUntracked) => {
         if (!start) return;
         const visited = new Set();
@@ -1055,8 +982,6 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       const nodeCid = nodeId => this._reactiveNodes.get(nodeId).meta.componentId;
       const countUntracked = nodeId => () =>
         untracked.set(nodeId, (untracked.get(nodeId) ?? 0) + 1);
-      // Reads of a component's markup effects: edges into its template node
-      // (filter: keep only edges from these node ids, for neighbours).
       const markupEdges = (cid, filter) => {
         const effects = this._markupEffects(cid);
         if (effects.length === 0) return;
@@ -1179,8 +1104,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       return Number.isFinite(n) && n >= 1 ? Math.min(n, max) : max;
     },
 
-    // Whether a pull request names another page load (epoch): such a request
-    // is not answered by this one.
+    // A request naming another page load (epoch) is not answered by this one.
     _otherEpoch(req) {
       return req.epoch !== undefined && req.epoch !== null && req.epoch !== this._epoch;
     },
@@ -1200,11 +1124,8 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       this._send('svelte-devtools:reactive-graph', graph);
     },
 
-    // Overview aggregate. Built from the activity buckets of the
-    // window (whole seconds: the current partial second plus the previous
-    // ones, ceil(windowMs / 1000) buckets) — cost O(components active in the
-    // window), no graph, no node scan. Rows rank by sampled changes, then
-    // renders, then render ms; rows + other = total (components and nodes).
+    // Built from the window's activity buckets: O(components active in the
+    // window), no graph, no node scan.
     getReactiveSummary(opts) {
       const o = opts ?? {};
       const topK = __clampInt(o.topK, 1, 200, 50);
@@ -1289,11 +1210,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       this._send('svelte-devtools:reactive-summary', summary);
     },
 
-    // --- State timeline ---
-
-    // Current value of a $state node: the signal value, or for tag_proxy
-    // nodes (non-reassigned object/array state) the live proxy itself.
-    // Returns a sentinel when the value can't be read.
+    // tag_proxy nodes (non-reassigned object/array state) hold the live proxy itself.
     _readStateValue(nodeId, signal) {
       if (signal._isProxy) {
         const proxy = this._reactiveProxies.get(nodeId)?.deref();
@@ -1305,24 +1222,17 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     },
 
     // Runs every 200 ms in the user's app, so it must stay cheap regardless of
-    // how much state the app holds.
-    //  1. Hint pass, time-sliced: at most HINT_NODES $state nodes per tick,
-    //     continuing from a cursor carried across ticks, so a full sweep over
-    //     n nodes takes ceil(n / HINT_NODES) ticks. Per node O(1):
-    //     primitives are compared directly and recorded at once; objects
-    //     whose reference or Svelte write version (wv) changed are added to
-    //     _pollDirty, which persists across ticks until serialized.
-    //  2. Serialization work is limited to BUDGET_MS per tick (dirty nodes
-    //     carry over, nothing is dropped).
+    // how much state the app holds:
+    //  1. The hint pass is time-sliced (HINT_NODES per tick from a carried
+    //     cursor). Objects whose reference or Svelte write version (wv) changed
+    //     go to _pollDirty, which persists across ticks until serialized.
+    //  2. Serialization is limited to BUDGET_MS per tick; dirty nodes carry over.
     //  3. In-place deep mutations (proxies don't bump an outer wv) are found by
-    //     time-based re-checks: each object is re-verified no earlier than
-    //     nextCheckAt = now + max(RECHECK_MS, 50 x its serialization cost),
-    //     paid from a DEEP_MS-per-tick credit, so the amortized cost is bounded
-    //     however many large states the app holds.
-    //  4. Values serializing above MAX_SNAPSHOT_CHARS are kept as length+hash
-    //     (not the string) and appear in the timeline as a summary.
-    // Writes between two visits of a node are observed as one change (the
-    // timeline is a sample, policy 'sampled-200ms'; not counted as dropped).
+    //     re-checks no earlier than max(RECHECK_MS, 50 x serialization cost),
+    //     paid from a DEEP_MS-per-tick credit, so the amortized cost is bounded.
+    //  4. Values above MAX_SNAPSHOT_CHARS are kept as length+hash, not the string.
+    // Writes between two visits of a node are observed as one change (a sample,
+    // not counted as dropped).
     _pollStateValues(baseline) {
       const HINT_NODES = 4096;
       const SWEEP_NODES = 2048;
@@ -1406,12 +1316,9 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       }
     },
 
-    // Activation (late consumer): nodes registered while inactive have no
-    // seed yet, so a write before their first visit could not be seen as a
-    // change. The first slice is seeded at activation instead of 200 ms later:
-    // ONE normal pass (<= HINT_NODES nodes, the per-tick serialization budget;
-    // the rest follow on the usual ticks). Seeds record nothing; readiness is
-    // disclosed in the summary as baseline { complete, pendingNodes }.
+    // Nodes registered while inactive have no seed yet, so a write before their
+    // first visit could not be seen as a change: one normal pass seeds them at
+    // activation instead of 200 ms later.
     _pollBaseline() {
       this._baselining = true;
       try {
@@ -1497,12 +1404,9 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       // sampled change count: independent of the ring
       this._activityRow(entry.meta.componentId).changes++;
       this._stateSnapshots.set(nodeId, newValue);
-      // The ring (_trimTimeline) is applied in bulk, not with one splice per
-      // change (a poll tick can record thousands): before every read (each
-      // push — with a hot channel and an active consumer, at least every 200
-      // changes — the full snapshot, getStateTimeline() and clear), and here
-      // once more than __TIMELINE_TRIM_AT entries are held or the byte budget
-      // is exceeded, which bounds memory when nothing reads or pushes.
+      // Trimmed in bulk, not one splice per change (a poll tick can record
+      // thousands): before every read, and here once past __TIMELINE_TRIM_AT
+      // entries or the byte budget, which bounds memory when nothing reads.
       if (
         this._stateTimeline.length > __TIMELINE_TRIM_AT ||
         this._timelineBytes > __TIMELINE_BYTES
@@ -1532,10 +1436,9 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       }
     },
 
-    // Push: a throttle, not a debounce — a pending timer is never
-    // re-armed, so unsent entries leave within 300 ms of the first one even
-    // under continuous change — plus an immediate flush once 200 entries
-    // (one message) are unsent, since one poll tick can record thousands.
+    // A throttle, not a debounce: a pending timer is never re-armed, so unsent
+    // entries leave within 300 ms even under continuous change. Flushed at once
+    // when 200 entries (one message) are unsent: one poll tick can record thousands.
     _scheduleTimelineUpdate() {
       if (!this._active || this._baselining) return;
       if (this._timelineSeq - this._pushedSeq >= 200) {
@@ -1560,8 +1463,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       }
     },
 
-    // Disclosure counters since the previous push, attached to (and reset
-    // by) the next message: dropped [{ reason, count }] and valueTooLarge.
+    // Counters since the previous push, attached to (and reset by) the next message.
     _takeTimelineDisclosure(msg) {
       msg.baseline = this._baselineInfo();
       this._sentPendingNodes = msg.baseline.pendingNodes;
@@ -1577,9 +1479,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       return msg;
     },
 
-    // Seed coverage, on every state-timeline message and the
-    // summary: pendingNodes = polled $state nodes without a first sample;
-    // their writes are not observable yet.
+    // Writes of polled $state nodes without a first sample are not observable yet.
     _baselineInfo() {
       return { complete: this._unseeded.size === 0, pendingNodes: this._unseeded.size };
     },
@@ -1593,10 +1493,6 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       );
     },
 
-    // Delta push: only entries recorded
-    // since the previous push, ≤ 200 per message, tagged with a per-page-load
-    // epoch; reset after clearStateTimeline(). A message with no changes is
-    // still sent when there is something to disclose (all unsent dropped).
     _timelineDeltas() {
       this._trimTimeline();
       const all = this._stateTimeline;
@@ -1619,9 +1515,8 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       return msgs;
     },
 
-    // Full buffer (reset: true) — reply to request-state-timeline and the
-    // activation snapshot. Newest entries first up to __TIMELINE_BYTES, the
-    // server's own buffer budget, so nothing is sent that it would drop.
+    // Newest entries first up to __TIMELINE_BYTES, the server's own buffer
+    // budget, so nothing is sent that it would drop.
     _timelineFull() {
       this._trimTimeline();
       const all = this._stateTimeline;
@@ -1662,9 +1557,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       if (import.meta.hot) import.meta.hot.send(event, data);
     },
 
-    // --- FPS monitoring ---
-    // Uses requestAnimationFrame to measure frame rate with minimal overhead.
-    // Only stores timestamps - no allocations per frame beyond a single array push.
+    // Only timestamps: no allocations per frame beyond a single array push.
     _fpsFrameTimes: [],
 
     _fpsLoop(gen) {
@@ -1704,8 +1597,6 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       this._syncSampling();
     },
 
-    // Sampling (state poll + FPS) runs only while active AND the app tab is
-    // visible.
     _syncSampling() {
       const want = this._active && this._isVisible();
       if (want && !this._sampling) {
@@ -1714,7 +1605,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
         this._sampling = {
           poll: setInterval(() => {
             this._pollStateValues();
-            // seed progress changed: push it even without changes (B-2)
+            // seed progress changed: push it even without changes
             if (this._sentPendingNodes !== this._unseeded.size) this._scheduleTimelineUpdate();
           }, 200),
           fps: setInterval(() => {
@@ -1733,7 +1624,6 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
 
     _sampleFps() {
       const now = performance.now();
-      // Remove frame timestamps older than 1 second
       const cutoff = now - 1000;
       let i = 0;
       while (i < this._fpsFrameTimes.length && this._fpsFrameTimes[i] < cutoff) i++;
@@ -1745,13 +1635,10 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
 
   window.__SVELTE_DEVTOOLS__ = __SVELTE_DT;
 
-  // State polling and FPS sampling start on the server's subscription
-  // message and pause while the app tab is hidden.
   if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
     document.addEventListener('visibilitychange', () => __SVELTE_DT._syncSampling());
   }
 
-  // Runtime errors
   window.addEventListener('error', event => {
     __SVELTE_DT._send('svelte-devtools:runtime-error', {
       message: event.message,
@@ -1767,15 +1654,12 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     const message = reason?.message;
     const stack = reason?.stack;
     __SVELTE_DT._send('svelte-devtools:runtime-error', {
-      // No (or an empty / non-string) message: the stringified reason.
       message: typeof message === 'string' && message !== '' ? message : __describe(reason),
       stack: typeof stack === 'string' ? stack : '',
       timestamp: Date.now(),
     });
   });
 
-  // The Svelte Inspector shows the component instance of the selected element,
-  // and selects it in the DevTools when the element is opened.
   // Svelte (5.58+) records the component context an element was rendered in
   // as `__svelte_meta.component`; library components and the context `mount`
   // creates are not tracked, so the nearest tracked ancestor (`ctx.p`,

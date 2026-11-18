@@ -1,8 +1,6 @@
-// Deterministic work counter: number of elements visited by Map/Set/Array
-// iteration while `fn` runs. Wall-clock ratios are too noisy on shared CI
-// machines; element visits expose O(n²) loops exactly. Shared by the perf and
-// reactivity scaling tests. Patching the prototypes permanently disables V8
-// fast paths (protectors) for the worker, so callers live in their own files.
+// Wall-clock ratios are too noisy on shared CI machines; element visits expose
+// O(n²) loops exactly. Patching the prototypes permanently disables V8 fast
+// paths (protectors) for the worker, so callers live in their own files.
 export function countVisits(fn: () => void): number {
   let visits = 0;
   const restores: Array<() => void> = [];

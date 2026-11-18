@@ -3,10 +3,9 @@ import os from 'node:os';
 import path from 'node:path';
 
 /**
- * Session ids come from MCP clients and become file names (review C-7): only
- * the issued `s_<base36>_<hex6>` shape may reach the disk. No file outside the
- * temp persist dir is created; escaping ids must be rejected before any fs
- * access, which the fs spies check.
+ * Session ids come from MCP clients and become file names: only the issued
+ * `s_<base36>_<hex6>` shape may reach the disk, and escaping ids must be
+ * rejected before any fs access.
  */
 import * as fc from 'fast-check';
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
@@ -110,10 +109,6 @@ describe('session ids', () => {
     expect(s.get('s_abc_123456')).toBeUndefined();
   });
 });
-
-// =====================================================================
-// Lifecycle, delta / compare maths, persistence
-// =====================================================================
 
 interface Metrics {
   render: RenderProfile[];

@@ -106,7 +106,6 @@ describe('ApiPlayground', () => {
     expect(options[0]!.textContent).toContain('POST');
     // More than three methods collapse into a "+n" badge.
     expect(options[1]!.textContent).toContain('+2');
-    // Nothing picked yet.
     expect(within(response()).getByText('Send a request')).toBeTruthy();
     expect(sendButton().disabled).toBe(true);
   });
@@ -463,7 +462,6 @@ describe('ApiPlayground', () => {
     await user.click(sendButton());
     await settle();
     expect(within(response()).getByText('200 OK')).toBeTruthy();
-    // scroll up in the finished response
     const pre = response().querySelector('pre')!;
     Object.defineProperty(pre, 'clientHeight', { configurable: true, value: 100 });
     Object.defineProperty(pre, 'scrollHeight', { configurable: true, value: 500 });

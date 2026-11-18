@@ -1,6 +1,4 @@
 /**
- * The API playground's request, sent by the browser itself.
- *
  * The DevTools UI is served by the app's own dev server, so a request from
  * here is same-origin with the app: the browser attaches the app's cookies
  * (httpOnly ones included), and `Set-Cookie` lands in the browser like it
@@ -122,11 +120,8 @@ export async function sendRequest(
   }
 }
 
-/**
- * The body as text, at most `maxBytes` of it, reporting the text so far
- * after every chunk. A body that fails midway (the user stopping an endless
- * stream such as SSE) keeps what arrived.
- */
+// A body that fails midway (the user stopping an endless stream such as SSE)
+// keeps what arrived.
 async function readCapped(
   res: Response,
   maxBytes: number,

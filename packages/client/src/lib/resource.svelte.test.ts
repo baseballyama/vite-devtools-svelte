@@ -40,7 +40,6 @@ function controlled<T>() {
   return { fetcher, calls, last: () => calls.at(-1)! };
 }
 
-// document.hidden / visibilitychange
 const visibility: (() => void)[] = [];
 const doc = {
   hidden: false,

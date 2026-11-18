@@ -3,16 +3,8 @@
 //
 //   pnpm build && node e2e/reactivity.mjs [--port=5290] [--headed]
 //
-// Drives playground/src/routes/lab (one page with the patterns the runtime
-// has to follow: module/class state, context, props, bind:, {#each} with
-// {@const}, snippets, {#key}, {#await}, <svelte:boundary>, $app/state,
-// SvelteMap) with Playwright and checks what the MCP tools report: the
-// component tree, the reactive graph (edges, markup readers, module scopes,
-// orphans, isolated nodes), the state timeline after interactions, and the
-// tree after an HMR edit. Exit 0 when every check passes, 1 otherwise.
-//
-// The dev server runs in its own process group and is killed on exit; the
-// HMR edit is undone in finally.
+// Drives playground/src/routes/lab, one page with the patterns the runtime
+// has to follow. Exit 0 when every check passes, 1 otherwise.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -30,7 +22,6 @@ const sleep = ms =>
     setTimeout(r, ms);
   });
 
-// ------------------------------------------------------------------ ledger
 const results = [];
 function check(name, ok, detail) {
   results.push({ name, ok: !!ok });
@@ -39,7 +30,6 @@ function check(name, ok, detail) {
   );
 }
 
-// ------------------------------------------------------------------ dev server
 const child = spawn(
   process.execPath,
   [
@@ -76,7 +66,6 @@ process.on('exit', () => {
 });
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => process.exit(130));
 
-// ------------------------------------------------------------------ MCP
 let token;
 let rpcId = 0;
 async function tool(name, args = {}) {
@@ -126,7 +115,6 @@ async function until(fn, ok, ms = 8000) {
   return last;
 }
 
-// ------------------------------------------------------------------ helpers
 const file = c => c.file ?? c.componentFile ?? '';
 const isFile = suffix => c => file(c).endsWith(suffix);
 const edgesOf = g => new Set(g.edges.map(e => `${e.from} -> ${e.to}`));
@@ -150,7 +138,6 @@ function checkTree(label, comps) {
   );
 }
 
-// ------------------------------------------------------------------ run
 let browser;
 try {
   for (let i = 0; i < 200 && !log.includes('x-svelte-devtools-token:'); i++) await sleep(150);
@@ -176,7 +163,6 @@ try {
     10_000,
   );
 
-  // ---------------------------------------------------------------- tree
   let { comps, graph: g } = await snapshot();
   checkTree('initial', comps);
   const labPage = comps.find(isFile('routes/lab/+page.svelte'));
@@ -199,7 +185,6 @@ try {
     panels,
   );
 
-  // ---------------------------------------------------------------- graph
   const E = edgesOf(g);
   const P = n => `${labPage.id}:${n}`;
   const items = byName(g, 'Inventory.items', 'lab/store.svelte.ts');
@@ -279,7 +264,6 @@ try {
     issues.issues,
   );
 
-  // scoped views
   const scope = await tool('get_reactive_scope', {
     componentId: labPage.id,
     epoch: (await tool('get_live_components', { includeMeta: true })).epoch,
@@ -305,7 +289,6 @@ try {
     { countReaders, scoped: [...SE].filter(e => e.includes(':count')) },
   );
 
-  // ---------------------------------------------------------------- timeline
   const timeline = await tool('get_state_timeline', {});
   let cursor = timeline.cursor;
   const changesAfter = async (action, expectNames) => {
@@ -353,7 +336,6 @@ try {
     comps.filter(isFile('lib/lab/Panel.svelte')).length === 1,
   );
 
-  // ---------------------------------------------------------------- HMR
   const before = comps.filter(isFile('lib/lab/Row.svelte')).map(r => r.id);
   const epochBefore = (await tool('get_live_components', { includeMeta: true })).epoch;
   fs.writeFileSync(
@@ -402,9 +384,8 @@ try {
     { timeout: 15_000 },
   );
 
-  // ---------------------------------------------------------------- boundary
-  // (after HMR: once an init failed inside <svelte:boundary>, the next HMR
-  // update is a full page reload — also without this plugin)
+  // After HMR: once an init failed inside <svelte:boundary>, the next HMR
+  // update is a full page reload, also without this plugin.
   await page.click('[data-testid=fail]');
   await page.waitForSelector('[data-testid=failed]', { timeout: 5000 });
   ({ comps } = await snapshot());
@@ -419,7 +400,6 @@ try {
     comps.filter(isFile('lib/lab/Row.svelte')).every(r => r.parentId === page2?.id),
   );
 
-  // ---------------------------------------------------------------- errors
   const unexpected = pageErrors.filter(e => !e.includes('fails on purpose'));
   check('no unexpected page errors', unexpected.length === 0, unexpected);
   const serverErrors = log

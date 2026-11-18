@@ -2,10 +2,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-/**
- * Module graph from Vite's module nodes: filtering, deduplication, edges and
- * cycle detection, checked against a transitive-closure reference.
- */
 import * as fc from 'fast-check';
 import { describe, it, expect } from 'vitest';
 
@@ -139,8 +135,8 @@ describe('buildModuleGraph: edges', () => {
       ],
       [],
     ],
-    // c (2) closes its cycle through b, which DFS had already visited: the
-    // former DFS listed only [a, b, a] and left c unmarked.
+    // c (2) closes its cycle through b, which DFS had already visited, so a
+    // visited-set DFS would leave c unmarked
     [
       'cycle through a visited module',
       [

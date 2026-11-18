@@ -2,10 +2,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-/**
- * API playground: which methods a `+server` file exports (parsed, `export *`
- * followed).
- */
 import { describe, it, expect, vi, afterEach, afterAll } from 'vitest';
 
 import {
@@ -52,7 +48,6 @@ function endpointRoute(code: string | null, ext = 'ts'): RouteInfo {
 
 const ALL = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 
-/** Write `files` (relative path → code) into a fresh directory; returns its path. */
 function project(files: Record<string, string>): string {
   const dir = path.join(tmp, `p${n++}`);
   for (const [rel, code] of Object.entries(files)) {
@@ -105,7 +100,7 @@ describe('analyzeApiEndpoints: exported methods', () => {
       ['GET', 'POST', 'HEAD', 'OPTIONS'],
     ],
     ['class', 'export class PUT {}', ['PUT']],
-    // false positives of the old substring match
+    // false positives of a substring match
     ['prefix name', 'export const GETTER = 1\nexport function POSTED() {}', []],
     ['commented out', '// export function GET() {}\n/* export const POST = 1 */', []],
     ['inside a string', "const s = 'export function GET() {}'", []],

@@ -1,7 +1,4 @@
-// §6.7 wave 1 (docs/devframe-migration.md): scoped / capped reactive graph
-// with request correlation (A, M1), time-sliced state poll (D), timeline
-// throttle + disclosure (C), and the overview aggregate (I/J).
-// Deterministic: fake timers and an injected clock, no wall-clock ratios.
+// Deterministic: fake timers and an injected clock, never wall-clock ratios.
 import { describe, expect, it } from 'vitest';
 
 import { countVisits, createRuntime, mountList, pollFn, type Harness } from './harness.js';
@@ -11,8 +8,6 @@ const graphReplies = (h: Harness) =>
 const timelineMsgs = (h: Harness) =>
   h.sent.filter(s => s.event === 'svelte-devtools:state-timeline').map(s => s.data as any);
 
-// n components, each: state a -> derived b (direct dependency).
-/** Disclosed drops across timeline messages. */
 const droppedIn = (msgs: any[]) => msgs.flatMap(m => m.dropped ?? []);
 
 /** Iteration visits of a scoped graph build in an app of `n` chains. */
@@ -41,7 +36,7 @@ function chainApp(h: Harness, n: number) {
   return { ids, sigs };
 }
 
-describe('§6.7 A/D: reactive graph', () => {
+describe('reactive graph', () => {
   it('scoped: O(scope) work — dereferences only the scope, not the other 2 000 components', () => {
     const h = createRuntime();
     const { ids } = chainApp(h, 2000);
@@ -139,7 +134,7 @@ describe('§6.7 A/D: reactive graph', () => {
   });
 });
 
-describe('§6.7 D: time-sliced state poll', () => {
+describe('time-sliced state poll', () => {
   it('visits every node within ceil(n / 4096) ticks and carries the cursor', () => {
     const h = createRuntime();
     const { signals } = mountList(h, 5000, 2); // 10 000 $state nodes
@@ -220,7 +215,7 @@ function setup() {
 
 const range = (from: number, to: number) => Array.from({ length: to - from }, (_, i) => from + i);
 
-describe('§6.7 C: timeline throttle + disclosure', () => {
+describe('timeline throttle + disclosure', () => {
   it('does not starve under continuous change: one pending timer, never re-armed', () => {
     const { h, add, sigs, poll } = setup();
     add(1);
@@ -418,7 +413,7 @@ describe('§6.7 C: timeline throttle + disclosure', () => {
   });
 });
 
-describe('§6.7 I/J: reactive summary', () => {
+describe('reactive summary', () => {
   it('O(1) counters: rows + other = total, ranked by sampled changes, top-K', () => {
     let now = 10_000;
     const h = createRuntime({ clock: () => now });
@@ -483,10 +478,10 @@ describe('§6.7 I/J: reactive summary', () => {
   });
 });
 
-// Compat smoke run 161 (plain-svelte): the page loaded inactive, an MCP lease
-// activated it, and a click right after activation was never seen as 1 -> 2:
-// nodes registered while inactive had no sample yet. First observations are
-// seeds (no entry, no counters, review B-1); readiness is disclosed (B-2).
+// A page loaded inactive and activated by an MCP lease: a click right after
+// activation must be seen as 1 -> 2 although nodes registered while inactive
+// have no sample yet. First observations are seeds (no entry, no counters),
+// and readiness is disclosed.
 const summaryOf = (h: Harness) => h.dt.getReactiveSummary({});
 
 describe('late activation (consumer arrives after mount)', () => {

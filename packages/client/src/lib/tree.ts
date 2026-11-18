@@ -11,7 +11,6 @@ export interface TreeRow<N> {
   parentKey: string | null;
   hasChildren: boolean;
   expanded: boolean;
-  /** True when the node itself matches the active filter. */
   match: boolean;
   /** 1-based position among visible siblings (aria-posinset). */
   posinset: number;
@@ -104,7 +103,6 @@ function withSiblingPositions<N>(rows: TreeRow<N>[]): TreeRow<N>[] {
   return rows;
 }
 
-/** Every key that has children — for "expand all". */
 export function branchKeys<N>(roots: readonly N[], access: TreeAccess<N>): Set<string> {
   const out = new Set<string>();
   const stack = [...roots];
@@ -119,9 +117,6 @@ export function branchKeys<N>(roots: readonly N[], access: TreeAccess<N>): Set<s
   return out;
 }
 
-// ---- Anchors that survive live updates -----------------------------------
-
-/** Lookup tables of one snapshot of a live tree. */
 export interface AnchorIndex<N> {
   byId: ReadonlyMap<number, N>;
   byKey: ReadonlyMap<string, N>;
@@ -181,7 +176,6 @@ export function remapKeys<N>(
   return out;
 }
 
-/** A snapshot plus the app page load (epoch) its ids belong to. */
 export interface EpochIndex<N> extends AnchorIndex<N> {
   /** `''` = server without epochs (always comparable); `null` = unknown (never comparable). */
   epoch: string | null;

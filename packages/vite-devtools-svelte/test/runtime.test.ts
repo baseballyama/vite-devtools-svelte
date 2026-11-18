@@ -15,10 +15,6 @@ import {
 // @ts-expect-error -- browser source without declarations (served as text)
 import * as wrapper from '../src/runtime/wrapper.js';
 
-// Behaviour of the runtime and the wrapper is covered by test/perf (the
-// runtime in a fake browser) and test/reactivity (real Svelte components
-// through the wrapper). This file pins the module contract the plugin serves.
-
 describe('virtual module ids', () => {
   it.each([
     ['RUNTIME_MODULE_ID', RUNTIME_MODULE_ID, 'virtual:svelte-devtools-runtime'],

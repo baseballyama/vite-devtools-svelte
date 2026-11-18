@@ -97,7 +97,6 @@
 
   function select(id: string) {
     if (!byId.has(id)) return;
-    // Make sure the target is visible under the current filters.
     if (!rows.some(m => m.id === id)) {
       query = '';
       type = 'all';

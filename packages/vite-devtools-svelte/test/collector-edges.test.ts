@@ -1,6 +1,3 @@
-// Collector paths not reached by the scenario tests in collector.test.ts:
-// malformed runtime payloads, served-epoch eviction, pull cache bounds, the
-// state timeline pull, and reply/request mismatches.
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 
 import {

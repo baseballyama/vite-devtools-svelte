@@ -8,9 +8,7 @@
   import type { RowState } from './types.js';
 
   /**
-   * Fixed-row-height virtual list. Renders only the rows in view (+overscan),
-   * so 100k items cost the same DOM as 40. The viewport is a single tab stop
-   * (ARIA listbox/tree/grid pattern with `aria-activedescendant`); selection
+   * The viewport is a single tab stop (`aria-activedescendant`); selection
    * follows keyboard focus like the browser devtools element tree.
    */
   interface Props {

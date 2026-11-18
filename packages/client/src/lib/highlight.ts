@@ -1,7 +1,4 @@
-/**
- * Tiny line-oriented syntax highlighter for Svelte source and compiled JS.
- * Output is escaped HTML with `hl-*` classes (styled in CodePane).
- */
+// Output is escaped HTML: CodePane renders it with `{@html}`.
 import { isDigit, isIdentStart, isSpace, isWord, skip } from './chars.js';
 
 type Tok = { t: string; c?: string };
@@ -232,7 +229,7 @@ function tokCSS(code: string): Tok[] {
   const ind = code.slice(0, code.length - tr.length);
   const body = tr.trimEnd();
   // A rule opener first: `a:hover {` would also read as `prop: value`.
-  // Trailing whitespace stays in the `{` token: dropping it lost source text.
+  // Trailing whitespace stays in the `{` token so no source text is lost.
   const brace = tr.indexOf('{');
   if (brace > 0 && brace === body.length - 1) {
     const sel = tr.slice(0, brace).trimEnd();
@@ -261,7 +258,6 @@ function render(toks: Tok[]): string {
   return out;
 }
 
-/** Highlight a .svelte file line by line, tracking <script>/<style> blocks. */
 export function highlightSvelte(lines: string[]): string[] {
   let sec: 'template' | 'script' | 'style' = 'template';
   const js = { s: 'code' as JSState };

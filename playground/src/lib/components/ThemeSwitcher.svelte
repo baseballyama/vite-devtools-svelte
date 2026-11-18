@@ -28,9 +28,8 @@
   const track = (...deps: unknown[]) => deps.length;
 
   $effect(() => {
-    // Track setting changes (read the dependencies)
     track(theme, fontSize, showPreview);
-    // Use queueMicrotask to write state outside the effect's tracking scope
+    // `changeCount++` reads changeCount: inside the effect it would become a dependency and loop.
     queueMicrotask(() => {
       changeCount++;
     });

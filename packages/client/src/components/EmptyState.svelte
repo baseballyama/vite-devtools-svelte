@@ -4,12 +4,7 @@
   import type { IconName } from '../lib/icons.js';
   import Icon from './Icon.svelte';
 
-  /**
-   * Placeholder for an empty, loading or failed view. With `error` (the
-   * failure message, shown monospace above any children) it is an alert
-   * with the error icon. `announce: false` drops the `status` role, for a
-   * view whose change a live region of its own already announces.
-   */
+  /** `announce: false` drops the `status` role, for a view whose own live region already announces the change. */
   let {
     icon,
     title,

@@ -1,5 +1,4 @@
-// What the plugin wires into its devframe host and MCP server: every data
-// source must read the live dev server / collector it belongs to.
+// Every data source must read the live dev server / collector it belongs to.
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import path from 'node:path';

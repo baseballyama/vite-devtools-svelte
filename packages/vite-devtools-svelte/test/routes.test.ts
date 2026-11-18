@@ -2,10 +2,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-/**
- * Route analysis over generated src/routes trees (SvelteKit routing rules:
- * kit docs "Routing" and "Advanced routing").
- */
 import * as fc from 'fast-check';
 import { describe, it, expect, afterAll } from 'vitest';
 
@@ -17,7 +13,6 @@ afterAll(() => {
   for (const d of tmpRoots) fs.rmSync(d, { recursive: true, force: true });
 });
 
-/** Create `src/routes` with the given files (`/`-separated, relative to it). */
 function routesTree(files: string[]): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sdt-routes-'));
   tmpRoots.push(root);
@@ -36,7 +31,6 @@ const p = (name: string, extra: Partial<ParamInfo> = {}): ParamInfo => ({
   ...extra,
 });
 
-/** Route order: by path, then id. */
 const byPathThenId = (a: RouteInfo, b: RouteInfo) =>
   a.path.localeCompare(b.path) || a.id.localeCompare(b.id);
 

@@ -2,11 +2,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-/**
- * Static analyzers over generated temp projects: assets, project info,
- * component relations, reactive declaration lines. (Routes, API endpoints,
- * OG, build and module graph have their own files.)
- */
 import { describe, it, expect, afterAll, afterEach, vi } from 'vitest';
 
 import { analyzeAssets } from '../src/analyzers/assets.js';
@@ -25,7 +20,6 @@ afterEach(() => {
 /** chmod 000 only locks a file for a non-root user on POSIX. */
 const CAN_LOCK = process.platform !== 'win32' && process.getuid?.() !== 0;
 
-/** A temp directory holding `files` (relative path → content). */
 function tree(files: Record<string, string | Buffer>): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sdt-an-'));
   tmpRoots.push(root);
@@ -36,10 +30,6 @@ function tree(files: Record<string, string | Buffer>): string {
   }
   return root;
 }
-
-// =====================================================================
-// analyzeAssets
-// =====================================================================
 
 describe('analyzeAssets', () => {
   it.each([
@@ -133,10 +123,6 @@ describe('analyzeAssets', () => {
     expect(analyzeAssets(path.join(dir, 'nope'))).toEqual([]);
   });
 });
-
-// =====================================================================
-// analyzeProject
-// =====================================================================
 
 describe('analyzeProject', () => {
   it('reads name, version and dependency maps from package.json', () => {
@@ -237,10 +223,6 @@ describe('analyzeProject', () => {
     expect(analyzeProject(root, false)).not.toBe(third);
   });
 });
-
-// =====================================================================
-// analyzeComponents
-// =====================================================================
 
 describe('analyzeComponents', () => {
   const root = tree({
@@ -391,10 +373,6 @@ describe('analyzeComponents', () => {
     }
   });
 });
-
-// =====================================================================
-// findReactiveLine
-// =====================================================================
 
 describe('findReactiveLine', () => {
   const source = [

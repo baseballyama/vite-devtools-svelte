@@ -1,8 +1,4 @@
-/**
- * Small `$state` wrapper persisted to localStorage — used for UI preferences
- * (nav collapsed, split widths, view modes). Storage failures (private mode,
- * sandboxed iframes) silently fall back to in-memory state.
- */
+/** Storage failures (private mode, sandboxed iframes) silently fall back to in-memory state. */
 const PREFIX = 'svelte-devtools:';
 
 export function persisted<T>(key: string, initial: T) {

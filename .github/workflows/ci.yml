@@ -1,7 +1,7 @@
 name: CI
 
 # Every job is independent and starts at once; the slowest one sets the
-# wall-clock time. Shared setup lives in .github/actions/setup.
+# wall-clock time.
 
 on:
   push:
@@ -17,7 +17,6 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Static checks: lint, format, dead code, workspace consistency, types.
   check:
     name: Lint + typecheck
     runs-on: ubuntu-latest
@@ -67,7 +66,6 @@ jobs:
           node node_modules/@typescript/native/bin/tsc -p packages/vite-devtools-svelte/tsconfig.json
           pnpm -C packages/client exec svelte-check --tsgo --tsconfig ./tsconfig.app.json
 
-  # Unit tests, the published packages, and production builds of the apps.
   test:
     name: Tests + builds
     runs-on: ubuntu-latest
@@ -83,7 +81,6 @@ jobs:
       - name: Tests with coverage (plugin + client + inspector)
         run: pnpm test:coverage
 
-      # The published packages: exports, files and types as consumers see them.
       - name: Package lint (publint + are-the-types-wrong)
         if: ${{ !cancelled() }}
         run: pnpm publint
@@ -136,11 +133,8 @@ jobs:
           pnpm -C examples/strict-csp-app exec svelte-kit sync
           pnpm -C examples/sample-app exec svelte-check --workspace ../strict-csp-app --tsconfig ./tsconfig.json
 
-  # The public site: build (as deployed by site.yml), typecheck, and
-  # screenshots + QA of the built site (links and anchors, overflow, contrast,
-  # one h1, alt text, focus styles, reduced motion, copy buttons, privacy).
   # The live site ('before') and vite.dev ('reference') are captured best
-  # effort for comparison only.
+  # effort, for comparison only.
   site:
     name: Site
     runs-on: ubuntu-latest
@@ -153,6 +147,7 @@ jobs:
 
       - name: Build site
         working-directory: site
+        # Same env as site.yml, so the QA below checks what is deployed.
         env:
           NODE_ENV: production
           BASE_PATH: /vite-devtools-svelte
@@ -173,14 +168,6 @@ jobs:
           path: site-shots/
           retention-days: 7
 
-  # Browser tests, one runner each:
-  # - compat: the plugin in a plain Svelte + Vite app and a SvelteKit 3
-  #   fixture, standalone and inside the Vite DevTools dock (e2e/compat/README.md)
-  # - reactivity: the playground's /lab page through MCP (component tree,
-  #   graph edges, problems, timeline, HMR) (e2e/reactivity.mjs)
-  # - screenshots: the reactivity UI on the SvelteKit sample app, and real MCP
-  #   request/response examples for the MCP guide. Output is scanned for
-  #   machine paths, codes and tokens; a hit fails instead of being written.
   e2e:
     name: E2E (${{ matrix.name }})
     runs-on: ubuntu-latest
@@ -199,6 +186,8 @@ jobs:
             run: node e2e/compat/prepare.mjs kit3 && node e2e/compat/smoke.mjs kit3 --dock --tier=2
           - name: reactivity (MCP)
             run: node e2e/reactivity.mjs
+          # Output is scanned for machine paths, codes and tokens; a hit fails
+          # instead of being written.
           - name: screenshots
             run: |
               node scripts/screenshots/reactivity.mjs --out=e2e-out/reactivity-shots
@@ -223,10 +212,8 @@ jobs:
           path: e2e-out/
           retention-days: 7
 
-      # The tests must leave the repo as they found it: the workspace lockfile
-      # and the existing apps untouched (the HMR edit is undone by the script;
-      # e2e/compat/kit3's own lockfile entry for the freshly packed plugin
-      # tarball is expected to change and is not checked here).
+      # e2e/ is not checked: kit3's own lockfile entry for the freshly packed
+      # plugin tarball changes on every run.
       - name: Repo unchanged
         if: always()
         run: git diff --exit-code -- pnpm-lock.yaml examples/ playground/ packages/
@@ -246,9 +233,8 @@ jobs:
         with:
           node-version: '24'
 
-      # The release plan's input. (`changeset status` is not used: it fails
-      # on any PR that changes a package without a changeset, and with
-      # --since it lists nothing.)
+      # Not `changeset status`: it fails on any PR that changes a package
+      # without a changeset, and with --since it lists nothing.
       - name: Pending changesets
         run: |
           for f in $(find .changeset -name '*.md' ! -name README.md | sort); do

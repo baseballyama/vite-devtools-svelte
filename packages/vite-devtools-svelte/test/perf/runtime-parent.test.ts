@@ -1,14 +1,9 @@
-// Review B1b: a component created by a later block update ({#each} item added
-// after mount) must get its real parent, in both the delta and the full form.
-//
-// The wrapper (wrapperCode) runs against a small model of the parts of
-// svelte/internal/client 5.56.8 it relies on (checked in the installed
-// source): push/pop maintain a component-context chain; pop() creates the
-// deferred user effects while the component's own context is current
-// (context.js); every effect records `ctx: component_context` at creation
-// (reactivity/effects.js) and runs with active_effect = itself and
-// component_context = its ctx restored (runtime.js update_reaction); the
-// live `active_effect` binding is exported (internal/client/index.js).
+// A component created by a later block update ({#each} item added after mount)
+// must get its real parent. The model mirrors svelte/internal/client 5.56.8
+// (checked in the installed source): push/pop keep a component-context chain,
+// pop() creates deferred user effects under the component's context, and every
+// effect records `ctx` at creation and runs with active_effect = itself and
+// component_context = its ctx restored.
 import { describe, expect, it } from 'vitest';
 
 import { wrapperCode } from '../../src/runtime/index.js';
@@ -89,21 +84,17 @@ function svelteModel() {
   return { ns, flush, root: (fn: () => void) => ns.branch(fn) };
 }
 
-/** Every component added across delta messages. */
 function addedIn(msgs: any[]): any[] {
   return msgs.flatMap(m => m.added ?? []);
 }
 
 function loadWrapper(ns: any, window: Record<string, any>) {
-  // The module syntax as plain script: imports and re-exports dropped,
-  // `export function` / `export const` declarations kept.
   const body = wrapperCode
     .split('\n')
     .filter(line => !line.startsWith('import ') && !line.startsWith('export *'))
     .filter(line => !line.startsWith('export {'))
     .map(line => (line.startsWith('export ') ? line.slice('export '.length) : line))
     .join('\n');
-  // Evaluates the wrapper module's own source against the model namespace.
   // oxlint-disable-next-line typescript/no-implied-eval -- running the wrapper source under test is the point
   return new Function('__svelte_original', 'window', `${body}\nreturn { push, pop, each };`)(
     ns,

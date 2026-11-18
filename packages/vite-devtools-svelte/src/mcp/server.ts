@@ -29,24 +29,20 @@ export interface McpDeps {
   getLiveSnapshot: () => { epoch: string | null; total: number; components: ComponentInstance[] };
   getComponentRelations: () => ComponentRelation[];
   getRenderProfiles: () => RenderProfile[];
-  /** Resolves with the current reactive graph after refreshing from the browser. */
+  /** Refreshes from the browser first. */
   getReactiveGraph: () => Promise<ReactiveGraph>;
   getLoadProfiles: () => LoadProfile[];
   getFpsSamples: () => FpsSample[];
   sessions: SessionStore;
-  // Bounded reactivity tools (docs/devframe-migration.md §6.7).
   getReactiveSummary: (req: ReactiveSummaryRequest) => Promise<ReactiveSummary>;
   getReactiveScope: (req: ReactiveGraphRequest) => Promise<ReactiveGraphResult>;
   getStateTimelineDelta: (since?: number) => StateTimelineDelta;
   getCaptureInfo: () => CaptureInfoMap;
 }
 
-/** Most timeline entries one `get_state_timeline` call returns. */
 export const MCP_TIMELINE_LIMIT = 500;
-/** Default / largest JSON size of one old/new value in `get_state_timeline` output. */
 const MCP_VALUE_CHARS = { default: 2048, max: 32768 } as const;
 
-/** A state value for MCP output: as is when small, otherwise a size summary. */
 function capValue(value: unknown, maxChars: number): unknown {
   let json: string | undefined;
   try {
@@ -62,10 +58,9 @@ function capValue(value: unknown, maxChars: number): unknown {
   };
 }
 
-/** Session ids as issued by `start_session`; anything else is rejected before the store. */
+/** Anything but an issued session id is rejected before the store. */
 const sessionId = z.string().max(64).refine(isSessionId, 'not a session id');
 
-/** A tool answer: `value` as pretty JSON (strings as is). */
 function text(value: unknown) {
   return {
     content: [
@@ -85,16 +80,13 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     version: '0.1.0',
   });
 
-  // --- read tools: issue surface ---
-
   server.registerTool(
     'list_performance_issues',
     {
       title: 'List performance issues',
       description:
         'Cross-cuts render/reactive/load/fps metrics and returns ranked issues. The entry point for AI-driven performance audits. Each issue carries `suggestedTool` naming the detail tool to call next.',
-      // Bounded like the detail tools: 0 or a negative threshold flagged
-      // every component / load, including never-rendered ones.
+      // 0 or a negative threshold would flag every component / load, including never-rendered ones.
       inputSchema: {
         avgRenderTimeMs: z.number().positive().optional(),
         renderCount: z.number().int().min(1).optional(),
@@ -242,8 +234,6 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     },
   );
 
-  // --- context tools ---
-
   server.registerTool(
     'get_project_info',
     {
@@ -277,7 +267,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     },
     ({ includeMeta, limit }) => {
       const snap = deps.getLiveSnapshot();
-      // Unchanged default: the bare array older clients expect (`limit` only when given).
+      // The bare array older clients expect (`limit` only when given).
       if (!includeMeta) return text(snap.components.slice(0, limit));
       const cap = limit ?? 1000;
       return text({
@@ -299,8 +289,6 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     },
     () => text(deps.getComponentRelations()),
   );
-
-  // --- bounded reactivity tools (read only; every answer says what it covers) ---
 
   server.registerTool(
     'get_reactive_summary',
@@ -375,8 +363,6 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     },
     () => text(deps.getCaptureInfo()),
   );
-
-  // --- session tools ---
 
   server.registerTool(
     'start_session',

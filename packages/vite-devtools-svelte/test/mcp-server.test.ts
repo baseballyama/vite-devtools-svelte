@@ -4,12 +4,6 @@ import path from 'node:path';
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-/**
- * MCP tool surface through a real client/server pair (in-memory transport):
- * the exact tool set, every tool with valid input, input validation, error
- * paths, and that the reactivity tools stay bounded and say what they cover
- * (docs/devframe-migration.md §6.7).
- */
 import { describe, it, expect, afterEach, vi } from 'vitest';
 
 import { buildMcpServer, MCP_TIMELINE_LIMIT } from '../src/mcp/server.js';
@@ -121,10 +115,9 @@ async function call(client: Client, name: string, args: Record<string, unknown> 
   return (await client.callTool({ name, arguments: args })) as ToolResult;
 }
 const parse = (result: ToolResult) => JSON.parse(result.content[0]!.text);
-/** Whether the call failed (a success may omit `isError`). */
+/** A success may omit `isError`. */
 const failed = (result: ToolResult) => result.isError === true;
 
-/** What every listed tool must carry. */
 function toolShape(t: {
   name: string;
   title?: string;
@@ -523,7 +516,6 @@ describe('read tools', () => {
       edges.push({ from: `s${i}`, to: 'e' });
     }
     const client = await connect(makeDeps({ graph: { nodes, edges } }));
-    // omitted: default 8 (passing `effectMaxDeps: undefined` used to disable the check)
     expect(parse(await call(client, 'get_reactive_graph_problems')).effects).toHaveLength(1);
     expect(
       parse(await call(client, 'get_reactive_graph_problems', { effectMaxDeps: 9 })).effects,

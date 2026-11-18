@@ -27,7 +27,6 @@ function uncoveredMarks(text: string, terms: string[], parts: { t: string; m: bo
   return out;
 }
 
-/** Highlighted segments of `text` for query `q`. */
 const marked = (text: string, q: string) =>
   highlightParts(text, q)
     .filter(p => p.m)
@@ -133,7 +132,7 @@ describe('highlightParts', () => {
   });
 
   it('keeps offsets aligned when lowercasing changes the length (İ → i̇)', () => {
-    // 'İ'.toLowerCase() is two code units; marks used to shift right by one.
+    // 'İ'.toLowerCase() is two code units, which can shift later marks.
     expect(marked('İstanbul code', 'code')).toEqual(['code']);
     expect(marked('İİ abc', 'abc')).toEqual(['abc']);
   });

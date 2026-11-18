@@ -1,11 +1,6 @@
 import path from 'node:path';
 import { Readable } from 'node:stream';
 
-/**
- * OG preview: tag parsing, charset and entity decoding, relative og:image,
- * redirects / HTTP errors / timeouts, SSRF guard. Offline: the transport is
- * mocked.
- */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
 import { decodeEntities } from '../src/analyzers/html.js';

@@ -1,27 +1,12 @@
 name: Release
 
-# Changesets-driven publish.
+# Publishing uses npm Trusted Publishers (OIDC), so there is no NPM_TOKEN: the
+# package must trust this repo + workflow at
+# https://www.npmjs.com/package/@sveltejs/vite-devtools-svelte/access.
 #
-# Flow:
-#   1. PRs land on main with a `.changeset/*.md` file describing the bump.
-#   2. This workflow opens (or updates) a "Version Packages" PR that bumps
-#      package.json + CHANGELOG.md and removes consumed changesets.
-#   3. Merging that PR re-runs this workflow, which now finds no pending
-#      changesets and instead publishes to npm with provenance and creates
-#      a GitHub Release for each version bump.
-#
-# Authentication:
-#   Publishing uses npm Trusted Publishers (OIDC). The package on npm must be
-#   configured to trust this repo + workflow at
-#   https://www.npmjs.com/package/@sveltejs/vite-devtools-svelte/access. No NPM_TOKEN
-#   secret is needed; OIDC is brokered via the `id-token: write` permission
-#   below.
-#
-# Required repo settings:
-#   - Settings → Actions → General → Workflow permissions:
-#     "Read and write permissions" + "Allow GitHub Actions to create and
-#     approve pull requests" (so changesets/action can open the release PR
-#     and create GitHub Releases).
+# changesets/action needs Settings → Actions → General → Workflow permissions:
+# "Read and write permissions" + "Allow GitHub Actions to create and approve
+# pull requests".
 
 on:
   push:
@@ -31,7 +16,7 @@ on:
 permissions:
   contents: write # create/merge release PR, push tags, GitHub Releases
   pull-requests: write # open the "Version Packages" PR
-  id-token: write # OIDC for npm provenance
+  id-token: write # OIDC: npm Trusted Publishers auth + provenance
 
 concurrency:
   group: release-${{ github.ref }}
@@ -45,15 +30,9 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Use Node 24 here, not 22. `changeset publish` shells out to
-      # `npm publish`, and OIDC Trusted Publishers require npm CLI >= 11.5.1.
-      # Node 22 ships with npm 10.x; Node 24 ships with npm 11.x, so the OIDC
-      # publish path works out of the box without a separate npm install step.
-      #
-      # Note: the setup action does not set `registry-url` — it would have
-      # setup-node write `_authToken=${NODE_AUTH_TOKEN}` into .npmrc, which
-      # forces token auth and blocks the OIDC code path used by Trusted
-      # Publishers.
+      # Node 24: Trusted Publishers need npm >= 11.5.1, and Node 22 ships npm 10.
+      # The setup action sets no `registry-url`: setup-node would then write an
+      # `_authToken` into .npmrc, which forces token auth and blocks OIDC.
       - uses: ./.github/actions/setup
         with:
           node-version: '24'
@@ -69,9 +48,6 @@ jobs:
 
       - name: Create Release PR or publish to npm
         id: changesets
-        # v2: kebab-case inputs; the token is passed as an input (the
-        # GITHUB_TOKEN env var is no longer read); release commits and tags
-        # are pushed through the GitHub API.
         uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         with:
           version-script: pnpm changeset version

@@ -3,7 +3,6 @@
 
   import Button from './Button.svelte';
 
-  /** Detail pane shown in a SplitView's aside. Esc closes it. */
   interface Props {
     title: string;
     subtitle?: string;

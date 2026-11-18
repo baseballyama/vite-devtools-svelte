@@ -18,7 +18,6 @@ export const kitSetup = (routes: string) => ({
   api: { options: { files: { routes } } },
 });
 
-/** A `SvelteDevtoolsHost` without a dev server (overridable per test). */
 export function createTestHost(
   root: string,
   overrides: Partial<SvelteDevtoolsHost> = {},
@@ -39,7 +38,6 @@ export function createTestHost(
   };
 }
 
-/** RPC handlers keyed by their wire id (`svelte-devtools:<name>`), invoked directly. */
 export function rpcHandlers(host: SvelteDevtoolsHost): Map<string, (...args: any[]) => any> {
   const map = new Map<string, (...args: any[]) => any>();
   for (const fn of createRpcFunctions(host)) {
@@ -50,13 +48,11 @@ export function rpcHandlers(host: SvelteDevtoolsHost): Map<string, (...args: any
 
 type AnyFn = (...args: any[]) => any;
 
-/** Invoke a Vite plugin hook directly, whether declared as a function or as `{ handler }`. */
 export function callHook(hook: unknown, ...args: unknown[]): any {
   const fn = typeof hook === 'function' ? hook : (hook as { handler: unknown }).handler;
   return (fn as AnyFn)(...args);
 }
 
-/** Run each plugin's `configResolved` with a minimal dev-server config (overridable). */
 export function resolvePlugins(plugins: Plugin[], config: Record<string, unknown> = {}) {
   const resolved = {
     command: 'serve',
@@ -70,15 +66,11 @@ export function resolvePlugins(plugins: Plugin[], config: Record<string, unknown
   return resolved;
 }
 
-/** The code of a transform hook result (`string` or `{ code }`). */
 export function codeOf(result: unknown): string {
   return typeof result === 'string' ? result : (result as { code: string }).code;
 }
 
-/**
- * Poll `read` until `ok(value)` holds (default: truthy) and return that value.
- * Integration tests wait on observable state, never for a fixed time.
- */
+/** Integration tests wait on observable state, never for a fixed time. */
 export async function waitFor<T>(
   read: () => T | Promise<T>,
   ok: (value: T) => boolean = Boolean,

@@ -1,9 +1,3 @@
-// Scaling and memory-bound tests for the browser runtime injected into the
-// user's app. They drive `window.__SVELTE_DEVTOOLS__` the same way the
-// svelte/internal/client wrapper does (register → registered → trackState →
-// unmount) with huge-app sized inputs.
-//
-// No `it.fails`: every known defect found so far is fixed and asserted here.
 import { describe, it, expect } from 'vitest';
 
 import {
@@ -15,8 +9,6 @@ import {
   type Harness,
 } from './harness.js';
 
-// Fake clock + deterministic JSON.stringify cost model (see P2 tests).
-/** One churn tick: every numeric signal changes. */
 function bumpNumbers(signals: Array<{ v: unknown }>) {
   for (const s of signals) if (typeof s.v === 'number') s.v++;
 }
@@ -45,7 +37,6 @@ function simulatedClock(nsPerChar = 10) {
   return {
     nsPerChar,
     now: () => now,
-    // Runs `count` ticks `gapMs` apart; returns simulated ms spent per tick.
     run(tick: () => void, count: number, gapMs = 200) {
       const orig = JSON.stringify;
       let calls = 0;
@@ -114,11 +105,9 @@ describe('runtime memory bounds', () => {
 });
 
 describe('runtime scaling (huge app)', () => {
-  // P3: a single component mount must not resend the whole component list.
-  // P3 full-form protection (used without the §6.5 gate, and for full
-  // checkpoints): full-list pushes are throttled with an interval adapted to
-  // the cost of the previous push. Send cost is simulated
-  // deterministically (fake clock, 10 ns per byte).
+  // P3: a single component mount must not resend the whole component list. Full-list
+  // pushes (without the componentDeltas gate, and full checkpoints) are throttled by the cost of
+  // the previous push. Send cost is simulated deterministically (fake clock, 10 ns per byte).
   it('P3: a ≥ 1 MB component push spaces the next one ≥ 1 s apart; churn keeps one timer', () => {
     let now = 0;
     const h = createRuntime({
@@ -128,9 +117,8 @@ describe('runtime scaling (huge app)', () => {
         now += bytes * 1e-5;
       },
     });
-    // §6.3: activation (inside createRuntime) already sent one full snapshot
+    // activation (inside createRuntime) already sent one full snapshot
     // of the then-empty tree. Assert it explicitly, then measure from here.
-    // (An earlier version counted it as a throttled push: "expected 1, got 2".)
     const activation = h.sent.filter(m => m.event === 'svelte-devtools:components');
     expect(activation.map(m => (m.data as any).components.length)).toEqual([0]);
     h.sent.length = 0;
@@ -160,7 +148,7 @@ describe('runtime scaling (huge app)', () => {
     expect(h.pendingDelays()).toContain(100);
   });
 
-  // P3 (§6.5 component deltas): one mount in a 5 000-instance app sends a
+  // Component deltas: one mount in a 5 000-instance app sends a
   // delta, not the tree.
   it('P3: one mount with 5 000 live components sends < 50 kB to the server', () => {
     const h = createRuntime();
@@ -202,7 +190,7 @@ describe('runtime scaling (huge app)', () => {
 
   // An idle tick must not serialize unchanged states because of the hint pass
   // (O(1) per node), so latency is independent of app size. Since the hint pass
-  // is time-sliced (§6.7 D: ≤ 4096 nodes per tick), a node is visited only
+  // is time-sliced (≤ 4096 nodes per tick), a node is visited only
   // every few ticks, and an object whose 1 s deep re-check came due between two
   // visits is re-checked on its next visit even when no time passed since the
   // previous tick. Those re-checks are the designed deep pass (paid from the
@@ -236,7 +224,7 @@ describe('runtime scaling (huge app)', () => {
     expect(idle.calls).toBe(overdue);
   });
 
-  // P4 / RT4: with no DevTools client attached the runtime must not run a
+  // P4: with no DevTools client attached the runtime must not run a
   // perpetual rAF loop, interval polling or payload sends in the user's app.
   it('P4: no periodic work or payload sends before a DevTools client subscribes', () => {
     const h = createRuntime({ active: false });
@@ -352,7 +340,7 @@ describe('state polling correctness under budgets', () => {
     h.dt.registered(id);
     const poll = pollFn(h);
     // seed every node first (5 001 nodes = 2 slices): a write before a node's
-    // first sample is not observable by design (seed only, review B-1)
+    // first sample is not observable by design (seed only)
     poll();
     poll();
     expect(h.dt.getReactiveSummary({}).baseline).toEqual({ complete: true, pendingNodes: 0 });
@@ -400,7 +388,7 @@ describe('state polling correctness under budgets', () => {
     expect(changes[0].newValue).toMatch(/^\(object: \d+ chars/);
   });
 
-  // §6.7 D: the hint pass is time-sliced (4 096 nodes per tick), so 5 000
+  // the hint pass is time-sliced (4 096 nodes per tick), so 5 000
   // nodes take 2 ticks — no starvation within a bounded number of ticks.
   it('does not starve: 400 changed primitives among 5 000 are recorded within 2 ticks', () => {
     const h = createRuntime();
@@ -421,7 +409,7 @@ describe('state polling correctness under budgets', () => {
 
 const events = (h: Harness) => h.sent.map(m => m.event);
 
-describe('activity subscription (devframe-migration §6.3)', () => {
+describe('activity subscription', () => {
   it('announces itself with runtime-ready on boot and on HMR reconnect', () => {
     const h = createRuntime({ active: false });
     expect(events(h)).toEqual(['svelte-devtools:runtime-ready']);
@@ -491,7 +479,7 @@ function setup() {
   return { h, add, poll: () => pollFn(h)(), timelineMsgs };
 }
 
-describe('state timeline transfer (devframe-migration §6.4)', () => {
+describe('state timeline transfer', () => {
   it('pushes only new entries since the previous push, tagged with a stable epoch', () => {
     const { h, add, poll, timelineMsgs } = setup();
     const sigs = add(3);
@@ -558,7 +546,7 @@ describe('state timeline transfer (devframe-migration §6.4)', () => {
   });
 });
 
-describe('scoped reactive graph (review U1)', () => {
+describe('scoped reactive graph', () => {
   it('returns only the requested component and its direct neighbours', () => {
     const h = createRuntime();
     const a = h.dt.register('/app/src/lib/A.svelte');
@@ -592,7 +580,7 @@ describe('scoped reactive graph (review U1)', () => {
 const compMsgs = (h: Harness) =>
   h.sent.filter(m => m.event === 'svelte-devtools:components').map(m => m.data as any);
 
-describe('component deltas (devframe-migration §6.5)', () => {
+describe('component deltas', () => {
   it('sends only the full form without the componentDeltas gate', () => {
     const h = createRuntime({ deltas: false });
     mountList(h, 10);
@@ -691,7 +679,7 @@ describe('component deltas (devframe-migration §6.5)', () => {
   });
 });
 
-describe('resync (§6.5, review C1)', () => {
+describe('resync', () => {
   it('resends components(reset) -> profiles -> timeline(reset) on resync while active', () => {
     const h = createRuntime();
     mountList(h, 3);

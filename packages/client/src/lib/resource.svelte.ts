@@ -1,14 +1,7 @@
 /**
- * Polling-aware data loader shared by every panel.
- *
- * - Data is held in `$state.raw` so large RPC payloads (tens of thousands of
- *   rows) are never deep-proxied; consumers derive indexes from it instead.
- * - Polling only runs while the owning panel is visible (see `PANEL_ACTIVE`)
- *   and the document is not hidden, and never overlaps an in-flight request.
- * - With a `version` getter (server change counters, `getVersions`), a tick
- *   whose version did not move skips the fetch entirely; otherwise identical
- *   payloads are dropped after one serialisation pass, so an idle app never
- *   re-derives indexes or re-renders.
+ * Data is held in `$state.raw` so large RPC payloads (tens of thousands of
+ * rows) are never deep-proxied. Unchanged versions skip the fetch and
+ * identical payloads are dropped, so an idle app never re-derives or re-renders.
  */
 import { getContext, untrack } from 'svelte';
 
@@ -24,11 +17,7 @@ export interface ResourceOptions<T> {
   interval?: number;
   /** Extra gate (reactive): only load/poll while this returns true. */
   when?: () => boolean;
-  /**
-   * Cheap change token checked before each *polled* fetch; when it equals the
-   * token of the last successful fetch, the fetch is skipped. Manual
-   * `refresh()` always fetches. `undefined` token = unknown → fetch.
-   */
+  /** A polled fetch is skipped while this equals the last successful one (`refresh()` always fetches); `undefined` = unknown, so it fetches. */
   version?: () => Promise<string | undefined>;
   /**
    * Change check for a new payload. Defaults to comparing serialised content
@@ -54,7 +43,7 @@ export interface Resource<T> {
   set(next: T): void;
 }
 
-/** Cheap content key for change detection; `null` when not serialisable. */
+/** `null` when not serialisable. */
 function contentKey(v: unknown): string | null {
   try {
     return JSON.stringify(v) ?? null;

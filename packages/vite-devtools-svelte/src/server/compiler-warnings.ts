@@ -4,7 +4,6 @@ import type { Plugin } from 'vite';
 
 import type { CompilerWarning } from '../types.js';
 
-/** The fields of a Svelte compiler `Warning` we read. */
 interface SvelteWarning {
   code: string;
   message: string;
@@ -14,10 +13,8 @@ interface SvelteWarning {
 
 type OnWarn = (warning: SvelteWarning, defaultHandler: (warning: SvelteWarning) => void) => void;
 
-/**
- * vite-plugin-svelte's resolved options: one object its sub-plugins share as
- * `api.options` and read `onwarn` from on every compile.
- */
+// vite-plugin-svelte's sub-plugins share this object and read `onwarn` from it
+// on every compile, so patching it takes effect.
 function svelteOptions(plugins: readonly Plugin[]): { onwarn?: OnWarn } | undefined {
   for (const p of plugins) {
     if (!p.name.startsWith('vite-plugin-svelte')) continue;
@@ -27,16 +24,10 @@ function svelteOptions(plugins: readonly Plugin[]): { onwarn?: OnWarn } | undefi
   return undefined;
 }
 
-/**
- * Report every Svelte compiler warning of the app to `record`, as the
- * compiler's structured warning (vite-plugin-svelte prints dev warnings with
- * `console.log`, past Vite's logger). The user's `onwarn` (or the default
- * handler) still runs, so console output is unchanged. Dependencies'
- * warnings are skipped, as vite-plugin-svelte does in dev.
- *
- * Must run after vite-plugin-svelte's own `configResolved`, which creates
- * the options (a restart creates new ones, so wrappers never stack).
- */
+// vite-plugin-svelte prints dev warnings with `console.log`, past Vite's
+// logger, so they are captured through `onwarn`. Must run after its
+// `configResolved`, which creates the options (a restart creates new ones,
+// so wrappers never stack).
 export function captureCompilerWarnings(
   plugins: readonly Plugin[],
   record: (warning: CompilerWarning) => void,

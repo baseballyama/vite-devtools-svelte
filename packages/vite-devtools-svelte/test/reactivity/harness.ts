@@ -1,5 +1,3 @@
-// Helpers for the reactivity integration tests (see plugin.ts): mount real
-// compiled components and read what the injected runtime recorded.
 import { mount, unmount, flushSync, type Component } from 'svelte';
 import { vi } from 'vitest';
 
@@ -84,11 +82,10 @@ export const incoming = (g: Graph, id: string) => g.edges.filter(e => e.to === i
 export const outgoing = (g: Graph, id: string) => g.edges.filter(e => e.from === id).map(e => e.to);
 
 /**
- * One state poll tick (what the 200 ms interval runs), with every object
- * re-check due: in-place proxy mutations are otherwise found by the
- * time-based re-check (>= 1 s after the last one). The clock is frozen for
- * the tick: its 2 ms serialization budget is wall-clock, and on a loaded
- * machine a GC pause would otherwise defer part of the work to a later tick.
+ * Every object re-check is due: in-place proxy mutations are otherwise only
+ * found by the time-based re-check (>= 1 s). The clock is frozen for the tick:
+ * its 2 ms serialization budget is wall-clock, and on a loaded machine a GC
+ * pause would otherwise defer part of the work to a later tick.
  */
 export function poll() {
   const d = dt();

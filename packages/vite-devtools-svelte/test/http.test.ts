@@ -1,8 +1,3 @@
-/**
- * The OG preview's outbound GET: `node:http`, no redirects, decompression,
- * timeout, and a connection-time DNS guard (DNS rebinding). Requests go to
- * local servers; DNS answers are mocked.
- */
 import type * as DnsModule from 'node:dns';
 import http from 'node:http';
 import net from 'node:net';
@@ -142,7 +137,6 @@ const origin = () => `http://localhost:${port}`;
 const text = async (res: OutboundResponse) =>
   new TextDecoder().decode((await readCapped(res.body, 1024 * 1024)).bytes);
 
-/** A server answering every request with `raw` bytes; closed after the test. */
 async function rawServer(raw: string): Promise<string> {
   const evil = net.createServer(socket => {
     socket.once('data', () => {
@@ -279,7 +273,6 @@ describe('transport.get', () => {
   });
 });
 
-/** publicOnlyLookup's callback arguments, as one value. */
 const run = (host: string, all: boolean) =>
   new Promise<{ err: Error | null; address: unknown; family?: number }>(resolve => {
     publicOnlyLookup(host, { all }, (err, address, family) => {

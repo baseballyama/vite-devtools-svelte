@@ -17,10 +17,6 @@
   import type { Resource } from '../../lib/resource.svelte.js';
   import type { ReactiveSummary, ReactiveSummaryRow } from '../../lib/types.js';
 
-  /**
-   * Whole-app aggregate from the runtime counters: the most active
-   * components (by file or by instance). No graph is fetched.
-   */
   let {
     summary,
     group,

@@ -56,11 +56,9 @@ function scanDir(dir: string, rootDir: string, base: string, assets: AssetInfo[]
       continue;
     }
 
-    // Skip hidden files
     if (entry.name.startsWith('.')) continue;
 
     // Follows symlinks; a dangling link or one to a directory is not an asset
-    // (statSync used to throw and fail the whole listing).
     let stat: fs.Stats;
     try {
       stat = fs.statSync(fullPath);

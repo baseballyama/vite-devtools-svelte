@@ -211,8 +211,6 @@ kbd {
   color: var(--text-2);
 }
 
-/* ---------- frame + bands ---------- */
-
 .frame {
   position: relative;
   max-width: min(var(--frame), calc(100vw - 1rem));
@@ -293,8 +291,6 @@ kbd {
   margin: 0;
 }
 
-/* ---------- buttons ---------- */
-
 .btn {
   display: inline-flex;
   align-items: center;
@@ -340,8 +336,6 @@ kbd {
   background: var(--paper-2);
   color: var(--text);
 }
-
-/* ---------- small elements ---------- */
 
 /* In a page's meta row the eyebrow sits on the row's centre line. */
 .head-meta > .eyebrow {
@@ -433,7 +427,6 @@ kbd {
   border: 0;
 }
 
-/* Screenshots: a hairline border and a soft radius, nothing more. */
 .shot img,
 img.shot {
   border: 1px solid var(--line);
@@ -441,7 +434,6 @@ img.shot {
   background: var(--paper);
 }
 
-/* Theme-specific images */
 html[data-theme='dark'] .only-light,
 html[data-theme='light'] .only-dark {
   display: none;
@@ -459,7 +451,6 @@ html[data-theme='light'] .only-dark {
   }
 }
 
-/* Visible keyboard focus everywhere */
 :focus-visible {
   outline: 2px solid var(--link);
   outline-offset: 3px;

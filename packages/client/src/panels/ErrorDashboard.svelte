@@ -78,7 +78,6 @@
 
   const current = $derived(selected ? (all.find(p => p.key === selected) ?? null) : null);
 
-  // Most frequent warning codes — a quick way to triage a noisy project.
   const topCodes = $derived(
     [...countBy(problems.data.warnings, w => w.code)].sort((a, b) => b[1] - a[1]).slice(0, 4),
   );

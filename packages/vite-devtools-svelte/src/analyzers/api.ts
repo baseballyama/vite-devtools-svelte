@@ -57,12 +57,10 @@ function bindingNames(pattern: Binding, out: Set<string>): void {
 }
 
 /**
- * What a `+server` module exports. Parsed, not substring-matched: the old
- * `content.includes('export const GET')` also matched `export const GETTER`
- * and commented-out code, and missed `export { handler as GET }`. Covers
- * declarations (destructuring included), export lists and re-exports;
- * `export * from` is reported in `stars` for the caller to follow. Null
- * when the module cannot be parsed.
+ * What a `+server` module exports. Parsed, not substring-matched, so
+ * `export const GETTER`, commented-out code and `export { handler as GET }`
+ * come out right. `export * from` is reported in `stars` for the caller to
+ * follow. Null when the module cannot be parsed.
  */
 export function moduleExports(code: string, filename: string): ModuleExports | null {
   // The language (js / ts) follows the file extension.

@@ -209,7 +209,6 @@ describe('RenderProfiler', () => {
     expect(details.textContent).not.toContain('instance');
     expect(details.textContent).not.toContain('slow');
     expect(details.textContent).toContain('—');
-    // Escape inside the inspector closes it.
     await user.click(within(details).getByRole('button', { name: 'Open in editor' }));
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('complementary')).toBeNull();

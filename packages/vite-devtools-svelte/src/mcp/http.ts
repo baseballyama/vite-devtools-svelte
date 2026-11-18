@@ -7,13 +7,11 @@ import type { Logger } from 'vite';
 
 import type { Collector } from '../server/collector.js';
 
-/** Dev-server path of the MCP endpoint. */
 export const MCP_PATH = '/__svelte-devtools/mcp';
 
 /**
- * Whether the request's `x-svelte-devtools-token` header is exactly `token`.
- * Constant-time for equal lengths (the length itself is not secret: every
- * token is a UUID). A repeated header (string array) is never accepted.
+ * Constant-time for equal lengths (the length is not secret: every token is a
+ * UUID). A repeated header (string array) is never accepted.
  */
 export function isValidMcpToken(header: string | string[] | undefined, token: string): boolean {
   if (typeof header !== 'string') return false;
@@ -24,12 +22,7 @@ export function isValidMcpToken(header: string | string[] | undefined, token: st
 
 const describe = (e: unknown) => (e instanceof Error ? (e.stack ?? e.message) : String(e));
 
-/**
- * Connect middleware for the MCP endpoint: lets AI agents (Claude Code etc.)
- * read metrics and run measurement sessions over the Streamable HTTP
- * transport. Same-origin is *not* required because MCP clients are local
- * processes that don't run inside a browser tab; the token is the gate.
- */
+/** Same-origin is not required: MCP clients are local processes, not browser tabs; the token is the gate. */
 export function createMcpMiddleware(opts: {
   token: string;
   collector: Collector;
@@ -51,13 +44,11 @@ export function createMcpMiddleware(opts: {
       res.end('Forbidden');
       return;
     }
-    // An agent talking to us is a consumer: keep the runtime sampling. If
-    // this request woke the runtime up, give it a moment to send its
+    // Keep the runtime sampling; if this request woke it up, wait for its
     // activation snapshot so the first answer isn't stale.
     if (collector.lease('mcp', 60_000)) await collector.waitForSnapshot(1000);
-    // A fresh server+transport per request. Stateless mode in the SDK still
-    // keeps per-instance bookkeeping that gets corrupted when the same
-    // transport handles multiple requests.
+    // Stateless mode in the SDK still keeps per-instance bookkeeping that gets
+    // corrupted when one transport handles multiple requests.
     const server = opts.createServer();
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
@@ -69,8 +60,7 @@ export function createMcpMiddleware(opts: {
     };
     try {
       await server.connect(transport);
-      // The SDK consumes the request body itself; pre-reading would leave
-      // the stream empty.
+      // The SDK consumes the request body itself; pre-reading would leave it empty.
       await transport.handleRequest(req, res);
     } catch (e) {
       fail(res, e);
@@ -80,9 +70,7 @@ export function createMcpMiddleware(opts: {
     }
   };
 
-  // Connect ignores the returned promise: route any rejection (e.g. building
-  // the MCP server threw) to the logger, and answer the request instead of
-  // leaving the client hanging.
+  // Connect ignores the returned promise: answer on rejection instead of leaving the client hanging.
   return (req, res) => {
     handle(req, res).catch((e: unknown) => fail(res, e));
   };

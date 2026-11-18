@@ -1,11 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
 
-  /**
-   * Panel chrome: one compact header row (title, toolbar, actions)
-   * above a body that fills the remaining height. Lists scroll themselves;
-   * pass `scroll` for document-like panels.
-   */
+  /** Lists scroll themselves; pass `scroll` for document-like panels. */
   interface Props {
     title: string;
     toolbar?: Snippet;

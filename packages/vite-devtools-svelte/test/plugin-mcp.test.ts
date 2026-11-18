@@ -1,6 +1,3 @@
-// The MCP endpoint the plugin mounts on the dev server
-// (`/__svelte-devtools/mcp`): token gate, consumer lease, error handling, and
-// the `claude mcp add` hint printed once the server listens.
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 
@@ -23,7 +20,6 @@ const SUBSCRIPTION = 'svelte-devtools:subscription';
 
 type Handler = (req: unknown, res: unknown) => void;
 
-/** A dev server double: hot channel, middleware stack, logger, http server events. */
 function setup(serverConfig: Record<string, unknown> = {}) {
   const plugins: Plugin[] = svelteDevtools();
   // Hosted by the Vite DevTools hub: no standalone devframe mount, so the
@@ -186,7 +182,6 @@ describe('MCP endpoint errors', () => {
   });
 });
 
-/** An MCP `initialize` request carrying `token`. */
 const initialize = (url: string, token: string) =>
   fetch(url, {
     method: 'POST',

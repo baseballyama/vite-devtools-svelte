@@ -7,11 +7,6 @@
   import Button from './Button.svelte';
   import Icon from './Icon.svelte';
 
-  /**
-   * Connection UX: a blocking card when the dev server needs the one-time
-   * code (standalone devframe auth), and a slim banner while the connection
-   * is down. Nothing renders while connected.
-   */
   let code = $state('');
   const digits = $derived(digitsOf(code));
   let busy = $state(false);
@@ -42,11 +37,8 @@
     }
   });
 
-  // A magic link (`#devframe_otp=<code>`) opened in this same document —
-  // pasted into the address bar or followed from a same-page link — only
-  // fires `hashchange`; devframe reads the code on a full page load only.
-  // While the gate is open, consume it through the public submit path,
-  // once per code, and take the code out of the URL (back to the panel).
+  // A magic link (`#devframe_otp=<code>`) opened in this same document only
+  // fires `hashchange`, and devframe reads the code on a full page load only.
   // eslint-disable-next-line svelte/prefer-svelte-reactivity -- consumed-code bookkeeping, read only in the hash handler and never rendered: intentionally non-reactive
   const linkCodes = new Set<string>();
   $effect(() => {

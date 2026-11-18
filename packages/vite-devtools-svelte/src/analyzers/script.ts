@@ -1,6 +1,5 @@
 import { parseSync } from 'vite';
 
-/** An ESTree node of the oxc AST, read structurally. */
 export interface AstNode {
   type: string;
   start: number;
@@ -11,19 +10,11 @@ export interface ParsedScript {
   /** Where `code` starts in the file. */
   offset: number;
   code: string;
-  /**
-   * The parser's result. Its `program` (the AST, as an `AstNode`) is built
-   * on first access, which costs several times the parse: read `module` (the
-   * import / export summary) when that is enough.
-   */
+  /** `program` is built on first access and costs several times the parse: read `module` when that is enough. */
   result: ReturnType<typeof parseSync>;
 }
 
-/**
- * The parsed `<script>` blocks of a component, each with the offset of its
- * code in the file (HTML comments skipped), or the whole source when there is
- * none (a JS / TS module). Blocks that do not parse are left out.
- */
+/** Falls back to the whole source when there is no `<script>` (a JS / TS module). */
 export function parseScripts(source: string): ParsedScript[] {
   const parsed: ParsedScript[] = [];
   for (const { offset, code } of scriptBlocks(source)) {
@@ -34,7 +25,6 @@ export function parseScripts(source: string): ParsedScript[] {
   return parsed;
 }
 
-/** Visit every node in source order, with the name of the class it lies in. */
 export function walk(
   value: unknown,
   visit: (node: AstNode, className: string | undefined) => void,
@@ -82,7 +72,7 @@ function scriptBlocks(source: string): Array<{ offset: number; code: string }> {
   return blocks.length > 0 ? blocks : [{ offset: 0, code: source }];
 }
 
-/** Offset just past the `>` ending a start tag (`>` may sit in a quoted value), or -1. */
+/** `>` may sit in a quoted attribute value. */
 function startTagEnd(source: string, from: number): number {
   let quote = '';
   for (let i = from; i < source.length; i++) {

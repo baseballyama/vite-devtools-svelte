@@ -1,6 +1,5 @@
 import { words } from './chars.js';
 
-/** Case-insensitive substring matcher shared by every search field. */
 export function matcher(
   query: string,
 ): ((...fields: (string | undefined | null)[]) => boolean) | null {
@@ -8,23 +7,18 @@ export function matcher(
   return match && ((...fields) => match(haystack(...fields)));
 }
 
-/**
- * Same matching as {@link matcher}, for callers that precompute one
- * lowercase haystack per item (fields joined with '\n') so a keystroke
- * costs only `includes` per item.
- */
+/** Precomputed per-item haystack (fields joined with '\n') so a keystroke costs only `includes`. */
 export function haystackMatcher(query: string): ((hay: string) => boolean) | null {
   const terms = words(query.toLowerCase());
   if (terms.length === 0) return null;
   return hay => terms.every(t => hay.includes(t));
 }
 
-/** Lowercase haystack for {@link haystackMatcher}; empty fields are skipped like in {@link matcher}. */
+/** Empty fields are skipped like in {@link matcher}. */
 export function haystack(...fields: (string | undefined | null)[]): string {
   return fields.filter(Boolean).join('\n').toLowerCase();
 }
 
-/** Split `text` into plain / highlighted segments for `<Highlight>`. */
 export function highlightParts(text: string, query: string): { t: string; m: boolean }[] {
   const terms = words(query.toLowerCase());
   if (terms.length === 0 || !text) return [{ t: text, m: false }];

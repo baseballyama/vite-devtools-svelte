@@ -222,7 +222,6 @@ export function emitPick(pick: ElementPick): void {
   for (const listener of pickListeners) listener(pick);
 }
 
-/** Restore every default implementation and clear recorded calls. */
 export function resetFakeRpc(): void {
   for (const key of Object.keys(all) as FnKey[]) {
     const mock = all[key] as Mock<(...a: never[]) => unknown>;

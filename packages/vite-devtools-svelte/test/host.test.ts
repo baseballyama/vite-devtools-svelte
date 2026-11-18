@@ -7,12 +7,6 @@ import type { DevframeRpcClient } from 'devframe/client';
 import { getTempAuthCode } from 'devframe/node/auth';
 import { build, createServer } from 'vite';
 import type { ViteDevServer } from 'vite';
-/**
- * Integration: the real devframe stack on a real Vite dev server, driven by
- * devframe's public browser client (with the two browser globals it needs
- * shimmed). Covers the standalone host; the Vite DevTools host is covered
- * through the kit hook in plugin.test.ts and by browser verification.
- */
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 
 /** The plugin's RPC names are not in devframe's typed registry, so call them by name. */
@@ -171,7 +165,6 @@ describe('standalone host (initDevframe on the Vite dev server)', () => {
   }, 20_000);
 });
 
-/** Every file under `dir`, keyed by its relative path. */
 function readTree(dir: string): Record<string, string> {
   return Object.fromEntries(
     fs
@@ -184,7 +177,6 @@ function readTree(dir: string): Record<string, string> {
   );
 }
 
-/** `vite build` of `root` into `outDir`, returning the emitted files. */
 async function buildFiles(root: string, outDir: string, plugins: any[]) {
   await build({
     root,

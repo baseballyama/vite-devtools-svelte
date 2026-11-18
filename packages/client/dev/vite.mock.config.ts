@@ -117,10 +117,8 @@ function mockBackend(scale: number): Plugin {
   };
 
   async function mountDevframe(server: ViteDevServer) {
-    // Same wire as the shipped plugin: a devframe answering the scoped
-    // `svelte-devtools:*` ids, mounted with `initDevframe` on Vite's server
-    // in bridge mode (Vite serves the SPA, devframe serves
-    // `__connection.json` + `__ws` + `__sse` under the same base).
+    // Same wire as the shipped plugin, in bridge mode: Vite serves the SPA,
+    // devframe serves `__connection.json` + `__ws` + `__sse` under the same base.
     const { defineDevframe, defineRpcFunction } = await import('devframe');
     const { initDevframe } = await import('devframe/initiate');
     const def = defineDevframe({
@@ -174,7 +172,7 @@ export default mergeConfig(
   base,
   defineConfig({
     root: clientRoot,
-    // Production uses a relative base (arch, docs/devframe-migration.md §6.1);
+    // Production uses a relative base;
     // the dev server still needs an absolute mount to mirror the real URL.
     base: MOUNT,
     plugins: [mockBackend(Number(process.env.MOCK_SCALE) || 5000)],

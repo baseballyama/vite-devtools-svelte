@@ -1,8 +1,3 @@
-// Vite plugin for the reactivity integration tests: the same module wiring
-// the dev server gets from svelteDevtools() (svelte/internal/client ->
-// wrapper, the runtime virtual module, the component-tracking transform),
-// without a dev server, devframe or MCP.
-//
 // Loaded by vitest.config.ts, whose bundler has no `?raw` support: the
 // browser sources are read from disk here (the same text `?raw` inlines).
 import fs from 'node:fs';

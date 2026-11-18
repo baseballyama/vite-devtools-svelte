@@ -1,6 +1,4 @@
 /**
- * Reactivity data helpers (docs/devframe-migration.md §6.7 A/I).
- *
  * Replies are normalised so the UI never shows a guessed number: anything
  * the server did not report is `null` / `false`.
  */
@@ -20,7 +18,7 @@ import type {
   StateTimelineEntry,
 } from './types.js';
 
-/** Server-side caps (§6.7 A); larger requests are rejected by the RPC schema. */
+/** Server-side caps; larger requests are rejected by the RPC schema. */
 const GRAPH_CAPS = { maxNodes: 5000, maxEdges: 20000 } as const;
 
 export const EMPTY_GRAPH: ReactiveGraphResult = {
@@ -36,7 +34,7 @@ export const EMPTY_GRAPH: ReactiveGraphResult = {
 };
 
 /**
- * Fill the §6.7 A fields a reply without them (an older server) lacks,
+ * Fill the total / truncation fields a reply without them (an older server) lacks,
  * without inventing totals. Such a server always sends the whole app; when
  * one component was asked for, it is narrowed here (`policy: 'server-filter'`).
  */
@@ -77,10 +75,9 @@ export function normalizeGraph(
 }
 
 /**
- * One component instance or, with `null`, the whole app within the caps.
- * A scoped request always carries the page load (`epoch`) the id came from;
- * the server then answers `staleReason: 'epoch-changed'` instead of scoping a
- * different instance that reuses the id.
+ * A scoped request carries `epoch` so the server answers
+ * `staleReason: 'epoch-changed'` instead of scoping a different instance that
+ * reuses the id.
  */
 export async function fetchGraph(
   scope: { componentId: number; epoch: string } | null,
@@ -111,7 +108,6 @@ export function sameValue(a: unknown, b: unknown): boolean {
   }
 }
 
-/** The server refused a scoped request because the page reloaded (§6.7 A, epoch check). */
 export const isEpochChanged = (g: { staleReason?: string }) => g.staleReason === 'epoch-changed';
 
 /** Shown when the baseline is not reported (older runtime): unknown is not the same as complete. */
@@ -131,7 +127,6 @@ export function baselineNotice(
   return `Sampling baseline: ${b.pendingNodes.toLocaleString()} state${b.pendingNodes === 1 ? '' : 's'} pending — changes to ${b.pendingNodes === 1 ? 'it are' : 'those are'} not visible yet`;
 }
 
-/** A value the runtime summarised instead of sending it. */
 export const isValueSummary = (v: unknown): v is string =>
   typeof v === 'string' &&
   (v === '(object)' ||
@@ -175,7 +170,6 @@ export function sameGraph(a: ReactiveGraphResult, b: ReactiveGraphResult): boole
   return true;
 }
 
-/** Overview rows folded by component file (IS5: file → instances → nodes). */
 export interface SummaryFileRow {
   file: string;
   instances: ReactiveSummaryRow[];
@@ -211,7 +205,6 @@ export function groupByFile(rows: readonly ReactiveSummaryRow[]): SummaryFileRow
   return [...m.values()];
 }
 
-/** Registered nodes of a row. */
 export const nodeCount = (n: { state: number; derived: number; effect: number }) =>
   n.state + n.derived + n.effect;
 
@@ -236,10 +229,8 @@ export function fileNeighbourhood(
   return ids;
 }
 
-/** Signal kind for display: `$state`, `$derived`, `$effect`, or `markup` for the template node. */
 export const kindLabel = (t: ReactiveNode['type']) => (t === 'template' ? 'markup' : `$${t}`);
 
-/** One state's entries in the timeline buffer, folded into a row. */
 export interface HotState {
   key: string;
   name: string;
@@ -250,11 +241,7 @@ export interface HotState {
   last: StateTimelineEntry;
 }
 
-/**
- * The timeline buffer grouped by state (first-seen order). Node ids are
- * `<componentId>:<name>` (runtime trackState); a non-numeric prefix has no
- * component to open.
- */
+/** Node ids are `<componentId>:<name>` (runtime trackState); a non-numeric prefix has no component to open. */
 export function hotStates(entries: readonly StateTimelineEntry[]): HotState[] {
   return [...groupBy(entries, c => c.id)].map(([id, [first, ...rest]]) => {
     const cid = Number(id.slice(0, id.indexOf(':')));
@@ -269,11 +256,9 @@ export function hotStates(entries: readonly StateTimelineEntry[]): HotState[] {
   });
 }
 
-/** A reported count, or `unknown` when the server did not report one. */
 export const totalLabel = (n: number | null | undefined) =>
   n === null || n === undefined ? 'unknown' : n.toLocaleString();
 
-/** Why a reply is stale, or `null` for a fresh one. */
 export const staleLabel = (s?: { stale?: boolean; staleReason?: string } | null) =>
   s?.stale
     ? s.staleReason === 'no-runtime'

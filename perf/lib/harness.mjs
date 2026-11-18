@@ -1,8 +1,7 @@
 // Shared helpers for the paired baseline/final browser measurement
 // (perf/run-paired.mjs). Pure helpers: nothing here starts work on import.
 //
-// Ground rules encoded here (docs/performance-status.md, "Bounded paired
-// measurement plan"):
+// Ground rules encoded here:
 // - only this process's own children are ever stopped (by the handle we
 //   spawned), never other processes;
 // - environment is recorded read-only (uptime / top / sysctl) and gates runs;
@@ -24,9 +23,6 @@ export const sleep = ms =>
     setTimeout(r, ms);
   });
 export const r1 = n => Math.round(n * 10) / 10;
-// Mathematical median: the mean of the two middle values for an even count.
-// (Until 2026-10-04 03:3x this returned the lower middle value; the slot A
-// summary was re-aggregated from the unchanged raw items with this version.)
 export const median = xs => {
   const s = xs.toSorted((a, b) => a - b);
   if (s.length === 0) return NaN;
@@ -37,8 +33,6 @@ const pct = (xs, p) => {
   const s = xs.toSorted((a, b) => a - b);
   return s.length > 0 ? s[Math.min(s.length - 1, Math.floor((p / 100) * s.length))] : NaN;
 };
-
-// ---------------------------------------------------------------- deps
 
 // Dependencies come from the workspace root only (root devDependencies
 // `playwright-core`, `axe-core`), so both checkouts are driven by the very
@@ -65,8 +59,6 @@ export function rootDepFile(name, file) {
   }
 }
 
-// ---------------------------------------------------------------- metadata
-
 export function sha256File(file) {
   try {
     return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex').slice(0, 16);
@@ -75,7 +67,6 @@ export function sha256File(file) {
   }
 }
 
-/** Hash of every file under `dir` (sorted relative paths + contents). */
 export function sha256Tree(dir) {
   const hash = crypto.createHash('sha256');
   const files = [];
@@ -105,7 +96,6 @@ function pkgVersion(repo, name) {
   }
 }
 
-/** Read-only description of a checkout: versions, dist fingerprint, git state. */
 export function checkoutMeta(repo, label) {
   const pkg = path.join(repo, 'packages/vite-devtools-svelte');
   const clientAssets = path.join(pkg, 'dist/client/assets');
@@ -159,8 +149,6 @@ export function checkoutMeta(repo, label) {
     },
   };
 }
-
-// ---------------------------------------------------------------- environment
 
 /**
  * Read-only snapshot of machine load: `uptime`, one `top` sample, swap.
@@ -216,7 +204,6 @@ function gateOk(env, gate) {
   return { ok: reasons.length === 0, reasons };
 }
 
-/** Wait (bounded) for the gate; returns the last snapshot + verdict. */
 export async function waitForGate(gate, waitS, log = () => {}) {
   const deadline = Date.now() + waitS * 1000;
   for (;;) {
@@ -228,14 +215,11 @@ export async function waitForGate(gate, waitS, log = () => {}) {
   }
 }
 
-// ---------------------------------------------------------------- server
-
 const ANSI = /\u001B\[[0-9;]*m/g; // oxlint-disable-line no-control-regex -- strip terminal colors
 
 /**
- * Start `vite dev` for the fixture of `repo`. HOME is isolated (devframe keeps
- * its trusted tokens in `$HOME/.svelte-devtools`), and constant per checkout
- * so one authorization survives server restarts within a paired run.
+ * HOME is isolated (devframe keeps its trusted tokens in `$HOME/.svelte-devtools`),
+ * and constant per checkout so one authorization survives server restarts.
  */
 export async function startServer({ appDir, port, withDevtools, home }) {
   const viteBin = path.join(appDir, '../../node_modules/vite/bin/vite.js');
@@ -291,15 +275,12 @@ export async function stopServer(srv) {
   if (srv.child.exitCode === null) srv.child.kill('SIGKILL');
 }
 
-/** Newest 6-digit devframe auth code printed after `fromIndex` of the log. */
 export function lastAuthCode(log, fromIndex = 0) {
   const tail = log.slice(fromIndex);
   const codes = [...tail.matchAll(/auth code\s+(\d{6})/g)].map(m => m[1]);
   const links = [...tail.matchAll(/devframe_otp=(\d{6})/g)].map(m => m[1]);
   return codes.at(-1) ?? links.at(-1) ?? null;
 }
-
-// ---------------------------------------------------------------- page helpers
 
 export const INIT_SCRIPT = `
 (() => {
@@ -375,7 +356,6 @@ export async function wsAccounting(cdp) {
   };
 }
 
-/** Difference of two wsAccounting snapshots, summed over sockets. */
 export function wsDelta(before, after) {
   const sum = { sent: { frames: 0, bytes: 0 }, received: { frames: 0, bytes: 0 } };
   for (const [key, a] of Object.entries(after)) {
@@ -388,7 +368,6 @@ export function wsDelta(before, after) {
   return sum;
 }
 
-/** CPU/main-thread cost over a quiet window (+ WS traffic if accounted). */
 export async function idleWindow(page, cdp, ms, ws) {
   const before = await cdpMetrics(cdp);
   const wsBefore = ws?.snapshot();
@@ -422,7 +401,6 @@ export function frameStats(durations) {
   };
 }
 
-/** Runtime-internal sizes and subscription state of the app page. */
 export function runtimeState(page) {
   return page.evaluate(() => {
     const key = Object.keys(window).find(
@@ -434,7 +412,7 @@ export function runtimeState(page) {
     const size = x =>
       x && typeof x.size === 'number' ? x.size : Array.isArray(x) ? x.length : null;
     return {
-      // `_active` exists only in runtimes with the §6.3 subscription
+      // `_active` exists only in runtimes with the subscription
       active: typeof dt._active === 'boolean' ? dt._active : 'n/a (always on)',
       epoch: dt._epoch ?? null,
       instances: size(dt._instances),

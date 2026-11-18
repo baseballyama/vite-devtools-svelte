@@ -4,10 +4,7 @@ import net from 'node:net';
 import type { LookupFunction } from 'node:net';
 import path from 'node:path';
 
-/**
- * Validate that a URL does not target private/internal network addresses (SSRF prevention).
- * Allows only http/https schemes and blocks private IP ranges.
- */
+/** SSRF prevention. */
 export function validateExternalUrl(urlStr: string): URL {
   const parsed = parseUrl(urlStr);
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
@@ -34,10 +31,7 @@ function stripBrackets(host: string): string {
   return host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
 }
 
-/**
- * The URL's host as an address or a name: IPv6 without brackets, lowercase,
- * without the trailing dot of a fully qualified name (`localhost.`).
- */
+// Drops the trailing dot of a fully qualified name, so `localhost.` is still caught.
 function hostOf(url: URL): string {
   const host = stripBrackets(url.hostname).toLowerCase();
   return host.endsWith('.') ? host.slice(0, -1) : host;
@@ -53,23 +47,16 @@ function isInternalHostname(host: string): boolean {
 }
 
 export interface OutboundUrlOptions {
-  /**
-   * Origins that may be fetched even though they are local — the dev
-   * server's own resolved URLs, so the OG preview can read the app's pages.
-   */
+  /** The dev server's own URLs, so the OG preview can read the app's pages. */
   allowedOrigins?: readonly string[];
 }
 
 /**
- * Checks a URL an outbound request may fetch, and returns the `lookup` its
- * connection must use. An exact dev-server origin in `allowedOrigins`
- * connects with the default resolver (undefined). Anything else must pass
- * {@link validateExternalUrl} (scheme, IP literals, which no lookup sees,
- * internal names) and connects through {@link publicOnlyLookup}, which
- * checks the addresses the socket really uses: a name is never resolved
- * once for a check and again for the connection (DNS rebinding).
- * Callers must also not follow redirects, so a public URL cannot bounce
- * the request to a private one.
+ * An exact `allowedOrigins` origin gets `undefined` (the unchecked default
+ * resolver). IP literals never reach a lookup, so they are validated here; names connect
+ * through {@link publicOnlyLookup}, so a name is never resolved once for a
+ * check and again for the connection (DNS rebinding). Callers must not follow
+ * redirects, so a public URL cannot bounce the request to a private one.
  */
 export function outboundLookup(
   urlStr: string,
@@ -80,12 +67,7 @@ export function outboundLookup(
   return publicOnlyLookup;
 }
 
-/**
- * `dns.lookup` for a socket that may only reach public addresses. The
- * check runs on the addresses the connection then uses, so a name that
- * answered with a public address a moment ago and a private one now (DNS
- * rebinding) is refused.
- */
+// Checks the addresses the connection then uses, so DNS rebinding is refused.
 export const publicOnlyLookup: LookupFunction = (hostname, options, callback) => {
   dns.lookup(hostname, { ...options, all: true }, (err, addresses) => {
     if (err) {
@@ -101,11 +83,7 @@ export const publicOnlyLookup: LookupFunction = (hostname, options, callback) =>
   });
 };
 
-/**
- * Addresses an outbound request must not reach: this host, the local
- * network, and ranges that are not globally routable (RFC 6890 special
- * purpose registries, plus multicast and broadcast).
- */
+// Not globally routable: RFC 6890 special-purpose registries, plus multicast and broadcast.
 const BLOCKED = new net.BlockList();
 for (const [prefix, bits] of [
   ['0.0.0.0', 8], // "this network"
@@ -148,13 +126,8 @@ for (const [prefix, bits] of [
   BLOCKED.addSubnet(prefix, bits, 'ipv6');
 }
 
-/**
- * Whether `ip` (an IPv4 or IPv6 literal, IPv6 optionally in brackets) is a
- * private, loopback or otherwise non-public address. IPv6 forms that embed
- * an IPv4 address (mapped, SIIT, compatible, NAT64, 6to4) are judged by that
- * address. Anything that is not a valid IP literal counts as private, so a
- * malformed value is never let through.
- */
+// Anything that is not a valid IP literal counts as private, so a malformed
+// value is never let through.
 export function isPrivateIP(ip: string): boolean {
   const host = stripBrackets(ip).toLowerCase();
   const version = net.isIP(host);
@@ -167,11 +140,7 @@ export function isInside(dir: string, file: string): boolean {
   return rel !== '' && rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
 }
 
-/**
- * Resolve a user-supplied file path strictly under `root`. Symlinks are
- * followed via realpathSync so that symlinks inside the project cannot be
- * used to escape the root sandbox. Throws if the real path is outside.
- */
+// Symlinks are followed so one inside the project cannot escape the root.
 export function resolveWithinRoot(root: string, input: string): string {
   if (typeof input !== 'string' || input.length === 0) {
     throw new Error('Invalid file path');

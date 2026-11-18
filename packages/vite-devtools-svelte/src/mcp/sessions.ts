@@ -6,7 +6,6 @@ import type { RenderProfile, LoadProfile, FpsSample } from '../types.js';
 import { avg, min } from './stats.js';
 
 interface SessionSnapshot {
-  /** componentId -> { renderCount, totalRenderTime } at snapshot moment */
   renderProfiles: Array<{
     componentId: number;
     file: string;
@@ -27,9 +26,7 @@ export interface SessionRecord {
   persist: boolean;
   startSnapshot: SessionSnapshot;
   endSnapshot?: SessionSnapshot;
-  /** load profiles that arrived strictly between startedAt..endedAt */
   loadProfiles: LoadProfile[];
-  /** fps samples that arrived strictly between startedAt..endedAt */
   fpsSamples: FpsSample[];
 }
 
@@ -121,10 +118,9 @@ function consistsOf(s: string, chars: string): boolean {
 }
 
 /**
- * Whether `id` has the only shape `start()` issues: `s_<Date.now() base36>_<6
- * hex>`. Ids reach the store from MCP clients and become file names, so
- * anything else (path separators, `..`, absolute paths) is rejected before
- * touching disk (review C-7).
+ * Ids reach the store from MCP clients and become file names, so anything but
+ * the shape `start()` issues (path separators, `..`, absolute paths) is
+ * rejected before touching disk.
  */
 export function isSessionId(id: unknown): id is string {
   if (typeof id !== 'string') return false;
@@ -181,12 +177,10 @@ export class SessionStore {
     return this.active === null ? undefined : this.sessions.get(this.active);
   }
 
-  /** Called by the plugin whenever a new load profile arrives. */
   recordLoadProfile(p: LoadProfile): void {
     this.activeRecord?.loadProfiles.push(p);
   }
 
-  /** Called by the plugin whenever a new fps sample arrives. */
   recordFpsSample(s: FpsSample): void {
     this.activeRecord?.fpsSamples.push(s);
   }
@@ -253,11 +247,7 @@ export class SessionStore {
     return had || onDisk;
   }
 
-  /**
-   * The delta of a record in hand. `end('discard')` removes the record from
-   * the store, so end_session must not look it up again by id (it used to,
-   * and failed with "Session not found" for every discarded session).
-   */
+  /** Takes the record, not an id: `end('discard')` removes it from the store. */
   deltaOf(rec: SessionRecord): SessionDelta {
     if (!rec.endSnapshot || rec.endedAt === undefined) {
       throw new Error(`Session ${rec.id} has not been ended yet`);
@@ -365,8 +355,7 @@ export class SessionStore {
       const raw = fs.readFileSync(this.pathFor(id), 'utf-8');
       const rec: unknown = JSON.parse(raw);
       // A file whose content claims another id is not served under this one;
-      // one missing fields deltaOf()/list() read is not served at all (it used
-      // to crash them with a TypeError).
+      // one missing fields deltaOf()/list() read is not served at all.
       return isRecordShape(rec) && rec.id === id ? rec : undefined;
     } catch {
       return undefined;
@@ -374,11 +363,7 @@ export class SessionStore {
   }
 }
 
-/**
- * Nearest-rank percentile: the smallest value with at least `p`% of the
- * values at or below it. (`floor(p/100 * n)` used before was one rank too
- * high: the p95 of 20 values was the maximum.)
- */
+/** Nearest-rank: the smallest value with at least `p`% of the values at or below it. */
 function percentile(xs: number[], p: number): number {
   if (xs.length === 0) return 0;
   const sorted = xs.toSorted((a, b) => a - b);
@@ -405,7 +390,6 @@ function isSnapshot(v: unknown): v is SessionSnapshot {
   );
 }
 
-/** The fields a persisted session must carry to be listed, loaded and diffed. */
 function isRecordShape(v: unknown): v is SessionRecord {
   return (
     isObject(v) &&

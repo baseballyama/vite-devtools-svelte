@@ -13,12 +13,9 @@ export default defineConfig({
     DevTools({ clientAuth }),
     sveltekit({
       adapter: adapter(),
-      // Strict CSP — designed to surface every cross-origin request that
-      // `@vitejs/devtools` and `vite-devtools-svelte` perform at runtime.
-      //
-      // SvelteKit applies these directives via a meta http-equiv in dev too,
-      // so the browser enforces them against everything injected into the page,
-      // including DevTools' transformIndexHtml injection.
+      // Strict, to surface every cross-origin request the DevTools make. SvelteKit
+      // applies it via a meta http-equiv in dev too, so it also covers what
+      // DevTools inject through transformIndexHtml.
       csp: {
         mode: 'nonce',
         directives: {

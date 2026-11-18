@@ -1,8 +1,6 @@
 /**
- * Integration: compiler warnings of a real vite-plugin-svelte dev compile
- * reach the collector. vite-plugin-svelte prints dev warnings with
- * `console.log`, never through Vite's logger, so they have to be taken from
- * its `onwarn` as structured warnings.
+ * vite-plugin-svelte prints dev warnings with `console.log`, never through
+ * Vite's logger, so they have to be taken from its `onwarn`.
  */
 import fs from 'node:fs';
 import path from 'node:path';

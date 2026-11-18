@@ -16,23 +16,15 @@ const LOAD_FILES: Record<string, LoadProfile['type']> = {
   '+layout.js': 'universal',
 };
 
-/** The route id of a load file (its directory under `routesDir`), or `null` outside it. */
 function routeOf(file: string, routesDir: string): string | null {
   const dir = file.slice(0, file.lastIndexOf('/'));
   if (dir === routesDir) return '/';
   return dir.startsWith(`${routesDir}/`) ? dir.slice(routesDir.length) : null;
 }
 
-/**
- * Wrap the exported `load` of a SvelteKit load file (`+page.ts`,
- * `+layout.server.js`, …) so each call reports its duration and data size,
- * or `null` when `id` is not a load file under `routesDir` (absolute,
- * `/`-separated) or declares no exported `load`.
- *
- * Only the `export` keyword is removed (the local binding stays, so the
- * module's own references keep the original) and a profiled wrapper is
- * exported as `load` instead; line numbers are unchanged.
- */
+// Only the `export` keyword is removed, so the module's own references keep
+// the original `load` and line numbers are unchanged. `routesDir` is absolute
+// and `/`-separated.
 export function profileLoad(code: string, id: string, routesDir: string): string | null {
   // Cheap checks first: this runs for every module the dev server serves.
   const type = LOAD_FILES[id.slice(id.lastIndexOf('/') + 1)];

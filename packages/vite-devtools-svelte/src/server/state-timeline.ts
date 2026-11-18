@@ -8,20 +8,18 @@ import type {
 } from '../types.js';
 import { arrayOf, nonNegInt } from './payload.js';
 
-/** Most entries the server-side state timeline keeps. */
 export const STATE_TIMELINE_LIMIT = 500;
 
-/** Byte budget (JSON length, measured once at ingest) for the server-side state timeline. */
+/** Measured as JSON length, once at ingest. */
 export const STATE_TIMELINE_BYTES = 4 * 1024 * 1024;
 
-/** Epoch for runtimes that send payloads without an epoch. */
 export const LEGACY_EPOCH = '(legacy)';
 
 // Timeline `seq` values (and dataset versions) come from one process-wide
 // counter, seeded from the clock: a cursor issued by an earlier collector in
 // this process (inline or config-file restart) is always below a newer
 // collector's `resetAt`, and one from a previous process is too unless it
-// issued more than 1 000 entries per millisecond of downtime (review D2).
+// issued more than 1 000 entries per millisecond of downtime.
 let lastSeq = Date.now() * 1000;
 export const nextSeq = (): number => ++lastSeq;
 
@@ -44,13 +42,10 @@ export function isBaseline(b: unknown): b is TimelineBaseline {
 
 interface Stored {
   entry: StateTimelineEntry;
-  /** JSON size, measured once at ingest. */
   size: number;
-  /** App page load the entry came from. */
   epoch: string;
 }
 
-/** A runtime timeline push (docs/devframe-migration.md §6.4), untrusted. */
 export interface TimelinePush {
   changes?: unknown;
   epoch?: unknown;
@@ -60,13 +55,6 @@ export interface TimelinePush {
   baseline?: unknown;
 }
 
-/**
- * The server-side state timeline: entries of every tracked page load
- * (epoch), oldest first, capped by count and bytes, read through cursors.
- * Losses are counted per epoch and reason until the epoch is forgotten or
- * the timeline cleared (§6.7 B/C). `onChange` runs whenever what a reader
- * sees changes.
- */
 export class StateTimeline {
   private stored: Stored[] = [];
   private entriesCache: StateTimelineEntry[] | undefined;
@@ -92,13 +80,9 @@ export class StateTimeline {
   }
 
   /**
-   * Two payload shapes (§6.4):
-   * - delta: `{ epoch, changes, reset? }` — `changes` are new since the
-   *   previous push from that page load; `reset` replaces that epoch's
-   *   entries. Entries are kept per epoch, so several app tabs (or a reload)
-   *   interleave instead of wiping each other.
-   * - legacy full snapshot: `{ changes }` — only the entries after the
-   *   newest one already held are appended, so clients still get deltas.
+   * Entries are kept per epoch, so several app tabs (or a reload) interleave
+   * instead of wiping each other. A legacy full snapshot (no epoch) appends
+   * only the entries after the newest one held, so clients still get deltas.
    */
   ingest(data: TimelinePush | undefined): void {
     const incoming = arrayOf<StateChange>(data?.changes).slice(-STATE_TIMELINE_LIMIT);
@@ -144,7 +128,6 @@ export class StateTimeline {
     this.markReset();
   }
 
-  /** An evicted page load: its entries and every counter about it. */
   forget(epoch: string): void {
     this.dropEpoch(epoch);
     this.drops.delete(epoch);
@@ -160,7 +143,7 @@ export class StateTimeline {
     this.markReset();
   }
 
-  /** Capture info (§6.7 B); the baseline is the served `epoch`'s. */
+  /** The baseline is the served `epoch`'s. */
   captureInfo(epoch: string | undefined): CaptureInfo {
     const sums = { 'runtime-count': 0, 'runtime-bytes': 0, 'server-count': 0, 'server-bytes': 0 };
     for (const counts of this.drops.values()) {
@@ -190,11 +173,7 @@ export class StateTimeline {
     this.onChange();
   }
 
-  /**
-   * Add the runtime's own losses (unsent entries it evicted, §6.7 C) and
-   * too-large values to the epoch's counters. Only runtime reasons are
-   * accepted from the runtime; server reasons are counted here.
-   */
+  // Only runtime reasons are accepted from the runtime; server reasons are counted here.
   private countRuntimeLosses(epoch: string, dropped: unknown, valueTooLarge: unknown): void {
     if (Array.isArray(dropped)) {
       for (const d of dropped as Array<{ reason?: unknown; count?: unknown }>) {

@@ -8,7 +8,6 @@
   import type { ReactiveNode, ReactiveSummary } from '../../lib/types.js';
   import KindBadge from './KindBadge.svelte';
 
-  /** Detail pane for one signal of the loaded graph. */
   let {
     node,
     byId,

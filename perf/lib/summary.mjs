@@ -1,7 +1,5 @@
-// Paired B/F summary (perf/run-paired.mjs, perf/resummarize.mjs).
-// `median` is the mathematical median (mean of the two middle values for an
-// even count). Verdict rule: a difference is claimed only when the B and F
-// sample ranges do not overlap (>= 2 samples per side).
+// Verdict rule: a difference is claimed only when the B and F sample ranges do
+// not overlap (>= 2 samples per side).
 
 import { median, r1 } from './harness.mjs';
 

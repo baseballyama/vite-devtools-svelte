@@ -1,46 +1,15 @@
-/**
- * Path / file display helpers shared across panels.
- *
- * Vite normalizes paths to forward-slash on every platform, but we still
- * accept backslash too so that anything bypassing Vite's normalization
- * (e.g. raw FS paths surfaced from analyzers on Windows) renders correctly.
- */
-
+// Vite normalizes paths to `/`, but anything bypassing it (e.g. raw FS paths
+// from analyzers on Windows) can still carry `\`.
 const segments = (path: string) => path.replaceAll('\\', '/').split('/');
 
-/**
- * Last `depth` segments of a path, joined with `/`. Useful for compact
- * display in lists where the full path is in a tooltip / detail panel.
- *
- * @example
- *   shortPath('src/lib/components/Counter.svelte') // → 'components/Counter.svelte'
- *   shortPath('src/lib/components/Counter.svelte', 3) // → 'lib/components/Counter.svelte'
- *   shortPath('Counter.svelte') // → 'Counter.svelte'
- */
 export function shortPath(path: string, depth = 2): string {
   return segments(path).slice(-depth).join('/');
 }
 
-/**
- * Last segment of a path (basename), without directory.
- *
- * @example
- *   basename('src/lib/Counter.svelte') // → 'Counter.svelte'
- *   basename('') // → ''
- */
 export function basename(path: string): string {
   return segments(path).pop()!;
 }
 
-/**
- * Display name for a Svelte component file. Strips both the directory
- * prefix and the `.svelte` extension. Falls back to a passed default.
- *
- * @example
- *   componentName('src/lib/Counter.svelte') // → 'Counter'
- *   componentName('') // → 'Unknown'
- *   componentName(undefined, '?') // → '?'
- */
 export function componentName(file: string | undefined | null, fallback = 'Unknown'): string {
   if (!file) return fallback;
   // Only a trailing `.svelte` is the component extension: module state lives
@@ -51,11 +20,10 @@ export function componentName(file: string | undefined | null, fallback = 'Unkno
 
 const BYTE_UNITS = ['KB', 'MB', 'GB', 'TB'] as const;
 
-/** Human-readable byte size: `512 B`, `1.4 KB`, `2.31 MB`, `1.50 GB`. */
 export function formatBytes(bytes: number | undefined | null): string {
   if (typeof bytes !== 'number' || !Number.isFinite(bytes)) return '—';
-  // The unit follows the magnitude (a negative delta of 2 MB is `-2.00 MB`,
-  // not `-2097152 B`), and sizes past 1 GB no longer read as `1048576.00 MB`.
+  // The unit follows the magnitude: a negative delta of 2 MB is `-2.00 MB`,
+  // not `-2097152 B`.
   if (Math.abs(bytes) < 1024) return `${bytes} B`;
   let v = bytes / 1024;
   let unit = 0;
@@ -66,7 +34,6 @@ export function formatBytes(bytes: number | undefined | null): string {
   return `${v.toFixed(unit === 0 ? 1 : 2)} ${BYTE_UNITS[unit]}`;
 }
 
-/** Millisecond duration with precision that adapts to magnitude. */
 export function formatMs(ms: number | undefined | null): string {
   if (typeof ms !== 'number' || !Number.isFinite(ms)) return '—';
   if (ms >= 1000) return `${(ms / 1000).toFixed(2)} s`;
@@ -75,7 +42,6 @@ export function formatMs(ms: number | undefined | null): string {
   return `${ms.toFixed(2)} ms`;
 }
 
-/** Wall-clock time `HH:MM:SS` (optionally with milliseconds). */
 export function formatClock(ts: number, millis = false): string {
   return new Date(ts).toLocaleTimeString(undefined, {
     hour12: false,
@@ -87,21 +53,17 @@ export function formatClock(ts: number, millis = false): string {
 }
 
 /**
- * Last-resort `String()` for values JSON cannot represent (functions,
- * symbols, bigints, cyclic objects). Objects intentionally keep their own
- * `toString()` (or the `[object Object]` default) — there is nothing better
- * to show for an unserialisable value.
+ * Objects intentionally keep their own `toString()` (or `[object Object]`):
+ * there is nothing better to show for a value JSON cannot represent.
  */
 export function toText(v: unknown): string {
   return typeof v === 'string' ? v : String(v);
 }
 
-/** The message of a thrown value (anything can be thrown, not only an `Error`). */
 export function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-/** Compact one-line rendering of an arbitrary value (JSON-ish, truncated). */
 export function formatValue(v: unknown, max = 80): string {
   if (v === undefined) return 'undefined';
   // JSON has no NaN / ±Infinity (`JSON.stringify(NaN) === 'null'`): showing
@@ -116,7 +78,6 @@ export function formatValue(v: unknown, max = 80): string {
   return s.length > max ? s.slice(0, max - 1) + '…' : s;
 }
 
-/** Pretty multi-line rendering of an arbitrary value for inspectors. */
 export function prettyValue(v: unknown): string {
   if (v === undefined) return 'undefined';
   if (typeof v === 'number' && !Number.isFinite(v)) return String(v); // see formatValue

@@ -47,24 +47,22 @@ export const LIMITS = {
   compilerWarnings: 500,
 } as const;
 
-/** How long a pull request to the browser runtime may take before we answer from cache. */
+/** After this, a pull to the browser runtime is answered from cache. */
 export const RUNTIME_REQUEST_TIMEOUT = 1000;
 
 /** A pull answered within this window is reused instead of asking the runtime again. */
 export const PULL_FRESHNESS = 1000;
 
-/** A consumer (DevTools UI tab, MCP agent) counts as watching until its lease expires. */
 export const LEASE_TTL = 15_000;
 
-/** App page loads (tabs / reloads) whose component tree + profiles are kept, LRU. */
+/** App page loads (tabs / reloads) kept, LRU. */
 export const MAX_EPOCHS = 4;
 
-/** Keyed pull results kept for reuse / stale fallback (graph scopes, summaries), LRU. */
 const MAX_CACHED_PULLS = 32;
 
 type DatasetKey = keyof DatasetVersions;
 
-/** Hot-channel event names shared with `runtime.ts` (stable contract, see docs/devframe-migration.md §6). */
+/** Stable contract with the browser runtime. */
 export const HOT_EVENTS = {
   components: 'svelte-devtools:components',
   profiles: 'svelte-devtools:profiles',
@@ -73,29 +71,25 @@ export const HOT_EVENTS = {
   runtimeError: 'svelte-devtools:runtime-error',
   reactiveGraph: 'svelte-devtools:reactive-graph',
   requestReactiveGraph: 'svelte-devtools:request-reactive-graph',
-  /** server → runtime `{ requestId, epoch?, topK, windowMs }`; reply `reactiveSummary` (§6.7 I). */
+  /** server → runtime `{ requestId, epoch?, topK, windowMs }`; reply `reactiveSummary`. */
   requestReactiveSummary: 'svelte-devtools:request-reactive-summary',
   reactiveSummary: 'svelte-devtools:reactive-summary',
   requestStateTimeline: 'svelte-devtools:request-state-timeline',
   clearStateTimeline: 'svelte-devtools:clear-state-timeline',
   /** runtime → server, once per page load: "send me the current subscription state". */
   runtimeReady: 'svelte-devtools:runtime-ready',
-  /** server → runtime(s): `{ active: boolean }` — whether any consumer is watching. */
+  /** server → runtime(s): `{ active: boolean }`, whether any consumer is watching. */
   subscription: 'svelte-devtools:subscription',
-  /** runtime → server: `{ epoch, componentId }` — an element was picked in the inspector. */
+  /** runtime → server: `{ epoch, componentId }`, an element was picked in the inspector. */
   elementPicked: 'svelte-devtools:element-picked',
 } as const;
 
-/**
- * How long a pick stays "recent": a DevTools UI that connects within this
- * time after it (the dock opening the Svelte panel for it) still gets it.
- */
+// A DevTools UI that connects this soon after a pick (the dock opening the
+// Svelte panel for it) still gets it.
 export const RECENT_PICK_MS = 10_000;
 
-/** Longest epoch accepted in a pick. */
 const MAX_EPOCH = 200;
 
-/** A pick from the runtime, or null when malformed. */
 function parseElementPick(value: unknown): ElementPick | null {
   const { epoch, componentId } = asPayload(value) ?? {};
   if (typeof epoch !== 'string' || epoch.length === 0 || epoch.length > MAX_EPOCH) return null;
@@ -108,29 +102,23 @@ function parseElementPick(value: unknown): ElementPick | null {
 interface EpochState {
   /** Insertion order = registration order (parents first). */
   components: Map<number, ComponentInstance>;
-  /**
-   * Ids of mounted instances not stored: beyond the cap, or whose parent
-   * isn't stored (admitting them would show orphans). Ids only, so the total
-   * and removals stay exact.
-   */
+  // Mounted instances not stored: past the cap, or under an unstored parent
+  // (storing it would show an orphan). Ids only, so the total and removals stay exact.
   overflow: Set<number>;
-  /** A full components snapshot was applied, so deltas have a base. */
   hasBase: boolean;
   profiles: RenderProfile[];
-  /** Profiles the runtime holds before its tail cap (sent as `total`); `null` = unknown. */
+  /** Runtime's count before its tail cap; `null` = unknown. */
   profilesTotal: number | null;
 }
 
 type PullResult = ReactiveGraphResult | ReactiveSummary;
 
-/** A pull request waiting for the runtime's reply, matched by `requestId` (§6.7 A, M1). */
 interface PendingPull {
   kind: 'graph' | 'summary';
   key: string;
   epoch: string | null;
   scope: number | null;
   resolve: (value: PullResult) => void;
-  /** The answer when the runtime does not reply: the last result for `key`, or empty. */
   fallback: (reason: 'timeout' | 'no-runtime') => PullResult;
   timer: ReturnType<typeof setTimeout>;
 }
@@ -153,19 +141,14 @@ export interface CollectorHooks {
 const epochOf = (data: Payload | undefined) =>
   typeof data?.epoch === 'string' ? data.epoch : LEGACY_EPOCH;
 
-/**
- * Host-side store for everything the browser runtime and the instrumentation
- * transforms report. Independent of Vite and of devframe: the Vite plugin
- * feeds it, the devframe RPC layer and the MCP server read from it.
- */
 export class Collector {
   // Component tree + render profiles are kept per app page load (`epoch`),
   // so several app tabs / a reload don't overwrite each other; the epoch that
-  // pushed most recently is the one served (review D3, perf R-A8).
+  // pushed most recently is the one served.
   private epochs = new Map<string, EpochState>();
   private servedEpoch: string | undefined;
   private liveCache: ComponentInstance[] | undefined;
-  /** Epochs we asked for a full snapshot (delta without a base); answered once per epoch. */
+  /** Epochs asked for a full snapshot after a delta without a base; asked once per epoch. */
   private resyncRequested = new Set<string>();
 
   private readonly fps = new Ring<FpsSample>(LIMITS.fpsSamples);
@@ -177,7 +160,7 @@ export class Collector {
   // Opaque change tokens drawn from the process-wide counter (like timeline
   // seqs): a restarted server's collector never reports a value a client saw
   // before, so "unchanged version → skip refetch" stays correct across
-  // restarts (review B1).
+  // restarts.
   readonly versions: DatasetVersions = {
     components: nextSeq(),
     renderProfiles: nextSeq(),
@@ -189,14 +172,12 @@ export class Collector {
     apiEndpoints: nextSeq(),
   };
 
-  // Keyed pulls (graph scopes, summaries; §6.7 A/I): each request carries a
-  // requestId + the served epoch, and only the matching reply resolves it, so
-  // one viewer never receives another viewer's scope (review G5, M1).
+  // Each pull carries a requestId + the served epoch, and only the matching
+  // reply resolves it, so one viewer never receives another viewer's scope.
   private pulls = new Map<string, PendingPull>();
   private pullCache = new Map<string, { value: PullResult; at: number }>();
   private pullInflight = new Map<string, Promise<PullResult>>();
   private requestSeq = 0;
-  /** The most recent graph reply, for capture info. */
   private lastGraph: ReactiveGraphResult | undefined;
 
   private lastTimelinePull = 0;
@@ -222,10 +203,8 @@ export class Collector {
     for (const key of keys) this.versions[key] = nextSeq();
   }
 
-  /**
-   * Subscribe to the runtime's hot-channel events. Re-attaching (dev server
-   * restart) detaches the previous channel first so listeners never pile up.
-   */
+  // Re-attaching (dev server restart) detaches the previous channel first so
+  // listeners never pile up.
   attach(hot: HotChannel): void {
     this.detach();
     this.hot = hot;
@@ -285,11 +264,9 @@ export class Collector {
   /** What the runtime is told: collect/poll only while somebody is watching. */
   get subscription(): { active: boolean; componentDeltas: true } {
     // `componentDeltas` advertises that the delta form of `components` is
-    // accepted (§6.5), so a runtime never sends deltas to an older server.
+    // accepted, so a runtime never sends deltas to an older server.
     return { active: this.active, componentDeltas: true };
   }
-
-  // --- datasets ---
 
   get fpsSamples(): FpsSample[] {
     return this.fps.items;
@@ -307,12 +284,10 @@ export class Collector {
     return this.warnings.items;
   }
 
-  /** The server-side timeline (all tracked epochs, oldest first). */
   get stateTimeline(): StateTimelineEntry[] {
     return this.timeline.entries;
   }
 
-  /** Components of the served epoch, parents first, capped at {@link LIMITS.liveComponents}. */
   get liveComponents(): ComponentInstance[] {
     if (!this.liveCache) {
       const state = this.servedState();
@@ -321,11 +296,7 @@ export class Collector {
     return this.liveCache;
   }
 
-  /**
-   * The served epoch's components with that epoch, read together, so a
-   * component id is never paired with another page load's epoch (several app
-   * tabs keep separate trees; nothing is merged).
-   */
+  // Read together so a component id is never paired with another page load's epoch.
   get liveSnapshot(): {
     epoch: string | null;
     total: number;
@@ -339,7 +310,6 @@ export class Collector {
     };
   }
 
-  /** Instances the served epoch has mounted, including those beyond the cap. */
   get liveComponentsTotal(): number {
     const state = this.servedState();
     return state ? state.components.size + state.overflow.size : 0;
@@ -349,12 +319,9 @@ export class Collector {
     return this.servedState()?.profiles ?? [];
   }
 
-  /** The epoch currently served and how many app page loads are tracked. */
   get epochInfo(): { epoch: string | undefined; epochs: number } {
     return { epoch: this.servedEpoch ?? [...this.epochs.keys()].at(-1), epochs: this.epochs.size };
   }
-
-  // --- epochs ---
 
   private servedState(): EpochState | undefined {
     if (this.servedEpoch !== undefined) return this.epochs.get(this.servedEpoch);
@@ -363,12 +330,8 @@ export class Collector {
     return [...this.epochs.values()].at(-1);
   }
 
-  /**
-   * Get (creating, LRU-bounded) the state for `epoch` and mark it as the most
-   * recent pusher. It becomes the served epoch only once it holds a full
-   * component snapshot — an epoch known only from profiles/timeline would
-   * otherwise show an empty tree (review B1).
-   */
+  // Becomes the served epoch only once it holds a full component snapshot: an
+  // epoch known only from profiles/timeline would otherwise show an empty tree.
   private touchEpoch(epoch: string): EpochState {
     const state = this.epochs.get(epoch) ?? {
       components: new Map(),
@@ -404,9 +367,6 @@ export class Collector {
     this.liveCache = undefined;
   }
 
-  // --- element picker ---
-
-  /** Subscribe to elements picked in the app page's inspector; returns an unsubscribe function. */
   onElementPicked(listener: (pick: ElementPick) => void): () => void {
     this.pickListeners.add(listener);
     return () => {
@@ -414,29 +374,21 @@ export class Collector {
     };
   }
 
-  /**
-   * A pick: its page load becomes the served one (when its tree is known),
-   * so the instance id resolves in the components the UI reads next.
-   */
+  // The pick's page load becomes the served one so the instance id resolves
+  // in the components the UI reads next.
   ingestPick(pick: ElementPick): void {
     if (this.epochs.has(pick.epoch)) this.touchEpoch(pick.epoch);
     this.lastPick = { pick, at: Date.now() };
     for (const listener of this.pickListeners) listener(pick);
   }
 
-  /** The last pick when it was made within `RECENT_PICK_MS`, else null. */
   get recentPick(): ElementPick | null {
     const last = this.lastPick;
     return last && Date.now() - last.at <= RECENT_PICK_MS ? last.pick : null;
   }
 
-  // --- consumers ---
-
-  /**
-   * Mark `id` as watching for `ttl` ms (renewed by heartbeats). The first
-   * lease activates the runtime's polling/FPS sampling, the last expiry or
-   * release pauses it. Returns whether this call activated it.
-   */
+  // The first lease activates the runtime's polling/FPS sampling; the last
+  // expiry or release pauses it.
   lease(id: string, ttl = LEASE_TTL): boolean {
     const wasActive = this.active;
     this.leases.set(id, Date.now() + ttl);
@@ -448,12 +400,9 @@ export class Collector {
     if (this.leases.delete(id)) this.updateSubscription();
   }
 
-  /**
-   * Resolve once the runtime has sent its activation snapshot (components,
-   * profiles, then a `reset: true` timeline — the last part) or after
-   * `timeout`, so a consumer that just activated the runtime doesn't read
-   * the stale pre-activation state.
-   */
+  // Resolves once the activation snapshot arrived (or after `timeout`), so a
+  // consumer that just activated the runtime doesn't read the stale
+  // pre-activation state.
   waitForSnapshot(timeout: number): Promise<void> {
     return new Promise(resolve => {
       const done = () => {
@@ -487,18 +436,10 @@ export class Collector {
     }
   }
 
-  // --- ingest ---
-
-  /**
-   * Full form `{ epoch?, reset?, components }` replaces the epoch's tree;
-   * delta form `{ epoch, added, removed }` (ids) patches it (§6.5). A delta
-   * for an epoch we hold no full snapshot of (new to us, or evicted) is not
-   * applied — a partial tree would persist — and the sender is asked to
-   * resync. Entries stay in registration order (parents first); an instance
-   * is stored only while its parent is and the cap allows, otherwise only its
-   * id is tracked, so the stored part is always a rooted, orphan-free tree.
-   * Entries that are not objects with a numeric `id` are ignored.
-   */
+  // A delta for an epoch with no full snapshot (new, or evicted) is not
+  // applied, since a partial tree would persist; the sender is asked to
+  // resync. An instance is stored only while its parent is, so the stored
+  // part is always a rooted, orphan-free tree.
   ingestComponents(data: Payload | undefined, client?: HotClient): void {
     const epoch = epochOf(data);
     const isDelta =
@@ -555,7 +496,7 @@ export class Collector {
     this.lastTimelinePull = Date.now();
     this.flushStateTimeline();
     // The runtime's activation snapshot ends with a `reset: true` timeline
-    // (after components and profiles), so that completes a snapshot (D4).
+    // (after components and profiles), so that completes a snapshot.
     if (data?.reset === true) {
       // Copy: each waiter removes itself from the list while we iterate.
       for (const done of this.snapshotWaiters.slice()) done();
@@ -573,11 +514,8 @@ export class Collector {
     this.bump('errors');
   }
 
-  /**
-   * A watched file was added, changed or deleted. Any file deliberately counts,
-   * not only `+server` files: a rescan is cheap, runs only while the API panel
-   * is visible, and handlers can come from other modules.
-   */
+  // Any file deliberately counts, not only `+server` files: a rescan is cheap,
+  // runs only while the API panel is visible, and handlers can come from other modules.
   sourceChanged(): void {
     this.bump('apiEndpoints');
   }
@@ -627,17 +565,11 @@ export class Collector {
     this.hot?.send(HOT_EVENTS.clearStateTimeline, {});
   }
 
-  // --- reads ---
-
-  /** Changes after `since` (a previous `cursor`), or the whole buffer when the cursor is stale. */
   getStateTimelineDelta(since?: number): StateTimelineDelta {
     return this.timeline.delta(since);
   }
 
-  /**
-   * What the server holds versus what was reported, per dataset (§6.7 B).
-   * `total: null` means unknown; nothing is estimated.
-   */
+  /** `total: null` means unknown; nothing is estimated. */
   getCaptureInfo(): CaptureInfoMap {
     const state = this.servedState();
     const epoch = this.servedEpoch;
@@ -656,7 +588,7 @@ export class Collector {
         captured: profiles,
         total: profilesTotal,
         truncated: profilesTotal !== null && profilesTotal > profiles,
-        // The runtime keeps first-render order and sends the tail: the newest-mounted instances (review IA1).
+        // The runtime keeps first-render order and sends the tail: the newest-mounted instances.
         policy: 'newest-mounted',
         ...withEpoch,
       },
@@ -687,15 +619,9 @@ export class Collector {
     return info;
   }
 
-  // --- pulls (the runtime answers on request) ---
-
-  /**
-   * A graph reply. With a `requestId` (§6.7 A) it resolves only that request,
-   * and only if its epoch matches the one asked for; a reply nobody waits for
-   * (another app tab, too late) is ignored. Without one (an older runtime) it
-   * is a whole-app graph and answers every pending graph pull, scoped ones by
-   * filtering here.
-   */
+  // A reply nobody waits for (another app tab, too late) is ignored. Without
+  // a `requestId` (an older runtime) it is a whole-app graph and answers every
+  // pending graph pull, scoped ones by filtering here.
   ingestReactiveGraph(data: Payload | undefined): void {
     const requestId = typeof data?.requestId === 'string' ? data.requestId : undefined;
     if (requestId === undefined) {
@@ -714,7 +640,6 @@ export class Collector {
     this.bump('reactiveGraph');
   }
 
-  /** A summary reply (§6.7 I): resolves only the matching request. */
   ingestReactiveSummary(data: Payload | undefined): void {
     const requestId = typeof data?.requestId === 'string' ? data.requestId : undefined;
     const pull =
@@ -722,7 +647,6 @@ export class Collector {
     if (pull) this.settle(requestId!, normalizeSummary(data, pull.epoch));
   }
 
-  /** The pending pull `requestId` names, if the reply is of its kind and from its epoch. */
   private matchingPull(
     requestId: string,
     kind: PendingPull['kind'],
@@ -736,11 +660,6 @@ export class Collector {
     return pull;
   }
 
-  /**
-   * Ask the browser runtime for the graph of one component instance (or the
-   * whole app), built by the runtime within the caps (§6.7 A). Falls back to
-   * the last result for the same scope, marked `stale`.
-   */
   requestReactiveGraph(req: ReactiveGraphRequest = {}): Promise<ReactiveGraphResult> {
     const id = req.componentId;
     const scope = typeof id === 'number' && Number.isInteger(id) && id >= 0 ? id : null;
@@ -748,7 +667,7 @@ export class Collector {
     const maxEdges = clampInt(req.maxEdges, 1, LIMITS.reactiveEdges, LIMITS.reactiveEdges);
     const epoch = this.servedEpoch ?? null;
     // No page load has sent its tree: a component id means nothing yet, and
-    // asking every tab would let any of them answer for it (review MUST-1).
+    // asking every tab would let any of them answer for it.
     if (scope !== null && epoch === null) {
       return Promise.resolve(emptyGraph(scope, epoch, 'no-runtime'));
     }
@@ -767,7 +686,7 @@ export class Collector {
     });
   }
 
-  /** Ask the runtime for the overview aggregate (§6.7 I); never captures the graph. */
+  /** Never captures the graph. */
   requestReactiveSummary(req: ReactiveSummaryRequest = {}): Promise<ReactiveSummary> {
     const { topK: defaultTopK, maxTopK, windowMs: defaultWindow } = SUMMARY_DEFAULTS;
     const topK = clampInt(req.topK, 1, maxTopK, defaultTopK);
@@ -789,12 +708,6 @@ export class Collector {
     });
   }
 
-  /**
-   * One pull per key at a time; a result younger than {@link PULL_FRESHNESS}
-   * is reused. The request carries a requestId and the served epoch; only
-   * the matching reply resolves it. On timeout (or without a runtime) the
-   * last result for the same key is returned with `stale: true`.
-   */
   private keyedPull<T extends PullResult>(req: {
     kind: PendingPull['kind'];
     key: string;
@@ -835,10 +748,6 @@ export class Collector {
     return promise;
   }
 
-  /**
-   * Resolve a pending pull: with a fresh result (cached under its key), or
-   * with its fallback when the runtime did not answer.
-   */
   private settle(requestId: string, outcome: PullResult | 'timeout' | 'no-runtime'): void {
     const pull = this.pulls.get(requestId);
     if (!pull) return;
@@ -857,12 +766,9 @@ export class Collector {
     pull.resolve(outcome);
   }
 
-  /**
-   * Ask the browser runtime for a fresh state timeline; falls back to the
-   * last one. Concurrent callers share one in-flight pull, and a result
-   * younger than {@link PULL_FRESHNESS} is reused, so several polling clients
-   * never make the user's app rebuild the same data more than once a second.
-   */
+  // Concurrent callers share one in-flight pull and fresh results are reused,
+  // so several polling clients never make the app rebuild the same data more
+  // than once a second.
   requestStateTimeline(): Promise<StateChange[]> {
     const hot = this.hot;
     if (!hot || Date.now() - this.lastTimelinePull < PULL_FRESHNESS) {

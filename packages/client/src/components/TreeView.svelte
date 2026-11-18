@@ -7,9 +7,8 @@
   import VirtualList from './VirtualList.svelte';
 
   /**
-   * Virtualised ARIA tree. Expansion state is a key Set owned by the caller
-   * (bindable) so it survives data refreshes; while `filter` is set, matching
-   * branches are shown expanded regardless of that state.
+   * Expansion state is owned by the caller (bindable) so it survives data
+   * refreshes; while `filter` is set, matching branches show expanded anyway.
    */
   interface Props {
     roots: readonly N[];
@@ -60,7 +59,6 @@
     return rows.findIndex(r => r.key === key);
   }
 
-  /** Reveal (expand ancestors) and select a node by key. */
   export function reveal(key: string, ancestors: string[]) {
     if (ancestors.length > 0) expanded = new Set([...expanded, ...ancestors]);
     selected = key;

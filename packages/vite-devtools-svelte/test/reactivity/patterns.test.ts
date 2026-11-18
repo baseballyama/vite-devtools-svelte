@@ -21,7 +21,6 @@ afterEach(() => {
   for (const c of cleanup) c();
   cleanup = [];
 });
-/** Components whose parent is not in the tree. */
 function orphansOf(t: Array<{ parentId: number | null }>, ids: Set<number>) {
   return t.filter(c => c.parentId !== null && !ids.has(c.parentId));
 }

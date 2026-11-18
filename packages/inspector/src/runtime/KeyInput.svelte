@@ -22,7 +22,6 @@
     ? { control: '⌃ Control', alt: '⌥ Option', shift: '⇧ Shift', meta: '⌘ Cmd' }
     : { control: 'Ctrl', alt: 'Alt', shift: 'Shift', meta: 'Win' };
 
-  /** how keys are shown */
   const NAMES: Record<string, string> = {
     arrowup: '↑',
     arrowdown: '↓',
