@@ -31,6 +31,7 @@ import type { Collector } from './collector.js';
 import { resolveWithinRoot } from './security.js';
 
 export const DEVFRAME_ID = 'svelte-devtools';
+export const INSPECT_DOCK_ID = 'svelte-devtools:inspect';
 /** Same base for both hosts (standalone and Vite DevTools), so the SPA URL never changes. */
 export const DEVFRAME_BASE = '/.svelte-devtools/';
 export const PICK_BROADCAST = 'element-picked';
@@ -269,7 +270,13 @@ export function createSvelteDevframe(host: SvelteDevtoolsHost): DevframeDefiniti
     basePath: DEVFRAME_BASE,
     // Live data from an instrumented dev server only; a static export would be an empty shell.
     capabilities: { dev: true, build: false },
-    dock: { category: 'framework' },
+    dock: {
+      title: 'Overview',
+      category: 'default',
+      defaultOrder: 0,
+      groupId: 'svelte',
+      icon: 'ph:squares-four-duotone',
+    },
     clientAssets,
     setup(ctx) {
       const scoped = ctx.scope(DEVFRAME_ID);
@@ -281,7 +288,7 @@ export function createSvelteDevframe(host: SvelteDevtoolsHost): DevframeDefiniti
         void scoped.rpc
           .broadcast({ method: PICK_BROADCAST, args: [pick], event: true, optional: true })
           .catch(() => {});
-        docks?.activate?.(DEVFRAME_ID);
+        docks?.activate?.(INSPECT_DOCK_ID);
       });
     },
   });

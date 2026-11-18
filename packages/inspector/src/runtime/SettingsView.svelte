@@ -3,7 +3,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
 
-  import { INSPECTOR_ICON_URL } from './icon.js';
   import KeyInput from './KeyInput.svelte';
   import { same } from './settings-shared.js';
   import type { ActionResult, Settings } from './settings-shared.js';
@@ -107,126 +106,136 @@
 </script>
 
 <div class="sis">
-  <header class="sis-header">
-    <img src={INSPECTOR_ICON_URL} alt="" width="28" height="28" />
-    <div>
-      <h2>Svelte Inspector</h2>
-      <p>Your personal settings, kept by Vite DevTools for all your projects</p>
-    </div>
-  </header>
+  <main class="sis-main">
+    <header class="sis-header">
+      <h2>Inspector settings</h2>
+    </header>
 
-  <section>
-    <h3>Activation</h3>
-    <div class="sis-row">
-      <div class="sis-label">
-        <span>Shortcut</span>
-        <small>Turns the picker on and off</small>
-      </div>
-      <KeyInput
-        mode="combo"
-        label="Shortcut"
-        value={form.toggleKeyCombo}
-        onchange={(v: string) => (form.toggleKeyCombo = v)}
-      />
-    </div>
-    <label class="sis-row">
-      <div class="sis-label">
-        <span>Hold to inspect</span>
-        <small>Only on while the shortcut is held down</small>
-      </div>
-      <input class="sis-switch" type="checkbox" role="switch" bind:checked={form.holdMode} />
-    </label>
-  </section>
+    <div class="sis-content">
+      <p class="sis-intro">Personal settings shared by Vite DevTools across your projects.</p>
 
-  <section>
-    <h3>Keys while picking</h3>
-    <div class="sis-row">
-      <div class="sis-label"><span>Open in editor</span></div>
-      <KeyInput
-        mode="key"
-        label="Open in editor"
-        value={form.openKey}
-        onchange={(v: string) => (form.openKey = v)}
-      />
-    </div>
-    <div class="sis-row">
-      <div class="sis-label"><span>Component menu</span></div>
-      <KeyInput
-        mode="key"
-        label="Component menu"
-        value={form.openMenuKey}
-        onchange={(v: string) => (form.openMenuKey = v)}
-      />
-    </div>
-    <div class="sis-row">
-      <div class="sis-label"><span>Stop picking</span></div>
-      <div class="sis-keys">
-        {#each form.escapeKeys as key, i (escape_ids[i])}
-          <span class="sis-chip">
-            <KeyInput
-              mode="key"
-              label="Stop picking"
-              value={key}
-              onchange={(v: string) => set_escape(i, v)}
-            />
-            {#if form.escapeKeys.length > 1}
-              <button
-                type="button"
-                class="sis-remove"
-                aria-label={`Remove ${key}`}
-                onclick={() => remove_escape(i)}>×</button
-              >
-            {/if}
-          </span>
-        {/each}
-        <button type="button" class="sis-add" onclick={add_escape}>+ Add</button>
-      </div>
-    </div>
-    <div class="sis-row sis-row-top">
-      <div class="sis-label">
-        <span>Move between elements</span>
-      </div>
-      <div class="sis-nav">
-        {#each nav as [name, text] (name)}
-          <div class="sis-nav-item" title={text}>
-            <span class="sis-nav-label">{text}</span>
-            <KeyInput
-              mode="key"
-              label={text}
-              value={form.navKeys[name]}
-              onchange={(v: string) => (form.navKeys[name] = v)}
-            />
+      <section>
+        <h3>Activation</h3>
+        <div class="sis-row">
+          <div class="sis-label">
+            <span>Shortcut</span>
+            <small>Turns the picker on and off</small>
           </div>
-        {/each}
-      </div>
+          <KeyInput
+            mode="combo"
+            label="Shortcut"
+            value={form.toggleKeyCombo}
+            onchange={(v: string) => (form.toggleKeyCombo = v)}
+          />
+        </div>
+        <label class="sis-row">
+          <div class="sis-label">
+            <span>Hold to inspect</span>
+            <small>Only on while the shortcut is held down</small>
+          </div>
+          <input class="sis-switch" type="checkbox" role="switch" bind:checked={form.holdMode} />
+        </label>
+      </section>
+
+      <section>
+        <h3>Keys while picking</h3>
+        <div class="sis-row">
+          <div class="sis-label"><span>Open in editor</span></div>
+          <KeyInput
+            mode="key"
+            label="Open in editor"
+            value={form.openKey}
+            onchange={(v: string) => (form.openKey = v)}
+          />
+        </div>
+        <div class="sis-row">
+          <div class="sis-label"><span>Component menu</span></div>
+          <KeyInput
+            mode="key"
+            label="Component menu"
+            value={form.openMenuKey}
+            onchange={(v: string) => (form.openMenuKey = v)}
+          />
+        </div>
+        <div class="sis-row">
+          <div class="sis-label"><span>Stop picking</span></div>
+          <div class="sis-keys">
+            {#each form.escapeKeys as key, i (escape_ids[i])}
+              <span class="sis-chip">
+                <KeyInput
+                  mode="key"
+                  label="Stop picking"
+                  value={key}
+                  onchange={(v: string) => set_escape(i, v)}
+                />
+                {#if form.escapeKeys.length > 1}
+                  <button
+                    type="button"
+                    class="sis-remove"
+                    aria-label={`Remove ${key}`}
+                    onclick={() => remove_escape(i)}>×</button
+                  >
+                {/if}
+              </span>
+            {/each}
+            <button type="button" class="sis-add" onclick={add_escape}>+ Add</button>
+          </div>
+        </div>
+        <div class="sis-row sis-row-top">
+          <div class="sis-label">
+            <span>Move between elements</span>
+          </div>
+          <div class="sis-nav">
+            {#each nav as [name, text] (name)}
+              <div class="sis-nav-item-key" title={text}>
+                <span class="sis-nav-label">{text}</span>
+                <KeyInput
+                  mode="key"
+                  label={text}
+                  value={form.navKeys[name]}
+                  onchange={(v: string) => (form.navKeys[name] = v)}
+                />
+              </div>
+            {/each}
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h3>Appearance</h3>
+        <label class="sis-row">
+          <div class="sis-label">
+            <span>Highlight classes</span>
+            <small>Adds <code>svelte-inspector-*</code> classes while picking</small>
+          </div>
+          <input
+            class="sis-switch"
+            type="checkbox"
+            role="switch"
+            bind:checked={form.customStyles}
+          />
+        </label>
+      </section>
+
+      <footer class="sis-footer">
+        <p class={['sis-status', { error: status && !status.ok }]} role="status">
+          {status?.text ?? (dirty ? 'Unsaved changes' : '')}
+        </p>
+        <button
+          type="button"
+          class="sis-button"
+          disabled={busy || at_defaults}
+          onclick={reset_to_defaults}>Reset to defaults</button
+        >
+        <button
+          type="button"
+          class="sis-button primary"
+          disabled={busy || !dirty}
+          onclick={save_form}>Save</button
+        >
+      </footer>
     </div>
-  </section>
-
-  <section>
-    <h3>Appearance</h3>
-    <label class="sis-row">
-      <div class="sis-label">
-        <span>Highlight classes</span>
-        <small>Adds <code>svelte-inspector-*</code> classes while picking</small>
-      </div>
-      <input class="sis-switch" type="checkbox" role="switch" bind:checked={form.customStyles} />
-    </label>
-  </section>
-
-  <footer class="sis-footer">
-    <p class={['sis-status', { error: status && !status.ok }]} role="status">
-      {status?.text ?? (dirty ? 'Unsaved changes' : '')}
-    </p>
-    <button
-      type="button"
-      class="sis-button"
-      disabled={busy || at_defaults}
-      onclick={reset_to_defaults}>Reset to defaults</button
-    >
-    <button type="button" class="sis-button primary" disabled={busy || !dirty} onclick={save_form}
-      >Save</button
-    >
-  </footer>
+  </main>
 </div>
 
 <style>
@@ -234,18 +243,17 @@
   :global {
     .sis {
       --sis-bg: #ffffff;
-      --sis-surface: #f6f6f7;
-      --sis-fg: #1c1c1f;
-      --sis-muted: #6b6b73;
-      --sis-border: rgba(0, 0, 0, 0.09);
-      --sis-border-strong: rgba(0, 0, 0, 0.16);
-      --sis-hover: rgba(0, 0, 0, 0.05);
+      --sis-surface: #f7f7f8;
+      --sis-fg: #1c1d21;
+      --sis-muted: #5f636b;
+      --sis-border: rgba(0, 0, 0, 0.08);
+      --sis-border-strong: rgba(0, 0, 0, 0.15);
+      --sis-hover: rgba(0, 0, 0, 0.04);
       --sis-accent: #ff3e00;
       --sis-danger: #d4321c;
       box-sizing: border-box;
       height: 100%;
-      overflow: auto;
-      padding: 20px 24px 0;
+      overflow: hidden;
       background: var(--sis-bg);
       color: var(--sis-fg);
       font:
@@ -257,13 +265,13 @@
       color-scheme: light;
     }
     .sis[data-theme='dark'] {
-      --sis-bg: #151517;
-      --sis-surface: #1e1e21;
-      --sis-fg: #e9e9ec;
-      --sis-muted: #9b9ba3;
-      --sis-border: rgba(255, 255, 255, 0.08);
-      --sis-border-strong: rgba(255, 255, 255, 0.16);
-      --sis-hover: rgba(255, 255, 255, 0.06);
+      --sis-bg: #111214;
+      --sis-surface: #16171a;
+      --sis-fg: #e8e8ea;
+      --sis-muted: #9497a0;
+      --sis-border: rgba(255, 255, 255, 0.075);
+      --sis-border-strong: rgba(255, 255, 255, 0.13);
+      --sis-hover: rgba(255, 255, 255, 0.045);
       --sis-danger: #ff7a66;
       color-scheme: dark;
     }
@@ -279,20 +287,36 @@
         Menlo,
         monospace;
     }
+    .sis-main {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      min-width: 0;
+      min-height: 0;
+    }
     .sis-header {
       display: flex;
       align-items: center;
-      gap: 12px;
-      margin-bottom: 20px;
+      flex: none;
+      height: 44px;
+      padding: 0 16px;
+      border-bottom: 1px solid var(--sis-border);
     }
     .sis-header h2 {
       margin: 0;
-      font-size: 16px;
+      font-size: 13px;
       font-weight: 600;
     }
-    .sis-header p {
-      margin: 2px 0 0;
+    .sis-content {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding: 20px 24px 0;
+    }
+    .sis-intro {
+      margin: 0 0 16px;
       color: var(--sis-muted);
+      font-size: 12px;
     }
     .sis section {
       margin-bottom: 16px;
@@ -416,7 +440,7 @@
       grid-template-columns: repeat(2, auto);
       gap: 6px 14px;
     }
-    .sis-nav-item {
+    .sis-nav-item-key {
       display: flex;
       align-items: center;
       gap: 6px;

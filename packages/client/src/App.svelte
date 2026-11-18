@@ -15,9 +15,12 @@
   import {
     groupLabels,
     panelById,
+    panelsForView,
+    requestedPanelView,
     visiblePanels,
     type PanelGroup,
     type PanelId,
+    type PanelView,
   } from './lib/panels.js';
   import { persisted } from './lib/persisted.svelte.js';
   import { resource } from './lib/resource.svelte.js';
@@ -27,6 +30,8 @@
 
   const theme = createThemeStore();
   const navPref = persisted<'expanded' | 'collapsed' | null>('nav', null);
+  const requestedView = requestedPanelView();
+  const view: PanelView = requestedView ?? 'overview';
 
   let viewportWidth = $state(window.innerWidth);
   const collapsed = $derived(navPref.value ? navPref.value === 'collapsed' : viewportWidth < 900);
@@ -46,11 +51,16 @@
     when: () => !connectionSupported || connection.state.status === 'connected',
   });
   // A failed lookup shows every panel rather than hiding any for good.
-  const panels = $derived(visiblePanels(project.error ? true : project.data?.kit));
+  const panels = $derived(
+    requestedView
+      ? panelsForView(project.error ? true : project.data?.kit, view)
+      : visiblePanels(project.error ? true : project.data?.kit),
+  );
 
   // A link or reload to a SvelteKit-only panel in an app without SvelteKit.
   $effect(() => {
-    if (project.data && !panels.some(p => p.id === router.current)) router.replace('overview');
+    if (project.data && !panels.some(p => p.id === router.current))
+      router.replace(panels[0]?.id ?? 'overview');
   });
 
   // The panel to show: none while a link to a SvelteKit-only panel waits for
@@ -68,6 +78,7 @@
 
   $effect(() =>
     onElementPicked(pick => {
+      if (requestedView !== null && requestedView !== 'inspect') return;
       elementPick.set(pick);
       router.go('components');
     }),
@@ -132,13 +143,17 @@
       icon: 'moon',
       run: () => theme.set('dark'),
     },
-    {
-      id: 'nav:toggle',
-      label: collapsed ? 'Expand sidebar' : 'Collapse sidebar',
-      group: 'Preferences',
-      icon: 'sidebar',
-      run: toggleNav,
-    },
+    ...(requestedView === null
+      ? [
+          {
+            id: 'nav:toggle',
+            label: collapsed ? 'Expand sidebar' : 'Collapse sidebar',
+            group: 'Preferences',
+            icon: 'sidebar' as const,
+            run: toggleNav,
+          },
+        ]
+      : []),
   ]);
 
   function isTyping(t: EventTarget | null) {
@@ -175,112 +190,130 @@
 
 <svelte:window bind:innerWidth={viewportWidth} {onkeydown} />
 
-<div class="app" class:collapsed>
-  <nav class="nav" aria-label="Panels">
-    <div class="brand">
-      <svg class="logo" viewBox="0 0 98.1 118" width="18" height="21" aria-hidden="true">
-        <path
-          fill="#ff3e00"
-          d="M91.8 15.6C80.9-.1 59.2-4.7 43.6 5.2L16.1 22.8C8.6 27.5 3.4 35.2 1.9 43.9c-1.3 7.3-.2 14.8 3.3 21.3-2.4 3.6-4 7.6-4.7 11.8-1.6 8.9.5 18.1 5.7 25.4 11 15.7 32.6 20.3 48.2 10.4l27.5-17.5c7.5-4.7 12.7-12.4 14.2-21.1 1.3-7.3.2-14.8-3.3-21.3 2.4-3.6 4-7.6 4.7-11.8 1.7-9-.4-18.2-5.7-25.5"
-        />
-        <path
-          fill="#fff"
-          d="M40.9 103.9c-8.9 2.3-18.2-1.2-23.4-8.7-3.2-4.4-4.4-9.9-3.5-15.3.2-.9.4-1.7.6-2.6l.5-1.6 1.4 1c3.3 2.4 6.9 4.2 10.8 5.4l1 .3-.1 1c-.1 1.4.3 2.9 1.1 4.1 1.6 2.3 4.4 3.4 7.1 2.7.6-.2 1.2-.4 1.7-.7L65.5 72c1.4-.9 2.3-2.2 2.6-3.8.3-1.6-.1-3.3-1-4.6-1.6-2.3-4.4-3.3-7.1-2.6-.6.2-1.2.4-1.7.7l-10.5 6.7c-1.7 1.1-3.6 1.9-5.6 2.4-8.9 2.3-18.2-1.2-23.4-8.7-3.1-4.4-4.4-9.9-3.4-15.3.9-5.2 4.1-9.9 8.6-12.7l27.5-17.5c1.7-1.1 3.6-1.9 5.6-2.5 8.9-2.3 18.2 1.2 23.4 8.7 3.2 4.4 4.4 9.9 3.5 15.3-.2.9-.4 1.7-.7 2.6l-.5 1.6-1.4-1c-3.3-2.4-6.9-4.2-10.8-5.4l-1-.3.1-1c.1-1.4-.3-2.9-1.1-4.1-1.6-2.3-4.4-3.3-7.1-2.6-.6.2-1.2.4-1.7.7L32.4 46.1c-1.4.9-2.3 2.2-2.6 3.8s.1 3.3 1 4.6c1.6 2.3 4.4 3.3 7.1 2.6.6-.2 1.2-.4 1.7-.7l10.5-6.7c1.7-1.1 3.6-1.9 5.6-2.5 8.9-2.3 18.2 1.2 23.4 8.7 3.2 4.4 4.4 9.9 3.5 15.3-.9 5.2-4.1 9.9-8.6 12.7l-27.5 17.5c-1.7 1.1-3.6 1.9-5.6 2.5"
-        />
-      </svg>
-      <span class="brand-name">Svelte <span class="faint">DevTools</span></span>
-    </div>
+<div class="app" class:collapsed class:embedded={requestedView !== null}>
+  {#if requestedView === null}
+    <nav class="nav" aria-label="Panels">
+      <div class="brand">
+        <svg class="logo" viewBox="0 0 98.1 118" width="18" height="21" aria-hidden="true">
+          <path
+            fill="#ff3e00"
+            d="M91.8 15.6C80.9-.1 59.2-4.7 43.6 5.2L16.1 22.8C8.6 27.5 3.4 35.2 1.9 43.9c-1.3 7.3-.2 14.8 3.3 21.3-2.4 3.6-4 7.6-4.7 11.8-1.6 8.9.5 18.1 5.7 25.4 11 15.7 32.6 20.3 48.2 10.4l27.5-17.5c7.5-4.7 12.7-12.4 14.2-21.1 1.3-7.3.2-14.8-3.3-21.3 2.4-3.6 4-7.6 4.7-11.8 1.7-9-.4-18.2-5.7-25.5"
+          />
+          <path
+            fill="#fff"
+            d="M40.9 103.9c-8.9 2.3-18.2-1.2-23.4-8.7-3.2-4.4-4.4-9.9-3.5-15.3.2-.9.4-1.7.6-2.6l.5-1.6 1.4 1c3.3 2.4 6.9 4.2 10.8 5.4l1 .3-.1 1c-.1 1.4.3 2.9 1.1 4.1 1.6 2.3 4.4 3.4 7.1 2.7.6-.2 1.2-.4 1.7-.7L65.5 72c1.4-.9 2.3-2.2 2.6-3.8.3-1.6-.1-3.3-1-4.6-1.6-2.3-4.4-3.3-7.1-2.6-.6.2-1.2.4-1.7.7l-10.5 6.7c-1.7 1.1-3.6 1.9-5.6 2.4-8.9 2.3-18.2-1.2-23.4-8.7-3.1-4.4-4.4-9.9-3.4-15.3.9-5.2 4.1-9.9 8.6-12.7l27.5-17.5c1.7-1.1 3.6-1.9 5.6-2.5 8.9-2.3 18.2 1.2 23.4 8.7 3.2 4.4 4.4 9.9 3.5 15.3-.2.9-.4 1.7-.7 2.6l-.5 1.6-1.4-1c-3.3-2.4-6.9-4.2-10.8-5.4l-1-.3.1-1c.1-1.4-.3-2.9-1.1-4.1-1.6-2.3-4.4-3.3-7.1-2.6-.6.2-1.2.4-1.7.7L32.4 46.1c-1.4.9-2.3 2.2-2.6 3.8s.1 3.3 1 4.6c1.6 2.3 4.4 3.3 7.1 2.6.6-.2 1.2-.4 1.7-.7l10.5-6.7c1.7-1.1 3.6-1.9 5.6-2.5 8.9-2.3 18.2 1.2 23.4 8.7 3.2 4.4 4.4 9.9 3.5 15.3-.9 5.2-4.1 9.9-8.6 12.7l-27.5 17.5c-1.7 1.1-3.6 1.9-5.6 2.5"
+          />
+        </svg>
+        <span class="brand-name">Svelte <span class="faint">DevTools</span></span>
+      </div>
 
-    <button
-      class="cmdk"
-      type="button"
-      onclick={() => (paletteOpen = true)}
-      title="Command palette (⌘K)"
-    >
-      <Icon name="search" size={14} />
-      <span class="nav-text grow">Search</span>
-      <kbd class="nav-text">⌘K</kbd>
-    </button>
+      <button
+        class="cmdk"
+        type="button"
+        onclick={() => (paletteOpen = true)}
+        title="Command palette (⌘K)"
+      >
+        <Icon name="search" size={14} />
+        <span class="nav-text grow">Search</span>
+        <kbd class="nav-text">⌘K</kbd>
+      </button>
 
-    <div class="groups">
-      {#each groups as g (g.id)}
-        <div class="group" role="group" aria-labelledby="nav-{g.id}">
-          <!-- Overview and Problems need no heading; it still names the group. -->
-          <span class={['group-label', g.id === 'start' && 'sr-only']} id="nav-{g.id}">
-            {g.label}
+      <div class="groups">
+        {#each groups as g (g.id)}
+          <div class="group" role="group" aria-labelledby="nav-{g.id}">
+            <!-- Overview and Problems need no heading; it still names the group. -->
+            <span class={['group-label', g.id === 'start' && 'sr-only']} id="nav-{g.id}">
+              {g.label}
+            </span>
+            {#each g.items as p (p.id)}
+              <a
+                class="item"
+                href="#/{p.id}"
+                aria-current={shown === p.id ? 'page' : undefined}
+                title={collapsed ? p.label : p.description}
+              >
+                <Icon name={p.icon} size={16} />
+                <span class="nav-text truncate">{p.label}</span>
+              </a>
+            {/each}
+          </div>
+        {/each}
+      </div>
+
+      <div class="foot">
+        {#if connectionSupported}
+          <span
+            class="conn {connection.state.status}"
+            role="status"
+            title="Dev server: {connection.state.status}{connection.state.host !== 'unknown'
+              ? ` (${connection.state.host === 'vite-devtools' ? 'Vite DevTools' : 'standalone'})`
+              : ''}"
+          >
+            <span class="conn-dot" aria-hidden="true"></span>
+            <span class="nav-text">{connection.state.status}</span>
           </span>
-          {#each g.items as p (p.id)}
-            <a
-              class="item"
-              href="#/{p.id}"
-              aria-current={shown === p.id ? 'page' : undefined}
-              title={collapsed ? p.label : p.description}
-            >
-              <Icon name={p.icon} size={16} />
-              <span class="nav-text truncate">{p.label}</span>
-            </a>
-          {/each}
-        </div>
-      {/each}
-    </div>
-
-    <div class="foot">
-      {#if connectionSupported}
-        <span
-          class="conn {connection.state.status}"
-          role="status"
-          title="Dev server: {connection.state.status}{connection.state.host !== 'unknown'
-            ? ` (${connection.state.host === 'vite-devtools' ? 'Vite DevTools' : 'standalone'})`
-            : ''}"
-        >
-          <span class="conn-dot" aria-hidden="true"></span>
-          <span class="nav-text">{connection.state.status}</span>
-        </span>
-      {/if}
-      <Button
-        icon={themeIcon}
-        variant="ghost"
-        label="Theme: {theme.mode} (click to change)"
-        onclick={cycleTheme}
-      />
-      <Button
-        icon="sidebar"
-        variant="ghost"
-        label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        onclick={toggleNav}
-      />
-    </div>
-  </nav>
+        {/if}
+        <Button
+          icon={themeIcon}
+          variant="ghost"
+          label="Theme: {theme.mode} (click to change)"
+          onclick={cycleTheme}
+        />
+        <Button
+          icon="sidebar"
+          variant="ghost"
+          label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          onclick={toggleNav}
+        />
+      </div>
+    </nav>
+  {/if}
 
   <main class="stage">
-    {#each visited as id (id)}
-      {@const Comp = loaded[id]}
-      {#if Comp}
-        <svelte:boundary>
-          <PanelHost component={Comp} active={shown === id} />
-          {#snippet failed(error: unknown, reset: () => void)}
-            <div class="host" hidden={shown !== id}>
-              <EmptyState title="{panelById(id).label} crashed" error={errorMessage(error)}>
-                <Button icon="refresh" onclick={reset}>Reload panel</Button>
-              </EmptyState>
-            </div>
-          {/snippet}
-        </svelte:boundary>
-      {:else if shown === id}
+    {#if requestedView !== null && panels.length > 1}
+      <nav class="panel-tabs" aria-label="Workflow tools">
+        {#each panels as panel (panel.id)}
+          <a
+            href="#/{panel.id}"
+            aria-current={shown === panel.id ? 'page' : undefined}
+            title={panel.description}
+          >
+            <Icon name={panel.icon} size={14} />
+            {panel.label}
+          </a>
+        {/each}
+      </nav>
+    {/if}
+    <div class="stage-content">
+      {#each visited as id (id)}
+        {@const Comp = loaded[id]}
+        {#if Comp}
+          <svelte:boundary>
+            <PanelHost component={Comp} active={shown === id} />
+            {#snippet failed(error: unknown, reset: () => void)}
+              <div class="host" hidden={shown !== id}>
+                <EmptyState title="{panelById(id).label} crashed" error={errorMessage(error)}>
+                  <Button icon="refresh" onclick={reset}>Reload panel</Button>
+                </EmptyState>
+              </div>
+            {/snippet}
+          </svelte:boundary>
+        {:else if shown === id}
+          <div class="host">
+            {#if loadError[id]}
+              <EmptyState title="Could not load panel" error={loadError[id]} />
+            {:else}
+              <div class="loading" aria-busy="true" aria-label="Loading panel"></div>
+            {/if}
+          </div>
+        {/if}
+      {/each}
+      {#if !shown}
         <div class="host">
-          {#if loadError[id]}
-            <EmptyState title="Could not load panel" error={loadError[id]} />
-          {:else}
-            <div class="loading" aria-busy="true" aria-label="Loading panel"></div>
-          {/if}
+          <div class="loading" aria-busy="true" aria-label="Loading panel"></div>
         </div>
       {/if}
-    {/each}
-    {#if !shown}
-      <div class="host">
-        <div class="loading" aria-busy="true" aria-label="Loading panel"></div>
-      </div>
-    {/if}
+    </div>
   </main>
 </div>
 
@@ -296,6 +329,9 @@
   }
   .app.collapsed {
     grid-template-columns: var(--nav-w-collapsed) minmax(0, 1fr);
+  }
+  .app.embedded {
+    display: block;
   }
 
   .nav {
@@ -463,15 +499,65 @@
   }
 
   .stage {
+    display: flex;
+    flex-direction: column;
     min-width: 0;
     min-height: 0;
     position: relative;
+    height: 100%;
   }
-  .stage :global(.host) {
+  .panel-tabs {
+    display: flex;
+    flex: none;
+    gap: 2px;
+    min-width: 0;
+    height: 40px;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--border);
+    overflow: auto hidden;
+  }
+  .panel-tabs a {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 10px;
+    color: var(--fg-muted);
+    font-size: var(--fs-sm);
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .panel-tabs a:hover {
+    color: var(--fg);
+  }
+  .panel-tabs a[aria-current='page'] {
+    color: var(--fg);
+  }
+  .panel-tabs a[aria-current='page'] :global(.icon) {
+    color: var(--accent-fg);
+  }
+  .panel-tabs a[aria-current='page']::after {
+    content: '';
+    position: absolute;
+    right: 8px;
+    bottom: 0;
+    left: 8px;
+    height: 2px;
+    border-radius: 2px 2px 0 0;
+    background: var(--accent);
+  }
+  .stage-content {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+  }
+  .stage-content :global(.host) {
     height: 100%;
     min-height: 0;
   }
-  .stage :global(.host[hidden]) {
+  .stage-content :global(.host[hidden]) {
     display: none;
   }
   /* transform-only animation: runs on the compositor, not on the main

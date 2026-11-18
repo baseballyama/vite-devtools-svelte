@@ -3,6 +3,7 @@ import type { Component } from 'svelte';
 import type { IconName } from './icons.js';
 
 export type PanelGroup = 'start' | 'inspect' | 'profile' | 'project';
+export type PanelView = 'overview' | 'problems' | 'inspect' | 'profile' | 'project';
 
 export interface PanelDef {
   id: string;
@@ -170,6 +171,33 @@ export type PanelId = (typeof panels)[number]['id'];
 /** SvelteKit-only panels stay hidden while `kit` is unknown, so apps without SvelteKit never see them flash in. */
 export function visiblePanels(kit: boolean | undefined): (PanelDef & { id: PanelId })[] {
   return panels.filter((p: PanelDef) => !p.kit || kit === true);
+}
+
+const viewPanels: Record<PanelView, readonly PanelId[]> = {
+  overview: ['overview'],
+  problems: ['errors'],
+  inspect: ['components', 'reactive', 'timeline', 'inspect'],
+  profile: ['render', 'loads', 'fps', 'build'],
+  project: ['routes', 'api', 'modules', 'assets', 'og'],
+};
+
+export function requestedPanelView(
+  search = location.search,
+  embedded = window.self !== window.top,
+): PanelView | null {
+  const requested = new URLSearchParams(search).get('view');
+  if (requested && Object.hasOwn(viewPanels, requested)) return requested as PanelView;
+  return embedded ? 'overview' : null;
+}
+
+export function panelsForView(
+  kit: boolean | undefined,
+  view: PanelView,
+): (PanelDef & { id: PanelId })[] {
+  const visible = visiblePanels(kit);
+  return viewPanels[view]
+    .map(id => visible.find(panel => panel.id === id))
+    .filter(panel => panel !== undefined);
 }
 
 export function panelById(id: string): PanelDef {

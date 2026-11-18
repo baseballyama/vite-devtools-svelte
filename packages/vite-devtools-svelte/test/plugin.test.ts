@@ -12,7 +12,7 @@ import {
   WRAPPER_MODULE_ID,
   wrapperCode,
 } from '../src/runtime/index.js';
-import { callHook, resolvePlugins } from './helpers.js';
+import { callHook, kitSetup, resolvePlugins } from './helpers.js';
 
 const shape = (p: Plugin) => ({
   name: p.name,
@@ -181,6 +181,7 @@ async function hubHandlers(plugins: Plugin[]) {
     scope: (id: string) => ({
       rpc: { register: (fn: any) => handlers.set(`${id}:${fn.name}`, fn.handler) },
     }),
+    docks: { register: vi.fn() },
   });
   return handlers;
 }
@@ -231,6 +232,63 @@ describe('mainPlugin devtools hook (Vite DevTools)', () => {
     ];
     expect(expected.filter(name => !handlers.has(`svelte-devtools:${name}`))).toEqual([]);
     expect((await handlers.get('svelte-devtools:get-project')!()).name).toBeTruthy();
+  });
+
+  it('adds workflow docks beside the Overview devframe', async () => {
+    const plugins = svelteDevtools();
+    resolve(plugins, { plugins: [kitSetup('/test/src/routes')] });
+    const main = plugins.find(p => p.name === 'vite-devtools-svelte')!;
+    const register = vi.fn();
+    await (main.devtools as any).setup({
+      scope: () => ({ rpc: { register: vi.fn() } }),
+      docks: { register },
+    });
+    expect(register.mock.calls.map(([entry]) => entry)).toEqual([
+      {
+        id: 'svelte-devtools:problems',
+        title: 'Problems',
+        description: 'Compiler warnings and runtime errors',
+        icon: 'ph:warning-duotone',
+        type: 'iframe',
+        url: '/.svelte-devtools/?view=problems#/errors',
+        groupId: 'svelte',
+        category: 'default',
+        defaultOrder: 10,
+      },
+      {
+        id: 'svelte-devtools:inspect',
+        title: 'Inspect',
+        description: 'Components, reactivity, state and compiled output',
+        icon: 'ph:binoculars-duotone',
+        type: 'iframe',
+        url: '/.svelte-devtools/?view=inspect#/components',
+        groupId: 'svelte',
+        category: 'default',
+        defaultOrder: 20,
+      },
+      {
+        id: 'svelte-devtools:profile',
+        title: 'Profile',
+        description: 'Render, load, frame rate and build performance',
+        icon: 'ph:gauge-duotone',
+        type: 'iframe',
+        url: '/.svelte-devtools/?view=profile#/render',
+        groupId: 'svelte',
+        category: 'default',
+        defaultOrder: 30,
+      },
+      {
+        id: 'svelte-devtools:project',
+        title: 'Project',
+        description: 'Routes, API, modules, assets and social previews',
+        icon: 'ph:folder-open-duotone',
+        type: 'iframe',
+        url: '/.svelte-devtools/?view=project#/routes',
+        groupId: 'svelte',
+        category: 'default',
+        defaultOrder: 40,
+      },
+    ]);
   });
 });
 

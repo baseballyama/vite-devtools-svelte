@@ -303,6 +303,56 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
         const { createPluginFromDevframe } = await import('@vitejs/devtools-kit/node');
         const plugin = createPluginFromDevframe(devframe, { base: DEVFRAME_BASE });
         await plugin.devtools?.setup?.(ctx);
+        for (const entry of [
+          {
+            id: 'problems',
+            title: 'Problems',
+            description: 'Compiler warnings and runtime errors',
+            icon: 'ph:warning-duotone',
+            view: 'problems',
+            panel: 'errors',
+            defaultOrder: 10,
+          },
+          {
+            id: 'inspect',
+            title: 'Inspect',
+            description: 'Components, reactivity, state and compiled output',
+            icon: 'ph:binoculars-duotone',
+            view: 'inspect',
+            panel: 'components',
+            defaultOrder: 20,
+          },
+          {
+            id: 'profile',
+            title: 'Profile',
+            description: 'Render, load, frame rate and build performance',
+            icon: 'ph:gauge-duotone',
+            view: 'profile',
+            panel: 'render',
+            defaultOrder: 30,
+          },
+          {
+            id: 'project',
+            title: 'Project',
+            description: 'Routes, API, modules, assets and social previews',
+            icon: 'ph:folder-open-duotone',
+            view: 'project',
+            panel: 'routes',
+            defaultOrder: 40,
+          },
+        ] as const) {
+          ctx.docks?.register({
+            id: `svelte-devtools:${entry.id}`,
+            title: entry.title,
+            description: entry.description,
+            icon: entry.icon,
+            type: 'iframe',
+            url: `${DEVFRAME_BASE}?view=${entry.view}#/${entry.panel}`,
+            groupId: 'svelte',
+            category: 'default',
+            defaultOrder: entry.defaultOrder,
+          });
+        }
       },
     },
   };

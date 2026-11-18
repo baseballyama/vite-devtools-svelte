@@ -5,7 +5,8 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('./rpc.js', () => ({ getCaptureInfo: vi.fn(), getVersions: vi.fn() }));
 vi.stubGlobal('location', { hash: '' });
 
-const { groupLabels, panelById, panels, visiblePanels } = await import('./panels.js');
+const { groupLabels, panelById, panels, panelsForView, requestedPanelView, visiblePanels } =
+  await import('./panels.js');
 const { icons } = await import('./icons.js');
 
 const KIT_ONLY = new Set(['routes', 'loads', 'build', 'api']);
@@ -33,6 +34,40 @@ describe('panel registry', () => {
     expect(visibleIds(true)).toEqual(panels.map(p => p.id));
     expect(visibleIds(false)).toEqual(panels.map(p => p.id).filter(id => !KIT_ONLY.has(id)));
     expect(visibleIds()).toEqual(visibleIds(false)); // unknown yet
+  });
+
+  it('groups panels by workflow, including SvelteKit tools', () => {
+    expect(panelsForView(true, 'overview').map(p => p.id)).toEqual(['overview']);
+    expect(panelsForView(true, 'problems').map(p => p.id)).toEqual(['errors']);
+    expect(panelsForView(true, 'inspect').map(p => p.id)).toEqual([
+      'components',
+      'reactive',
+      'timeline',
+      'inspect',
+    ]);
+    expect(panelsForView(true, 'profile').map(p => p.id)).toEqual([
+      'render',
+      'loads',
+      'fps',
+      'build',
+    ]);
+    expect(panelsForView(true, 'project').map(p => p.id)).toEqual([
+      'routes',
+      'api',
+      'modules',
+      'assets',
+      'og',
+    ]);
+    expect(panelsForView(false, 'profile').map(p => p.id)).toEqual(['render', 'fps']);
+    expect(panelsForView(false, 'project').map(p => p.id)).toEqual(['modules', 'assets', 'og']);
+  });
+
+  it('uses workflow views in the dock and keeps every panel in standalone mode', () => {
+    expect(requestedPanelView('?view=inspect', false)).toBe('inspect');
+    expect(requestedPanelView('?view=profile', false)).toBe('profile');
+    expect(requestedPanelView('?view=unknown', false)).toBeNull();
+    expect(requestedPanelView('', true)).toBe('overview');
+    expect(requestedPanelView('', false)).toBeNull();
   });
 
   it.each(panels.map(p => p.id))('panelById(%j) finds it', id => {

@@ -28,7 +28,8 @@ function navigate(hash: string) {
   flushSync();
 }
 
-async function renderApp(hash = '#/overview') {
+async function renderApp(hash = '#/overview', search = '') {
+  history.replaceState(null, '', `/${search}`);
   navigate(hash);
   const view = render(App);
   await settle();
@@ -51,7 +52,7 @@ const visiblePanel = () => screen.getByRole('region', { name: n => n !== 'Depend
 
 describe('App shell', () => {
   it('lists every panel by group and opens the panel named in the hash', async () => {
-    await renderApp('#/routes');
+    await renderApp('#/overview');
     for (const group of ['General', 'Inspect', 'Profile', 'Project'])
       expect(within(nav()).getByRole('group', { name: group })).toBeTruthy();
     // Overview and Problems lead, under a heading only screen readers announce.
@@ -63,10 +64,21 @@ describe('App shell', () => {
     ).toEqual(['Overview', 'Problems']);
     expect(within(general).getByText('General').classList.contains('sr-only')).toBe(true);
     expect(within(nav()).getAllByRole('link')).toHaveLength(15);
-    expect(current()?.textContent).toContain('Routes');
-    expect(current()?.getAttribute('href')).toBe('#/routes');
-    expect(document.title).toBe('Routes · Svelte DevTools');
-    await waitFor(() => expect(visiblePanel().getAttribute('aria-label')).toBe('Routes'));
+    expect(current()?.textContent).toContain('Overview');
+    expect(current()?.getAttribute('href')).toBe('#/overview');
+    expect(document.title).toBe('Overview · Svelte DevTools');
+    await waitFor(() => expect(visiblePanel().getAttribute('aria-label')).toBe('Overview'));
+    expect(screen.getByRole('button', { name: /Routes/ })).toBeTruthy();
+  });
+
+  it('uses a focused shell without tabs for the embedded Overview', async () => {
+    await renderApp('#/overview', '?view=overview');
+    expect(screen.queryByRole('navigation', { name: 'Panels' })).toBeNull();
+    expect(screen.queryByRole('navigation', { name: 'Workflow tools' })).toBeNull();
+    await waitFor(() => expect(visiblePanel().getAttribute('aria-label')).toBe('Overview'));
+    expect(screen.queryByRole('button', { name: /Routes/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Mounted components/ })).toBeNull();
+    expect(screen.getByText('Mounted components')).toBeTruthy();
   });
 
   it('falls back to Overview for an unknown hash', async () => {
@@ -143,9 +155,7 @@ describe('App shell', () => {
     expect(container.querySelector('.app')!.classList.contains('collapsed')).toBe(true);
     expect(localStorage.getItem('svelte-devtools:nav')).toBe('"collapsed"');
     // Collapsed links keep their label as a tooltip.
-    expect(within(nav()).getByRole('link', { name: 'Routes' }).getAttribute('title')).toBe(
-      'Routes',
-    );
+    expect(within(nav()).getByRole('link', { name: 'API' }).getAttribute('title')).toBe('API');
     await userEvent.click(screen.getByRole('button', { name: 'Expand sidebar' }));
     expect(container.querySelector('.app')!.classList.contains('collapsed')).toBe(false);
   });
@@ -195,7 +205,7 @@ describe('App without SvelteKit', () => {
 
   it('redirects a link to a SvelteKit-only panel to Overview', async () => {
     withoutKit();
-    await renderApp('#/routes');
+    await renderApp('#/api');
     await waitFor(() => expect(location.hash).toBe('#/overview'));
     expect(current()?.textContent).toContain('Overview');
   });
@@ -217,31 +227,31 @@ describe('App without SvelteKit', () => {
 
   it('never loads a SvelteKit-only panel while the project is unknown', async () => {
     const resolve = pendingProject();
-    await renderApp('#/routes');
+    await renderApp('#/build');
     expect(screen.getByLabelText('Loading panel')).toBeTruthy();
     expect(current()).toBeUndefined();
     resolve({ ...project, kit: false });
     await waitFor(() => expect(location.hash).toBe('#/overview'));
-    expect(rpc.getRoutes).not.toHaveBeenCalled();
-    expect(screen.queryByRole('region', { name: 'Routes', hidden: true })).toBeNull();
+    expect(rpc.getBuildAnalysis).not.toHaveBeenCalled();
+    expect(screen.queryByRole('region', { name: 'Build', hidden: true })).toBeNull();
   });
 
   it('keeps a link to a SvelteKit-only panel in a SvelteKit app', async () => {
     const resolve = pendingProject();
-    await renderApp('#/routes');
-    expect(location.hash).toBe('#/routes');
+    await renderApp('#/build');
+    expect(location.hash).toBe('#/build');
     resolve(project);
-    await waitFor(() => expect(visiblePanel().getAttribute('aria-label')).toBe('Routes'));
-    expect(location.hash).toBe('#/routes');
-    expect(current()?.textContent).toContain('Routes');
+    await waitFor(() => expect(visiblePanel().getAttribute('aria-label')).toBe('Build'));
+    expect(location.hash).toBe('#/build');
+    expect(current()?.textContent).toContain('Build');
   });
 
   it('steps from a panel that is not listed yet with Alt+↑/↓', async () => {
     pendingProject();
-    await renderApp('#/routes');
+    await renderApp('#/build');
     await userEvent.keyboard('{Alt>}{ArrowUp}{/Alt}');
     expect(location.hash).toBe('#/og');
-    navigate('#/routes');
+    navigate('#/build');
     await userEvent.keyboard('{Alt>}{ArrowDown}{/Alt}');
     expect(location.hash).toBe('#/overview');
   });
@@ -264,7 +274,44 @@ describe('App without SvelteKit', () => {
   });
 });
 
+describe('workflow views', () => {
+  it('shows Inspect subpages as horizontal tabs', async () => {
+    await renderApp('#/components', '?view=inspect');
+    expect(screen.queryByRole('navigation', { name: 'Panels' })).toBeNull();
+    const tabs = screen.getByRole('navigation', { name: 'Workflow tools' });
+    expect(
+      within(tabs)
+        .getAllByRole('link')
+        .map(link => link.textContent?.trim()),
+    ).toEqual(['Components', 'Reactivity', 'State timeline', 'Compiled output']);
+    expect(
+      within(tabs).getByRole('link', { name: 'Components' }).getAttribute('aria-current'),
+    ).toBe('page');
+    expect(document.title).toBe('Components · Svelte DevTools');
+    await waitFor(() => expect(visiblePanel().getAttribute('aria-label')).toBe('Components'));
+  });
+
+  it('recombines SvelteKit pages with their workflow tabs', async () => {
+    await renderApp('#/loads', '?view=profile');
+    const tabs = screen.getByRole('navigation', { name: 'Workflow tools' });
+    expect(
+      within(tabs)
+        .getAllByRole('link')
+        .map(link => link.textContent?.trim()),
+    ).toEqual(['Render', 'Load functions', 'Frame rate', 'Build']);
+    expect(
+      within(tabs).getByRole('link', { name: 'Load functions' }).getAttribute('aria-current'),
+    ).toBe('page');
+  });
+});
+
 describe('App keyboard shortcuts and command palette', () => {
+  it('omits standalone navigation commands from embedded views', async () => {
+    await renderApp('#/overview', '?view=overview');
+    await userEvent.keyboard('{Control>}k{/Control}');
+    expect(screen.queryByRole('option', { name: /sidebar/ })).toBeNull();
+  });
+
   it('toggles the palette with ⌘K / Ctrl+K and from the Search button', async () => {
     await renderApp();
     await userEvent.keyboard('{Control>}k{/Control}');
@@ -340,8 +387,16 @@ describe('App keyboard shortcuts and command palette', () => {
 });
 
 describe('element picks', () => {
+  it('leaves an incompatible embedded workflow for the host to switch', async () => {
+    await renderApp('#/overview', '?view=overview');
+    emitPick({ epoch: 'e1', componentId: 2 });
+    flushSync();
+    expect(location.hash).toBe('#/overview');
+    expect(elementPick.pending).toBeNull();
+  });
+
   it('a pick on the app page opens Components with the pick pending', async () => {
-    const view = await renderApp('#/routes');
+    const view = await renderApp('#/build');
     const pick = { epoch: 'e1', componentId: 2 };
     emitPick(pick);
     flushSync();

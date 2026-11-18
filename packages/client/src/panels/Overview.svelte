@@ -10,7 +10,7 @@
   import { formatBytes } from '../lib/format.js';
   import type { IconName } from '../lib/icons.js';
   import { matcher } from '../lib/match.js';
-  import type { PanelId } from '../lib/panels.js';
+  import { requestedPanelView, type PanelId } from '../lib/panels.js';
   import { resource } from '../lib/resource.svelte.js';
   import { router } from '../lib/router.svelte.js';
   import {
@@ -26,6 +26,7 @@
   import { datasetVersion } from '../lib/versions.js';
 
   const project = resource<ProjectInfo | null>(getProject, { initial: null });
+  const embedded = requestedPanelView() !== null;
 
   // Cheap, in-memory or directory-scan stats only — the overview is the
   // landing page and must not trigger whole-project static analysis.
@@ -104,7 +105,7 @@
 
   const tiles = $derived.by<Tile[]>(() => {
     const s = stats.data;
-    return [
+    const all: Tile[] = [
       {
         panel: 'routes',
         icon: 'routes',
@@ -144,6 +145,7 @@
         tone: s?.errors ? 'red' : s?.warnings ? 'yellow' : undefined,
       },
     ];
+    return all;
   });
 </script>
 
@@ -193,19 +195,34 @@
 
       <div class="tiles">
         {#each tiles as t (t.panel)}
-          <button type="button" class="tile" onclick={() => router.go(t.panel)}>
-            <span class="tile-head">
-              <Icon name={t.icon} size={14} />
-              {t.label}
-              <span class="go"><Icon name="chevron" size={12} /></span>
-            </span>
-            <span
-              class="tile-value num"
-              class:red={t.tone === 'red'}
-              class:yellow={t.tone === 'yellow'}>{t.value}</span
-            >
-            <span class="tile-sub">{t.sub ?? ' '}</span>
-          </button>
+          {#if embedded}
+            <div class="tile">
+              <span class="tile-head">
+                <Icon name={t.icon} size={14} />
+                {t.label}
+              </span>
+              <span
+                class="tile-value num"
+                class:red={t.tone === 'red'}
+                class:yellow={t.tone === 'yellow'}>{t.value}</span
+              >
+              <span class="tile-sub">{t.sub ?? ' '}</span>
+            </div>
+          {:else}
+            <button type="button" class="tile" onclick={() => router.go(t.panel)}>
+              <span class="tile-head">
+                <Icon name={t.icon} size={14} />
+                {t.label}
+                <span class="go"><Icon name="chevron" size={12} /></span>
+              </span>
+              <span
+                class="tile-value num"
+                class:red={t.tone === 'red'}
+                class:yellow={t.tone === 'yellow'}>{t.value}</span
+              >
+              <span class="tile-sub">{t.sub ?? ' '}</span>
+            </button>
+          {/if}
         {/each}
       </div>
 
