@@ -20,6 +20,7 @@ import { createSvelteDevframe, DEVFRAME_BASE } from './server/devframe.js';
 import type { SvelteDevtoolsHost } from './server/devframe.js';
 import { LOAD_RECORDER, loadProfileOf, profileLoad } from './server/load-profile.js';
 import { mountStandalone, urlHost } from './server/mount.js';
+import { svelteSupport } from './svelte-support.js';
 import type { LoadProfile } from './types.js';
 
 export interface SvelteDevtoolsOptions {
@@ -98,6 +99,11 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
   // Plugins are `apply: 'serve'`, but a hook can still be reached outside dev
   // (a plugin list reused by another tool): every hook is inert unless serving.
   const serving = () => config?.command === 'serve';
+  // Whether the app's Svelte has the devtools events the hooks listen to (set
+  // in configResolved). Without them, nothing imports the hooks: they import
+  // `svelte/internal/devtools`, and the compiler rejects `experimental.devtools`.
+  let devtoolsEvents = false;
+  const hooked = () => serving() && devtoolsEvents;
   // Per-process token for the MCP endpoint (MCP clients are local processes,
   // not browser tabs, so they cannot use devframe's browser auth handshake).
   const mcpToken = crypto.randomUUID();
@@ -154,10 +160,23 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       config = resolvedConfig;
       root = config.root;
       hostedByViteDevtools = config.plugins.some(p => p.name === VITE_DEVTOOLS_PLUGIN);
+      if (serving()) {
+        const support = svelteSupport(root);
+        devtoolsEvents = support.devtoolsEvents;
+        if (!devtoolsEvents && !process.env['VITEST']) {
+          const why =
+            support.version === undefined
+              ? 'Svelte was not found'
+              : `svelte@${support.version} has no devtools events (svelte/internal/devtools)`;
+          config.logger.warn(
+            `[vite-devtools-svelte] ${why}: components and state are not tracked. Update Svelte to a version that has them.`,
+          );
+        }
+      }
       // Only while developing, and not inside Vitest (which runs `serve`).
       // vite-plugin-svelte resolved its options in its own `configResolved`
       // (order 'pre').
-      if (serving() && !process.env['VITEST']) {
+      if (hooked() && !process.env['VITEST']) {
         addDevtoolsHooks(config.plugins);
         // Components import the hooks by path (/@fs/...). Installed by link
         // or from outside the workspace, that path is not in fs.allow and
@@ -265,7 +284,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     transformIndexHtml: {
       order: 'pre',
       handler() {
-        if (!serving()) return [];
+        if (!hooked()) return [];
         return [
           {
             tag: 'script',
@@ -298,7 +317,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     apply: 'serve',
 
     transform(code, id, transformOptions) {
-      if (!serving()) return null;
+      if (!hooked()) return null;
       if (id.includes('node_modules')) return null;
       // Client modules only: the runtime is browser code, and a server
       // render has no devtools to report to.

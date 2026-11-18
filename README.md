@@ -148,7 +148,7 @@ After the app page reloads, a selected component id may belong to another instan
 ## Requirements
 
 - **Vite** >= 8.3.2
-- **Svelte** 5 (runes mode) with the dev-only devtools channel `svelte/internal/devtools` and the `experimental.devtools` compiler option (not released yet: build Svelte from the [`emit-dev-events`](https://github.com/sveltejs/svelte/tree/emit-dev-events) branch)
+- **Svelte** 5 (runes mode) with the dev-only devtools channel `svelte/internal/devtools` and the `experimental.devtools` compiler option (not released yet: build Svelte from the [`emit-dev-events`](https://github.com/sveltejs/svelte/tree/emit-dev-events) branch). With an older Svelte, the plugin prints a warning and the app runs without component and state tracking.
 - **SvelteKit** >= 3.3.0 (recommended, otherwise you'll have to [add the DevTools dock manually](https://devtools.vite.dev/guide/#projects-without-an-html-entry))
 - **[@vitejs/devtools](https://devtools.vite.dev/)** >= 0.8.0 — optional; only for the in-page dock
 
