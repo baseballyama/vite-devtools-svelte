@@ -8,6 +8,19 @@ import { log } from './utils/log.js';
 
 /** name of the inspector plugin that ships inside vite-plugin-svelte */
 const BUILTIN_INSPECTOR_NAME = 'vite-plugin-svelte-inspector';
+/** name of vite-plugin-svelte's config plugin, whose `api.options` holds the resolved options */
+const SVELTE_CONFIG_PLUGIN_NAME = 'vite-plugin-svelte:config';
+
+/**
+ * Whether the user turned on vite-plugin-svelte's inspector in its options. Unknown (`true`)
+ * when vite-plugin-svelte no longer exposes them, so the startup error stays the default.
+ */
+function builtinConfigured(plugins: readonly Plugin[]): boolean {
+  const api = plugins.find(p => p.name === SVELTE_CONFIG_PLUGIN_NAME)?.api as
+    | { options?: { inspector?: unknown } }
+    | undefined;
+  return api?.options === undefined || Boolean(api.options.inspector);
+}
 
 // vite-devtools-svelte: the inspector lives in the Vite DevTools dock
 /** name of `@vitejs/devtools`' config plugin (the same check as svelteDevtools()) */
@@ -38,8 +51,9 @@ function getInspectorPath(): string {
  * Svelte Inspector as a Vite plugin for the Vite DevTools (`@vitejs/devtools`) dock.
  *
  * It only runs in the dock: without Vite DevTools in the Vite config the plugin does nothing.
- * It does not turn off the built-in inspector of vite-plugin-svelte: when both would run,
- * the dev server fails to start with an error that says to turn that one off.
+ * When vite-plugin-svelte's built-in inspector is configured and both would run, the dev
+ * server fails to start with an error that says to turn that one off. When only the
+ * environment variables switched it on, it is turned off instead.
  *
  * vite-devtools-svelte: options come from the plugin argument instead of
  * vite-plugin-svelte's `inspector` option (see `configResolved`).
@@ -69,7 +83,6 @@ export function svelteInspector(options: InspectorOptions = {}): InspectorPlugin
         throw new Error(
           "[vite-devtools-svelte] svelteDevtools() includes the Svelte Inspector, but vite-plugin-svelte's own inspector is enabled as well. " +
             'Turn that one off: remove `inspector` from `vitePlugin` in svelte.config.js (or from the options of `svelte()`). ' +
-            'SVELTE_INSPECTOR_OPTIONS or SVELTE_INSPECTOR_TOGGLE in the shell or an env file switches it on too. ' +
             'To keep it instead, pass `inspector: false` to svelteDevtools().',
         );
       }
@@ -79,6 +92,14 @@ export function svelteInspector(options: InspectorOptions = {}): InspectorPlugin
     configResolved(config) {
       dock = config.plugins.some(p => p.name === VITE_DEVTOOLS_PLUGIN);
       builtin = config.plugins.find(p => p.name === BUILTIN_INSPECTOR_NAME);
+      // `SVELTE_INSPECTOR_OPTIONS` / `SVELTE_INSPECTOR_TOGGLE` are personal preferences for this
+      // inspector, but they switch the built-in one on too. When nothing else turned it on, keep
+      // it out of every environment (Vite applies `applyToEnvironment` after `configResolved`)
+      // instead of failing to start.
+      if (dock && builtin && !builtinConfigured(config.plugins)) {
+        builtin.applyToEnvironment = () => false;
+        log.debug('disabled the built-in inspector of vite-plugin-svelte', null, 'inspector');
+      }
 
       // vite-devtools-svelte: this plugin is always on once it is added, so
       // `SVELTE_INSPECTOR_OPTIONS=true|false` does not toggle it; an options

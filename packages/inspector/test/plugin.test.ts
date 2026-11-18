@@ -95,10 +95,26 @@ describe('svelteInspector', () => {
     expect(await loadOptions(await start())).toMatchObject({ toggleKeyCombo: 'meta-i' });
   });
 
-  it('names the variables in the error when they switch the built-in inspector on', async () => {
+  it.each([
+    ['SVELTE_INSPECTOR_TOGGLE', 'meta-i', { toggleKeyCombo: 'meta-i' }],
+    ['SVELTE_INSPECTOR_OPTIONS', '{"holdMode":false}', { holdMode: false }],
+    ['SVELTE_INSPECTOR_OPTIONS', 'true', { toggleKeyCombo: 'alt-x' }],
+  ])(
+    'in the dock, takes %s=%s as a preference and turns off the built-in inspector it switched on',
+    async (name, value, expected) => {
+      vi.stubEnv(name, value);
+      const env = await start({}, [VITE_DEVTOOLS, svelte()]);
+      const names = env.plugins.map(p => p.name);
+      expect(names).toContain('vite-devtools-svelte-inspector');
+      expect(names).not.toContain('vite-plugin-svelte-inspector');
+      expect(await loadOptions(env)).toMatchObject(expected);
+    },
+  );
+
+  it('still refuses to start when the built-in inspector is configured, with the variables set too', async () => {
     vi.stubEnv('SVELTE_INSPECTOR_TOGGLE', 'meta-i');
-    await expect(start({}, [VITE_DEVTOOLS, svelte()])).rejects.toThrow(
-      /SVELTE_INSPECTOR_OPTIONS or SVELTE_INSPECTOR_TOGGLE in the shell or an env file switches it on too/,
+    await expect(start({}, [VITE_DEVTOOLS, svelte({ inspector: true })])).rejects.toThrow(
+      /vite-plugin-svelte's own inspector is enabled as well/,
     );
   });
 

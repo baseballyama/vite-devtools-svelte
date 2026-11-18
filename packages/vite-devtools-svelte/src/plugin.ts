@@ -60,7 +60,7 @@ export interface SvelteDevtoolsOptions {
    * click an element to open its source in your editor. It only runs in the
    * Vite DevTools dock (`@vitejs/devtools`). Pass options to configure it, or
    * `false` to leave it out. The dev server fails to start when vite-plugin-svelte's
-   * built-in inspector is enabled too: turn that one off.
+   * built-in inspector is configured too (`vitePlugin.inspector`): turn that one off.
    * @default true
    */
   inspector?: boolean | InspectorOptions;
