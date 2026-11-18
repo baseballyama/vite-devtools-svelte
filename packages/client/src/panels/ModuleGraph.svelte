@@ -25,15 +25,20 @@
   let query = $state('');
   let type = $state<'all' | ModuleNode['type']>('all');
   let cyclicOnly = $state(false);
+  let showGenerated = $state(false);
   let sort = $state<SortState | null>({ id: 'size', desc: true });
   let selected = $state<string | null>(null);
 
   const byId = $derived(new Map(graph.data.modules.map(m => [m.id, m])));
+  const generatedCount = $derived(graph.data.modules.filter(m => m.generated).length);
+  const modules = $derived(
+    showGenerated ? graph.data.modules : graph.data.modules.filter(m => !m.generated),
+  );
 
   const typeOptions = $derived(
     kindOptions(
       ['svelte', 'ts', 'js', 'css', 'other'],
-      countBy(graph.data.modules, m => m.type),
+      countBy(modules, m => m.type),
       type,
       t => (t === 'svelte' ? 'Svelte' : t.toUpperCase()),
     ),
@@ -41,13 +46,13 @@
 
   const rows = $derived.by(() => {
     const m = matcher(query);
-    return graph.data.modules.filter(
+    return modules.filter(
       mod =>
         (type === 'all' || mod.type === type) && (!cyclicOnly || mod.isCyclic) && (!m || m(mod.id)),
     );
   });
 
-  const maxSize = $derived(graph.data.modules.reduce((m, x) => Math.max(m, x.size ?? 0), 1));
+  const maxSize = $derived(modules.reduce((m, x) => Math.max(m, x.size ?? 0), 1));
   const current = $derived(selected ? (byId.get(selected) ?? null) : null);
   const currentCycles = $derived(
     current ? graph.data.cycles.filter(c => c.includes(current.id)) : [],
@@ -101,6 +106,7 @@
       query = '';
       type = 'all';
       cyclicOnly = false;
+      if (byId.get(id)?.generated) showGenerated = true;
     }
     selected = id;
   }
@@ -117,6 +123,11 @@
     {#if graph.data.cycles.length}
       <Button icon="cycle" pressed={cyclicOnly} onclick={() => (cyclicOnly = !cyclicOnly)}>
         {graph.data.cycles.length} circular
+      </Button>
+    {/if}
+    {#if generatedCount}
+      <Button pressed={showGenerated} onclick={() => (showGenerated = !showGenerated)}>
+        {generatedCount} generated
       </Button>
     {/if}
   {/snippet}

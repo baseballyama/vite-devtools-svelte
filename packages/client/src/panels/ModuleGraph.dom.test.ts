@@ -59,6 +59,7 @@ describe('ModuleGraph', () => {
     await settle();
     expect(screen.getByRole('status').textContent).toContain('No modules transformed yet');
     expect(screen.queryByRole('button', { name: /circular/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /generated/ })).toBeNull();
   });
 
   it('reports a failed read as an error', async () => {
@@ -117,6 +118,37 @@ describe('ModuleGraph', () => {
     expect(ids()).toEqual(['/src/main.ts']);
     await user.type(screen.getByRole('searchbox'), 'zzz');
     expect(screen.getByRole('status').textContent).toContain('No modules match');
+  });
+
+  it('hides generated modules until asked for, and shows one when navigated to', async () => {
+    const user = userEvent.setup();
+    vi.mocked(rpc.getModuleGraph).mockResolvedValue({
+      modules: [
+        mod('/src/main.ts', 'ts', { importedBy: ['/.svelte-kit/generated/app.js'] }),
+        mod('/.svelte-kit/generated/app.js', 'js', { imports: ['/src/main.ts'], generated: true }),
+      ],
+      cycles: [],
+    });
+    render(ModuleGraph);
+    await settle();
+    expect(ids()).toEqual(['/src/main.ts']);
+    // Type counts cover only the listed modules.
+    expect(screen.queryByRole('radio', { name: /^JS/ })).toBeNull();
+
+    const toggle = screen.getByRole('button', { name: '1 generated' });
+    await user.click(toggle);
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    expect(ids()).toEqual(['/src/main.ts', '/.svelte-kit/generated/app.js']);
+    await user.click(toggle);
+    expect(ids()).toEqual(['/src/main.ts']);
+
+    // Following an importer that is hidden shows the generated modules again.
+    await user.click(within(list()).getAllByRole('option')[0]!);
+    const details = screen.getByRole('complementary', { name: 'main.ts details' });
+    await user.click(within(details).getByRole('button', { name: /app\.js/ }));
+    expect(screen.getByRole('complementary', { name: 'app.js details' })).toBeTruthy();
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    expect(ids()).toContain('/.svelte-kit/generated/app.js');
   });
 
   it('keeps the chosen type listed after its last module goes away', async () => {

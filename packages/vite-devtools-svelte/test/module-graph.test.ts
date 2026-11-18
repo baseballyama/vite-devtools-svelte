@@ -49,6 +49,17 @@ describe('buildModuleGraph: which modules are nodes', () => {
     expect(buildModuleGraph(ROOT, [at(file)]).modules[0]!.type).toBe(type);
   });
 
+  it.each(['.svelte-kit/generated/client/app.js', '.svelte-kit/generated/server/internal.js'])(
+    '%s is generated',
+    file => {
+      expect(buildModuleGraph(ROOT, [at(file)]).modules[0]!.generated).toBe(true);
+    },
+  );
+
+  it.each(['src/.svelte-kit/a.js', 'src/routes/+page.svelte'])('%s is not generated', file => {
+    expect(buildModuleGraph(ROOT, [at(file)]).modules[0]!.generated).toBeUndefined();
+  });
+
   it('ids are root-relative; size comes from disk when readable', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sdt-mg-'));
     try {
