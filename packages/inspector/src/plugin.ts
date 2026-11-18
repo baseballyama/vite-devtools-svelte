@@ -1,19 +1,9 @@
-import fs from 'node:fs';
-
 import { normalizePath } from 'vite';
 import type { Plugin } from 'vite';
 
 import { defaultInspectorOptions, parseEnvironmentOptions } from './options.js';
 import type { InspectorOptions } from './types.js';
 import { log } from './utils/log.js';
-
-/** `url` without its query string or hash */
-function cleanUrl(url: string): string {
-  const query = url.indexOf('?');
-  const hash = url.indexOf('#');
-  const end = Math.min(query === -1 ? url.length : query, hash === -1 ? url.length : hash);
-  return url.slice(0, end);
-}
 
 /** name of the inspector plugin that ships inside vite-plugin-svelte 7 */
 const BUILTIN_INSPECTOR_NAME = 'vite-plugin-svelte-inspector';
@@ -90,26 +80,16 @@ export function svelteInspector(options: InspectorOptions = {}): Plugin {
         return null;
       },
     },
+    // vite-devtools-svelte: only the virtual options module. Runtime files are read by Vite
+    // itself: it lets through files reached by imports even outside `server.fs.allow`, and its
+    // own read keeps them watched. (Upstream's disk-reading branch never ran: its glob was
+    // `<runtime>//**`.)
     load: {
       filter: {
-        id: {
-          include: [`${inspectorPath}/**`, /^virtual:vite-devtools-svelte-inspector-options$/],
-          exclude: [/style&lang\.css$/],
-        },
+        id: /^virtual:vite-devtools-svelte-inspector-options$/,
       },
-      handler(id) {
-        if (id === 'virtual:vite-devtools-svelte-inspector-options') {
-          return `export default ${JSON.stringify(inspectorOptions ?? {})}`;
-        }
-        if (id.startsWith(inspectorPath)) {
-          // read file ourselves to avoid getting shut out by vites fs.allow check
-          const file = cleanUrl(id);
-          if (fs.existsSync(file)) {
-            return fs.promises.readFile(file, 'utf-8');
-          }
-          log.error(`failed to find svelte-inspector: ${id}`, null, 'inspector');
-        }
-        return null;
+      handler() {
+        return `export default ${JSON.stringify(inspectorOptions ?? {})}`;
       },
     },
     transform: {

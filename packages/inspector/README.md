@@ -18,6 +18,7 @@ except for what a standalone plugin needs:
 - it turns off vite-plugin-svelte's built-in inspector, so the two never mount at the same time
 - the plugin name and virtual module ids use the `vite-devtools-svelte-inspector` prefix, so they do not clash with the built-in inspector
 - the source is TypeScript and built to `dist/` (`pnpm -C packages/inspector build`); the browser runtime in `src/runtime/` is copied as-is and compiled by the app's own Vite
+- runtime files are read by Vite itself; upstream's own disk read for them never ran (its filter glob ended in `//**`) and is removed
 - `src/utils/log.ts` is a reduced copy of upstream's logger
 - `src/types.ts` holds only `InspectorOptions`
 
