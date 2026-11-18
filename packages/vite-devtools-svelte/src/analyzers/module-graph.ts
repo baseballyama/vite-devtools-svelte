@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { isSvelteModule } from '../runtime/transform.js';
 import { isInside } from '../server/security.js';
 import type { ModuleGraphData, ModuleNode } from '../types.js';
 
@@ -11,8 +12,10 @@ export interface GraphModuleLike {
 }
 
 function classify(file: string): ModuleNode['type'] {
-  const ext = path.extname(file).toLowerCase();
-  if (ext === '.svelte') return 'svelte';
+  const name = path.basename(file).toLowerCase();
+  // `.svelte.js/ts` modules go through the Svelte compiler like components.
+  if (name.endsWith('.svelte') || isSvelteModule(name)) return 'svelte';
+  const ext = path.extname(name);
   if (ext === '.ts') return 'ts';
   if (ext === '.js') return 'js';
   if (ext === '.css') return 'css';
