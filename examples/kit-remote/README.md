@@ -29,5 +29,5 @@ pnpm examples kit-remote            # http://localhost:5207/
 - [ ] **Load functions**: `/classic` の `+page.server.ts` が記録される（リモート関数の呼び出しは load ではないので**出ない**のが現状の仕様）
 - [ ] **Routes**: 7 ルートが出る（`*.remote.ts` が生やす内部エンドポイントは出ない）
 - [ ] **Problems**: `/errors` の失敗が `failed` スニペットに収まり、未処理エラーとして溢れない
-- [ ] **Svelte Inspector**（Alt+X で要素をクリック）: `await` で遅れて描画された要素からも正しいコンポーネントが選択される
+- [ ] **Svelte Inspector**（Alt+X で要素を右クリック → Inspect）: `await` で遅れて描画された要素からも正しいコンポーネントが選択される
 - [ ] dock モード（`pnpm examples --dock kit-remote`）でも同じ

@@ -80,7 +80,7 @@ export const HOT_EVENTS = {
   runtimeReady: 'svelte-devtools:runtime-ready',
   /** server → runtime(s): `{ active: boolean }`, whether any consumer is watching. */
   subscription: 'svelte-devtools:subscription',
-  /** runtime → server: `{ epoch, componentId }`, an element was picked in the inspector. */
+  /** runtime → server: `{ epoch, componentId }`, a component chosen with Inspect in the inspector. */
   elementPicked: 'svelte-devtools:element-picked',
 } as const;
 

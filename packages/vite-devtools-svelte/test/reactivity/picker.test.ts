@@ -25,10 +25,15 @@ afterEach(() => {
   send.mockRestore();
 });
 
-/** What a pick of `el` reported to the dev server. */
+/** What Inspect on the element row of `el` reported to the dev server. */
 function pick(el: El | null): any[] {
   send.mockClear();
-  win.dispatchEvent(new win.CustomEvent('svelte-inspector:pick', { detail: { element: el } }));
+  win.dispatchEvent(
+    new win.CustomEvent('svelte-inspector:pick', {
+      detail: { element: el, entry: null },
+      cancelable: true,
+    }),
+  );
   return send.mock.calls.filter(([event]) => event === PICKED).map(([, data]) => data);
 }
 
@@ -244,7 +249,7 @@ describe('the menu rows of the components around an element', () => {
     r.destroy();
   });
 
-  it("the element row's Inspect (no entry) is taken; the inspector's own open is not", () => {
+  it("the element row's Inspect (no entry) is taken; a click is not", () => {
     const r = render(Outer);
     const two = leafByText(r.target, 'two');
     const row = new win.CustomEvent('svelte-inspector:pick', {
@@ -253,10 +258,12 @@ describe('the menu rows of the components around an element', () => {
     });
     win.dispatchEvent(row);
     expect(row.defaultPrevented).toBe(true);
-    // a click opens the editor and selects: not cancelable, nothing to take
+    // a click only opens the editor: not cancelable, and nothing is reported
+    send.mockClear();
     const click = new win.CustomEvent('svelte-inspector:pick', { detail: { element: two } });
     win.dispatchEvent(click);
     expect(click.defaultPrevented).toBe(false);
+    expect(send.mock.calls.filter(([event]) => event === PICKED)).toEqual([]);
     r.destroy();
   });
 });
