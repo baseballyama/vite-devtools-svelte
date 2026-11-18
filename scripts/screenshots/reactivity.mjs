@@ -328,7 +328,7 @@ try {
   await step(1, async () => {
     await go('reactive');
     await choose('Reactivity view', 'Overview');
-    await choose('Overview of', 'Components');
+    await choose('List', 'Components');
     await ui.waitForSelector(`${host} .record`, { timeout: 30_000 });
     // Let one 10 s overview window pass before the activity.
     await sleep(10_000);
@@ -345,7 +345,7 @@ try {
   });
 
   await step(3, async () => {
-    await choose('Overview of', 'States');
+    await choose('List', 'States');
     await ui
       .locator(`${host} [role=option]`, { hasText: 'running' })
       .first()
