@@ -48,4 +48,9 @@ describe('buildFileTree', () => {
     expect(tree.map(n => n.key)).toEqual(['a/', 'b/']);
     expect(tree[0]!.children[0]!.key).toBe('a\\X.svelte');
   });
+
+  it('labels a path without a file name with the path itself', () => {
+    const tree = buildFileTree([{ file: '/', name: 'X' }]);
+    expect(tree.map(n => [n.key, n.label])).toEqual([['/', '/']]);
+  });
 });
