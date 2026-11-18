@@ -31,11 +31,13 @@
   let { current, defaults, save, reset, file }: Props = $props();
 
   const clone = (s: Settings): Settings => $state.snapshot(s);
-  // starts over from `current` whenever that changes
-  let form = $derived.by(() => {
-    const f = $state(clone(current));
+  /** a deeply reactive copy, a plain object assigned to `form` would stop tracking edits */
+  function editable(s: Settings): Settings {
+    const f = $state(clone(s));
     return f;
-  });
+  }
+  // starts over from `current` whenever that changes
+  let form = $derived(editable(current));
   let next_id = 0;
   // one id per stop picking row so removing a row does not hand its input to the next one
   let escape_ids = $derived.by(() => {
@@ -56,13 +58,13 @@
   function reset_to_defaults() {
     // only unsaved edits, no need to touch .env.local
     if (!saved) {
-      form = clone(defaults);
+      form = editable(defaults);
       status = null;
       return;
     }
     void run(reset).then(ok => {
       // a failed reset leaves the saved settings in use
-      if (ok) form = clone(defaults);
+      if (ok) form = editable(defaults);
     });
   }
 

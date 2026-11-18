@@ -31,12 +31,16 @@
     backspace: '⌫ Backspace',
     escape: 'Esc',
     enter: '↵ Enter',
+    minus: '-',
+    numpadsubtract: 'Num -',
   };
 
   /** the key as the inspector compares it, letters and digits by physical key */
   function key_of(e: KeyboardEvent) {
     if (/^Key[A-Z]$/.test(e.code)) return e.code.slice(3).toLowerCase();
     if (/^Digit\d$/.test(e.code)) return e.code.slice(5);
+    // `-` separates the keys of a combo, so the minus keys are saved by code (`minus`)
+    if (e.key === '-') return e.code.toLowerCase();
     return e.key.toLowerCase() === 'control' ? 'control' : e.key;
   }
 

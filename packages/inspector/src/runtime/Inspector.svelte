@@ -232,6 +232,14 @@
     }
   }
 
+  // vite-devtools-svelte: digits by code too, so `shift-1` matches though `e.key` is `!`
+  /** `e.code` without the `Key` / `Digit` prefix, lowercased */
+  function physical_key(code: string) {
+    if (code.startsWith('Key')) return code.slice(3).toLowerCase();
+    if (code.startsWith('Digit')) return code.slice(5);
+    return code.toLowerCase();
+  }
+
   function is_active(key: string, e: KeyboardEvent) {
     switch (key) {
       case 'shift':
@@ -240,10 +248,7 @@
       case 'meta':
         return e.getModifierState(key.charAt(0).toUpperCase() + key.slice(1));
       default:
-        return (
-          key === (e.code.startsWith('Key') ? e.code.slice(3) : e.code).toLowerCase() ||
-          key === e.key.toLowerCase()
-        );
+        return key === physical_key(e.code) || key === e.key.toLowerCase();
     }
   }
 
