@@ -4,7 +4,7 @@ import { normalizePath } from 'vite';
 import type { Plugin, ViteDevServer } from 'vite';
 
 import { defaultInspectorOptions, parseEnvironmentOptions } from './options.js';
-import { INSPECTOR_ICON_URL, INSPECTOR_SETTINGS_ICON_SVG, svgDataUrl } from './runtime/icon.js';
+import { INSPECTOR_DOCK_ICON } from './runtime/icon.js';
 import { RESET_SETTINGS, SAVE_SETTINGS } from './runtime/settings-shared.js';
 import type { ActionResult, Settings } from './runtime/settings-shared.js';
 import { mergeOptions, pickOptions, updateSaved, validateSettings } from './settings.js';
@@ -188,17 +188,20 @@ export function svelteInspector(options: InspectorOptions = {}): InspectorPlugin
             icon: 'logos:svelte-icon',
             type: 'group',
             category: 'framework',
+            accentColor: '#ff3e00',
           });
         } catch (error) {
           log.debug('svelte dock group already registered', error, 'inspector');
         }
 
-        // on the bar so the picker stays one click away
         ctx.docks.register({
           id: 'svelte:inspector',
-          title: 'Svelte Inspector',
+          title: 'Pick element',
           description: 'Pick an element to open its source in your editor',
-          icon: INSPECTOR_ICON_URL,
+          icon: INSPECTOR_DOCK_ICON,
+          groupId: SVELTE_DOCK_GROUP,
+          category: 'default',
+          defaultOrder: 60,
           type: 'action',
           toggle: true,
           action: {
@@ -212,11 +215,12 @@ export function svelteInspector(options: InspectorOptions = {}): InspectorPlugin
 
         ctx.docks.register({
           id: 'svelte:inspector-settings',
-          title: 'Svelte Inspector settings',
+          title: 'Inspector settings',
           description: 'Your shortcut, keys and styles for the Svelte Inspector',
-          icon: svgDataUrl(INSPECTOR_SETTINGS_ICON_SVG),
+          icon: 'ph:gear-duotone',
           groupId: SVELTE_DOCK_GROUP,
-          category: 'inspector',
+          category: 'default',
+          defaultOrder: 50,
           type: 'custom-render',
           renderer: {
             importFrom: `${base()}/@id/__x00__${SETTINGS_MODULE_ID.slice(1)}`,

@@ -1,8 +1,10 @@
 import type { Component } from 'svelte';
 
 import type { IconName } from './icons.js';
+import { inDevtoolsDock } from './inspector-dock.js';
 
 export type PanelGroup = 'start' | 'inspect' | 'profile' | 'project';
+export type PanelView = 'overview' | 'problems' | 'inspect' | 'profile' | 'project';
 
 export interface PanelDef {
   id: string;
@@ -161,6 +163,36 @@ export type PanelId = (typeof panels)[number]['id'];
 /** SvelteKit-only panels stay hidden while `kit` is unknown, so apps without SvelteKit never see them flash in. */
 export function visiblePanels(kit: boolean | undefined): (PanelDef & { id: PanelId })[] {
   return panels.filter((p: PanelDef) => !p.kit || kit === true);
+}
+
+const viewPanels: Record<PanelView, readonly PanelId[]> = {
+  overview: ['overview'],
+  problems: ['errors'],
+  inspect: ['components', 'reactive', 'timeline'],
+  profile: ['render', 'loads', 'fps', 'build'],
+  project: ['routes', 'api', 'modules', 'assets', 'og'],
+};
+
+// The Overview is the devframe's own dock, whose URL cannot carry `?view`.
+export function requestedPanelView(
+  search = location.search,
+  embedded = inDevtoolsDock(),
+): PanelView | null {
+  const requested = new URLSearchParams(search).get('view');
+  if (requested && Object.hasOwn(viewPanels, requested)) return requested as PanelView;
+  return embedded ? 'overview' : null;
+}
+
+/** Every visible panel when `view` is null (the standalone page). */
+export function panelsForView(
+  kit: boolean | undefined,
+  view: PanelView | null,
+): (PanelDef & { id: PanelId })[] {
+  const visible = visiblePanels(kit);
+  if (view === null) return visible;
+  return viewPanels[view]
+    .map(id => visible.find(panel => panel.id === id))
+    .filter(panel => panel !== undefined);
 }
 
 export function panelById(id: string): PanelDef {

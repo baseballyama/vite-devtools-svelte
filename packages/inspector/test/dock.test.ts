@@ -45,9 +45,13 @@ function setup(options?: InspectorOptions) {
 
 interface DockEntry {
   id: string;
+  title: string;
   type: string;
   groupId?: string;
+  category?: string;
+  defaultOrder?: number;
   icon: string;
+  accentColor?: string;
   toggle?: boolean;
   action?: { importFrom: string };
   renderer?: { importFrom: string };
@@ -136,20 +140,30 @@ describe('the dock', () => {
     expect(plugin.transform).toBeUndefined();
     expect(docks.map(d => [d.id, d.type, d.groupId])).toEqual([
       ['svelte', 'group', undefined],
-      ['svelte:inspector', 'action', undefined],
+      ['svelte:inspector', 'action', 'svelte'],
       ['svelte:inspector-settings', 'custom-render', 'svelte'],
     ]);
     const [, inspector, settings] = docks;
+    expect(docks[0]).toMatchObject({ accentColor: '#ff3e00' });
     expect(inspector?.toggle).toBe(true);
     expect(inspector?.action?.importFrom).toBe(
       '/@id/__x00__virtual:vite-devtools-svelte-inspector-dock',
     );
-    expect(Buffer.from(String(inspector?.icon.split(',')[1]), 'base64').toString()).toContain(
-      'svelte-inspector-logo',
+    expect(inspector).toMatchObject({
+      title: 'Pick element',
+      category: 'default',
+      defaultOrder: 60,
+    });
+    expect(inspector?.icon).toMatch(/^mask:data:image\/svg\+xml;base64,/);
+    expect(Buffer.from(inspector!.icon.split(',')[1]!, 'base64').toString()).toContain(
+      '<circle cx="9.5" cy="9.5"',
     );
-    expect(Buffer.from(String(settings?.icon.split(',')[1]), 'base64').toString()).toContain(
-      'svelte-inspector-settings',
-    );
+    expect(settings).toMatchObject({
+      title: 'Inspector settings',
+      icon: 'ph:gear-duotone',
+      category: 'default',
+      defaultOrder: 50,
+    });
     expect(settings?.renderer?.importFrom).toBe(
       '/@id/__x00__virtual:vite-devtools-svelte-inspector-settings',
     );

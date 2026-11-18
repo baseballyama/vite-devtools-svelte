@@ -10,7 +10,7 @@
   import { formatBytes } from '../lib/format.js';
   import type { IconName } from '../lib/icons.js';
   import { matcher } from '../lib/match.js';
-  import type { PanelId } from '../lib/panels.js';
+  import { requestedPanelView, type PanelId } from '../lib/panels.js';
   import { resource } from '../lib/resource.svelte.js';
   import { router } from '../lib/router.svelte.js';
   import {
@@ -26,6 +26,7 @@
   import { datasetVersion } from '../lib/versions.js';
 
   const project = resource<ProjectInfo | null>(getProject, { initial: null });
+  const embedded = requestedPanelView() !== null;
 
   // Cheap, in-memory or directory-scan stats only — the overview is the
   // landing page and must not trigger whole-project static analysis.
@@ -192,20 +193,28 @@
       </header>
 
       <div class="tiles">
+        {#snippet body(t: Tile)}
+          <span class="tile-head">
+            <Icon name={t.icon} size={14} />
+            {t.label}
+            {#if !embedded}<span class="go"><Icon name="chevron" size={12} /></span>{/if}
+          </span>
+          <span
+            class="tile-value num"
+            class:red={t.tone === 'red'}
+            class:yellow={t.tone === 'yellow'}>{t.value}</span
+          >
+          <span class="tile-sub">{t.sub ?? ' '}</span>
+        {/snippet}
         {#each tiles as t (t.panel)}
-          <button type="button" class="tile" onclick={() => router.go(t.panel)}>
-            <span class="tile-head">
-              <Icon name={t.icon} size={14} />
-              {t.label}
-              <span class="go"><Icon name="chevron" size={12} /></span>
-            </span>
-            <span
-              class="tile-value num"
-              class:red={t.tone === 'red'}
-              class:yellow={t.tone === 'yellow'}>{t.value}</span
+          <!-- a dock cannot route to a panel of another workflow -->
+          {#if embedded}
+            <div class="tile">{@render body(t)}</div>
+          {:else}
+            <button type="button" class="tile" onclick={() => router.go(t.panel)}
+              >{@render body(t)}</button
             >
-            <span class="tile-sub">{t.sub ?? ' '}</span>
-          </button>
+          {/if}
         {/each}
       </div>
 
@@ -341,7 +350,7 @@
       border-color var(--dur-fast) var(--ease),
       background var(--dur-fast) var(--ease);
   }
-  .tile:hover {
+  button.tile:hover {
     border-color: var(--border-strong);
     background: var(--bg-hover);
   }

@@ -40,6 +40,13 @@ describe('devframe definition', () => {
     expect(def.capabilities).toEqual({ dev: true, build: false });
     expect(def.packageName).toBe('@sveltejs/vite-devtools-svelte');
     expect(def.clientAssets).toMatch(/client$/);
+    expect(def.dock).toEqual({
+      title: 'Overview',
+      category: 'default',
+      defaultOrder: 0,
+      groupId: 'svelte',
+      icon: 'ph:squares-four-duotone',
+    });
   });
 
   it('registers every RPC under the svelte-devtools scope with bare names', async () => {
@@ -543,7 +550,7 @@ describe('element picker', () => {
     // a failed broadcast (no UI connected) is not an error
     channel.emit(HOT_EVENTS.elementPicked, pick);
     await Promise.resolve();
-    expect(activated).toEqual([DEVFRAME_ID]);
+    expect(activated).toEqual(['svelte-devtools:inspect']);
   });
 
   it('a second setup (dev-server restart) replaces the subscription', async () => {
