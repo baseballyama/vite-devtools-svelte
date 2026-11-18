@@ -27,6 +27,8 @@
     __svelte_meta: Metadata;
   }
 
+  type StackItem = Loc & { tag: string };
+
   const toggle_combo = options.toggleKeyCombo.toLowerCase().split('-');
   const escape_keys = options.escapeKeys.map(k => k.toLowerCase());
   const nav_keys = Object.values(options.navKeys).map(k => k.toLowerCase());
@@ -174,7 +176,7 @@
     const el = find_selectable_parent(target, true)!;
     const meta = el.__svelte_meta;
 
-    const stack = [
+    const stack: StackItem[] = [
       {
         file: meta.loc.file,
         line: meta.loc.line,
@@ -217,6 +219,13 @@
   }
 
   function send(loc: Loc) {
+    // for other in-page tools, e.g. to reveal the component in a devtools panel
+    const stack = active_el ? get_stack(active_el) : [];
+    window.dispatchEvent(
+      new CustomEvent<{ loc: Loc; stack: StackItem[] }>('svelte-inspector:pick', {
+        detail: { loc, stack },
+      }),
+    );
     void fetch(
       `${options.__internal.base}/__open-in-editor?file=${encodeURIComponent(
         `${loc.file}:${loc.line}:${loc.column + 1}`,

@@ -21,6 +21,7 @@ except for what a standalone plugin needs:
 - runtime files are read by Vite itself; upstream's own disk read for them never ran (its filter glob ended in `//**`) and is removed
 - `src/utils/log.ts` is a reduced copy of upstream's logger
 - `src/types.ts` holds only `InspectorOptions`
+- it dispatches a `svelte-inspector:pick` event and marks its components with `Symbol.for('svelte.devtools.ignore')` (see [below](#events)); this part is new, not copied from upstream
 
 ## Setup
 
@@ -133,6 +134,21 @@ SVELTE_INSPECTOR_OPTIONS='{"holdMode": false, "toggleButtonPos": "bottom-left"}'
   Inject custom styles when inspector is active. This is useful if you want to customize the inspector styles to match your app.
 
   When the inspector is active, the `svelte-inspector-enabled` class is added to the `body` element, and the `svelte-inspector-active-target` class is added to the current active target (e.g. via hover or keyboard).
+
+### Events
+
+Every time an element is opened, the inspector dispatches a `svelte-inspector:pick` event on `window`, so other in-page tools (e.g. a devtools panel revealing the component) can react to it:
+
+```js
+window.addEventListener('svelte-inspector:pick', e => {
+  // e.detail.loc: { file, line, column } of the element
+  // e.detail.stack: the element and the components it is rendered in, innermost first
+});
+```
+
+### Devtools UIs
+
+The inspector's components are marked with `Symbol.for('svelte.devtools.ignore')`. Devtools that list the app's components and state leave a marked component, everything it renders and its state out of their panels. Other devtools UIs mounted into the page can use the same marker.
 
 ### Editors
 
