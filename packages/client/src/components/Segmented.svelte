@@ -8,7 +8,6 @@
 
   let {
     options,
-    // eslint-disable-next-line @typescript-eslint/no-useless-default-assignment -- `$bindable()` marks the required prop bindable; it is not a default value
     value = $bindable(),
     label,
   }: { options: readonly Option[]; value: V; label: string } = $props();

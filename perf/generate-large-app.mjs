@@ -127,7 +127,8 @@ function kitMajor(dir) {
     if (fs.existsSync(file)) {
       const { version } = JSON.parse(fs.readFileSync(file, 'utf8'));
       const major = Number(version.split('.')[0]);
-      if (!Number.isInteger(major)) throw new Error(`unexpected @sveltejs/kit version ${version}`);
+      if (!Number.isInteger(major))
+        throw new TypeError(`unexpected @sveltejs/kit version ${version}`);
       return major;
     }
     if (path.dirname(d) === d) throw new Error(`@sveltejs/kit not found from ${dir}`);
