@@ -4,8 +4,9 @@ import { flushSync } from 'svelte';
 import { describe, expect, it, vi } from 'vitest';
 
 import App from './App.svelte';
+import * as rpc from './lib/rpc.js';
 import { settle } from './test/dom.js';
-import { emitConnection } from './test/fake-rpc.js';
+import { emitConnection, project } from './test/fake-rpc.js';
 
 // One panel whose module fails to load and one that throws while rendering,
 // to exercise the shell's error states. Every other panel is the real one
@@ -151,6 +152,106 @@ describe('App shell', () => {
     emitConnection({ status: 'connected', host: 'vite-devtools' });
     flushSync();
     expect(status.getAttribute('title')).toBe('Dev server: connected (Vite DevTools)');
+  });
+});
+
+const KIT_ONLY = ['Routes', 'Load functions', 'API', 'Build'];
+const labels = () =>
+  within(nav())
+    .getAllByRole('link')
+    .map(a => a.textContent?.trim());
+const withoutKit = () => vi.mocked(rpc.getProject).mockResolvedValue({ ...project, kit: false });
+
+/** Hold `getProject` open; returns its resolver. */
+function pendingProject() {
+  let resolve!: (p: typeof project) => void;
+  vi.mocked(rpc.getProject).mockReturnValue(
+    new Promise(r => {
+      resolve = r;
+    }),
+  );
+  return resolve;
+}
+
+describe('App without SvelteKit', () => {
+  it('hides the SvelteKit-only panels from the sidebar and the palette', async () => {
+    withoutKit();
+    await renderApp();
+    expect(within(nav()).getAllByRole('link')).toHaveLength(11);
+    for (const label of KIT_ONLY) expect(labels()).not.toContain(label);
+    await userEvent.keyboard('{Control>}k{/Control}');
+    const options = screen.getAllByRole('option').map(o => o.textContent);
+    for (const label of KIT_ONLY) expect(options.some(o => o?.includes(label))).toBe(false);
+  });
+
+  it('redirects a link to a SvelteKit-only panel to Overview', async () => {
+    withoutKit();
+    await renderApp('#/routes');
+    await waitFor(() => expect(location.hash).toBe('#/overview'));
+    expect(current()?.textContent).toContain('Overview');
+  });
+
+  it('skips the hidden panels with Alt+↑/↓', async () => {
+    withoutKit();
+    await renderApp('#/assets');
+    await userEvent.keyboard('{Alt>}{ArrowDown}{/Alt}');
+    expect(location.hash).toBe('#/render');
+  });
+
+  it('keeps them hidden until the project is known, then shows them for SvelteKit', async () => {
+    const resolve = pendingProject();
+    await renderApp();
+    expect(within(nav()).getAllByRole('link')).toHaveLength(11);
+    resolve(project);
+    await waitFor(() => expect(within(nav()).getAllByRole('link')).toHaveLength(15));
+  });
+
+  it('never loads a SvelteKit-only panel while the project is unknown', async () => {
+    const resolve = pendingProject();
+    await renderApp('#/routes');
+    expect(screen.getByLabelText('Loading panel')).toBeTruthy();
+    expect(current()).toBeUndefined();
+    resolve({ ...project, kit: false });
+    await waitFor(() => expect(location.hash).toBe('#/overview'));
+    expect(rpc.getRoutes).not.toHaveBeenCalled();
+    expect(screen.queryByRole('region', { name: 'Routes', hidden: true })).toBeNull();
+  });
+
+  it('keeps a link to a SvelteKit-only panel in a SvelteKit app', async () => {
+    const resolve = pendingProject();
+    await renderApp('#/routes');
+    expect(location.hash).toBe('#/routes');
+    resolve(project);
+    await waitFor(() => expect(visiblePanel().getAttribute('aria-label')).toBe('Routes'));
+    expect(location.hash).toBe('#/routes');
+    expect(current()?.textContent).toContain('Routes');
+  });
+
+  it('steps from a panel that is not listed yet with Alt+↑/↓', async () => {
+    pendingProject();
+    await renderApp('#/routes');
+    await userEvent.keyboard('{Alt>}{ArrowUp}{/Alt}');
+    expect(location.hash).toBe('#/og');
+    navigate('#/routes');
+    await userEvent.keyboard('{Alt>}{ArrowDown}{/Alt}');
+    expect(location.hash).toBe('#/overview');
+  });
+
+  it('checks again after a reconnect (the server may have added SvelteKit)', async () => {
+    withoutKit();
+    await renderApp();
+    expect(within(nav()).getAllByRole('link')).toHaveLength(11);
+    vi.mocked(rpc.getProject).mockResolvedValue(project);
+    emitConnection({ status: 'disconnected', host: 'standalone' });
+    flushSync();
+    emitConnection({ status: 'connected', host: 'standalone' });
+    await waitFor(() => expect(within(nav()).getAllByRole('link')).toHaveLength(15));
+  });
+
+  it('shows every panel when the project lookup fails', async () => {
+    vi.mocked(rpc.getProject).mockRejectedValue(new Error('down'));
+    await renderApp();
+    await waitFor(() => expect(within(nav()).getAllByRole('link')).toHaveLength(15));
   });
 });
 

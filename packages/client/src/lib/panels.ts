@@ -15,6 +15,8 @@ export interface PanelDef {
   group: PanelGroup;
   description: string;
   keywords?: string;
+  /** Only shown when the app uses SvelteKit (noise otherwise). */
+  kit?: boolean;
   load: () => Promise<{ default: Component }>;
 }
 
@@ -44,6 +46,7 @@ export const panels = [
   },
   {
     id: 'routes',
+    kit: true,
     label: 'Routes',
     icon: 'routes',
     group: 'app',
@@ -98,6 +101,7 @@ export const panels = [
   },
   {
     id: 'loads',
+    kit: true,
     label: 'Load functions',
     icon: 'loads',
     group: 'perf',
@@ -116,6 +120,7 @@ export const panels = [
   },
   {
     id: 'build',
+    kit: true,
     label: 'Build',
     icon: 'build',
     group: 'perf',
@@ -143,6 +148,7 @@ export const panels = [
   },
   {
     id: 'api',
+    kit: true,
     label: 'API',
     icon: 'api',
     group: 'tools',
@@ -162,6 +168,15 @@ export const panels = [
 ] as const satisfies readonly PanelDef[];
 
 export type PanelId = (typeof panels)[number]['id'];
+
+/**
+ * The panels to offer: SvelteKit-only ones need `kit` to be true. While it is
+ * unknown (`undefined`) they stay hidden, so apps without SvelteKit never
+ * see them flash in.
+ */
+export function visiblePanels(kit: boolean | undefined): (PanelDef & { id: PanelId })[] {
+  return panels.filter((p: PanelDef) => !p.kit || kit === true);
+}
 
 export function panelById(id: string): PanelDef {
   return panels.find(p => p.id === id) ?? panels[0];

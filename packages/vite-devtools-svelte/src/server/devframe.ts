@@ -87,7 +87,7 @@ const action = <N extends string, R>(name: N, handler: () => R) => plain('action
 
 export function createRpcFunctions(host: SvelteDevtoolsHost) {
   const { collector } = host;
-  const project = () => analyzeProject(host.root());
+  const project = () => analyzeProject(host.root(), host.routesDir() !== undefined);
   const routes = () => analyzeRoutes(host.routesDir());
 
   return [

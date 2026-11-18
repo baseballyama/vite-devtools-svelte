@@ -34,6 +34,7 @@ export const project: ProjectInfo = {
   version: '1.0.0',
   svelteVersion: '5.0.0',
   sveltekitVersion: '3.0.0',
+  kit: true,
   viteVersion: '6.0.0',
   dependencies: {},
   devDependencies: {},

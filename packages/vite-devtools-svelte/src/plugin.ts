@@ -204,7 +204,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
           logger: devServer.config.logger,
           createServer: () =>
             buildMcpServer({
-              getProject: () => analyzeProject(root),
+              getProject: () => analyzeProject(root, routesDir !== undefined),
               getRoutes: () => analyzeRoutes(routesDir),
               getLiveSnapshot: () => collector.liveSnapshot,
               getComponentRelations: () => analyzeComponents(root),

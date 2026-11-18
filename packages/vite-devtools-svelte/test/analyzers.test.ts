@@ -148,11 +148,12 @@ describe('analyzeProject', () => {
         devDependencies: { vite: '^8.0.0' },
       }),
     });
-    expect(analyzeProject(root)).toEqual({
+    expect(analyzeProject(root, true)).toEqual({
       name: 'app',
       version: '1.2.3',
       svelteVersion: '^5.0.0',
       sveltekitVersion: '^3.0.0',
+      kit: true,
       viteVersion: '^8.0.0',
       dependencies: { svelte: '^5.0.0', '@sveltejs/kit': '^3.0.0' },
       devDependencies: { vite: '^8.0.0' },
@@ -178,7 +179,7 @@ describe('analyzeProject', () => {
     ],
   ])('%s falls back to defaults', (_label, files) => {
     const root = tree(files);
-    expect(analyzeProject(root)).toMatchObject({
+    expect(analyzeProject(root, false)).toMatchObject({
       name: path.basename(root),
       version: '0.0.0',
       svelteVersion: 'unknown',
@@ -199,7 +200,7 @@ describe('analyzeProject', () => {
       'node_modules/@sveltejs/kit/package.json': '{ broken',
       'node_modules/vite/package.json': JSON.stringify({ version: 8 }),
     });
-    expect(analyzeProject(root)).toMatchObject({
+    expect(analyzeProject(root, false)).toMatchObject({
       svelteVersion: '5.1.0',
       sveltekitVersion: '^3.0.0', // unreadable installed manifest
       viteVersion: '^8.0.0', // non-string installed version; empty dependency entry skipped
@@ -213,23 +214,27 @@ describe('analyzeProject', () => {
     ['static wins over public', ['public', 'static'], 'static'],
   ])('directories: %s', (_label, dirs, statics) => {
     const root = tree(Object.fromEntries(dirs.map(d => [`${d}/.keep`, ''])));
-    expect(analyzeProject(root).staticDir).toBe(path.join(root, statics));
+    expect(analyzeProject(root, false).staticDir).toBe(path.join(root, statics));
   });
 
   it('caches per root for 5 seconds', () => {
     vi.useFakeTimers({ now: 1_000_000 });
     const root = tree({ 'package.json': JSON.stringify({ name: 'v1' }) });
-    const first = analyzeProject(root);
+    const first = analyzeProject(root, false);
     fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'v2' }));
     vi.setSystemTime(1_000_000 + 4999);
-    expect(analyzeProject(root)).toBe(first);
+    expect(analyzeProject(root, false)).toBe(first);
     vi.setSystemTime(1_000_000 + 5000);
-    const second = analyzeProject(root);
+    const second = analyzeProject(root, false);
     expect(second.name).toBe('v2');
     // another root is never served from the cache
     const other = tree({ 'package.json': JSON.stringify({ name: 'other' }) });
-    expect(analyzeProject(other).name).toBe('other');
-    expect(analyzeProject(root)).not.toBe(second); // the cache holds one root
+    expect(analyzeProject(other, false).name).toBe('other');
+    expect(analyzeProject(root, false)).not.toBe(second); // the cache holds one root
+    // nor is a different SvelteKit state
+    const third = analyzeProject(root, false);
+    expect(analyzeProject(root, true)).toMatchObject({ kit: true });
+    expect(analyzeProject(root, false)).not.toBe(third);
   });
 });
 

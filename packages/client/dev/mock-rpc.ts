@@ -469,6 +469,7 @@ export function createMockBackend(scale = 5000) {
       version: '2.14.0',
       svelteVersion: '5.56.8',
       sveltekitVersion: '2.70.1',
+      kit: true,
       viteVersion: '8.1.5',
       dependencies: Object.fromEntries(
         WORDS.slice(0, 18).map(w => [`@acme/${w}`, `^${1 + (w.length % 5)}.${w.length}.0`]),

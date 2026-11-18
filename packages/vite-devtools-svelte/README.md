@@ -17,10 +17,12 @@ Svelte DevTools for Vite, built on [Devframe](https://devfra.me/). Provides 15 s
 - **Code Inspector** — View compiled Svelte output with source mapping
 - **Module Graph** — Visualize module dependencies and detect circular imports
 - **OG Preview** — Preview Open Graph meta tags for SEO validation
-- **Build Analysis** — Analyze build chunks and bundle composition
+- **Build Analysis** — Analyze SvelteKit build chunks and bundle composition
 - **FPS Monitor** — Real-time frame rate monitoring with historical data
 - **Asset Browser** — Browse and preview static assets with metadata
 - **Overview** — Project summary with versions and dependency info
+
+Without SvelteKit, the panels that need it (Routes, Load functions, API and Build) are hidden.
 
 ### Screenshots
 
