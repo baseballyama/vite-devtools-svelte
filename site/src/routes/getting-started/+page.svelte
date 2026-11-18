@@ -21,12 +21,12 @@ export default defineConfig({
   const dockInstallCode = `npm install -D @vitejs/devtools`;
 
   const dockConfigCode = `import { svelteDevtools } from '@sveltejs/vite-devtools-svelte'
-import { DevTools } from '@vitejs/devtools'
 import { sveltekit } from '@sveltejs/kit/vite'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
-  plugins: [svelteDevtools(), DevTools(), sveltekit()],
+  devtools: { apply: 'serve' },
+  plugins: [svelteDevtools(), sveltekit()],
 })`;
 
   const optionsCode = `svelteDevtools({
@@ -152,9 +152,9 @@ export default defineConfig({
         <p>
           On a single-user machine where the dev server only listens on <code>localhost</code>, you
           can skip the code with <code>svelteDevtools(&#123; clientAuth: false &#125;)</code>
-          (or <code>DevTools(&#123; clientAuth: false &#125;)</code> inside the Vite DevTools dock). Without
-          it, any page or device that can reach the dev server can read your project files through the
-          DevTools, so keep it on if you are unsure.
+          (or <code>devtools: &#123; apply: 'serve', clientAuth: false &#125;</code> in the Vite config
+          for the Vite DevTools dock). Without it, any page or device that can reach the dev server can
+          read your project files through the DevTools, so keep it on if you are unsure.
         </p>
       </section>
 
@@ -169,8 +169,8 @@ export default defineConfig({
         </p>
         <CodeBlock code={dockInstallCode} lang="bash" />
         <p>
-          Add <code>DevTools()</code> after <code>svelteDevtools()</code> and before
-          <code>sveltekit()</code>:
+          Turn it on with Vite's <code>devtools</code> option. <code>apply: 'serve'</code> keeps it
+          out of <code>vite build</code>:
         </p>
         <CodeBlock code={dockConfigCode} lang="ts" filename="vite.config.ts" />
         <p>

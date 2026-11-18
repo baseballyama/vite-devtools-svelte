@@ -50,7 +50,7 @@ export interface SvelteDevtoolsOptions {
    * can read files in your project through the DevTools (including other
    * devices when the dev server listens on a LAN address, `--host`).
    * Inside the Vite DevTools dock this option has no effect: use
-   * `DevTools({ clientAuth: false })` from `@vitejs/devtools` instead.
+   * `devtools: { apply: 'serve', clientAuth: false }` in the Vite config instead.
    * The MCP endpoint keeps its own token either way.
    * @default true
    */

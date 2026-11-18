@@ -1,16 +1,15 @@
 import adapter from '@sveltejs/adapter-auto';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { svelteDevtools } from '@sveltejs/vite-devtools-svelte';
-import { DevTools } from '@vitejs/devtools';
 import { defineConfig } from 'vite';
 
 // SVELTE_DEVTOOLS_CLIENT_AUTH=0 (set by scripts/examples.mjs) turns the one-time code off.
 const clientAuth = process.env.SVELTE_DEVTOOLS_CLIENT_AUTH !== '0';
 
 export default defineConfig({
+  devtools: { apply: 'serve', clientAuth },
   plugins: [
     svelteDevtools({ clientAuth }),
-    DevTools({ clientAuth }),
     sveltekit({
       adapter: adapter(),
       // Strict, to surface every cross-origin request the DevTools make. SvelteKit

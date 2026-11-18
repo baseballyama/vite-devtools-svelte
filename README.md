@@ -191,20 +191,19 @@ On a single-user machine where the dev server only listens on `localhost`, you c
 
 ```ts
 svelteDevtools({ clientAuth: false }); // standalone /.svelte-devtools/
-DevTools({ clientAuth: false }); // inside the Vite DevTools dock (@vitejs/devtools)
+defineConfig({ devtools: { apply: 'serve', clientAuth: false } }); // inside the Vite DevTools dock (@vitejs/devtools)
 ```
 
 Without it, any page in your browser that can reach the dev server, and any device on the network when you use `--host`, can read files in your project through the DevTools. Keep it on if you are unsure. The MCP endpoint keeps its own token either way.
 
 ### Inside the Vite DevTools dock
 
-With `@vitejs/devtools` installed, add its plugin as well. The Svelte tool then mounts as a dock entry instead of standalone (never both), and authentication is handled once by Vite DevTools:
+With `@vitejs/devtools` installed, turn it on with Vite's `devtools` option (`apply: 'serve'` keeps it out of `vite build`). The Svelte tool then mounts as a dock entry instead of standalone (never both), and authentication is handled once by Vite DevTools:
 
 ```ts
-import { DevTools } from '@vitejs/devtools';
-
 export default defineConfig({
-  plugins: [svelteDevtools(), DevTools(), sveltekit()],
+  devtools: { apply: 'serve' },
+  plugins: [svelteDevtools(), sveltekit()],
 });
 ```
 
@@ -217,7 +216,7 @@ svelteDevtools({
   // Enable component lifecycle tracking (default: true)
   componentTracking: true,
   // Require the one-time code for the standalone DevTools (default: true).
-  // In the Vite DevTools dock use DevTools({ clientAuth: false }) instead.
+  // In the Vite DevTools dock use devtools: { apply: 'serve', clientAuth: false } in the Vite config instead.
   clientAuth: true,
   // Options of the Svelte Inspector, which runs in the Vite DevTools dock.
   inspector: { toggleKeyCombo: 'alt-x', holdMode: true },
@@ -330,7 +329,7 @@ The MCP server is **read + measure only** — it never edits files. Editing is l
 
 Some RPCs read files from disk or open them in your editor, so the DevTools backend is authenticated even though the dev server is normally only reachable from `localhost`.
 
-- **Devframe auth gate.** Every RPC connection must be trusted first: a browser exchanges a single-use 6-digit code (printed in the dev-server terminal, valid for 5 minutes) for a bearer token stored in that browser. Inside Vite DevTools the hub's own gate covers the tool. `svelteDevtools({ clientAuth: false })` (or `DevTools({ clientAuth: false })` in the dock) removes this gate; the origin checks below still apply.
+- **Devframe auth gate.** Every RPC connection must be trusted first: a browser exchanges a single-use 6-digit code (printed in the dev-server terminal, valid for 5 minutes) for a bearer token stored in that browser. Inside Vite DevTools the hub's own gate covers the tool. `svelteDevtools({ clientAuth: false })` (or `devtools: { apply: 'serve', clientAuth: false }` in the Vite config for the dock) removes this gate; the origin checks below still apply.
 - **Origin checks.** The RPC WebSocket only accepts loopback origins (plus the dev server's own LAN origins when you use `--host`), which blocks cross-site pages and DNS-rebinding attacks.
 - **Schema-validated arguments.** RPC inputs are validated with zod schemas before any handler runs.
 - **Path sandbox.** `inspect-file`, `open-in-editor`, and `open-reactive-in-editor` resolve their input through `fs.realpath()` and refuse anything outside the project root. Symlinks inside the project are followed normally.
