@@ -209,15 +209,12 @@
   <div
     class="terminal"
     role="img"
-    aria-label="Terminal output: the dev server prints a claude mcp add command with the URL and a token"
+    aria-label="Terminal output: the dev server prints the claude mcp add command"
   >
     <p class="t-dim">$ npm run dev</p>
     <p class="t-dim">…</p>
-    <p>svelte-devtools MCP ready — register with Claude Code:</p>
-    <p class="t-cmd">
-      claude mcp add --transport http svelte http://localhost:5173/__svelte-devtools/mcp --header
-      x-svelte-devtools-token:&lt;token&gt;
-    </p>
+    <p>svelte-devtools MCP ready — register it once with Claude Code:</p>
+    <p class="t-cmd">claude mcp add svelte-devtools -- npx @sveltejs/vite-devtools-svelte mcp</p>
   </div>
 </section>
 

@@ -24,6 +24,19 @@ const sleep = ms =>
     setTimeout(r, ms);
   });
 
+/** The MCP token the dev server wrote to its registry file, once there. */
+function registeredToken() {
+  try {
+    const name = fs.readdirSync(registry).find(n => n.endsWith(`-${port}.json`));
+    return name ? JSON.parse(fs.readFileSync(path.join(registry, name), 'utf8')).token : null;
+  } catch {
+    return null;
+  }
+}
+
+// The dev server announces its MCP endpoint and token here.
+const registry = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-reactivity-registry-'));
+
 const results = [];
 function check(name, ok, detail) {
   results.push({ name, ok: !!ok });
@@ -54,7 +67,7 @@ const child = spawn(
     cwd: appDir,
     detached: true,
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, LAUNCH_EDITOR: editorBin },
+    env: { ...process.env, LAUNCH_EDITOR: editorBin, VITE_DEVTOOLS_SVELTE_REGISTRY: registry },
   },
 );
 let log = '';
@@ -79,6 +92,7 @@ process.on('exit', () => {
   restore();
   stopServer();
   fs.rmSync(editorDir, { recursive: true, force: true });
+  fs.rmSync(registry, { recursive: true, force: true });
 });
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => process.exit(130));
 
@@ -258,8 +272,10 @@ function checkTree(label, comps) {
 
 let browser;
 try {
-  for (let i = 0; i < 200 && !log.includes('x-svelte-devtools-token:'); i++) await sleep(150);
-  token = log.match(/x-svelte-devtools-token:([0-9a-f-]{36})/)?.[1];
+  for (let i = 0; i < 200 && !token; i++) {
+    token = registeredToken();
+    if (!token) await sleep(150);
+  }
   if (!token) throw new Error(`dev server did not start:\n${log.slice(-2000)}`);
 
   browser = await chromium.launch({ headless: !headed });

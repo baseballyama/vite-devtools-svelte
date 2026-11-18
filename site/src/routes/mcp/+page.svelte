@@ -6,24 +6,18 @@
   import { MCP_TOOL_COUNT, MCP_TOOL_GROUPS } from '#lib/mcp-tools.ts';
   import { image } from '#lib/paths.ts';
 
-  const printedCode = `  svelte-devtools MCP ready — register with Claude Code:
-    claude mcp add --transport http svelte http://localhost:5173/__svelte-devtools/mcp --header x-svelte-devtools-token:<token>`;
+  const addCode = `claude mcp add svelte-devtools -- npx @sveltejs/vite-devtools-svelte mcp`;
 
-  const reRegisterCode = `claude mcp remove svelte
-claude mcp add --transport http svelte http://localhost:5173/__svelte-devtools/mcp --header x-svelte-devtools-token:<new token>`;
+  const svelteMcpCode = `claude mcp add svelte -- npx -y @sveltejs/mcp`;
 
   const mcpJsonCode = `{
   "mcpServers": {
-    "svelte": {
-      "type": "http",
-      "url": "http://localhost:5173/__svelte-devtools/mcp",
-      "headers": { "x-svelte-devtools-token": "\${SVELTE_DEVTOOLS_TOKEN}" }
+    "svelte-devtools": {
+      "command": "npx",
+      "args": ["@sveltejs/vite-devtools-svelte", "mcp"]
     }
   }
 }`;
-
-  const envCode = `export SVELTE_DEVTOOLS_TOKEN=<token from the printed line>
-claude`;
 
   const curlCode = `curl -s http://localhost:5173/__svelte-devtools/mcp \\
   -H 'content-type: application/json' \\
@@ -193,32 +187,36 @@ and what changed when I edited the tax rate.`;
           <h2>Connect Claude Code</h2>
         </header>
         <p>
-          Start the dev server. Once it listens, it prints the exact command to register the server
-          with Claude Code, including the port and a token:
+          Register the MCP server once per project. The dev server also prints this command when it
+          starts:
         </p>
-        <CodeBlock code={printedCode} lang="text" filename="terminal (npm run dev)" />
+        <CodeBlock code={addCode} lang="bash" />
         <p>
-          Run that line as printed. Every request must carry the token in the
-          <code>x-svelte-devtools-token</code> header; without it the endpoint answers
-          <code>403</code>.
+          <code>vite-devtools-svelte mcp</code> runs over stdio and forwards each call to the running
+          dev server of the project in the current directory. It finds that dev server, its port and its
+          token by itself, so restarts and port changes need nothing. Without a running dev server, the
+          tools answer how to start one.
         </p>
-        <h3 class="content-h2">The token changes on every start</h3>
+        <h3 class="content-h2">Svelte documentation and code checks</h3>
         <p>
-          The token is random per dev-server start (also when Vite restarts after a config change).
-          After a restart, register again with the newly printed line:
+          The documentation and <code>svelte-autofixer</code> come from the official
+          <a href="https://svelte.dev/docs/mcp">Svelte MCP server</a>. This server tells the agent
+          to use it when it is configured, so add it too:
         </p>
-        <CodeBlock code={reRegisterCode} lang="bash" />
+        <CodeBlock code={svelteMcpCode} lang="bash" />
         <h3 class="content-h2">Project file instead of the command</h3>
         <p>
           <code>claude mcp add</code> registers the server for you only (local scope). A
           <code>.mcp.json</code> file in the project is shared with everyone who opens the project (project
-          scope), so never write the token into it. Claude Code expands environment variables in that
-          file, so read the token from one:
+          scope). It holds no token, so it can be committed:
         </p>
         <CodeBlock code={mcpJsonCode} lang="json" filename=".mcp.json" />
-        <p>Set it from the line the dev server printed, then start Claude Code:</p>
-        <CodeBlock code={envCode} lang="bash" />
-        <p>The port in the URL must match your dev server.</p>
+        <h3 class="content-h2">Several dev servers</h3>
+        <p>
+          From a monorepo root, or with the same app started twice, more than one dev server can
+          match. The agent then calls <code>list_dev_servers</code> and passes <code>server</code>
+          with the one to use.
+        </p>
         <h3 class="content-h2">Ask</h3>
         <p>For example, with the cart page of your app open:</p>
         <CodeBlock code={promptCode} lang="text" filename="prompt" />
@@ -235,19 +233,23 @@ and what changed when I edited the tax rate.`;
           <h2>Other MCP clients</h2>
         </header>
         <p>
-          Any client that supports Streamable HTTP with custom headers can connect. It needs two
-          values:
+          Clients that start stdio servers use the same command:
+          <code>npx @sveltejs/vite-devtools-svelte mcp</code>. Clients that support only Streamable
+          HTTP with custom headers connect to the dev server directly. They need two values:
         </p>
         <ul>
           <li>URL: <code>http://localhost:&lt;port&gt;/__svelte-devtools/mcp</code></li>
           <li>
-            Header: <code>x-svelte-devtools-token: &lt;token&gt;</code> (from the printed line)
+            Header: <code>x-svelte-devtools-token: &lt;token&gt;</code> (the <code>token</code> in
+            the dev server's file under <code>~/.cache/vite-devtools-svelte/servers/</code>; it
+            changes on every start)
           </li>
         </ul>
         <p>
-          The server is stateless and answers with JSON. Only the Claude Code command is printed by
-          the dev server; for other clients, use their own configuration format with these two
-          values. To check the endpoint by hand:
+          When the dev server runs in a container or on another machine, give the stdio server these
+          two values as <code>VITE_DEVTOOLS_SVELTE_URL</code> and
+          <code>VITE_DEVTOOLS_SVELTE_TOKEN</code> instead (see the README). The HTTP endpoint is stateless
+          and answers with JSON. To check it by hand:
         </p>
         <CodeBlock code={curlCode} lang="bash" />
       </section>
@@ -258,6 +260,11 @@ and what changed when I edited the tax rate.`;
           <h2>The {MCP_TOOL_COUNT} tools</h2>
         </header>
         <p>All inputs are optional unless they have no <code>?</code>.</p>
+        <p>
+          Through <code>vite-devtools-svelte mcp</code>, every tool also takes
+          <code>server?</code> (which dev server to ask), and <code>list_dev_servers</code> lists the
+          running dev servers and the default one.
+        </p>
         {#each MCP_TOOL_GROUPS as group (group.id)}
           <h3 class="group-title" id="tools-{group.id}">{group.title}</h3>
           <p class="group-intro">{group.intro}</p>
@@ -412,8 +419,15 @@ and what changed when I edited the tax rate.`;
           <div>
             <dt><code>403 Forbidden</code></dt>
             <dd>
-              The token is missing or from an earlier start. Register again with the line the dev
-              server printed last.
+              Over HTTP: the token is missing or from an earlier start. Read it again from the dev
+              server's file under <code>~/.cache/vite-devtools-svelte/servers/</code>.
+            </dd>
+          </div>
+          <div>
+            <dt><code>No running dev server for …</code></dt>
+            <dd>
+              Start the dev server of the project Claude Code runs in, or pass <code>server</code>
+              with one of the dev servers the answer lists.
             </dd>
           </div>
           <div>
@@ -462,8 +476,9 @@ and what changed when I edited the tax rate.`;
         <ul class="limits">
           <li>The endpoint exists only in the dev server. Production builds don't contain it.</li>
           <li>
-            Every request needs the token. It is random per start and printed only in your terminal.
-            Treat it like a password and don't commit it.
+            Every request needs the token. It is random per start and kept in a file only your user
+            can read (<code>~/.cache/vite-devtools-svelte/servers/</code>). Treat it like a password
+            and don't commit it.
           </li>
           <li>
             The token is separate from the browser sign-in of the panels (the one-time code). MCP

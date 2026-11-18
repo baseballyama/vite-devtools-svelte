@@ -1,15 +1,15 @@
 ---
 name: vite-devtools-svelte-perf-audit
-description: Use when the user asks to audit Svelte/SvelteKit app performance, find render hotspots, or identify what to optimize. Requires the vite-devtools-svelte MCP server to be registered (the dev server prints `claude mcp add ...` on startup). Always interactive — the user picks which issues to fix; never starts editing on its own.
+description: Use when the user asks to audit Svelte/SvelteKit app performance, find render hotspots, or identify what to optimize. Requires the vite-devtools-svelte MCP server to be registered (the dev server prints the `claude mcp add` command on startup). Always interactive — the user picks which issues to fix; never starts editing on its own.
 ---
 
 # Svelte performance audit
 
-You are auditing a running Svelte/SvelteKit dev server through the `svelte` MCP server provided by `vite-devtools-svelte`.
+You are auditing a running Svelte/SvelteKit dev server through the `svelte-devtools` MCP server provided by `vite-devtools-svelte`.
 
 ## Preconditions
 
-1. The dev server is running and the user has registered the MCP endpoint with `claude mcp add` (the dev server prints the exact command on startup).
+1. The dev server is running and the user has registered the MCP server with `claude mcp add` (the dev server prints the command on startup). If a tool answers `No running dev server`, relay that to the user; if it asks for `server`, call `list_dev_servers` and ask the user which app they mean.
 2. The user has exercised the app at least once in a browser — render/load/fps buffers are empty until traffic flows.
 
 If either is missing, stop and tell the user what to do; do not invent metrics.

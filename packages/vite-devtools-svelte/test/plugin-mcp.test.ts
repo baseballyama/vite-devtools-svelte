@@ -1,10 +1,14 @@
+import fs from 'node:fs';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
+import os from 'node:os';
+import { join } from 'node:path';
 
 import type { Plugin } from 'vite';
-import { afterEach, describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 
 import { isValidMcpToken } from '../src/mcp/http.js';
+import { listServers } from '../src/mcp/registry.js';
 import * as mcpServerModule from '../src/mcp/server.js';
 import { svelteDevtools } from '../src/plugin.js';
 import { callHook, resolvePlugins } from './helpers.js';
@@ -40,7 +44,7 @@ function setup(serverConfig: Record<string, unknown> = {}) {
     middlewares: { use: (path: string, fn: Handler) => routes.push([path, fn]) },
     httpServer,
     watcher: { on: vi.fn() },
-    config: { server: serverConfig, logger: { info: vi.fn(), error: vi.fn() } },
+    config: { server: serverConfig, logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } },
     environments: {},
   };
   callHook(plugins[0]!.configureServer, server);
@@ -288,7 +292,17 @@ describe('MCP endpoint over HTTP', () => {
   });
 });
 
-describe('MCP registration hint', () => {
+describe('MCP registration', () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = fs.mkdtempSync(join(os.tmpdir(), 'vds-plugin-registry-'));
+    vi.stubEnv('VITE_DEVTOOLS_SVELTE_REGISTRY', dir);
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
   it.each([
     ['IPv6 wildcard', { address: '::', family: 'IPv6' }, {}, 'http://localhost:5173'],
     ['IPv4 wildcard', { address: '0.0.0.0', family: 'IPv4' }, {}, 'http://localhost:5173'],
@@ -297,23 +311,63 @@ describe('MCP registration hint', () => {
     ['a LAN IPv4', { address: '192.168.1.20', family: 'IPv4' }, {}, 'http://192.168.1.20:5173'],
     ['a LAN IPv6', { address: 'fe80::1', family: 'IPv6' }, {}, 'http://[fe80::1]:5173'],
     ['https', { address: '::', family: 'IPv6' }, { https: {} }, 'https://localhost:5173'],
-  ])('%s binding → %s', (_, addr, serverConfig, origin) => {
+  ])('%s binding → registers %s and prints the command', (_, addr, serverConfig, origin) => {
     const s = setup(serverConfig);
     s.httpServer.address = () => ({ ...addr, port: 5173 });
     s.httpServer.emit('listening');
     const lines = s.server.config.logger.info.mock.calls.map(([line]) => String(line).trim());
     expect(lines).toContain(
-      `claude mcp add --transport http svelte ${origin}${MCP_PATH} --header x-svelte-devtools-token:${s.token}`,
+      'claude mcp add svelte-devtools -- npx @sveltejs/vite-devtools-svelte mcp',
     );
+    expect(listServers(dir)).toEqual([
+      expect.objectContaining({
+        id: `${process.pid}-5173`,
+        pid: process.pid,
+        url: `${origin}${MCP_PATH}`,
+        token: s.token,
+        host: os.hostname(),
+        root: FIXTURES,
+      }),
+    ]);
+    s.httpServer.emit('close');
+    expect(listServers(dir)).toEqual([]);
+  });
+
+  it('removes the entry when the process exits', () => {
+    const s = setup();
+    s.httpServer.address = () => ({ address: '::1', family: 'IPv6', port: 5174 });
+    const before = process.listenerCount('exit');
+    s.httpServer.emit('listening');
+    expect(process.listenerCount('exit')).toBe(before + 1);
+    expect(listServers(dir)).toHaveLength(1);
+    const onExit = process.listeners('exit').at(-1)!;
+    onExit.call(process, 0);
+    expect(listServers(dir)).toEqual([]);
+    s.httpServer.emit('close');
+    expect(process.listenerCount('exit')).toBe(before);
+  });
+
+  it('warns and still prints the command when the registry is not writable', () => {
+    const file = join(dir, 'not-a-dir');
+    fs.writeFileSync(file, '');
+    vi.stubEnv('VITE_DEVTOOLS_SVELTE_REGISTRY', file);
+    const s = setup();
+    s.httpServer.address = () => ({ address: '::1', family: 'IPv6', port: 5173 });
+    s.httpServer.emit('listening');
+    expect(s.server.config.logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('could not register the MCP endpoint'),
+    );
+    expect(s.server.config.logger.info).toHaveBeenCalled();
   });
 
   it.each([
     ['a pipe / socket path', '/tmp/vite.sock'],
     ['no address', null],
-  ])('prints nothing for %s', (_, address) => {
+  ])('prints and registers nothing for %s', (_, address) => {
     const s = setup();
     s.httpServer.address = () => address;
     s.httpServer.emit('listening');
     expect(s.server.config.logger.info).not.toHaveBeenCalled();
+    expect(listServers(dir)).toEqual([]);
   });
 });
