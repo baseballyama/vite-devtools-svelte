@@ -226,11 +226,11 @@ svelteDevtools({
 
 ### Svelte Inspector
 
-`svelteDevtools()`: hold the toggle key combo (`alt-x` by default) in your app and click an element to open its source in your editor.
+`svelteDevtools()`: hold the toggle key combo (`alt-x` by default) in your app and click an element to open its source in your editor. It only runs in the Vite DevTools dock, and loads once the browser is authorized there.
 
 `inspector` takes the options (`toggleKeyCombo`, `navKeys`, `openKey`, `openMenuKey`, `escapeKeys`, `holdMode`, `customStyles`).
 
-`SVELTE_INSPECTOR_TOGGLE` and an options object in `SVELTE_INSPECTOR_OPTIONS` (shell or `.env` files) take precedence over them, for personal preferences;
+`SVELTE_INSPECTOR_TOGGLE` and an options object in `SVELTE_INSPECTOR_OPTIONS` (shell or `.env` files) take precedence over them, for personal preferences.
 
 ## How It Works
 
