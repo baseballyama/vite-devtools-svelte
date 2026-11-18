@@ -14,6 +14,8 @@ import {
   injectModuleTracking,
   isSvelteModule,
 } from '../src/runtime/transform.js';
+import { HOT_EVENTS } from '../src/server/collector.js';
+import { loadProfileOf, parseLoadReport } from '../src/server/load-profile.js';
 import { callHook, codeOf, kitSetup, resolvePlugins } from './helpers.js';
 
 const RUNTIME_IMPORT = `import '${RUNTIME_MODULE_ID}';`;
@@ -395,6 +397,62 @@ describe('loadProfilePlugin: profiled load functions', () => {
       '/app/src/routes/+page.ts',
     );
     expect(await mod.load()).toEqual({ ok: 1 });
+  });
+
+  it('in the browser (no recorder) sends the timing over the hot channel', async () => {
+    const send = vi.fn();
+    const hot = globalThis as { __fakeHot?: { send: typeof send } };
+    hot.__fakeHot = { send };
+    try {
+      const id = '/app/src/routes/+page.ts';
+      const result = callHook(loadProfile().transform, 'export const load = () => ({ ok: 1 })', id);
+      // a Node module has no `import.meta.hot`: stand in for Vite's
+      const file = path.join(tmpDir, `m${moduleSeq++}.mjs`);
+      fs.writeFileSync(file, codeOf(result).replace('import.meta.hot', 'globalThis.__fakeHot'));
+      const mod = await import(/* @vite-ignore */ pathToFileURL(file).href);
+      expect(await mod.load()).toEqual({ ok: 1 });
+      expect(send).toHaveBeenCalledOnce();
+      const [event, payload] = send.mock.calls[0]!;
+      expect(event).toBe(HOT_EVENTS.loadProfile);
+      expect(parseLoadReport(payload)).toEqual({
+        route: '/',
+        file: id,
+        type: 'universal',
+        duration: payload.duration,
+        dataSize: JSON.stringify({ ok: 1 }).length,
+      });
+    } finally {
+      delete hot.__fakeHot;
+    }
+  });
+
+  it.each([
+    ['not an object', 'x'],
+    ['null', null],
+    ['an unknown type', { route: '/', file: 'f', type: 'other', duration: 1, dataSize: 1 }],
+    [
+      'a negative duration',
+      { route: '/', file: 'f', type: 'universal', duration: -1, dataSize: 1 },
+    ],
+    ['a NaN duration', { route: '/', file: 'f', type: 'universal', duration: NaN, dataSize: 1 }],
+    ['a fractional size', { route: '/', file: 'f', type: 'universal', duration: 1, dataSize: 1.5 }],
+    ['a missing route', { file: 'f', type: 'universal', duration: 1, dataSize: 1 }],
+    ['a server load', { route: '/', file: 'f', type: 'server', duration: 1, dataSize: 1 }],
+    [
+      'a long file',
+      { route: '/', file: 'f'.repeat(4097), type: 'universal', duration: 1, dataSize: 1 },
+    ],
+  ])('a browser report that is %s is dropped', (_, payload) => {
+    expect(parseLoadReport(payload)).toBeNull();
+  });
+
+  it('a recorded load keeps its fields and rounds the duration to 0.01 ms', () => {
+    const report = { route: '/', file: 'f', type: 'server', duration: 1.236, dataSize: 3 } as const;
+    expect(loadProfileOf(report)).toEqual({
+      ...report,
+      duration: 1.24,
+      timestamp: expect.any(Number),
+    });
   });
 
   it('keeps the original line numbers of the module', () => {

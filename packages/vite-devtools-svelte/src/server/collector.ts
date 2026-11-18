@@ -82,6 +82,8 @@ export const HOT_EVENTS = {
   subscription: 'svelte-devtools:subscription',
   /** runtime → server: `{ epoch, componentId }`, an element was picked in the inspector. */
   elementPicked: 'svelte-devtools:element-picked',
+  /** browser → server: a `load` run in the browser, which has no recorder (see load-profile.ts). */
+  loadProfile: 'svelte-devtools:load-profile',
 } as const;
 
 // A DevTools UI that connects this soon after a pick (the dock opening the

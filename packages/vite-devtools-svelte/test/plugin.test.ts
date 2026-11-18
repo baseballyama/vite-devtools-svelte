@@ -426,7 +426,7 @@ describe('loadProfilePlugin recorder', () => {
     const plugins = svelteDevtools();
     resolve(plugins);
     const serverPlugin = plugins.find(p => p.name === 'vite-devtools-svelte:load-profile')!;
-    callHook(serverPlugin.configureServer, {});
+    callHook(serverPlugin.configureServer, { hot: { on: () => {} } });
     (globalThis as any).__svelte_devtools_record_load('/', '/r/+page.ts', 'universal', 1.234, 10);
     const loads = await (await hubHandlers(plugins)).get('svelte-devtools:get-load-profiles')!();
     expect(loads[0]).toMatchObject({ route: '/', duration: 1.23, dataSize: 10, type: 'universal' });

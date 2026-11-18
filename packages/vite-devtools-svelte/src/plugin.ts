@@ -27,11 +27,17 @@ import {
   injectModuleTracking,
   isSvelteModule,
 } from './runtime/transform.js';
-import { Collector } from './server/collector.js';
+import { Collector, HOT_EVENTS } from './server/collector.js';
 import { captureCompilerWarnings } from './server/compiler-warnings.js';
 import { createSvelteDevframe, DEVFRAME_BASE } from './server/devframe.js';
 import type { SvelteDevtoolsHost } from './server/devframe.js';
-import { LOAD_RECORDER, profileLoad } from './server/load-profile.js';
+import {
+  LOAD_RECORDER,
+  loadProfileOf,
+  parseLoadReport,
+  profileLoad,
+} from './server/load-profile.js';
+import type { LoadReport } from './server/load-profile.js';
 import { mountStandalone, urlHost } from './server/mount.js';
 import type { LoadProfile } from './types.js';
 
@@ -324,29 +330,29 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     },
   };
 
-  // The transform wraps each exported `load`, which reports to this recorder.
+  const recordLoad = (report: LoadReport) =>
+    collector.recordLoadProfile(loadProfileOf({ ...report, file: displayPath(root, report.file) }));
+
+  // The transform wraps each exported `load`, which reports to this recorder
+  // on the server and over the hot channel in the browser.
   const loadProfilePlugin: Plugin = {
     name: 'vite-devtools-svelte:load-profile',
     enforce: 'post',
     apply: 'serve',
 
-    configureServer() {
+    configureServer(devServer) {
       (globalThis as Record<string, unknown>)[LOAD_RECORDER] = (
         route: string,
         file: string,
         type: LoadProfile['type'],
         duration: number,
         dataSize: number,
-      ) => {
-        collector.recordLoadProfile({
-          route,
-          file: displayPath(root, file),
-          type,
-          duration: Math.round(duration * 100) / 100,
-          dataSize,
-          timestamp: Date.now(),
-        });
-      };
+      ) => recordLoad({ route, file, type, duration, dataSize });
+      // The hot channel closes with its server, so this listener needs no cleanup.
+      devServer.hot.on(HOT_EVENTS.loadProfile, payload => {
+        const report = parseLoadReport(payload);
+        if (report) recordLoad(report);
+      });
     },
 
     transform(code, id) {

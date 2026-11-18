@@ -250,7 +250,7 @@ describe('MCP server wiring', () => {
         { id: 'n', name: 'n', componentFile: PAGE, oldValue: 0, newValue: 1, timestamp: 2 },
       ],
     });
-    callHook(s.plugins.find(p => p.name.endsWith(':load-profile'))!.configureServer, {});
+    callHook(s.plugins.find(p => p.name.endsWith(':load-profile'))!.configureServer, s.server);
     (globalThis as any).__svelte_devtools_record_load('/', PAGE, 'server', 1, 2);
 
     expect(deps.getLiveSnapshot().components).toEqual([component]);
@@ -264,6 +264,19 @@ describe('MCP server wiring', () => {
     expect(deps.getRoutes().length).toBeGreaterThan(0);
     expect(deps.getComponentRelations().length).toBeGreaterThan(0);
     expect(deps.sessions).toBeInstanceOf(SessionStore);
+  });
+
+  it('records load timings the browser sends over the hot channel and drops malformed ones', async () => {
+    const s = setup();
+    s.configure();
+    const deps = await mcpDeps(s);
+    callHook(s.plugins.find(p => p.name.endsWith(':load-profile'))!.configureServer, s.server);
+    const report = { route: '/', file: PAGE, type: 'universal', duration: 1.234, dataSize: 9 };
+    s.emit('load-profile', report);
+    s.emit('load-profile', { ...report, type: 'nope' });
+    expect(deps.getLoadProfiles()).toEqual([
+      { ...report, file: 'src/routes/+page.svelte', duration: 1.23, timestamp: expect.any(Number) },
+    ]);
   });
 
   it("routes follow SvelteKit's files.routes, and are empty without SvelteKit", async () => {
@@ -283,7 +296,7 @@ describe('MCP server wiring', () => {
     const s = setup();
     s.configure();
     const { sessions } = await mcpDeps(s);
-    callHook(s.plugins.find(p => p.name.endsWith(':load-profile'))!.configureServer, {});
+    callHook(s.plugins.find(p => p.name.endsWith(':load-profile'))!.configureServer, s.server);
     const profile = {
       componentId: 1,
       file: PAGE,

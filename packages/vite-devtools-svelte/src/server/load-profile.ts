@@ -1,6 +1,7 @@
 import { parseSync } from 'vite';
 
 import type { LoadProfile } from '../types.js';
+import { HOT_EVENTS } from './collector.js';
 
 /** Server-side hook the profiled `load` wrappers report to (set by the plugin on the dev server). */
 export const LOAD_RECORDER = '__svelte_devtools_record_load';
@@ -58,6 +59,7 @@ function profiledExport(
   type: LoadProfile['type'],
 ): string {
   const args = [route, file, type].map(v => JSON.stringify(v)).join(', ');
+  const report = `route: ${JSON.stringify(route)}, file: ${JSON.stringify(file)}, type: ${JSON.stringify(type)}`;
   return `${others.length > 0 ? `\nexport { ${others.join(', ')} };` : ''}
 const __profiled_load = async (event) => {
   const __start = performance.now();
@@ -68,10 +70,34 @@ const __profiled_load = async (event) => {
     try { __dataSize = JSON.stringify(__result || {}).length; } catch {}
     if (typeof globalThis.${LOAD_RECORDER} === 'function') {
       globalThis.${LOAD_RECORDER}(${args}, __duration, __dataSize);
+    } else {
+      import.meta.hot?.send(${JSON.stringify(HOT_EVENTS.loadProfile)}, { ${report}, duration: __duration, dataSize: __dataSize });
     }
   } catch {}
   return __result;
 };
 export { __profiled_load as load };
 `;
+}
+
+export type LoadReport = Pick<LoadProfile, 'route' | 'file' | 'type' | 'duration' | 'dataSize'>;
+
+export function loadProfileOf(report: LoadReport): LoadProfile {
+  return { ...report, duration: Math.round(report.duration * 100) / 100, timestamp: Date.now() };
+}
+
+// Same bound as file paths in the RPC arguments.
+const MAX_STRING = 4096;
+
+// The payload comes from the user's app: anything not shaped like a report is dropped. Only
+// universal loads run in the browser; server loads always use the recorder.
+export function parseLoadReport(payload: unknown): LoadReport | null {
+  if (typeof payload !== 'object' || payload === null) return null;
+  const { route, file, type, duration, dataSize } = payload as Record<string, unknown>;
+  if (typeof route !== 'string' || route.length > MAX_STRING) return null;
+  if (typeof file !== 'string' || file.length > MAX_STRING) return null;
+  if (type !== 'universal') return null;
+  if (typeof duration !== 'number' || !Number.isFinite(duration) || duration < 0) return null;
+  if (typeof dataSize !== 'number' || !Number.isInteger(dataSize) || dataSize < 0) return null;
+  return { route, file, type, duration, dataSize };
 }
