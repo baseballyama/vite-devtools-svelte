@@ -23,6 +23,26 @@ describe('inspectorPicker', () => {
     expect(inspectorPicker()).toBeNull();
   });
 
+  it('is null outside the Vite DevTools hub', () => {
+    expect(inspectorPicker()).toBeNull();
+  });
+
+  it('is null in the standalone UI', () => {
+    (window as unknown as Record<string, unknown>)[KEY] = {
+      clientType: 'standalone',
+      docks: { entries: [{ id: 'svelte:inspector' }], setActionActive: vi.fn() },
+    };
+    expect(inspectorPicker()).toBeNull();
+  });
+
+  it('is null when the dock has no inspector', () => {
+    (window as unknown as Record<string, unknown>)[KEY] = {
+      clientType: 'embedded',
+      docks: { entries: [{ id: 'other' }], setActionActive: vi.fn() },
+    };
+    expect(inspectorPicker()).toBeNull();
+  });
+
   it('sets the dock action on', async () => {
     const setActionActive = vi.fn(() => Promise.resolve(true));
     (window as unknown as Record<string, unknown>)[KEY] = {
