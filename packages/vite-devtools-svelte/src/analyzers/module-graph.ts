@@ -38,8 +38,9 @@ export function buildModuleGraph(root: string, allModules: GraphModuleLike[]): M
     // one node per file across environments and query variants
     if (!mod.file || idMap.has(mod.file) || !isInside(root, mod.file)) continue;
     const id = path.relative(root, mod.file);
+    const segments = id.split(path.sep);
     // a node_modules path segment (not `src/node_modules_utils.ts`)
-    if (id.split(path.sep).includes('node_modules')) continue;
+    if (segments.includes('node_modules')) continue;
     let size: number | undefined;
     try {
       size = fs.statSync(mod.file).size;
@@ -54,6 +55,7 @@ export function buildModuleGraph(root: string, allModules: GraphModuleLike[]): M
       imports: [],
       size,
     };
+    if (segments[0] === '.svelte-kit') node.generated = true;
     idMap.set(mod.file, node);
     modules.push(node);
   }
