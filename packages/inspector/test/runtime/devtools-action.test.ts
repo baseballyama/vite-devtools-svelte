@@ -151,6 +151,70 @@ describe('the dock action', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it('dispatches svelte-inspector:pick with the location, stack and element', async () => {
+    const { ctx } = start();
+    await ctx.docks.setActionActive('svelte:inspector', true);
+    await settle();
+    const picks: unknown[] = [];
+    const listener = (e: Event) => {
+      picks.push((e as CustomEvent).detail);
+    };
+    window.addEventListener('svelte-inspector:pick', listener);
+    try {
+      const el = component();
+      await pick(el);
+      expect(picks).toEqual([
+        {
+          loc: { file: 'src/A.svelte', line: 3, column: 4 },
+          stack: [{ file: 'src/A.svelte', line: 3, column: 4, tag: 'div' }],
+          element: el,
+        },
+      ]);
+    } finally {
+      window.removeEventListener('svelte-inspector:pick', listener);
+    }
+  });
+
+  it('a component chosen from the context menu is picked without the element', async () => {
+    const { ctx } = start();
+    await ctx.docks.setActionActive('svelte:inspector', true);
+    await settle();
+    const picks: unknown[] = [];
+    const listener = (e: Event) => {
+      picks.push((e as CustomEvent).detail);
+    };
+    window.addEventListener('svelte-inspector:pick', listener);
+    try {
+      const el = component();
+      const layout = { file: 'src/Layout.svelte', line: 7, column: 2 };
+      (el as unknown as { __svelte_meta: Record<string, unknown> }).__svelte_meta.parent = {
+        type: 'component',
+        componentTag: 'Layout',
+        ...layout,
+        parent: null,
+      };
+      el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+      el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+      flushSync();
+      const rows = document.querySelectorAll<HTMLButtonElement>('.svelte-inspector-menu-row');
+      expect(rows).toHaveLength(2);
+      rows[1]!.click();
+      await settle();
+      expect(picks).toEqual([
+        {
+          loc: { ...layout, tag: 'Layout' },
+          stack: [
+            { file: 'src/A.svelte', line: 3, column: 4, tag: 'div' },
+            { ...layout, tag: 'Layout' },
+          ],
+          element: null,
+        },
+      ]);
+    } finally {
+      window.removeEventListener('svelte-inspector:pick', listener);
+    }
+  });
+
   it("falls back to Vite's own endpoint when Vite DevTools refuses the path", async () => {
     const { ctx } = start();
     // e.g. DTK0028 for a linked package outside the workspace root

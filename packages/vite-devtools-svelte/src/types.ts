@@ -74,6 +74,14 @@ export interface ComponentInstance {
   mounted: boolean;
 }
 
+/** An element picked on the app page: the component instance that rendered it. */
+export interface ElementPick {
+  /** App page load the id belongs to. */
+  epoch: string;
+  /** Nearest tracked component instance (library components are not tracked). */
+  componentId: number;
+}
+
 // Phase 2: Performance Analysis
 
 export interface RenderProfile {

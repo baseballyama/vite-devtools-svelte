@@ -10,6 +10,7 @@
   import PanelHost from './components/PanelHost.svelte';
   import type { Command } from './components/types.js';
   import { connection, connectionSupported } from './lib/connection.svelte.js';
+  import { elementPick } from './lib/element-pick.svelte.js';
   import { errorMessage } from './lib/format.js';
   import {
     groupLabels,
@@ -21,7 +22,7 @@
   import { persisted } from './lib/persisted.svelte.js';
   import { resource } from './lib/resource.svelte.js';
   import { router } from './lib/router.svelte.js';
-  import { getProject } from './lib/rpc.js';
+  import { getProject, onElementPicked } from './lib/rpc.js';
   import { createThemeStore, type ThemeMode } from './lib/theme.svelte.js';
 
   const theme = createThemeStore();
@@ -64,6 +65,14 @@
     if (!loaded[id] && !loadError[id]) void load(id);
     document.title = `${panelById(id).label} · Svelte DevTools`;
   });
+
+  // An element picked on the app page opens its instance in Components.
+  $effect(() =>
+    onElementPicked(pick => {
+      elementPick.set(pick);
+      router.go('components');
+    }),
+  );
 
   async function load(id: PanelId) {
     try {

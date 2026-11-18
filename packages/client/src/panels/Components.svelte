@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
 
   import Badge from '../components/Badge.svelte';
   import Button from '../components/Button.svelte';
@@ -18,6 +18,7 @@
   import type { Column, SortState, TableRowState, TreeViewApi } from '../components/types.js';
   import type { CaptureInfo } from '../lib/capture.svelte.js';
   import { countBy, groupBy } from '../lib/collections.js';
+  import { elementPick } from '../lib/element-pick.svelte.js';
   import { componentName, shortPath } from '../lib/format.js';
   import { buildLiveTree, type LiveNode } from '../lib/live-tree.js';
   import { matcher } from '../lib/match.js';
@@ -32,7 +33,12 @@
     openInEditor,
   } from '../lib/rpc.js';
   import { branchKeys, defaultExpansion, remapAcross, type TreeRow } from '../lib/tree.js';
-  import type { ComponentInstance, ComponentRelation, LiveComponentsMeta } from '../lib/types.js';
+  import type {
+    ComponentInstance,
+    ComponentRelation,
+    ElementPick,
+    LiveComponentsMeta,
+  } from '../lib/types.js';
   import { datasetVersion } from '../lib/versions.js';
 
   type Mode = 'tree' | 'files';
@@ -151,6 +157,36 @@
       ancestorsOf(id).map(a => a.key),
     );
   }
+
+  // ---- Element picked on the app page -------------------------------------
+  // Revealed once this tab is visible and the snapshot of the pick's page
+  // load holds the instance; the first miss refetches the tree right away.
+  let pageVisible = $state(!document.hidden);
+  $effect(() => {
+    const sync = () => (pageVisible = !document.hidden);
+    document.addEventListener('visibilitychange', sync);
+    return () => document.removeEventListener('visibilitychange', sync);
+  });
+
+  let refetchedFor: ElementPick | null = null;
+  $effect(() => {
+    const pick = elementPick.pending;
+    if (!pick || !pageVisible) return;
+    if (live.data.epoch !== pick.epoch || !tree.byId.has(pick.componentId)) {
+      if (refetchedFor !== pick) {
+        refetchedFor = pick;
+        untrack(() => void live.refresh());
+      }
+      return;
+    }
+    untrack(() => {
+      elementPick.done(pick);
+      mode.value = 'tree';
+      query = '';
+      // After the tree view (re)renders for the mode / filter change.
+      void tick().then(() => revealInstance(pick.componentId));
+    });
+  });
 
   // ---- Static file relations ---------------------------------------------
   const relations = resource<ComponentRelation[]>(getComponentRelations, {

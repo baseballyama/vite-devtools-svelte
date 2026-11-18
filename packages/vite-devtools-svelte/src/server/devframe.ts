@@ -19,6 +19,7 @@ import { analyzeRoutes } from '../analyzers/routes.js';
 import { findReactiveLine } from '../analyzers/source.js';
 import type {
   CaptureInfoMap,
+  ElementPick,
   InspectResult,
   OGPreview,
   ReactiveGraphResult,
@@ -32,6 +33,8 @@ import { resolveWithinRoot } from './security.js';
 export const DEVFRAME_ID = 'svelte-devtools';
 /** Mount base for both hosts (standalone and Vite DevTools), so the SPA URL never changes. */
 export const DEVFRAME_BASE = '/.svelte-devtools/';
+/** Client RPC (server → DevTools UI) announcing an element picked on the app page. */
+export const PICK_BROADCAST = 'element-picked';
 
 // Self-reference by name: resolves to this package's root both from the
 // bundle (dist/index.mjs) and from the sources (tests run src/ directly).
@@ -127,6 +130,8 @@ export function createRpcFunctions(host: SvelteDevtoolsHost) {
         host.openInEditor(line ? `${resolved}:${line}` : resolved);
       },
     }),
+    // A pick made just before a UI connected (the dock opening the Svelte panel for it).
+    query('get-recent-element-pick', (): ElementPick | null => collector.recentPick),
     defineRpcFunction({
       name: 'open-reactive-in-editor',
       type: 'action',
@@ -257,6 +262,8 @@ async function inspectFile(host: SvelteDevtoolsHost, file: string): Promise<Insp
  * `connectDevframe()` either way.
  */
 export function createSvelteDevframe(host: SvelteDevtoolsHost): DevframeDefinition {
+  // A host may run setup again (dev-server restart): one picker subscription at a time.
+  let detachPicker: (() => void) | undefined;
   return defineDevframe({
     id: DEVFRAME_ID,
     name: 'Svelte',
@@ -274,6 +281,16 @@ export function createSvelteDevframe(host: SvelteDevtoolsHost): DevframeDefiniti
     setup(ctx) {
       const scoped = ctx.scope(DEVFRAME_ID);
       for (const fn of createRpcFunctions(host)) scoped.rpc.register(fn);
+      const docks = (ctx as { docks?: { activate?: (dockId: string) => void } }).docks;
+      detachPicker?.();
+      detachPicker = host.collector.onElementPicked(pick => {
+        // To every DevTools UI, hidden tabs included (they apply it once visible).
+        void scoped.rpc
+          .broadcast({ method: PICK_BROADCAST, args: [pick], event: true, optional: true })
+          .catch(() => {});
+        // inside the Vite DevTools dock: show the Svelte panel
+        docks?.activate?.(DEVFRAME_ID);
+      });
     },
   });
 }

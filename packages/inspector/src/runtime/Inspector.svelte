@@ -170,7 +170,7 @@
 
     if (active_el) {
       stop(e);
-      send(active_el.__svelte_meta.loc);
+      send(active_el.__svelte_meta.loc, active_el);
     }
   }
 
@@ -221,13 +221,15 @@
     menu = { x, y, stack: get_stack(active_el) };
   }
 
-  function send(loc: Loc) {
+  /** `element`: the element opened, null for a component chosen from the menu */
+  function send(loc: Loc, element: Element | null = null) {
     // for other in-page tools, e.g. to reveal the component in a devtools panel
     const stack = active_el ? get_stack(active_el) : [];
     window.dispatchEvent(
-      new CustomEvent<{ loc: Loc; stack: StackItem[] }>('svelte-inspector:pick', {
-        detail: { loc, stack },
-      }),
+      new CustomEvent<{ loc: Loc; stack: StackItem[]; element: Element | null }>(
+        'svelte-inspector:pick',
+        { detail: { loc, stack, element } },
+      ),
     );
     openInEditor(loc);
     has_opened = true;

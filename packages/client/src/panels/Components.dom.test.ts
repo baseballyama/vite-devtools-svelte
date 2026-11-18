@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/svelte';
 import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { elementPick } from '../lib/element-pick.svelte.js';
 import { reactiveScope } from '../lib/reactive-selection.svelte.js';
 import { router } from '../lib/router.svelte.js';
 import * as rpc from '../lib/rpc.js';
@@ -375,5 +376,86 @@ describe('Components: files', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Re-analyze' }));
     await settle();
     expect(screen.getByText('No .svelte files found')).toBeTruthy();
+  });
+});
+
+const pickOf = (componentId: number, epoch = 'e1') => ({
+  epoch,
+  componentId,
+});
+const setVisibility = (state: 'visible' | 'hidden') => {
+  Object.defineProperty(document, 'visibilityState', { configurable: true, value: state });
+  Object.defineProperty(document, 'hidden', { configurable: true, value: state === 'hidden' });
+  document.dispatchEvent(new Event('visibilitychange'));
+};
+
+describe('Components: element picked on the app page', () => {
+  it('selects and reveals the instance: ancestors expanded, filter cleared, details open', async () => {
+    render(Components);
+    await settle();
+    await userEvent.click(screen.getByRole('button', { name: 'Collapse all' }));
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Filter' }), 'Layout');
+    expect(labels()).not.toContain('<Row>');
+    const pick = pickOf(5);
+    elementPick.set(pick);
+    await settle();
+    expect(row('Row', 1).getAttribute('aria-selected')).toBe('true');
+    expect(labels()).toEqual(['<App>', '<Layout>', '<Page>', '<Row>', '<Row>']);
+    expect(screen.getByRole('complementary', { name: '<Row> details' }).textContent).toContain(
+      '#5',
+    );
+    expect(screen.getByRole<HTMLInputElement>('searchbox', { name: 'Filter' }).value).toBe('');
+    expect(elementPick.pending).toBeNull();
+  });
+
+  it('switches from Files to the live tree', async () => {
+    render(Components);
+    await settle();
+    await userEvent.click(screen.getByRole('radio', { name: 'Files' }));
+    elementPick.set(pickOf(3));
+    await settle();
+    expect(row('Page').getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('a pick of an instance not in the snapshot yet refetches the tree once', async () => {
+    render(Components);
+    await settle();
+    const calls = vi.mocked(rpc.getLiveComponents).mock.calls.length;
+    vi.mocked(rpc.getLiveComponents).mockResolvedValue([...instances, c(6, 'Cell', 4)]);
+    elementPick.set(pickOf(6));
+    await settle();
+    expect(vi.mocked(rpc.getLiveComponents).mock.calls.length).toBe(calls + 1);
+    expect(row('Cell').getAttribute('aria-selected')).toBe('true');
+  });
+
+  it("waits for the pick's page load before matching ids", async () => {
+    render(Components);
+    await settle();
+    const pick = pickOf(4, 'e2');
+    elementPick.set(pick);
+    await settle();
+    expect(items().some(r => r.getAttribute('aria-selected') === 'true')).toBe(false);
+    expect(elementPick.pending).toBe(pick);
+    // the server now serves the picked tab
+    vi.mocked(rpc.getLiveComponentsMeta).mockResolvedValue(meta({ epoch: 'e2' }));
+    await userEvent.click(screen.getByRole('button', { name: /^Refresh/ }));
+    await settle();
+    expect(row('Row').getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('a tab that is hidden when the pick arrives reveals it once visible', async () => {
+    render(Components);
+    await settle();
+    setVisibility('hidden');
+    try {
+      elementPick.set(pickOf(4));
+      await settle();
+      expect(elementPick.pending).not.toBeNull();
+      expect(row('Row').getAttribute('aria-selected')).not.toBe('true');
+    } finally {
+      setVisibility('visible');
+    }
+    await settle();
+    expect(row('Row').getAttribute('aria-selected')).toBe('true');
   });
 });
