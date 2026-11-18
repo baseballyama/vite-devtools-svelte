@@ -212,6 +212,39 @@ describe('settings view', () => {
     expect(saved?.status).toMatch(/envDir: false/);
   });
 
+  it('says when the shell overrides the saved settings', async () => {
+    const plugin = setup();
+    const { ctx, actions } = fakeDevtools();
+    plugin.devtools.setup(ctx);
+    process.env.SVELTE_DEVTOOLS_INSPECTOR_OPTIONS = '{}';
+    const reset = await actions.get('svelte:inspector:reset-settings')?.();
+    expect(reset?.status).toContain(
+      'SVELTE_DEVTOOLS_INSPECTOR_OPTIONS is also set in the shell, which takes precedence.',
+    );
+  });
+
+  it('removes the variable when the settings match the plugin options', async () => {
+    fs.writeFileSync(path.join(dir, '.env.local'), 'A=1\n');
+    const plugin = setup();
+    const { ctx, actions } = fakeDevtools();
+    plugin.devtools.setup(ctx);
+    const saved = await actions.get('svelte:inspector:save-settings')?.(
+      form(await servedOptions(plugin)),
+    );
+    expect(saved?.status).toMatch(/^Same as the defaults: removed from \.env\.local\./);
+    expect(read()).toBe('A=1\n');
+  });
+
+  it('reports a file that cannot be written', async () => {
+    fs.mkdirSync(path.join(dir, '.env.local'));
+    const plugin = setup();
+    const { ctx, actions } = fakeDevtools();
+    plugin.devtools.setup(ctx);
+    const reset = await actions.get('svelte:inspector:reset-settings')?.();
+    expect(reset?.ok).toBe(false);
+    expect(reset?.status).toMatch(/^Couldn't save: /);
+  });
+
   it('serves the saved settings on the next start', async () => {
     const plugin = setup();
     const { ctx, actions } = fakeDevtools();
@@ -254,6 +287,7 @@ describe('settings helpers', () => {
     [withDefaults({ openKey: "'" }), "Open in editor can't be '"],
     [withDefaults({ escapeKeys: [] }), 'Stop picking needs at least one key'],
     [null, 'No settings to save'],
+    [{}, 'Stop picking needs at least one key'],
   ] as const)('rejects %j', (input, error) => {
     expect(validateSettings(input)).toEqual({ error });
   });
@@ -266,6 +300,12 @@ describe('settings helpers', () => {
           holdMode: false,
           navKeys: structuredClone(defaultInspectorOptions.navKeys),
         },
+        defaultInspectorOptions,
+      ),
+    ).toEqual({ holdMode: false });
+    expect(
+      changedOptions(
+        { holdMode: false, __internal: { base: '', cwd: '' } },
         defaultInspectorOptions,
       ),
     ).toEqual({ holdMode: false });
