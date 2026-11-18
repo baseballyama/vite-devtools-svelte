@@ -77,7 +77,13 @@ export const versions: DatasetVersions = {
   apiEndpoints: 0,
 };
 
-const liveMeta: LiveComponentsMeta = { total: 0, kept: 0, truncated: false, epochs: 1 };
+const liveMeta: LiveComponentsMeta = {
+  total: 0,
+  kept: 0,
+  truncated: false,
+  root: '/app',
+  epochs: 1,
+};
 const moduleGraph: ModuleGraphData = { modules: [], cycles: [] };
 const build: BuildAnalysis = { chunks: [], totalSize: 0, timestamp: 0 };
 const og: OGPreview = { url: '', title: '', description: '', image: '', tags: [], issues: [] };

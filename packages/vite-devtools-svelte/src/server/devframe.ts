@@ -76,6 +76,23 @@ export function createRpcFunctions(host: SvelteDevtoolsHost) {
   const { collector } = host;
   const project = () => analyzeProject(host.root(), host.routesDir() !== undefined);
   const routes = () => analyzeRoutes(host.routesDir());
+  // Spelled like the Vite module ids the runtime reports as live `file`s:
+  // Vite resolves them with the native realpath (real casing, symlinks
+  // resolved) and `/` separators.
+  let idRootCache: { root: string; id: string } | undefined;
+  const idRoot = () => {
+    const root = host.root();
+    if (idRootCache?.root !== root) {
+      let real = root;
+      try {
+        real = fs.realpathSync.native(root);
+      } catch {
+        // A root that cannot be resolved is still the best prefix we have.
+      }
+      idRootCache = { root, id: real.split(path.sep).join('/') };
+    }
+    return idRootCache.id;
+  };
 
   return [
     query('get-project', project),
@@ -90,6 +107,7 @@ export function createRpcFunctions(host: SvelteDevtoolsHost) {
       total: collector.liveComponentsTotal,
       kept: collector.liveComponents.length,
       truncated: collector.liveComponentsTotal > collector.liveComponents.length,
+      root: idRoot(),
       ...collector.epochInfo,
     })),
     defineRpcFunction({

@@ -143,6 +143,7 @@ describe('collector-backed RPCs', () => {
       total: 60_000,
       kept: 50_000,
       truncated: true,
+      root: fs.realpathSync.native(FIXTURES_DIR).split(path.sep).join('/'),
       epoch: '(legacy)',
       epochs: 1,
     });

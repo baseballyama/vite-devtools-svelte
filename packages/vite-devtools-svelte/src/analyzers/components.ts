@@ -25,16 +25,21 @@ export function analyzeComponents(root: string): ComponentRelation[] {
     const imports = new Set<string>(); // a component imported twice is one relation
     for (const specifier of cachedImports(file, cache)) {
       const resolved = resolveImportPath(specifier, path.dirname(file), root);
-      if (resolved) imports.add(path.relative(root, resolved));
+      if (resolved) imports.add(relativeId(root, resolved));
     }
     return {
-      file: path.relative(root, file),
+      file: relativeId(root, file),
       name: path.basename(file, '.svelte'),
       imports: [...imports],
     };
   });
   importCache = cache; // files no longer found drop out
   return relations;
+}
+
+// `/`-separated on every platform: the client matches these against Vite ids.
+function relativeId(root: string, file: string): string {
+  return path.relative(root, file).split(path.sep).join('/');
 }
 
 function cachedImports(file: string, cache: ImportCache): string[] {

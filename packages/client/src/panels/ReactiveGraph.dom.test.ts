@@ -136,6 +136,7 @@ beforeEach(() => {
     total: 3,
     kept: 3,
     truncated: false,
+    root: '/app',
     epoch: 'e1',
     epochs: 1,
   });
