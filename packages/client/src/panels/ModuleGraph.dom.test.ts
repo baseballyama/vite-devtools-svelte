@@ -151,6 +151,33 @@ describe('ModuleGraph', () => {
     expect(ids()).toContain('/.svelte-kit/generated/app.js');
   });
 
+  it('lists .svelte.js/ts modules under Svelte with their own badge', async () => {
+    const user = userEvent.setup();
+    vi.mocked(rpc.getModuleGraph).mockResolvedValue({
+      modules: [
+        mod('/src/App.svelte', 'svelte'),
+        mod('/src/cart.svelte.ts', 'svelte'),
+        mod('/src/count.svelte.js', 'svelte'),
+        mod('/src/main.ts', 'ts'),
+      ],
+      cycles: [],
+    });
+    render(ModuleGraph);
+    await settle();
+    await user.click(screen.getByRole('radio', { name: /^Svelte/ }));
+    const badges = within(list())
+      .getAllByRole('option')
+      .map(o => [o.querySelector('.id')!.textContent, o.querySelector('.badge')?.textContent]);
+    expect(badges.toSorted((a, b) => a[0]!.localeCompare(b[0]!))).toEqual([
+      ['/src/App.svelte', 'svelte'],
+      ['/src/cart.svelte.ts', 'svelte.ts'],
+      ['/src/count.svelte.js', 'svelte.js'],
+    ]);
+    await user.click(within(list()).getByRole('option', { name: /cart\.svelte\.ts/ }));
+    const details = screen.getByRole('complementary', { name: 'cart.svelte.ts details' });
+    expect(details.querySelector('.badge')!.textContent).toBe('svelte.ts');
+  });
+
   it('keeps the chosen type listed after its last module goes away', async () => {
     const user = userEvent.setup();
     vi.mocked(rpc.getModuleGraph).mockResolvedValue(graph);

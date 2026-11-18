@@ -100,6 +100,13 @@
     },
   ];
 
+  // Tells `.svelte.js/ts` modules from components, which share the svelte type.
+  function badge(m: ModuleNode): string {
+    if (m.type !== 'svelte') return m.type;
+    const ext = m.id.slice(m.id.lastIndexOf('.') + 1).toLowerCase();
+    return ext === 'svelte' ? 'svelte' : `svelte.${ext}`;
+  }
+
   function select(id: string) {
     if (!byId.has(id)) return;
     if (!rows.some(m => m.id === id)) {
@@ -147,7 +154,7 @@
     >
       {#snippet row(m: ModuleNode, { visible }: TableRowState)}
         <span class="mod">
-          <Badge tone={tones[m.type]}>{m.type}</Badge>
+          <Badge tone={tones[m.type]}>{badge(m)}</Badge>
           <span class="truncate mono id"><Highlight text={m.id} {query} /></span>
           {#if m.isCyclic}<span class="cyc" title="Part of a circular import"
               ><Icon name="cycle" size={12} /></span
@@ -183,7 +190,7 @@
           onclose={() => (selected = null)}
         >
           {#snippet badges()}
-            <Badge tone={tones[current.type]}>{current.type}</Badge>
+            <Badge tone={tones[current.type]}>{badge(current)}</Badge>
             {#if current.size}<Badge>{formatBytes(current.size)}</Badge>{/if}
             {#if current.isCyclic}<Badge tone="yellow">circular</Badge>{/if}
           {/snippet}
@@ -218,7 +225,7 @@
         {@const m = byId.get(id)}
         <li>
           <button type="button" onclick={() => select(id)} disabled={!m} title={id}>
-            {#if m}<Badge tone={tones[m.type]}>{m.type}</Badge>{/if}
+            {#if m}<Badge tone={tones[m.type]}>{badge(m)}</Badge>{/if}
             <span class="truncate">{basename(id)}</span>
             <span class="sub truncate mono">{id}</span>
           </button>
