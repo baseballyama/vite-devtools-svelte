@@ -1,5 +1,27 @@
 # vite-devtools-svelte
 
+## 0.9.0
+
+### Minor Changes
+
+- [#149](https://github.com/sveltejs/vite-devtools-svelte/pull/149) [`e2c2ef3`](https://github.com/sveltejs/vite-devtools-svelte/commit/e2c2ef3505f396d39fff11ddc6b00d8591d32f42) Thanks [@baseballyama](https://github.com/baseballyama)! - - The API playground sends requests from the browser instead of the dev server, so they carry your app's cookies (httpOnly included) and work behind Docker, proxies and tunnels. A `Set-Cookie` in a response now updates your app's session. Cross-origin URLs now need a CORS policy that allows them.
+  - Responses stream in as they arrive (SSE included), with a Stop button. The 30 s timeout covers only the wait for the headers, and bodies are cut at 5 MB.
+  - Removed: the `send-api-request` RPC and the `ApiResponse` type. `ApiEndpoint` gains `url`.
+
+- [#176](https://github.com/sveltejs/vite-devtools-svelte/pull/176) [`8ddce70`](https://github.com/sveltejs/vite-devtools-svelte/commit/8ddce7035cc88f28b5d71c9606835f6b3ec57ac6) Thanks [@baseballyama](https://github.com/baseballyama)! - The API playground now rescans endpoints when the dev server sees a file added, changed or deleted, so new or removed handlers show up without pressing Rescan.
+
+- [#153](https://github.com/sveltejs/vite-devtools-svelte/pull/153) [`61c6f1a`](https://github.com/sveltejs/vite-devtools-svelte/commit/61c6f1a3cf81765bc29fa319ce56fc2212f85b82) Thanks [@teemingc](https://github.com/teemingc)! - breaking: avoid injecting the DevTools dock automatically
+
+- [#178](https://github.com/sveltejs/vite-devtools-svelte/pull/178) [`44aafe2`](https://github.com/sveltejs/vite-devtools-svelte/commit/44aafe219c8fc8e80e47d73bbfa30459a57bcf08) Thanks [@teemingc](https://github.com/teemingc)! - breaking: require `@sveltejs/kit` 3.3.0 or later
+
+### Patch Changes
+
+- [#150](https://github.com/sveltejs/vite-devtools-svelte/pull/150) [`7b70877`](https://github.com/sveltejs/vite-devtools-svelte/commit/7b70877e3e7d625c66d55751ac54adab66cb90b5) Thanks [@baseballyama](https://github.com/baseballyama)! - The API playground detects handlers exported through destructuring and `export *` chains (`$lib` aliases included). An endpoint whose exports cannot all be followed is marked `?` and offers every HTTP method. `ApiEndpoint` gains `complete`.
+
+- [#182](https://github.com/sveltejs/vite-devtools-svelte/pull/182) [`d9dda64`](https://github.com/sveltejs/vite-devtools-svelte/commit/d9dda6425d18ecfa529720c64754d4ec660c8133) Thanks [@baseballyama](https://github.com/baseballyama)! - Update dependencies: `@vitejs/devtools-kit` ^0.8.3, `devframe` ^1.3.6
+
+- [#151](https://github.com/sveltejs/vite-devtools-svelte/pull/151) [`051c67e`](https://github.com/sveltejs/vite-devtools-svelte/commit/051c67e18d66989eba5d07815af200019df4d3bc) Thanks [@baseballyama](https://github.com/baseballyama)! - Security: the OG preview checks the address at connection time, closing a DNS rebinding path to the local network, and also refuses SIIT, local-use NAT64 and Teredo addresses. A malformed response now fails the preview instead of crashing the dev server. The preview sends a browser-like User-Agent and reads at most the first 1 MB of a page, the cutoff Meta's crawler documents.
+
 ## 0.8.0
 
 ### Minor Changes
