@@ -1,5 +1,57 @@
 # vite-devtools-svelte
 
+## 0.10.0
+
+### Minor Changes
+
+- [#213](https://github.com/sveltejs/vite-devtools-svelte/pull/213) [`a2509f3`](https://github.com/sveltejs/vite-devtools-svelte/commit/a2509f389a0f65142f00fc08d34731ef3fde7b52) Thanks [@baseballyama](https://github.com/baseballyama)! - feat: the Load functions panel now also records loads that run in the browser (universal loads after hydration, and every load of an app with `ssr = false`); before, only loads run on the server were shown
+
+- [#168](https://github.com/sveltejs/vite-devtools-svelte/pull/168) [`6514040`](https://github.com/sveltejs/vite-devtools-svelte/commit/6514040ccc67bdbd1d4a8a80da9ccee3ae42b8c3) Thanks [@teemingc](https://github.com/teemingc)! - feat: add the Svelte Inspector to the Vite DevTools dock: hold `alt-x` in your app and click an element to open its source. `svelte` is now a peer dependency.
+
+- [#168](https://github.com/sveltejs/vite-devtools-svelte/pull/168) [`6514040`](https://github.com/sveltejs/vite-devtools-svelte/commit/6514040ccc67bdbd1d4a8a80da9ccee3ae42b8c3) Thanks [@teemingc](https://github.com/teemingc)! - breaking: with Vite DevTools, the dev server fails to start while `vitePlugin.inspector` turns on vite-plugin-svelte's own inspector. Remove that option.
+
+- [#205](https://github.com/sveltejs/vite-devtools-svelte/pull/205) [`8b5cbbf`](https://github.com/sveltejs/vite-devtools-svelte/commit/8b5cbbf815166de4b43d549ae1369f5da2cc3bff) Thanks [@baseballyama](https://github.com/baseballyama)! - feat: the Svelte Inspector's label shows the component instance of the element under the cursor
+
+- [#206](https://github.com/sveltejs/vite-devtools-svelte/pull/206) [`67968a1`](https://github.com/sveltejs/vite-devtools-svelte/commit/67968a1e97e2e9906595f1c49574606b72750bfd) Thanks [@baseballyama](https://github.com/baseballyama)! - feat: each row of the Svelte Inspector's right-click menu has Inspect, which selects that component instance in the DevTools, and Open, which opens the editor (Inspect needs Svelte 5.58 or later)
+
+- [#179](https://github.com/sveltejs/vite-devtools-svelte/pull/179) [`80697db`](https://github.com/sveltejs/vite-devtools-svelte/commit/80697db89d460a6864d902ac2498409c78d88f5d) Thanks [@teemingc](https://github.com/teemingc)! - feat: add a Svelte Inspector settings view to the Vite DevTools dock. Your shortcut, keys and styles are saved for your user and apply to all your projects.
+
+- [#224](https://github.com/sveltejs/vite-devtools-svelte/pull/224) [`43240f9`](https://github.com/sveltejs/vite-devtools-svelte/commit/43240f94ab48b3f21bd8580f3e7bac7f9f654c62) Thanks [@baseballyama](https://github.com/baseballyama)! - feat: register the MCP server once with `claude mcp add svelte-devtools -- npx @sveltejs/vite-devtools-svelte mcp`; it finds the project's running dev server by itself, and the dev server no longer prints a token. Remove the old registration first (`claude mcp remove svelte`).
+
+- [#215](https://github.com/sveltejs/vite-devtools-svelte/pull/215) [`71cb065`](https://github.com/sveltejs/vite-devtools-svelte/commit/71cb0653f5588a5d946fffb61bc8b74dd201e620) Thanks [@baseballyama](https://github.com/baseballyama)! - feat: the Reactivity Components overview and the `get_reactive_summary` MCP tool now show each live instance's totals since it mounted and when it was last active, instead of the last 10 seconds. The tool's `windowMs` argument and `window` field are removed; use `computedAt` and each row's `lastActiveAt` instead.
+
+- [#211](https://github.com/sveltejs/vite-devtools-svelte/pull/211) [`1173aa1`](https://github.com/sveltejs/vite-devtools-svelte/commit/1173aa16d51c87855cac6d69b4b452d39734489b) Thanks [@baseballyama](https://github.com/baseballyama)! - feat: the Components panel has a Pick element button in the Vite DevTools dock, which turns on the Svelte Inspector in the app; Inspect in its right-click menu then selects the element's component there
+
+- [#230](https://github.com/sveltejs/vite-devtools-svelte/pull/230) [`03be86a`](https://github.com/sveltejs/vite-devtools-svelte/commit/03be86ab5d8c6c61fc4b1068402791feed44b74a) Thanks [@baseballyama](https://github.com/baseballyama)! - Remove the Compiled output panel, its `inspect-file` and `get-svelte-files` RPCs, and the `InspectResult` type. Vite DevTools shows the transformed code of each module.
+
+### Patch Changes
+
+- [#201](https://github.com/sveltejs/vite-devtools-svelte/pull/201) [`aa7d19a`](https://github.com/sveltejs/vite-devtools-svelte/commit/aa7d19a64f235eeb781492a3a584d49b39bcd8ac) Thanks [@baseballyama](https://github.com/baseballyama)! - Panels now always stay up to date: the Live/Paused toggle, the refresh button next to it and the count next to each panel title are removed, and the Reactivity full graph no longer pauses itself when it is large.
+
+- [#212](https://github.com/sveltejs/vite-devtools-svelte/pull/212) [`29152a5`](https://github.com/sveltejs/vite-devtools-svelte/commit/29152a537e697a497018cb7825feccd3194ae1e2) Thanks [@baseballyama](https://github.com/baseballyama)! - fix: the Components panel's Files view now shows how many instances of each file are mounted, and the links between the live tree and the Files view now work.
+
+- [#194](https://github.com/sveltejs/vite-devtools-svelte/pull/194) [`991a373`](https://github.com/sveltejs/vite-devtools-svelte/commit/991a373290c19295d056158cd50ccf5d794b4e74) Thanks [@baseballyama](https://github.com/baseballyama)! - The Routes, Load functions, API and Build panels are now hidden in apps that do not use SvelteKit.
+
+- [#184](https://github.com/sveltejs/vite-devtools-svelte/pull/184) [`bcad863`](https://github.com/sveltejs/vite-devtools-svelte/commit/bcad8635adcb57b08cc3197aadf6527e414f7413) Thanks [@baseballyama](https://github.com/baseballyama)! - Routes, API endpoints, the social preview and load profiling now follow the `files.routes` option of `sveltekit()` instead of assuming `src/routes`, and are empty without SvelteKit. `ProjectInfo` no longer has `routesDir`.
+
+- [#198](https://github.com/sveltejs/vite-devtools-svelte/pull/198) [`829c66b`](https://github.com/sveltejs/vite-devtools-svelte/commit/829c66b9a80c6d692bb09b60da964ad2eee02c24) Thanks [@baseballyama](https://github.com/baseballyama)! - The Load functions panel shows each load file's path relative to the project root, and clicking it opens the file in your editor. The Slow filter is removed; sort by Duration instead.
+
+- [#199](https://github.com/sveltejs/vite-devtools-svelte/pull/199) [`d840dbb`](https://github.com/sveltejs/vite-devtools-svelte/commit/d840dbb6324744512a448484334fecb308e36965) Thanks [@baseballyama](https://github.com/baseballyama)! - The Load functions panel shows only the load file's name (such as `+layout.server.ts`) next to the route, so layout and page loads on the same route are easy to tell apart. The full path is in the tooltip, and the Type column is removed since the file name already shows it.
+
+- [#210](https://github.com/sveltejs/vite-devtools-svelte/pull/210) [`42f001c`](https://github.com/sveltejs/vite-devtools-svelte/commit/42f001cbbe022588220423a45c8f7ba88e264adf) Thanks [@baseballyama](https://github.com/baseballyama)! - The Modules panel now hides files SvelteKit generates under `.svelte-kit/` by default; the "generated" button shows them.
+
+- [#218](https://github.com/sveltejs/vite-devtools-svelte/pull/218) [`e4684a0`](https://github.com/sveltejs/vite-devtools-svelte/commit/e4684a0ee72a35e7d08358f84d4871bdf57c9092) Thanks [@baseballyama](https://github.com/baseballyama)! - The Modules panel now lists `.svelte.js` and `.svelte.ts` modules under Svelte, with a `svelte.js` or `svelte.ts` badge.
+
+- [#195](https://github.com/sveltejs/vite-devtools-svelte/pull/195) [`aad3eb1`](https://github.com/sveltejs/vite-devtools-svelte/commit/aad3eb1ad2b392ee6655265047e3aed7445616ad) Thanks [@baseballyama](https://github.com/baseballyama)! - The sidebar now groups panels by task: Overview and Problems first, then Inspect, Profile and Project.
+
+- [#187](https://github.com/sveltejs/vite-devtools-svelte/pull/187) [`deccf46`](https://github.com/sveltejs/vite-devtools-svelte/commit/deccf46c394e0d7d5c90c6ef1c55befc0c393321) Thanks [@baseballyama](https://github.com/baseballyama)! - The reactive graph now fills the panel and refits when the panel is resized, unless you have zoomed.
+
+- [#217](https://github.com/sveltejs/vite-devtools-svelte/pull/217) [`df44481`](https://github.com/sveltejs/vite-devtools-svelte/commit/df44481f1e55434e8fcb751d1fcd84ac5b6acc20) Thanks [@baseballyama](https://github.com/baseballyama)! - The Reactivity overview picks Components, Instances or States from one control instead of two.
+
+- [#204](https://github.com/sveltejs/vite-devtools-svelte/pull/204) [`b981a59`](https://github.com/sveltejs/vite-devtools-svelte/commit/b981a597eb2ed5c9681d5d20c5d7df0958a4028f) Thanks [@baseballyama](https://github.com/baseballyama)! - The Reactivity overview replaces its block of coverage notes with a single line of component counts.
+
+- [#228](https://github.com/sveltejs/vite-devtools-svelte/pull/228) [`1b87c1e`](https://github.com/sveltejs/vite-devtools-svelte/commit/1b87c1e174740c5dcc6b6edfc7d6c12b37934dd4) Thanks [@manuel3108](https://github.com/manuel3108)! - Organize the Vite DevTools Svelte group into workflow views with horizontal tool tabs, including the SvelteKit tools and Inspector settings.
+
 ## 0.9.0
 
 ### Minor Changes
