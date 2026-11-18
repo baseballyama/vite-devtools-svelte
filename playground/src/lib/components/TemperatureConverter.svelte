@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
+
   let celsius = $state(0);
   let fahrenheit = $derived((celsius * 9) / 5 + 32);
   let kelvin = $derived(celsius + 273.15);
@@ -15,10 +17,14 @@
   let history = $state<number[]>([]);
 
   $effect(() => {
-    // Skip the initial 0.
-    if (celsius !== 0 || history.length > 0) {
-      history = [...history.slice(-9), celsius];
-    }
+    const c = celsius;
+    // Reading history here would make the effect depend on what it writes and loop.
+    untrack(() => {
+      // Skip the initial 0.
+      if (c !== 0 || history.length > 0) {
+        history = [...history.slice(-9), c];
+      }
+    });
   });
 </script>
 
