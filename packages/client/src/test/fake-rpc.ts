@@ -15,7 +15,6 @@ import type {
   BuildAnalysis,
   DatasetVersions,
   ElementPick,
-  InspectResult,
   LiveComponentsMeta,
   ModuleGraphData,
   OGPreview,
@@ -87,7 +86,6 @@ const liveMeta: LiveComponentsMeta = {
 const moduleGraph: ModuleGraphData = { modules: [], cycles: [] };
 const build: BuildAnalysis = { chunks: [], totalSize: 0, timestamp: 0 };
 const og: OGPreview = { url: '', title: '', description: '', image: '', tags: [], issues: [] };
-const inspected: InspectResult = { source: '', compiled: '', file: '' };
 
 let connectionState: ConnectionState = { status: 'connected', host: 'standalone' };
 const connectionListeners = new Set<(s: ConnectionState) => void>();
@@ -132,8 +130,6 @@ const defaults: { [K in FnKey]: RealRpc[K] } = {
   getCompilerWarnings: () => Promise.resolve([]),
   getRuntimeErrors: () => Promise.resolve([]),
   clearErrors: () => Promise.resolve(),
-  getSvelteFiles: () => Promise.resolve([]),
-  inspectFile: () => Promise.resolve(inspected),
   getModuleGraph: () => Promise.resolve(moduleGraph),
   getOGPreview: () => Promise.resolve(og),
   getBuildAnalysis: () => Promise.resolve(build),
@@ -172,8 +168,6 @@ export const getApiEndpoints = fake('getApiEndpoints');
 export const getCompilerWarnings = fake('getCompilerWarnings');
 export const getRuntimeErrors = fake('getRuntimeErrors');
 export const clearErrors = fake('clearErrors');
-export const getSvelteFiles = fake('getSvelteFiles');
-export const inspectFile = fake('inspectFile');
 export const getModuleGraph = fake('getModuleGraph');
 export const getOGPreview = fake('getOGPreview');
 export const getBuildAnalysis = fake('getBuildAnalysis');
@@ -208,8 +202,6 @@ const all: { [K in FnKey]: Mock<RealRpc[K]> } = {
   getCompilerWarnings,
   getRuntimeErrors,
   clearErrors,
-  getSvelteFiles,
-  inspectFile,
   getModuleGraph,
   getOGPreview,
   getBuildAnalysis,

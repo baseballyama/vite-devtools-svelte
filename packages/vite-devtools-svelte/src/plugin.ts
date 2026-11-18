@@ -148,7 +148,6 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     routesDir: () => routesDir,
     publicBase: () => config?.base ?? '/',
     modules: () => (server ? collectModules(server) : []),
-    transformRequest: file => (server ? server.transformRequest(file) : Promise.resolve(null)),
     resolveFile: serverResolver(() => server),
     serverOrigins: () => {
       const urls = server?.resolvedUrls;

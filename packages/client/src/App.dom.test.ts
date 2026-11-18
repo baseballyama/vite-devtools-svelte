@@ -62,7 +62,7 @@ describe('App shell', () => {
         .map(a => a.textContent?.trim()),
     ).toEqual(['Overview', 'Problems']);
     expect(within(general).getByText('General').classList.contains('sr-only')).toBe(true);
-    expect(within(nav()).getAllByRole('link')).toHaveLength(15);
+    expect(within(nav()).getAllByRole('link')).toHaveLength(14);
     expect(current()?.textContent).toContain('Routes');
     expect(current()?.getAttribute('href')).toBe('#/routes');
     expect(document.title).toBe('Routes · Svelte DevTools');
@@ -186,7 +186,7 @@ describe('App without SvelteKit', () => {
   it('hides the SvelteKit-only panels from the sidebar and the palette', async () => {
     withoutKit();
     await renderApp();
-    expect(within(nav()).getAllByRole('link')).toHaveLength(11);
+    expect(within(nav()).getAllByRole('link')).toHaveLength(10);
     for (const label of KIT_ONLY) expect(labels()).not.toContain(label);
     await userEvent.keyboard('{Control>}k{/Control}');
     const options = screen.getAllByRole('option').map(o => o.textContent);
@@ -210,9 +210,9 @@ describe('App without SvelteKit', () => {
   it('keeps them hidden until the project is known, then shows them for SvelteKit', async () => {
     const resolve = pendingProject();
     await renderApp();
-    expect(within(nav()).getAllByRole('link')).toHaveLength(11);
+    expect(within(nav()).getAllByRole('link')).toHaveLength(10);
     resolve(project);
-    await waitFor(() => expect(within(nav()).getAllByRole('link')).toHaveLength(15));
+    await waitFor(() => expect(within(nav()).getAllByRole('link')).toHaveLength(14));
   });
 
   it('never loads a SvelteKit-only panel while the project is unknown', async () => {
@@ -249,18 +249,18 @@ describe('App without SvelteKit', () => {
   it('checks again after a reconnect (the server may have added SvelteKit)', async () => {
     withoutKit();
     await renderApp();
-    expect(within(nav()).getAllByRole('link')).toHaveLength(11);
+    expect(within(nav()).getAllByRole('link')).toHaveLength(10);
     vi.mocked(rpc.getProject).mockResolvedValue(project);
     emitConnection({ status: 'disconnected', host: 'standalone' });
     flushSync();
     emitConnection({ status: 'connected', host: 'standalone' });
-    await waitFor(() => expect(within(nav()).getAllByRole('link')).toHaveLength(15));
+    await waitFor(() => expect(within(nav()).getAllByRole('link')).toHaveLength(14));
   });
 
   it('shows every panel when the project lookup fails', async () => {
     vi.mocked(rpc.getProject).mockRejectedValue(new Error('down'));
     await renderApp();
-    await waitFor(() => expect(within(nav()).getAllByRole('link')).toHaveLength(15));
+    await waitFor(() => expect(within(nav()).getAllByRole('link')).toHaveLength(14));
   });
 });
 

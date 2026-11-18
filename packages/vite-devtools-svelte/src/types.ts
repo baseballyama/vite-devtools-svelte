@@ -370,15 +370,6 @@ export interface RuntimeError {
   timestamp: number;
 }
 
-export interface InspectResult {
-  source: string;
-  compiled: string;
-  file: string;
-  /** VLQ-encoded source map `mappings` string (per the Source Map v3 spec). */
-  mappings?: string;
-  sources?: string[];
-}
-
 export interface ModuleNode {
   id: string;
   file: string;

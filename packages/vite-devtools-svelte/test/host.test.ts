@@ -135,9 +135,6 @@ describe('standalone host (initDevframe on the Vite dev server)', () => {
     await expect(rpc(client, 'svelte-devtools:open-in-editor', { file: 42 })).rejects.toThrow(
       /invalid argument at position 0: file/,
     );
-    await expect(
-      rpc(client, 'svelte-devtools:inspect-file', { file: '/etc/passwd' }),
-    ).resolves.toMatchObject({ source: '' });
   });
 
   it('accepts the page origin on the WebSocket and rejects foreign origins', async () => {

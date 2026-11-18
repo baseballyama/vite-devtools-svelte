@@ -6,18 +6,10 @@ export const isSpace = (c: string | undefined) =>
   c !== undefined &&
   (c <= ' ' ? c === ' ' || (c >= '\t' && c <= '\r') : c > '~' && c.trim() === '');
 
-export const isDigit = (c: string | undefined) => !!c && c >= '0' && c <= '9';
-
-const isAlpha = (c: string | undefined) =>
-  !!c && ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c === '_');
-
-export const isWord = (c: string | undefined) => isAlpha(c) || isDigit(c);
-
-/** First character of a JS identifier (ASCII only). */
-export const isIdentStart = (c: string | undefined) => isAlpha(c) || c === '$';
+const isDigit = (c: string | undefined) => !!c && c >= '0' && c <= '9';
 
 /** Index of the first character at or after `from` that fails `test`. */
-export function skip(s: string, from: number, test: (c: string | undefined) => boolean): number {
+function skip(s: string, from: number, test: (c: string | undefined) => boolean): number {
   let i = from;
   while (i < s.length && test(s[i])) i++;
   return i;

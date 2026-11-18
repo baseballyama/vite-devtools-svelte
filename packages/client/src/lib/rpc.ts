@@ -20,7 +20,6 @@ import type {
   ApiEndpoint,
   CompilerWarning,
   RuntimeError,
-  InspectResult,
   ModuleGraphData,
   OGPreview,
   BuildAnalysis,
@@ -333,19 +332,6 @@ export function getRuntimeErrors(): Promise<RuntimeError[]> {
 
 export async function clearErrors(): Promise<void> {
   await call('clear-errors');
-}
-
-export interface SvelteFileEntry {
-  file: string;
-  name: string;
-}
-
-export function getSvelteFiles(): Promise<SvelteFileEntry[]> {
-  return call('get-svelte-files');
-}
-
-export function inspectFile(filePath: string): Promise<InspectResult> {
-  return call('inspect-file', { file: filePath });
 }
 
 export function getModuleGraph(): Promise<ModuleGraphData> {
