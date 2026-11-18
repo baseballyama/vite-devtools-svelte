@@ -198,7 +198,10 @@
     <div class="groups">
       {#each groups as g (g.id)}
         <div class="group" role="group" aria-labelledby="nav-{g.id}">
-          <span class="group-label" id="nav-{g.id}">{g.label}</span>
+          <!-- Overview and Problems need no heading; it still names the group. -->
+          <span class={['group-label', g.id === 'start' && 'sr-only']} id="nav-{g.id}">
+            {g.label}
+          </span>
           {#each g.items as p (p.id)}
             <a
               class="item"

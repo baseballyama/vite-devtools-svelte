@@ -51,8 +51,16 @@ const visiblePanel = () => screen.getByRole('region', { name: n => n !== 'Depend
 describe('App shell', () => {
   it('lists every panel by group and opens the panel named in the hash', async () => {
     await renderApp('#/routes');
-    for (const group of ['App', 'Performance', 'Tools'])
+    for (const group of ['General', 'Inspect', 'Profile', 'Project'])
       expect(within(nav()).getByRole('group', { name: group })).toBeTruthy();
+    // Overview and Problems lead, under a heading only screen readers announce.
+    const general = within(nav()).getByRole('group', { name: 'General' });
+    expect(
+      within(general)
+        .getAllByRole('link')
+        .map(a => a.textContent?.trim()),
+    ).toEqual(['Overview', 'Problems']);
+    expect(within(general).getByText('General').classList.contains('sr-only')).toBe(true);
     expect(within(nav()).getAllByRole('link')).toHaveLength(15);
     expect(current()?.textContent).toContain('Routes');
     expect(current()?.getAttribute('href')).toBe('#/routes');
@@ -193,9 +201,9 @@ describe('App without SvelteKit', () => {
 
   it('skips the hidden panels with Alt+↑/↓', async () => {
     withoutKit();
-    await renderApp('#/assets');
+    await renderApp('#/render');
     await userEvent.keyboard('{Alt>}{ArrowDown}{/Alt}');
-    expect(location.hash).toBe('#/render');
+    expect(location.hash).toBe('#/fps');
   });
 
   it('keeps them hidden until the project is known, then shows them for SvelteKit', async () => {
@@ -298,7 +306,7 @@ describe('App keyboard shortcuts and command palette', () => {
   it('steps through panels with Alt+↑/↓, wrapping around', async () => {
     await renderApp('#/overview');
     await userEvent.keyboard('{Alt>}{ArrowDown}{/Alt}');
-    expect(location.hash).toBe('#/components');
+    expect(location.hash).toBe('#/errors');
     await userEvent.keyboard('{Alt>}{ArrowUp}{ArrowUp}{/Alt}');
     expect(location.hash).toBe('#/og');
     await userEvent.keyboard('{Alt>}{ArrowDown}{/Alt}');
