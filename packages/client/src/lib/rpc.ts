@@ -27,6 +27,8 @@ import type {
   StateTimelineDelta,
   DatasetVersions,
   LiveComponentsMeta,
+  AddonsResult,
+  CommunityAddonsResult,
 } from './types.js';
 
 // Runs both standalone and inside the Vite DevTools dock; `connectDevframe()`
@@ -352,4 +354,16 @@ export function getFps(): Promise<FpsSample[]> {
 
 export async function clearFps(): Promise<void> {
   await call('clear-fps');
+}
+
+export function getAddons(): Promise<AddonsResult> {
+  return call('get-addons');
+}
+
+export function installAddon(id: string): Promise<{ sessionId: string }> {
+  return call('install-addon', { id });
+}
+
+export function getCommunityAddons(): Promise<CommunityAddonsResult> {
+  return call('get-community-addons');
 }

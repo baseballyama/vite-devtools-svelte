@@ -58,7 +58,8 @@ export interface SvelteDevtoolsOptions {
    * can read files in your project through the DevTools (including other
    * devices when the dev server listens on a LAN address, `--host`).
    * Inside the Vite DevTools dock this option has no effect: use
-   * `devtools: { apply: 'serve', clientAuth: false }` in the Vite config instead.
+   * `devtools: { apply: 'serve', clientAuth: false }` in the Vite config instead,
+   * which also lets them install npm packages from the Add panel.
    * The MCP endpoint keeps its own token either way.
    * @default true
    */
@@ -359,6 +360,16 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
             view: 'project',
             panel: 'routes',
             defaultOrder: 40,
+          },
+          {
+            id: 'add',
+            title: 'Add',
+            description: 'Install sv add-ons in one click',
+            icon: 'ph:plus-circle-duotone',
+            view: 'add',
+            panel: 'addons',
+            // Last, after the inspector's Settings (50) and Pick element (60).
+            defaultOrder: 70,
           },
         ] as const) {
           ctx.docks?.register({

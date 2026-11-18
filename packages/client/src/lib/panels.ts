@@ -4,7 +4,7 @@ import type { IconName } from './icons.js';
 import { inDevtoolsDock } from './inspector-dock.js';
 
 export type PanelGroup = 'start' | 'inspect' | 'profile' | 'project';
-export type PanelView = 'overview' | 'problems' | 'inspect' | 'profile' | 'project';
+export type PanelView = 'overview' | 'problems' | 'inspect' | 'profile' | 'project' | 'add';
 
 export interface PanelDef {
   id: string;
@@ -15,6 +15,8 @@ export interface PanelDef {
   keywords?: string;
   /** Only shown when the app uses SvelteKit (noise otherwise). */
   kit?: boolean;
+  /** Only shown inside the Vite DevTools dock (needs its terminal). */
+  dock?: boolean;
   load: () => Promise<{ default: Component }>;
 }
 
@@ -148,6 +150,16 @@ export const panels = [
     load: () => import('../panels/Assets.svelte'),
   },
   {
+    id: 'addons',
+    dock: true,
+    label: 'Add',
+    icon: 'plus',
+    group: 'project',
+    description: 'Install sv add-ons in one click',
+    keywords: 'sv add addon install tailwind vitest drizzle',
+    load: () => import('../panels/Addons.svelte'),
+  },
+  {
     id: 'og',
     label: 'Social preview',
     icon: 'og',
@@ -161,8 +173,11 @@ export const panels = [
 export type PanelId = (typeof panels)[number]['id'];
 
 /** SvelteKit-only panels stay hidden while `kit` is unknown, so apps without SvelteKit never see them flash in. */
-export function visiblePanels(kit: boolean | undefined): (PanelDef & { id: PanelId })[] {
-  return panels.filter((p: PanelDef) => !p.kit || kit === true);
+export function visiblePanels(
+  kit: boolean | undefined,
+  docked = inDevtoolsDock(),
+): (PanelDef & { id: PanelId })[] {
+  return panels.filter((p: PanelDef) => (!p.kit || kit === true) && (!p.dock || docked));
 }
 
 const viewPanels: Record<PanelView, readonly PanelId[]> = {
@@ -171,6 +186,7 @@ const viewPanels: Record<PanelView, readonly PanelId[]> = {
   inspect: ['components', 'reactive', 'timeline'],
   profile: ['render', 'loads', 'fps', 'build'],
   project: ['routes', 'api', 'modules', 'assets', 'og'],
+  add: ['addons'],
 };
 
 // The Overview is the devframe's own dock, whose URL cannot carry `?view`.
@@ -187,8 +203,9 @@ export function requestedPanelView(
 export function panelsForView(
   kit: boolean | undefined,
   view: PanelView | null,
+  docked = inDevtoolsDock(),
 ): (PanelDef & { id: PanelId })[] {
-  const visible = visiblePanels(kit);
+  const visible = visiblePanels(kit, docked);
   if (view === null) return visible;
   return viewPanels[view]
     .map(id => visible.find(panel => panel.id === id))

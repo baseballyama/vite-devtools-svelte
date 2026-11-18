@@ -135,6 +135,9 @@ const defaults: { [K in FnKey]: RealRpc[K] } = {
   getBuildAnalysis: () => Promise.resolve(build),
   getFps: () => Promise.resolve([]),
   clearFps: () => Promise.resolve(),
+  getAddons: () => Promise.resolve({ available: false, addons: [] }),
+  installAddon: () => Promise.resolve({ sessionId: '' }),
+  getCommunityAddons: () => Promise.resolve({ addons: [] }),
 };
 
 function fake<K extends FnKey>(key: K): Mock<RealRpc[K]> {
@@ -173,6 +176,9 @@ export const getOGPreview = fake('getOGPreview');
 export const getBuildAnalysis = fake('getBuildAnalysis');
 export const getFps = fake('getFps');
 export const clearFps = fake('clearFps');
+export const getAddons = fake('getAddons');
+export const installAddon = fake('installAddon');
+export const getCommunityAddons = fake('getCommunityAddons');
 
 const all: { [K in FnKey]: Mock<RealRpc[K]> } = {
   getConnectionState,
@@ -207,6 +213,9 @@ const all: { [K in FnKey]: Mock<RealRpc[K]> } = {
   getBuildAnalysis,
   getFps,
   clearFps,
+  getAddons,
+  installAddon,
+  getCommunityAddons,
 };
 
 /** Push a connection state to every `onConnectionState` subscriber (the shell's gate). */

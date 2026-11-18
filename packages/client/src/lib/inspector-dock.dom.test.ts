@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { inspectorPicker } from './inspector-dock.js';
+import { inspectorPicker, showTerminals } from './inspector-dock.js';
 
 const KEY = '__DEVFRAME_HUB_CLIENT_CONTEXT__';
 
@@ -51,5 +51,31 @@ describe('inspectorPicker', () => {
     };
     await inspectorPicker()?.();
     expect(setActionActive).toHaveBeenCalledExactlyOnceWith('svelte:inspector', true);
+  });
+});
+
+describe('showTerminals', () => {
+  afterEach(() => {
+    delete (window as unknown as Record<string, unknown>)[KEY];
+  });
+
+  it('switches the dock to its Terminals like a click', async () => {
+    const switchEntry = vi.fn(() => Promise.resolve(true));
+    (window as unknown as Record<string, unknown>)[KEY] = {
+      clientType: 'embedded',
+      docks: { entries: [{ id: 'devframes_plugin_terminals' }], switchEntry },
+    };
+    await showTerminals();
+    expect(switchEntry).toHaveBeenCalledExactlyOnceWith('devframes_plugin_terminals');
+  });
+
+  it('does nothing without a Terminals dock', async () => {
+    const switchEntry = vi.fn();
+    (window as unknown as Record<string, unknown>)[KEY] = {
+      clientType: 'embedded',
+      docks: { entries: [], switchEntry },
+    };
+    await showTerminals();
+    expect(switchEntry).not.toHaveBeenCalled();
   });
 });

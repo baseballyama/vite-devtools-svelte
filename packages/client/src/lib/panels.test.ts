@@ -10,7 +10,8 @@ const { groupLabels, panelById, panels, panelsForView, requestedPanelView, visib
 const { icons } = await import('./icons.js');
 
 const KIT_ONLY = new Set(['routes', 'loads', 'build', 'api']);
-const visibleIds = (kit?: boolean) => visiblePanels(kit).map(p => p.id);
+const DOCK_ONLY = new Set(['addons']);
+const visibleIds = (kit?: boolean, docked = true) => visiblePanels(kit, docked).map(p => p.id);
 
 describe('panel registry', () => {
   it('has unique ids, known icons and known groups', () => {
@@ -59,6 +60,8 @@ describe('panel registry', () => {
     ]);
     expect(panelsForView(false, 'profile').map(p => p.id)).toEqual(['render', 'fps']);
     expect(panelsForView(false, 'project').map(p => p.id)).toEqual(['modules', 'assets', 'og']);
+    expect(panelsForView(true, 'add', true).map(p => p.id)).toEqual(['addons']);
+    expect(panelsForView(true, 'add', false)).toEqual([]);
   });
 
   it('uses workflow views in the dock and keeps every panel in standalone mode', () => {
@@ -71,6 +74,11 @@ describe('panel registry', () => {
     for (const key of ['constructor', '__proto__', 'toString'])
       expect(requestedPanelView(`?view=${key}`, false)).toBeNull();
     expect(panelsForView(true, null)).toEqual(visiblePanels(true));
+  });
+
+  it('offers the dock-only panels only inside the Vite DevTools dock', () => {
+    expect(visibleIds(true, false)).toEqual(panels.map(p => p.id).filter(id => !DOCK_ONLY.has(id)));
+    expect(visiblePanels(true).map(p => p.id)).toEqual(visibleIds(true, false));
   });
 
   it.each(panels.map(p => p.id))('panelById(%j) finds it', id => {

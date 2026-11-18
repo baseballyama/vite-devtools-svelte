@@ -26,6 +26,8 @@ import type {
   StateTimelineDelta,
   LiveComponentsMeta,
 } from '../types.js';
+import { createAddonRpcFunctions } from './addons.js';
+import type { AddonHub } from './addons.js';
 import type { Collector } from './collector.js';
 import { resolveWithinRoot } from './security.js';
 
@@ -240,6 +242,9 @@ export function createSvelteDevframe(host: SvelteDevtoolsHost): DevframeDefiniti
     setup(ctx) {
       const scoped = ctx.scope(DEVFRAME_ID);
       for (const fn of createRpcFunctions(host)) scoped.rpc.register(fn);
+      for (const fn of createAddonRpcFunctions(host.root, () => ctx as AddonHub)) {
+        scoped.rpc.register(fn);
+      }
       const docks = (ctx as { docks?: { activate?: (dockId: string) => void } }).docks;
       detachPicker?.();
       detachPicker = host.collector.onElementPicked(pick => {
