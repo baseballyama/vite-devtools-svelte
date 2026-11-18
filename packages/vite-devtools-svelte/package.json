@@ -21,7 +21,11 @@
     "url": "git+https://github.com/sveltejs/vite-devtools-svelte.git",
     "directory": "packages/vite-devtools-svelte"
   },
+  "bin": {
+    "vite-devtools-svelte": "./bin/vite-devtools-svelte.mjs"
+  },
   "files": [
+    "bin",
     "dist",
     "skills"
   ],

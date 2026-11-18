@@ -1,6 +1,6 @@
 ---
 name: full-code-review
-description: Owner-level review of the current branch of vite-devtools-svelte — WHY, design, then a chunked multi-reviewer implementation review — fixing findings with the user until no Critical or Major remains, then the CI gates and the changeset. Use for "/full-code-review", "full review", "review this", and always before committing, pushing, or opening/updating a PR.
+description: Owner-level review of the current branch of vite-devtools-svelte — WHY, design, then a chunked multi-reviewer implementation review — fixing findings with the user until no Critical or Major remains, then the CI gates and the changeset. Use for "/full-code-review", "full review", "review this", and before committing, pushing, or opening/updating a PR (ask first unless the GitHub user is `baseballyama`; see AGENTS.md).
 ---
 
 # Full code review
@@ -9,6 +9,7 @@ Review the branch as its code owner would, phase by phase. Each phase finds prob
 
 ## Ground rules
 
+- **Ask before running.** This review spends a lot of tokens. Unless `gh api user --jq .login` is `baseballyama` or the user invoked it directly (`/full-code-review`, "full review"), ask before starting, and warn that users without a high-usage plan (e.g. Claude Max) or on API billing will pay for those tokens.
 - **Verify, don't trust.** This skill and `implementation-checklist.md` say where to look, not what is true; the code at HEAD wins. Reviewer output (subagents, Codex) is a claim until you have read the cited lines and can state the concrete failure. Drop what you cannot confirm.
 - **Every finding** has a severity, `file:line`, the failure scenario (input/state → wrong result), and a fix.
 - **Fix with consent.** Present findings in one batch per phase or chunk; apply what the user approves. When the user asked for the review only, report and stop.

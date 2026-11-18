@@ -152,8 +152,6 @@ const base = `http://127.0.0.1:${port}`;
 for (let i = 0; ; i++) {
   if (child.exitCode !== null) throw new Error(`dev server exited: ${mask(log).slice(-600)}`);
   if (i > 300) throw new Error('dev server not ready in 60 s');
-  const token = log.match(/x-svelte-devtools-token:([0-9a-f-]{36})/)?.[1];
-  if (token) secrets.add(token);
   try {
     const r = await fetch(base + '/', { signal: AbortSignal.timeout(5000) });
     if (r.status < 500) break;
@@ -328,7 +326,7 @@ try {
   await step(1, async () => {
     await go('reactive');
     await choose('Reactivity view', 'Overview');
-    await choose('Overview of', 'Components');
+    await choose('List', 'Components');
     await ui.waitForSelector(`${host} .record`, { timeout: 30_000 });
     // Let one 10 s overview window pass before the activity.
     await sleep(10_000);
@@ -345,7 +343,7 @@ try {
   });
 
   await step(3, async () => {
-    await choose('Overview of', 'States');
+    await choose('List', 'States');
     await ui
       .locator(`${host} [role=option]`, { hasText: 'running' })
       .first()

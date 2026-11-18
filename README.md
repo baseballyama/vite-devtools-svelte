@@ -273,21 +273,44 @@ Static assets in the Assets panel are now served by Vite itself (their public UR
 
 The plugin exposes an MCP (Model Context Protocol) endpoint so AI agents such as Claude Code can read performance metrics and run measurement sessions autonomously. The intent: surface the same data the panels show, in a shape an agent can act on — and let the agent's own file-editing tools propose fixes.
 
-On dev-server startup the plugin prints a copy-pasteable registration command:
+Register the MCP server once per project:
 
+```bash
+claude mcp add svelte-devtools -- npx @sveltejs/vite-devtools-svelte mcp
 ```
-svelte-devtools MCP ready — register with Claude Code:
-  claude mcp add --transport http svelte http://localhost:5173/__svelte-devtools/mcp --header x-svelte-devtools-token:<token>
+
+The dev server prints this command on startup. `vite-devtools-svelte mcp` is a stdio MCP server: like `npx`, it runs the copy of the plugin installed in the project of the current directory, and forwards each tool call to that project's running dev server. Every running dev server announces its endpoint and token in a file under `~/.cache/vite-devtools-svelte/servers/` (`$XDG_CACHE_HOME`, or `%LOCALAPPDATA%` on Windows; readable by your user only), so the registration survives restarts and port changes. When several dev servers match (a monorepo root, or the same app started twice), the agent picks one with the `server` argument; `list_dev_servers` lists them.
+
+### Svelte documentation and code checks
+
+This server does not include the official [Svelte MCP server](https://svelte.dev/docs/mcp) (`@sveltejs/mcp`: documentation, `svelte-autofixer`). Its instructions tell the agent to use that server when it is configured, so add it as well if you want them:
+
+```bash
+claude mcp add svelte -- npx -y @sveltejs/mcp
 ```
 
-The endpoint is gated by a per-process random token (MCP clients are local processes, not browser tabs, so they don't use the browser login). The token rotates every dev-server start, so you'll re-register after a restart.
+### Dev server in a container or on another machine
 
-The endpoint is served wherever your Vite dev server listens. With the default (`localhost`) only local processes can reach it; with `server.host` set to `true` or `0.0.0.0`, other machines on your network can reach it too and only the token protects it. There is no separate Host/Origin check.
+When the agent cannot read the dev server's registry file (Docker, a devcontainer, WSL, a remote machine) or the app runs Vite in middleware mode (no `listening` event, so nothing is registered), point the MCP server at the dev server directly. The URL is the dev server's origin (or the full `/__svelte-devtools/mcp` URL); the token is the dev server's `getDevtoolsToken()` (see `examples/svelte-middleware/server.js`) or the `token` in its registry file:
+
+```bash
+claude mcp add svelte-devtools \
+  -e VITE_DEVTOOLS_SVELTE_URL=http://localhost:5173 \
+  -e VITE_DEVTOOLS_SVELTE_TOKEN=<token> \
+  -- npx @sveltejs/vite-devtools-svelte mcp
+```
+
+Inside a container, make Vite listen beyond loopback (`server.host`) and publish its port. The token rotates every dev-server start, so run `claude mcp remove svelte-devtools` and register again after a restart. An `https` dev server with a self-signed certificate needs that certificate trusted by Node.js (`NODE_EXTRA_CA_CERTS`).
+
+### HTTP endpoint
+
+The stdio server talks to the dev server's HTTP endpoint (`/__svelte-devtools/mcp`), which MCP clients can also use directly with `--transport http` and the `x-svelte-devtools-token` header. It is gated by the per-process random token (MCP clients are local processes, not browser tabs, so they don't use the browser login). The endpoint is served wherever your Vite dev server listens. With the default (`localhost`) only local processes can reach it; with `server.host` set to `true` or `0.0.0.0`, other machines on your network can reach it too and only the token protects it. There is no separate Host/Origin check.
 
 ### Tools exposed
 
 | Tool                                               | Purpose                                                                                                                                                                                                                                                                                                                                                                                            |
 | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list_dev_servers`                                 | Running dev servers and which one the other tools use by default (stdio server only).                                                                                                                                                                                                                                                                                                              |
 | `list_performance_issues`                          | Cross-cuts render / reactive / load / fps and returns ranked issues with `suggestedTool` for drill-down. Entry point.                                                                                                                                                                                                                                                                              |
 | `get_component_hotspots`                           | Top components by total render time.                                                                                                                                                                                                                                                                                                                                                               |
 | `get_reactive_graph_problems`                      | Classified reactive-graph issues (over-connected effects, orphan deriveds, isolated nodes).                                                                                                                                                                                                                                                                                                        |

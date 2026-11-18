@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import os from 'node:os';
 import path from 'node:path';
 
 import { launchEditor } from 'devframe/utils/launch-editor';
@@ -13,6 +14,7 @@ import { analyzeRoutes } from './analyzers/routes.js';
 import { inspectorPlugin, isInspectorRuntime } from './inspector.js';
 import type { InspectorOptions } from './inspector.js';
 import { createMcpMiddleware, MCP_PATH } from './mcp/http.js';
+import { registerServer, registryDir } from './mcp/registry.js';
 import { buildMcpServer } from './mcp/server.js';
 import { SessionStore } from './mcp/sessions.js';
 import {
@@ -209,11 +211,30 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
         const proto = devServer.config.server?.https ? 'https' : 'http';
         const url = `${proto}://${urlHost(addr.address)}:${addr.port}${MCP_PATH}`;
         const { logger } = devServer.config;
+        // Lets `vite-devtools-svelte mcp` find this server without a port or token.
+        try {
+          const unregister = registerServer(registryDir(), {
+            id: `${process.pid}-${addr.port}`,
+            host: os.hostname(),
+            pid: process.pid,
+            url,
+            token: mcpToken,
+            root,
+            packageName: analyzeProject(root, routesDir !== undefined).name,
+            startedAt: Date.now(),
+          });
+          // A killed process never closes its http server.
+          process.once('exit', unregister);
+          devServer.httpServer?.once('close', () => {
+            process.off('exit', unregister);
+            unregister();
+          });
+        } catch (e) {
+          logger.warn(`[svelte-devtools] could not register the MCP endpoint: ${String(e)}`);
+        }
         logger.info('');
-        logger.info(`  svelte-devtools MCP ready — register with Claude Code:`);
-        logger.info(
-          `    claude mcp add --transport http svelte ${url} --header x-svelte-devtools-token:${mcpToken}`,
-        );
+        logger.info(`  svelte-devtools MCP ready — register it once with Claude Code:`);
+        logger.info(`    claude mcp add svelte-devtools -- npx @sveltejs/vite-devtools-svelte mcp`);
         logger.info('');
       });
 
