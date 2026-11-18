@@ -5,7 +5,7 @@ import path from 'node:path';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { createServer } from 'vite';
 import type { DevEnvironment, ViteDevServer } from 'vite';
-import { afterEach, describe, expect, expectTypeOf, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 import type { InspectorOptions as ForkOptions } from '../../inspector/src/index.js';
 import type { InspectorOptions } from '../src/inspector.js';
@@ -17,12 +17,23 @@ const OPTIONS_ID = 'virtual:vite-devtools-svelte-inspector-options';
 const servers: ViteDevServer[] = [];
 const dirs: string[] = [];
 
+// Inspector variables set in the shell would otherwise leak into every server.
+beforeEach(() => {
+  vi.stubEnv('SVELTE_INSPECTOR_OPTIONS', '');
+  vi.stubEnv('SVELTE_INSPECTOR_TOGGLE', '');
+});
+
 afterEach(async () => {
   await Promise.all(servers.splice(0).map(server => server.close()));
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  vi.unstubAllEnvs();
 });
 
-async function start(options?: SvelteDevtoolsOptions): Promise<DevEnvironment> {
+/** what marks Vite DevTools (`@vitejs/devtools`) as installed */
+const VITE_DEVTOOLS = { name: 'vite:devtools' };
+
+/** With vite-plugin-svelte's own inspector configured, and Vite DevTools when `dock` is set */
+async function start(options?: SvelteDevtoolsOptions, dock = false): Promise<DevEnvironment> {
   const root = mkdtempSync(path.join(tmpdir(), 'vds-inspector-'));
   dirs.push(root);
   const server = await createServer({
@@ -30,7 +41,11 @@ async function start(options?: SvelteDevtoolsOptions): Promise<DevEnvironment> {
     configFile: false,
     logLevel: 'silent',
     server: { middlewareMode: true, ws: false },
-    plugins: [svelteDevtools(options), svelte({ inspector: true, configFile: false })],
+    plugins: [
+      svelteDevtools(options),
+      ...(dock ? [VITE_DEVTOOLS] : []),
+      svelte({ inspector: true, configFile: false }),
+    ],
   });
   servers.push(server);
   return server.environments.client;
@@ -46,7 +61,7 @@ async function inspectorOptions(env: DevEnvironment) {
 const names = (env: DevEnvironment) => env.plugins.map(p => p.name);
 
 describe('the inspector inside svelteDevtools()', () => {
-  it("is on by default, next to vite-plugin-svelte's built-in inspector", async () => {
+  it("is on by default; without Vite DevTools, next to vite-plugin-svelte's built-in inspector", async () => {
     const env = await start();
     expect(names(env)).toContain('vite-devtools-svelte-inspector');
     expect(names(env)).toContain('vite-plugin-svelte-inspector');
@@ -60,6 +75,16 @@ describe('the inspector inside svelteDevtools()', () => {
       holdMode: false,
       openKey: 'Enter',
     });
+  });
+
+  it("with Vite DevTools, refuses to start next to vite-plugin-svelte's configured inspector", async () => {
+    await expect(start({}, true)).rejects.toThrow(/pass `inspector: false` to svelteDevtools\(\)/);
+  });
+
+  it('with Vite DevTools and `inspector: false`, starts with the built-in inspector', async () => {
+    const env = await start({ inspector: false }, true);
+    expect(names(env)).not.toContain('vite-devtools-svelte-inspector');
+    expect(names(env)).toContain('vite-plugin-svelte-inspector');
   });
 
   it('with `inspector: false`, leaves it out', async () => {

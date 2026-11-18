@@ -103,6 +103,10 @@ describe('svelteInspector', () => {
     'in the dock, takes %s=%s as a preference and turns off the built-in inspector it switched on',
     async (name, value, expected) => {
       vi.stubEnv(name, value);
+      // the variable does switch the built-in on: outside the dock it stays
+      const outside = await start({}, [svelte()]);
+      expect(outside.plugins.map(p => p.name)).toContain('vite-plugin-svelte-inspector');
+
       const env = await start({}, [VITE_DEVTOOLS, svelte()]);
       const names = env.plugins.map(p => p.name);
       expect(names).toContain('vite-devtools-svelte-inspector');
