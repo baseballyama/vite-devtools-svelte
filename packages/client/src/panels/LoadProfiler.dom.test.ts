@@ -92,10 +92,10 @@ describe('LoadProfiler', () => {
     expect(stat('Calls')).toBe('3');
     expect(stat('Max')).toBe('250 ms');
     expect(stat('> 100 ms')).toBe('1');
-    expect(screen.getByRole('button', { name: /Slow \(1\)/ })).toBeTruthy();
     // Wide enough for the optional Data and At columns.
     expect(screen.getAllByRole('columnheader').map(h => h.textContent.trim())).toEqual([
       'Route',
+      'File',
       'Type',
       'Duration',
       'Data',
@@ -111,6 +111,7 @@ describe('LoadProfiler', () => {
     await settle();
     expect(screen.getAllByRole('columnheader').map(h => h.textContent.trim())).toEqual([
       'Route',
+      'File',
       'Type',
       'Duration',
     ]);
@@ -149,7 +150,7 @@ describe('LoadProfiler', () => {
     expect(routes()).toEqual(['/blog/[slug]', '/', '/about']);
   });
 
-  it('filters by type, slowness and route text', async () => {
+  it('filters by type and route text', async () => {
     const user = userEvent.setup();
     vi.mocked(rpc.getLoadProfiles).mockResolvedValue(loads);
     render(LoadProfiler);
@@ -160,12 +161,6 @@ describe('LoadProfiler', () => {
     await user.click(screen.getByRole('radio', { name: 'Server' }));
     expect(routes()).toEqual(['/', '/blog/[slug]']);
     await user.click(screen.getByRole('radio', { name: 'All' }));
-
-    const slow = screen.getByRole('button', { name: /Slow/ });
-    await user.click(slow);
-    expect(slow.getAttribute('aria-pressed')).toBe('true');
-    expect(routes()).toEqual(['/blog/[slug]']);
-    await user.click(slow);
 
     await user.type(screen.getByRole('searchbox'), 'blog');
     expect(routes()).toEqual(['/blog/[slug]']);
@@ -178,17 +173,46 @@ describe('LoadProfiler', () => {
     expect(document.querySelector('.stats')).toBeNull();
   });
 
-  it('opens the load file in the editor on activation', async () => {
+  it('opens the editor from the file chip, not from a row click', async () => {
+    const user = userEvent.setup();
+    vi.mocked(rpc.getLoadProfiles).mockResolvedValue(loads);
+    render(LoadProfiler);
+    await settle();
+    const chip = screen.getByRole('button', { name: 'src/routes/about/+page.ts' });
+    // The tooltip carries the full path when the chip truncates it.
+    expect(chip.title).toBe('Open in editor: src/routes/about/+page.ts');
+    // Only the chip opens the editor: the row itself just selects.
+    const list = screen.getByRole('listbox', { name: 'Load function calls' });
+    await user.dblClick(within(list).getAllByRole('option')[1]!);
+    expect(rpc.openInEditor).not.toHaveBeenCalled();
+    await user.click(chip);
+    expect(rpc.openInEditor).toHaveBeenCalledTimes(1);
+    expect(rpc.openInEditor).toHaveBeenCalledWith('src/routes/about/+page.ts');
+  });
+
+  it("opens the selected row's file with Enter, not with a double-click", async () => {
     const user = userEvent.setup();
     vi.mocked(rpc.getLoadProfiles).mockResolvedValue(loads);
     render(LoadProfiler);
     await settle();
     const list = screen.getByRole('listbox', { name: 'Load function calls' });
     await user.dblClick(within(list).getAllByRole('option')[0]!);
+    expect(rpc.openInEditor).not.toHaveBeenCalled();
+    await user.keyboard('{Enter}');
     expect(rpc.openInEditor).toHaveBeenCalledWith('src/routes/about/+page.ts');
-    // Keyboard: select with ↓ and open with Enter.
+    // Navigation still works after the chip was clicked: it takes no focus.
+    await user.click(screen.getByRole('button', { name: 'src/routes/about/+page.ts' }));
     await user.keyboard('{ArrowDown}{Enter}');
     expect(rpc.openInEditor).toHaveBeenLastCalledWith('src/routes/+page.server.ts');
+  });
+
+  it('filters by file path too', async () => {
+    const user = userEvent.setup();
+    vi.mocked(rpc.getLoadProfiles).mockResolvedValue(loads);
+    render(LoadProfiler);
+    await settle();
+    await user.type(screen.getByRole('searchbox'), 'page.server');
+    expect(routes()).toEqual(['/', '/blog/[slug]']);
   });
 
   it('clears load calls on the server and locally', async () => {

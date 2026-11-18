@@ -1,9 +1,9 @@
 <script lang="ts">
   import Badge from '../components/Badge.svelte';
-  import Button from '../components/Button.svelte';
   import CaptureNotice from '../components/CaptureNotice.svelte';
   import DataTable from '../components/DataTable.svelte';
   import Highlight from '../components/Highlight.svelte';
+  import Icon from '../components/Icon.svelte';
   import LiveControls from '../components/LiveControls.svelte';
   import Panel from '../components/Panel.svelte';
   import ResourceEmpty from '../components/ResourceEmpty.svelte';
@@ -31,7 +31,6 @@
   const capture = captureInfo(2000);
   let query = $state('');
   let type = $state<'all' | LoadProfile['type']>('all');
-  let slowOnly = $state(false);
   let sort = $state<SortState | null>({ id: 'time', desc: true });
   let selected = $state<string | null>(null);
 
@@ -43,12 +42,7 @@
 
   const rows = $derived.by(() => {
     const m = matcher(query);
-    return keyed.filter(
-      p =>
-        (type === 'all' || p.type === type) &&
-        (!slowOnly || p.duration > SLOW_MS) &&
-        (!m || m(p.route, p.file)),
-    );
+    return keyed.filter(p => (type === 'all' || p.type === type) && (!m || m(p.route, p.file)));
   });
 
   const stats = $derived.by<Stat[] | null>(() => {
@@ -68,14 +62,19 @@
   });
 
   const maxDuration = $derived(keyed.reduce((m, p) => Math.max(m, p.duration), 1));
-  const slowTotal = $derived(loads.data.filter(p => p.duration > SLOW_MS).length);
 
   const columns: Column<Row>[] = [
     {
       id: 'route',
       label: 'Route',
-      width: 'minmax(0, 1fr)',
+      width: 'minmax(0, 0.7fr)',
       sort: (a, b) => a.route.localeCompare(b.route),
+    },
+    {
+      id: 'file',
+      label: 'File',
+      width: 'minmax(0, 1fr)',
+      sort: (a, b) => a.file.localeCompare(b.file),
     },
     { id: 'type', label: 'Type', width: '84px', sort: (a, b) => a.type.localeCompare(b.type) },
     {
@@ -105,6 +104,8 @@
     },
   ];
 
+  const open = (r: Row) => openInEditor(r.file).catch(() => {});
+
   async function clear() {
     await clearLoadProfiles().catch(() => {});
     loads.set([]);
@@ -122,16 +123,8 @@
         { value: 'universal', label: 'Universal' },
       ]}
     />
-    <SearchField bind:value={query} placeholder="Filter routes…" count={rows.length} />
+    <SearchField bind:value={query} placeholder="Filter routes or files…" count={rows.length} />
     <CaptureNotice info={capture.data.loadProfiles} noun="load calls" />
-    <Button
-      icon="warning"
-      pressed={slowOnly}
-      onclick={() => (slowOnly = !slowOnly)}
-      title="Only loads slower than {SLOW_MS} ms"
-    >
-      Slow {slowTotal ? `(${slowTotal})` : ''}
-    </Button>
   {/snippet}
   {#snippet actions()}
     <LiveControls res={loads} onclear={clear} />
@@ -147,12 +140,25 @@
         bind:sort
         bind:selected
         label="Load function calls"
-        onactivate={(r: Row) => openInEditor(r.file).catch(() => {})}
+        onrowkeydown={(e: KeyboardEvent, r: Row) => e.key === 'Enter' && (open(r), true)}
       >
         {#snippet row(p: Row, { visible }: TableRowState)}
-          <span class="truncate mono route" title={p.file}
-            ><Highlight text={p.route} {query} /></span
-          >
+          <span class="truncate mono route"><Highlight text={p.route} {query} /></span>
+          <span class="cell">
+            <!-- The list is one tab stop (Enter on a row opens its file), so the
+                 chip is a mouse target only and never takes focus from it. -->
+            <button
+              type="button"
+              class="file"
+              tabindex="-1"
+              title="Open in editor: {p.file}"
+              onmousedown={e => e.preventDefault()}
+              onclick={e => (e.stopPropagation(), open(p))}
+              ><Icon name="editor" size={12} /><span class="path mono"
+                ><span dir="ltr"><Highlight text={p.file} {query} /></span></span
+              ></button
+            >
+          </span>
           <span><Badge tone={p.type === 'server' ? 'blue' : 'cyan'}>{p.type}</Badge></span>
           <span class="dur">
             <span class="track"
@@ -198,6 +204,37 @@
   }
   .route {
     font-size: var(--fs-xs);
+  }
+  .cell {
+    min-width: 0;
+  }
+  .file {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    max-width: 100%;
+    height: 20px;
+    padding: 0 6px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-elevated);
+    color: var(--fg-muted);
+    font-size: var(--fs-xs);
+    cursor: pointer;
+  }
+  /* Long paths lose their start, not the file name: the ellipsis goes on
+     the left (rtl box) while the path itself still reads left to right. */
+  .path {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    direction: rtl;
+  }
+  .file:hover {
+    border-color: var(--border-strong);
+    background: var(--bg-hover);
+    color: var(--fg);
   }
   .dur {
     display: flex;

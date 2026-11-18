@@ -446,6 +446,8 @@ describe('loadProfilePlugin recorder', () => {
     (globalThis as any).__svelte_devtools_record_load('/', '/r/+page.ts', 'universal', 1.234, 10);
     const loads = await (await hubHandlers(plugins)).get('svelte-devtools:get-load-profiles')!();
     expect(loads[0]).toMatchObject({ route: '/', duration: 1.23, dataSize: 10, type: 'universal' });
+    // Outside the root (e.g. a symlinked root): kept absolute, not `../..`.
+    expect(loads[0].file).toBe('/r/+page.ts');
   });
 });
 
