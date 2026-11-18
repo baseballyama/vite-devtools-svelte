@@ -38,12 +38,12 @@ const graphModule = (file: string, imports: string[] = []) => ({
   importedModules: imports.map(f => ({ file: f })),
 });
 
-function setup(serverOverrides: Record<string, unknown> = {}) {
+function setup(serverOverrides: Record<string, unknown> = {}, appPlugins: object[] = []) {
   const plugins: Plugin[] = svelteDevtools();
   resolvePlugins(plugins, {
     root: FIXTURES,
     base: '/app/',
-    plugins: [{ name: 'vite:devtools' }],
+    plugins: [{ name: 'vite:devtools' }, ...appPlugins],
   });
   const listeners = new Map<string, Handler>();
   const routes: Array<[string, Handler]> = [];
@@ -262,6 +262,19 @@ describe('MCP server wiring', () => {
     expect(deps.getRoutes().length).toBeGreaterThan(0);
     expect(deps.getComponentRelations().length).toBeGreaterThan(0);
     expect(deps.sessions).toBeInstanceOf(SessionStore);
+  });
+
+  it("project and routes follow SvelteKit's files.routes", async () => {
+    const routesDir = path.join(FIXTURES, 'src/routes/api');
+    const kitSetup = {
+      name: 'vite-plugin-sveltekit-setup',
+      api: { options: { files: { routes: routesDir } } },
+    };
+    const s = setup({}, [kitSetup]);
+    s.configure();
+    const deps = await mcpDeps(s);
+    expect(deps.getProject().routesDir).toBe(routesDir.split(path.sep).join('/'));
+    expect(deps.getRoutes().map(r => r.id)).toEqual(['hello', 'items', 'users']);
   });
 
   it('sessions measure the live collector', async () => {

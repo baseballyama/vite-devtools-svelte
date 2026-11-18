@@ -1,18 +1,43 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { normalizePath } from 'vite';
+
 import type { ProjectInfo } from '../types.js';
 
 const CACHE_TTL_MS = 5000;
-let cache: { root: string; at: number; info: ProjectInfo } | undefined;
+let cache: { root: string; routesDir?: string; at: number; info: ProjectInfo } | undefined;
 
-/** Project metadata, cached for {@link CACHE_TTL_MS} per root (every RPC derives from it). */
-export function analyzeProject(root: string): ProjectInfo {
+/**
+ * Project metadata, cached for {@link CACHE_TTL_MS} per root (every RPC
+ * derives from it). `routesDir` is SvelteKit's configured routes directory
+ * (see {@link kitRoutesDir}); without it, `src/routes` or `src/pages`.
+ */
+export function analyzeProject(root: string, routesDir?: string): ProjectInfo {
   const now = Date.now();
-  if (cache?.root !== root || now - cache.at >= CACHE_TTL_MS) {
-    cache = { root, at: now, info: analyzeProjectUncached(root) };
+  if (cache?.root !== root || cache.routesDir !== routesDir || now - cache.at >= CACHE_TTL_MS) {
+    cache = { root, routesDir, at: now, info: analyzeProjectUncached(root, routesDir) };
   }
   return cache.info;
+}
+
+/** SvelteKit's setup plugin; its `api.options` is the resolved SvelteKit config. */
+const SVELTEKIT_SETUP = 'vite-plugin-sveltekit-setup';
+
+/**
+ * The routes directory SvelteKit resolved (`files.routes` of the `sveltekit()`
+ * options, `src/routes` by default), read the way SvelteKit's own
+ * `extract_svelte_config` does. SvelteKit makes it absolute in its `config`
+ * hook, so this is read from `configResolved` on. `undefined` without SvelteKit.
+ */
+export function kitRoutesDir(
+  plugins: readonly { name: string; api?: unknown }[],
+): string | undefined {
+  const api = plugins.find(p => p.name === SVELTEKIT_SETUP)?.api;
+  const options = isRecord(api) ? api.options : undefined;
+  const files = isRecord(options) ? options.files : undefined;
+  const routes = isRecord(files) ? files.routes : undefined;
+  return typeof routes === 'string' && path.isAbsolute(routes) ? normalizePath(routes) : undefined;
 }
 
 interface PackageJson {
@@ -55,7 +80,7 @@ function readPackageJson(file: string): PackageJson {
   };
 }
 
-function analyzeProjectUncached(root: string): ProjectInfo {
+function analyzeProjectUncached(root: string, routesDir: string | undefined): ProjectInfo {
   const pkg = readPackageJson(path.join(root, 'package.json'));
   const deps = pkg.dependencies;
   const devDeps = pkg.devDependencies;
@@ -71,7 +96,7 @@ function analyzeProjectUncached(root: string): ProjectInfo {
     viteVersion: versionOf('vite'),
     dependencies: deps,
     devDependencies: devDeps,
-    routesDir: firstExisting(root, 'src/routes', 'src/pages'),
+    routesDir: routesDir ?? firstExisting(root, 'src/routes', 'src/pages'),
     staticDir: firstExisting(root, 'static', 'public'),
   };
 }

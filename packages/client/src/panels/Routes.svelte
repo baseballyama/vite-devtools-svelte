@@ -52,6 +52,12 @@
     return (n: RouteNode) => !!n.route && (!k || k(n.route)) && (!m || m(n.route.path, n.route.id));
   });
 
+  /** The route's directory on disk (where its files live, under the configured routes dir). */
+  function routeDir(r: RouteInfo): string | undefined {
+    const file = r.files[0]?.path;
+    return file?.slice(0, Math.max(file.lastIndexOf('/'), file.lastIndexOf('\\')));
+  }
+
   const counts = $derived({
     pages: routes.data.filter(KINDS.pages).length,
     endpoints: routes.data.filter(KINDS.endpoints).length,
@@ -177,24 +183,20 @@
         <ResourceEmpty
           res={routes}
           total={routes.data.length}
-          loading="Scanning src/routes…"
+          loading="Scanning routes…"
           failed="Could not read routes"
           icon="routes"
           title="No routes found"
           noMatch="No routes match"
         >
-          <p>Routes appear here for SvelteKit projects with a <code>src/routes</code> directory.</p>
+          <p>Routes appear here for SvelteKit projects.</p>
         </ResourceEmpty>
       {/snippet}
     </TreeView>
     {#snippet aside()}
       {#if selectedRoute}
         {@const r = selectedRoute}
-        <Inspector
-          title={r.path}
-          subtitle={'src/routes' + (r.id === '/' ? '' : r.id)}
-          onclose={() => (selected = null)}
-        >
+        <Inspector title={r.path} subtitle={routeDir(r)} onclose={() => (selected = null)}>
           {#snippet badges()}
             {#if r.hasPage}<Badge tone="accent">page</Badge>{/if}
             {#if r.hasLayout}<Badge tone="purple">layout</Badge>{/if}

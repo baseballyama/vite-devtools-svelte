@@ -215,6 +215,18 @@ describe('Routes', () => {
     expect(rpc.openInEditor).toHaveBeenCalledTimes(3);
   });
 
+  it("shows the route's directory under a custom routes dir (files.routes), Windows paths too", async () => {
+    vi.mocked(rpc.getRoutes).mockResolvedValue([
+      route('/settings', {
+        files: [{ type: 'page', path: 'C:\\app\\src\\app-routes\\settings\\+page.svelte' }],
+      }),
+    ]);
+    const { user, tree } = await setup();
+    await user.click(item(tree, 'settings'));
+    const details = screen.getByRole('complementary', { name: '/settings details' });
+    expect(within(details).getByText('C:\\app\\src\\app-routes\\settings')).toBeTruthy();
+  });
+
   it('does nothing when a route has no files', async () => {
     vi.mocked(rpc.getRoutes).mockResolvedValue([route('/', { files: [] })]);
     const { user, tree } = await setup();
@@ -242,7 +254,7 @@ describe('Routes', () => {
       }),
     );
     const { user, tree } = await setup();
-    expect(within(tree).getByText('Scanning src/routes…')).toBeTruthy();
+    expect(within(tree).getByText('Scanning routes…')).toBeTruthy();
     reject(new Error('EACCES'));
     await settle();
     expect(within(tree).getByRole('alert').textContent).toContain('EACCES');

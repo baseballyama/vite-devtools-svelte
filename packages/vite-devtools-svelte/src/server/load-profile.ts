@@ -1,5 +1,3 @@
-import path from 'node:path';
-
 import { parseSync } from 'vite';
 
 import type { LoadProfile } from '../types.js';
@@ -19,13 +17,12 @@ const LOAD_FILES: Record<string, LoadProfile['type']> = {
 };
 
 /**
- * The route id of a load file: its directory under `<root>/src/routes`, or
- * under the first `routes` directory on its path when it lies elsewhere
- * (a custom routes dir); `/` when there is none.
+ * The route id of a load file: its directory under `routesDir`, or under the
+ * first `routes` directory on its path when it lies elsewhere; `/` when there
+ * is none.
  */
-function routeOf(file: string, root: string): string {
+function routeOf(file: string, routesDir: string): string {
   const dir = file.slice(0, file.lastIndexOf('/'));
-  const routesDir = path.posix.join(root, 'src/routes');
   if (dir === routesDir || dir.startsWith(`${routesDir}/`)) {
     return dir.slice(routesDir.length) || '/';
   }
@@ -41,9 +38,10 @@ function routeOf(file: string, root: string): string {
  *
  * Only the `export` keyword is removed (the local binding stays, so the
  * module's own references keep the original) and a profiled wrapper is
- * exported as `load` instead; line numbers are unchanged.
+ * exported as `load` instead; line numbers are unchanged. `routesDir` is the
+ * absolute, `/`-separated routes directory route ids are taken from.
  */
-export function profileLoad(code: string, id: string, root: string): string | null {
+export function profileLoad(code: string, id: string, routesDir: string): string | null {
   // Cheap checks first: this runs for every module the dev server serves.
   const type = LOAD_FILES[id.slice(id.lastIndexOf('/') + 1)];
   if (!type || id.includes('node_modules') || !code.includes('load')) return null;
@@ -59,7 +57,7 @@ export function profileLoad(code: string, id: string, root: string): string | nu
   // Names the stripped `export` covered besides `load`, exported again.
   const others = stmt.entries.map(e => e.localName.name!).filter(n => n !== 'load');
   const local = code.slice(0, stmt.start) + code.slice(entry.start);
-  return local + profiledExport(others, routeOf(id, root), id, type);
+  return local + profiledExport(others, routeOf(id, routesDir), id, type);
 }
 
 // Measuring must never change what load does: a result JSON can't encode (a

@@ -21,6 +21,7 @@ export function createTestHost(
   return {
     collector: new Collector(),
     root: () => root,
+    routesDir: () => {},
     publicBase: () => '/',
     modules: () => [],
     serverOrigins: () => [],

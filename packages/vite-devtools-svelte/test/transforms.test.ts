@@ -301,8 +301,8 @@ interface LoadModule {
 }
 
 /** Transform `code` as `id` and import the result as a real ES module. */
-async function loadModule(code: string, id: string): Promise<LoadModule> {
-  const result = callHook(loadProfile().transform, code, id);
+async function loadModule(code: string, id: string, config = {}): Promise<LoadModule> {
+  const result = callHook(loadProfile(config).transform, code, id);
   expect(result).not.toBeNull();
   expect(result.map).toBeNull();
   const file = path.join(tmpDir, `m${moduleSeq++}.mjs`);
@@ -449,15 +449,25 @@ describe('loadProfilePlugin: profiled load functions', () => {
 
   it('takes the route from <root>/src/routes, not from the first "routes" in the path', async () => {
     const rec = installRecorder();
-    const id = '/home/routes/app/src/routes/blog/+page.ts';
-    const result = callHook(
-      loadProfile({ root: '/home/routes/app' }).transform,
+    const mod = await loadModule(
       'export const load = () => ({})',
-      id,
+      '/home/routes/app/src/routes/blog/+page.ts',
+      { root: '/home/routes/app' },
     );
-    const file = path.join(tmpDir, `m${moduleSeq++}.mjs`);
-    fs.writeFileSync(file, codeOf(result));
-    const mod: LoadModule = await import(/* @vite-ignore */ pathToFileURL(file).href);
+    await mod.load();
+    expect(rec.mock.calls[0]![0]).toBe('/blog');
+  });
+
+  it("takes the route from SvelteKit's configured files.routes", async () => {
+    const rec = installRecorder();
+    const kit = {
+      name: 'vite-plugin-sveltekit-setup',
+      api: { options: { files: { routes: '/app/pages' } } },
+    };
+    const mod = await loadModule('export const load = () => ({})', '/app/pages/blog/+page.ts', {
+      root: '/app',
+      plugins: [kit],
+    });
     await mod.load();
     expect(rec.mock.calls[0]![0]).toBe('/blog');
   });

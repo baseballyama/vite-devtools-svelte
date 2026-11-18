@@ -7,7 +7,7 @@ import type { Plugin, ResolvedConfig, ViteDevServer } from 'vite';
 import { serverResolver } from './analyzers/api.js';
 import { analyzeComponents } from './analyzers/components.js';
 import type { GraphModuleLike } from './analyzers/module-graph.js';
-import { analyzeProject } from './analyzers/project.js';
+import { analyzeProject, kitRoutesDir } from './analyzers/project.js';
 import { analyzeRoutes } from './analyzers/routes.js';
 import { createMcpMiddleware, MCP_PATH } from './mcp/http.js';
 import { buildMcpServer } from './mcp/server.js';
@@ -83,6 +83,8 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
   let config: ResolvedConfig;
   let server: ViteDevServer | undefined;
   let root: string;
+  // SvelteKit's resolved `files.routes` (absolute); undefined without SvelteKit.
+  let routesDir: string | undefined;
   // When `@vitejs/devtools` is installed the hub mounts the devframe through
   // our `devtools` hook; otherwise we mount it ourselves. Never both: they
   // would claim the same base.
@@ -117,6 +119,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
   const host: SvelteDevtoolsHost = {
     collector,
     root: () => root,
+    routesDir: () => routesDir,
     publicBase: () => config?.base ?? '/',
     modules: () => (server ? collectModules(server) : []),
     transformRequest: file => (server ? server.transformRequest(file) : Promise.resolve(null)),
@@ -145,6 +148,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     configResolved(resolvedConfig) {
       config = resolvedConfig;
       root = config.root;
+      routesDir = kitRoutesDir(config.plugins);
       hostedByViteDevtools = config.plugins.some(p => p.name === VITE_DEVTOOLS_PLUGIN);
     },
 
@@ -193,8 +197,8 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
           logger: devServer.config.logger,
           createServer: () =>
             buildMcpServer({
-              getProject: () => analyzeProject(root),
-              getRoutes: () => analyzeRoutes(analyzeProject(root).routesDir),
+              getProject: () => analyzeProject(root, routesDir),
+              getRoutes: () => analyzeRoutes(analyzeProject(root, routesDir).routesDir),
               getLiveSnapshot: () => collector.liveSnapshot,
               getComponentRelations: () => analyzeComponents(root),
               getRenderProfiles: () => collector.renderProfiles,
@@ -334,7 +338,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
 
     transform(code, id) {
       if (!serving()) return null;
-      const profiled = profileLoad(code, id, root);
+      const profiled = profileLoad(code, id, routesDir ?? path.posix.join(root, 'src/routes'));
       return profiled === null ? null : { code: profiled, map: null };
     },
   };

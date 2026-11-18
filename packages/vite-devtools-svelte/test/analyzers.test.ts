@@ -11,7 +11,7 @@ import { describe, it, expect, afterAll, afterEach, vi } from 'vitest';
 
 import { analyzeAssets } from '../src/analyzers/assets.js';
 import { analyzeComponents } from '../src/analyzers/components.js';
-import { analyzeProject } from '../src/analyzers/project.js';
+import { analyzeProject, kitRoutesDir } from '../src/analyzers/project.js';
 import { findReactiveLine } from '../src/analyzers/source.js';
 
 const tmpRoots: string[] = [];
@@ -234,6 +234,39 @@ describe('analyzeProject', () => {
     const other = tree({ 'package.json': JSON.stringify({ name: 'other' }) });
     expect(analyzeProject(other).name).toBe('other');
     expect(analyzeProject(root)).not.toBe(second); // the cache holds one root
+  });
+
+  it('uses the routes directory SvelteKit resolved over src/routes', () => {
+    const root = tree({ 'src/routes/.keep': '', 'src/app-routes/.keep': '' });
+    const custom = path.join(root, 'src/app-routes');
+    expect(analyzeProject(root, custom).routesDir).toBe(custom);
+    // a different routesDir for the same root is not served from the cache
+    expect(analyzeProject(root).routesDir).toBe(path.join(root, 'src/routes'));
+  });
+});
+
+/** The plugin list with SvelteKit's setup plugin exposing `api`. */
+const setup = (api: unknown) => [{ name: 'other' }, { name: 'vite-plugin-sveltekit-setup', api }];
+
+describe('kitRoutesDir', () => {
+  it("reads files.routes from SvelteKit's setup plugin", () => {
+    const dir = path.join(os.tmpdir(), 'app', 'src', 'app-routes');
+    expect(kitRoutesDir(setup({ options: { files: { routes: dir } } }))).toBe(
+      dir.split(path.sep).join('/'),
+    );
+  });
+
+  it.each<[string, { name: string; api?: unknown }[]]>([
+    ['without SvelteKit', [{ name: 'vite-plugin-svelte:config', api: {} }]],
+    ['without an api', setup(undefined)],
+    ['without files', setup({ options: {} })],
+    ['with a non-string routes', setup({ options: { files: { routes: 1 } } })],
+    [
+      'with a relative routes (not resolved yet)',
+      setup({ options: { files: { routes: 'src/x' } } }),
+    ],
+  ])('undefined %s', (_label, plugins) => {
+    expect(kitRoutesDir(plugins)).toBeUndefined();
   });
 });
 
