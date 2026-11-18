@@ -31,7 +31,7 @@ import type { Collector } from './collector.js';
 import { resolveWithinRoot } from './security.js';
 
 export const DEVFRAME_ID = 'svelte-devtools';
-export const INSPECT_DOCK_ID = 'svelte-devtools:inspect';
+const INSPECT_DOCK_ID = 'svelte-devtools:inspect';
 /** Same base for both hosts (standalone and Vite DevTools), so the SPA URL never changes. */
 export const DEVFRAME_BASE = '/.svelte-devtools/';
 export const PICK_BROADCAST = 'element-picked';
