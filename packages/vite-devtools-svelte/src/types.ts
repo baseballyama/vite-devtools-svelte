@@ -74,7 +74,7 @@ export interface ComponentInstance {
   mounted: boolean;
 }
 
-/** An element picked on the app page: the component instance that rendered it. */
+/** A component instance chosen with Inspect in the app page's inspector. */
 export interface ElementPick {
   /** App page load the id belongs to. */
   epoch: string;

@@ -34,9 +34,9 @@ pnpm examples svelte-features         # 単体で起動（--dock で Vite DevToo
   - [ ] library セクションで `Card` / `LibButton` / `Tabs` がツリーに出ず、中の `Ticker` / `Tree` が `Library` の直下に来る
   - [ ] blocks の再帰 `Tree` が入れ子で出る。`{#key}` の再マウントや `{#if}` の切り替えでノードが入れ替わる
   - [ ] 選択した `Slider` / `Consumer` の props・state が操作に追従する。レガシーの `LegacyCounter` も props と値が見える
-- **Svelte Inspector**（Alt+X / Option+X で要素をクリック）
+- **Svelte Inspector**（Alt+X / Option+X で要素を右クリック → Inspect）
   - [ ] 2 つ目・3 つ目のルート（右下の Widget、左下の Floating）の要素から、そのインスタンスを選べる
-  - [ ] ライブラリの `Card` の中身をクリックすると、最も近いアプリのコンポーネントが選ばれる。右クリックのメニューにライブラリの行は「Open」だけ
+  - [ ] ライブラリの `Card` の中身を Inspect すると、最も近いアプリのコンポーネントが選ばれる。右クリックのメニューにライブラリの行は「Open」だけ
   - [ ] 動的コンポーネント（セクション）と `<svelte:element>` の要素でも選択できる
   - [ ] ラベルに要素のタグではなくインスタンス名（例 `<Slider>`）が出る
   - [ ] 右クリックのメニューで外側のコンポーネントの行の Inspect を押すと、そのインスタンスが選ばれ、エディタは開かない。Open ではエディタが開く

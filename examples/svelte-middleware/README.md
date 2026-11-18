@@ -26,6 +26,6 @@ middleware mode では plugin が `listening` を受け取れず MCP の登録�
 - [ ] Counter をクリックすると State timeline / Reactivity に `count` の変化が出る。Clock の `now` が毎秒更新される
 - [ ] Render: Clock が毎秒再レンダーとして記録される
 - [ ] Routes / Load functions: SvelteKit ではないので空の状態表示
-- [ ] Svelte Inspector (Alt+X) でページ上の要素をクリックすると `Counter` などが選ばれる
+- [ ] Svelte Inspector (Alt+X) でページ上の要素を右クリックして Inspect を押すと `Counter` などが選ばれる
 - [ ] ドックモード (`SVELTE_DEVTOOLS_DOCK=1`): ドックが出て Svelte タブが開ける
 - [ ] `server.js` が出力する MCP コマンドで `get_live_components` が 4 件返る

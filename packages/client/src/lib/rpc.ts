@@ -259,7 +259,7 @@ async function deliverRecentPick(cb: (pick: ElementPick) => void): Promise<void>
 }
 
 /**
- * Elements picked in the app page's inspector (clicked while it is on).
+ * Component instances chosen with Inspect in the app page's inspector menu.
  * Delivered while this tab is hidden too, and a pick made just before this
  * UI connected (the dock opening the Svelte panel for it) is delivered once
  * on subscribing. Returns an unsubscribe function.
