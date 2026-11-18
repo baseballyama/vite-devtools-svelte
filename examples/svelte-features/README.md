@@ -52,8 +52,6 @@ pnpm examples svelte-features         # 単体で起動（--dock で Vite DevToo
 - **Problems**
   - [ ] `src/sections/Problems.svelte` の a11y 警告 3 件が出る
   - [ ] problems の「throw a runtime error」と boundaries の「throw」（boundary が捕捉）が実行時エラーとしてどう扱われるか
-- **Compiled output**
-  - [ ] runes のコンポーネント、レガシーの `LegacyCounter.svelte`、カスタム要素の `Badge.ce.svelte` のコンパイル結果が見られる
 - **Modules**
   - [ ] `src/main.ts` → `App.svelte` → 各セクション、`src/lib/roots.ts` → `Floating.svelte`、`examples-ui-lib` の依存が見える
 

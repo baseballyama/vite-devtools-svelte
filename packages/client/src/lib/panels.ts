@@ -70,15 +70,6 @@ export const panels = [
     load: () => import('../panels/StateTimeline.svelte'),
   },
   {
-    id: 'inspect',
-    label: 'Compiled output',
-    icon: 'inspect',
-    group: 'inspect',
-    description: 'Source ↔ compiled JS with source-map links',
-    keywords: 'inspect compile sourcemap',
-    load: () => import('../panels/Inspect.svelte'),
-  },
-  {
     id: 'render',
     label: 'Render',
     icon: 'render',

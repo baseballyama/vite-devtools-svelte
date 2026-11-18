@@ -295,7 +295,6 @@ describe('calls', () => {
       r => r.getStateTimelineDelta(7),
       ['get-state-timeline-delta', { since: 7 }],
     ],
-    ['inspectFile', r => r.inspectFile('x.svelte'), ['inspect-file', { file: 'x.svelte' }]],
     ['getOGPreview', r => r.getOGPreview('/p'), ['get-og-preview', { url: '/p' }]],
   ])('%s sends the right method and arguments', async (_, run, expected) => {
     const c = fakeClient();
@@ -327,7 +326,6 @@ describe('calls', () => {
       [rpc.getCompilerWarnings, 'get-compiler-warnings'],
       [rpc.getRuntimeErrors, 'get-runtime-errors'],
       [rpc.clearErrors, 'clear-errors'],
-      [rpc.getSvelteFiles, 'get-svelte-files'],
       [rpc.getModuleGraph, 'get-module-graph'],
       [rpc.getBuildAnalysis, 'get-build-analysis'],
       [rpc.getFps, 'get-fps'],

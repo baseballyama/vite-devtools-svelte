@@ -15,7 +15,6 @@ Svelte DevTools for Vite, built on [Devframe](https://devfra.me/). Provides 15 s
 - **State Timeline** — Record and replay state changes across the application
 - **API Playground** — Test SvelteKit server endpoints (`+server.ts`) directly from DevTools, sent by the browser with your app's cookies
 - **Error Dashboard** — Centralized view of compiler warnings and runtime errors
-- **Code Inspector** — View compiled Svelte output with source mapping
 - **Module Graph** — Visualize module dependencies and detect circular imports
 - **OG Preview** — Preview Open Graph meta tags for SEO validation
 - **Build Analysis** — Analyze build chunks and bundle composition
@@ -115,13 +114,6 @@ After the app page reloads, a selected component id may belong to another instan
 <summary>Problems</summary>
 
 ![Problems](docs/images/ui-errors.png)
-
-</details>
-
-<details>
-<summary>Compiled output</summary>
-
-![Compiled output](docs/images/ui-inspect.png)
 
 </details>
 
@@ -355,7 +347,7 @@ Some RPCs read files from disk or open them in your editor, so the DevTools back
 - **Devframe auth gate.** Every RPC connection must be trusted first: a browser exchanges a single-use 6-digit code (printed in the dev-server terminal, valid for 5 minutes) for a bearer token stored in that browser. Inside Vite DevTools the hub's own gate covers the tool. `svelteDevtools({ clientAuth: false })` (or `devtools: { apply: 'serve', clientAuth: false }` in the Vite config for the dock) removes this gate; the origin checks below still apply.
 - **Origin checks.** The RPC WebSocket only accepts loopback origins (plus the dev server's own LAN origins when you use `--host`), which blocks cross-site pages and DNS-rebinding attacks.
 - **Schema-validated arguments.** RPC inputs are validated with zod schemas before any handler runs.
-- **Path sandbox.** `inspect-file`, `open-in-editor`, and `open-reactive-in-editor` resolve their input through `fs.realpath()` and refuse anything outside the project root. Symlinks inside the project are followed normally.
+- **Path sandbox.** `open-in-editor` and `open-reactive-in-editor` resolve their input through `fs.realpath()` and refuse anything outside the project root. Symlinks inside the project are followed normally.
 - **SSRF defenses.** The OG preview's outbound fetch blocks private / loopback / link-local IPv4 and IPv6 targets (also when a hostname _resolves_ to one), `localhost`, `*.local` and `*.internal`, and never follows redirects. The dev server's own origins are the only local targets allowed, so it can read your app's pages. The API playground does not fetch on the server at all: the browser sends its requests from the DevTools page, under the same-origin and CORS rules as your app.
 - **Dev-only by construction.** Nothing is registered during `vite build`.
 

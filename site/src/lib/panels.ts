@@ -120,18 +120,6 @@ export const panels: Panel[] = [
     images: ['v2-panel-errors.jpg'],
   },
   {
-    slug: 'inspect',
-    title: 'Compiled output',
-    tagline: 'Your `.svelte` file next to its compiled JavaScript',
-    description:
-      'Pick any `.svelte` file and read its source beside the compiled JavaScript. Source-map lines connect the two, so you can see what a rune turns into.',
-    highlights: [
-      'Side-by-side source and compiled output',
-      'Source-map connections in both directions',
-    ],
-    images: ['v2-panel-inspect.jpg'],
-  },
-  {
     slug: 'modules',
     title: 'Modules',
     tagline: 'Imports between modules, and circular ones',

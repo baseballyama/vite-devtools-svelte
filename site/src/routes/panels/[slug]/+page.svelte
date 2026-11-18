@@ -28,7 +28,9 @@
     <header class="panel-head">
       <div class="head-meta">
         <span class="eyebrow">
-          <span class="eyebrow-num">{String(panelIndex + 1).padStart(2, '0')} / 15</span>
+          <span class="eyebrow-num"
+            >{String(panelIndex + 1).padStart(2, '0')} / {panels.length}</span
+          >
           · panel
         </span>
         <span class="mono dim">{panel.slug}</span>

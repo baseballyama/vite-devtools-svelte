@@ -61,7 +61,3 @@ export interface TreeViewApi {
   reveal(key: string, ancestors: string[]): void;
   focus(): void;
 }
-
-export interface CodePaneApi {
-  scrollToLine(line: number): void;
-}

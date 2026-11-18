@@ -25,11 +25,6 @@
       body: 'Sampled $state changes, newest first, with the value before and after.',
     },
     {
-      slug: 'inspect',
-      title: 'Compiled output',
-      body: 'Your component next to the JavaScript the compiler wrote, linked line by line through the source map.',
-    },
-    {
       slug: 'routes',
       title: 'Routes and load functions',
       body: 'The SvelteKit routes tree from your files, and how long each load function takes.',
@@ -48,12 +43,6 @@
       title: 'Know what changed, and when.',
       body: 'Recent $state writes, newest first, with the value before and after. The log keeps the latest entries, not the whole session.',
     },
-    {
-      img: 'home-compiled.jpg',
-      alt: 'Compiled output panel with Svelte source and compiled JavaScript side by side, connected by source-map lines',
-      title: 'Read what the compiler wrote.',
-      body: 'Your component next to its compiled JavaScript, linked line by line through the source map.',
-    },
   ];
 </script>
 
@@ -67,8 +56,7 @@
       <p class="eyebrow">Svelte 5 · SvelteKit · Vite</p>
       <h1>See inside your Svelte app.</h1>
       <p class="lead">
-        Components, reactivity, routes and compiled output in one DevTools UI, served by your Vite
-        dev server.
+        Components, reactivity and routes in one DevTools UI, served by your Vite dev server.
       </p>
       <div class="actions">
         <a class="btn btn-primary" href={resolve('/getting-started')}>Get started</a>

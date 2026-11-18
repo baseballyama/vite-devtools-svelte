@@ -15,7 +15,6 @@ export type {
   ApiEndpoint,
   CompilerWarning,
   RuntimeError,
-  InspectResult,
   ModuleNode,
   ModuleGraphData,
   OGPreview,
