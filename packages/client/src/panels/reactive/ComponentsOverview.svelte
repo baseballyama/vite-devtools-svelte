@@ -132,55 +132,12 @@
   {@const baseline = baselineNotice(s.baseline)}
   {@const stale = staleLabel(s)}
   <div class="overview">
-    <!-- role="group": `aria-label` is ignored on a role-less <dl>. -->
-    <dl class="record" role="group" aria-label="What this overview covers">
-      <div>
-        <dt>Window</dt>
-        <dd>
-          last {Math.round(s.window.ms / 1000)} s · sampled while active for {Math.round(
-            s.window.sampledActiveMs / 1000,
-          )} s
-        </dd>
-      </div>
-      <div>
-        <dt>Changes</dt>
-        <dd>$state sampled every 200 ms; several writes within one sample count once</dd>
-      </div>
-      <div>
-        <dt>Coverage</dt>
-        <dd>
-          state created during component init and in <code>.svelte.js/.ts</code> module bodies;
-          reads from the markup appear as the component's <em>markup</em> node
-        </dd>
-      </div>
-      <div>
-        <dt>Components</dt>
-        <dd>
-          {s.components.withActivity.toLocaleString()} active of {totalLabel(s.components.total)} registered
-        </dd>
-      </div>
-      <div>
-        <dt>Not available yet</dt>
-        <dd>
-          {[
-            !s.capabilities.valueInspection && 'full values',
-            !s.capabilities.signalHistory && 'per-signal history',
-            !s.capabilities.writeCause && 'update cause',
-          ]
-            .filter(Boolean)
-            .join(', ') || 'none'}
-          (not reported by this dev server)
-        </dd>
-      </div>
-      {#if baseline}<div class="warn">
-          <dt>Baseline</dt>
-          <dd>{baseline}</dd>
-        </div>{/if}
-      {#if stale}<div class="warn">
-          <dt>Stale</dt>
-          <dd>{stale}</dd>
-        </div>{/if}
-    </dl>
+    <p class="record">
+      {totalLabel(s.components.total)} components · {s.components.withActivity.toLocaleString()} active
+      in the last {Math.round(s.window.ms / 1000)} s
+    </p>
+    {#if baseline}<p class="record warn">{baseline}</p>{/if}
+    {#if stale}<p class="record warn">{stale}</p>{/if}
     <div class="table">
       <SplitView id="reactive-overview" open={!!current}>
         <DataTable
@@ -278,26 +235,13 @@
     min-height: 0;
   }
   .record {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px 20px;
     margin: 0;
     padding: 8px 14px;
     border-bottom: 1px solid var(--border);
     font-size: var(--fs-xs);
-  }
-  .record div {
-    display: flex;
-    gap: 6px;
-  }
-  .record dt {
-    color: var(--fg-faint);
-  }
-  .record dd {
-    margin: 0;
     color: var(--fg-muted);
   }
-  .record .warn dd {
+  .record.warn {
     color: var(--yellow);
   }
   .foot,
