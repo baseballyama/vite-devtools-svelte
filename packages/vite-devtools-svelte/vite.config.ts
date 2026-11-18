@@ -1,13 +1,15 @@
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { defineConfig } from 'vite';
+import { defineConfig, normalizePath } from 'vite';
 import type { Plugin } from 'vite';
 import dts from 'vite-plugin-dts';
 
 // the bundled inspector serves its runtime from disk at runtime next to its own chunk
-const INSPECTOR_SRC = /[\\/]packages[\\/]inspector[\\/]src[\\/]/;
+const INSPECTOR_SRC = normalizePath(fileURLToPath(new URL('../inspector/src/', import.meta.url)));
 const INSPECTOR_RUNTIME = fileURLToPath(new URL('../inspector/src/runtime/', import.meta.url));
+/** the inspector's chunk, at a fixed path so its runtime can sit next to it */
+const INSPECTOR_CHUNK = 'inspector/index';
 
 function copyInspectorRuntime(): Plugin {
   return {
@@ -62,9 +64,12 @@ export default defineConfig({
         'util',
       ],
       output: {
-        chunkFileNames: '[name].mjs',
+        chunkFileNames: chunk =>
+          chunk.name === INSPECTOR_CHUNK ? '[name].mjs' : '[name]-[hash].mjs',
         codeSplitting: {
-          groups: [{ name: 'inspector/index', test: INSPECTOR_SRC }],
+          groups: [
+            { name: INSPECTOR_CHUNK, test: id => normalizePath(id).startsWith(INSPECTOR_SRC) },
+          ],
         },
       },
     },
