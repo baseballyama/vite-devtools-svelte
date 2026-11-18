@@ -189,11 +189,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: compat plain-svelte
+          - name: compat plain-svelte, standalone
             run: node e2e/compat/prepare.mjs plain-svelte && node e2e/compat/smoke.mjs plain-svelte --tier=2
           - name: compat plain-svelte, dock
             run: node e2e/compat/prepare.mjs plain-svelte && node e2e/compat/smoke.mjs plain-svelte --dock --tier=2
-          - name: compat kit3
+          - name: compat kit3, standalone
             run: node e2e/compat/prepare.mjs kit3 && node e2e/compat/smoke.mjs kit3 --tier=2
           - name: compat kit3, dock
             run: node e2e/compat/prepare.mjs kit3 && node e2e/compat/smoke.mjs kit3 --dock --tier=2
