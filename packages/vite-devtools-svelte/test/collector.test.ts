@@ -894,6 +894,48 @@ describe('Collector reactive summary pulls', () => {
     });
   });
 
+  it('asks for range "load" without a window and keys its cache apart', async () => {
+    const c = new Collector();
+    const h = fakeHot();
+    c.attach(h.hot);
+    void c.requestReactiveSummary({ range: 'load', windowMs: 5000 });
+    void c.requestReactiveSummary({ windowMs: 5000 });
+    const reqs = h.sent
+      .filter(s => s.event === HOT_EVENTS.requestReactiveSummary)
+      .map(s => s.payload as any);
+    expect(reqs).toEqual([
+      { requestId: expect.any(String), topK: 50, range: 'load' },
+      { requestId: expect.any(String), topK: 50, windowMs: 5000 },
+    ]);
+    h.emit(HOT_EVENTS.reactiveSummary, {
+      requestId: reqs[0].requestId,
+      window: { range: 'load', ms: 60_000, since: 0, until: 60_000, sampledActiveMs: 0 },
+      rows: [],
+    });
+    // an older runtime ignores `range`: the answer says what it counted
+    h.emit(HOT_EVENTS.reactiveSummary, {
+      requestId: reqs[1].requestId,
+      window: { ms: 10_000, since: 0, until: 10_000, sampledActiveMs: 0 },
+      rows: [],
+    });
+    await expect(c.requestReactiveSummary({ range: 'load' })).resolves.toMatchObject({
+      window: { range: 'load', ms: 60_000 },
+    });
+    await expect(c.requestReactiveSummary({ windowMs: 5000 })).resolves.toMatchObject({
+      window: { range: 'window' },
+    });
+    expect(h.sent.filter(s => s.event === HOT_EVENTS.requestReactiveSummary)).toHaveLength(2);
+  });
+
+  it('a range "load" fallback says so', async () => {
+    const c = new Collector();
+    const h = fakeHot();
+    c.attach(h.hot);
+    const p = c.requestReactiveSummary({ range: 'load' });
+    vi.advanceTimersByTime(RUNTIME_REQUEST_TIMEOUT + 1);
+    await expect(p).resolves.toMatchObject({ stale: true, window: { range: 'load', ms: 0 } });
+  });
+
   it('answers stale and empty when the runtime does not reply', async () => {
     const c = new Collector();
     const h = fakeHot();

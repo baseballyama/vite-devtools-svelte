@@ -696,15 +696,16 @@ export class Collector {
       SUMMARY_DEFAULTS.maxWindowMs,
       defaultWindow,
     );
+    const range = req.range === 'load' ? 'load' : 'window';
     const epoch = this.servedEpoch ?? null;
     return this.keyedPull<ReactiveSummary>({
       kind: 'summary',
-      key: `summary|${epoch ?? ''}|${topK}|${windowMs}`,
+      key: `summary|${epoch ?? ''}|${topK}|${range === 'load' ? 'load' : windowMs}`,
       epoch,
       scope: null,
       event: HOT_EVENTS.requestReactiveSummary,
-      payload: { topK, windowMs },
-      empty: reason => emptySummary(epoch, windowMs, reason),
+      payload: range === 'load' ? { topK, range } : { topK, windowMs },
+      empty: reason => emptySummary(epoch, range, windowMs, reason),
     });
   }
 

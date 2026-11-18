@@ -73,6 +73,15 @@ function __componentBytes(instance) {
   return instance.file.length + instance.name.length + 72;
 }
 
+function __activityRow(rows, componentId) {
+  let r = rows.get(componentId);
+  if (!r) {
+    r = { changes: 0, renders: 0, renderMs: 0 };
+    rows.set(componentId, r);
+  }
+  return r;
+}
+
 function __clampInt(v, lo, hi, d) {
   const n = Math.floor(Number(v));
   return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d;
@@ -160,6 +169,10 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     _nodeCounts: new Map(),
     _nodeTotals: { state: 0, derived: 0, effect: 0 },
     _activity: [],
+    // Since page load, so the overview still lists components once the app is idle.
+    _totals: new Map(),
+    _sampledTotalMs: 0,
+    _loadedAt: performance.now(),
     _epoch: Math.random().toString(36).slice(2) + Date.now().toString(36),
 
     // Inactive until the server says a DevTools client (UI tab or MCP lease)
@@ -257,6 +270,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       this._instances.delete(id);
       this._profiles.delete(id);
       this._initStartTimes.delete(id);
+      this._totals.delete(id);
     },
 
     _cleanupReactiveNodes(componentId) {
@@ -460,14 +474,9 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       return b;
     },
 
-    _activityRow(componentId) {
-      const rows = this._bucket().rows;
-      let r = rows.get(componentId);
-      if (!r) {
-        r = { changes: 0, renders: 0, renderMs: 0 };
-        rows.set(componentId, r);
-      }
-      return r;
+    _bumpActivity(componentId, key, d) {
+      __activityRow(this._bucket().rows, componentId)[key] += d;
+      __activityRow(this._totals, componentId)[key] += d;
     },
 
     _removeChildren(parentId) {
@@ -570,7 +579,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       if (!profile) return;
       profile.renderCount++;
       profile.lastRenderAt = Date.now();
-      this._activityRow(id).renders++;
+      this._bumpActivity(id, 'renders', 1);
       this._scheduleProfileUpdate();
     },
 
@@ -596,7 +605,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       if (profile) {
         profile.totalRenderTime += duration;
         profile.lastRenderTime = duration;
-        this._activityRow(id).renderMs += duration;
+        this._bumpActivity(id, 'renderMs', duration);
       }
     },
 
@@ -1127,30 +1136,35 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       this._send('svelte-devtools:reactive-graph', graph);
     },
 
-    // Built from the window's activity buckets: O(components active in the
-    // window), no graph, no node scan.
+    // Built from the activity buckets (or the since-load totals): O(components
+    // active in the range), no graph, no node scan.
     getReactiveSummary(opts) {
       const o = opts ?? {};
       const topK = __clampInt(o.topK, 1, 200, 50);
-      const windowMs = __clampInt(o.windowMs, 1000, 60000, 10000);
+      const sinceLoad = o.range === 'load';
+      const until = Date.now();
+      const windowMs = sinceLoad
+        ? Math.max(0, Math.round(performance.now() - this._loadedAt))
+        : __clampInt(o.windowMs, 1000, 60000, 10000);
       const nowSec = Math.floor(performance.now() / 1000);
       const agg = new Map();
       let sampledMs = 0;
-      for (let k = 0; k < Math.ceil(windowMs / 1000); k++) {
-        const sec = nowSec - k;
-        const b = this._activity[__slot(sec)];
-        if (!b || b.second !== sec) continue;
-        sampledMs += b.sampledMs;
-        for (const [cid, r] of b.rows) {
-          if (!this._scopeLive(cid)) continue;
-          let a = agg.get(cid);
-          if (!a) {
-            a = { changes: 0, renders: 0, renderMs: 0 };
-            agg.set(cid, a);
+      if (sinceLoad) {
+        sampledMs = this._sampledTotalMs;
+        for (const [cid, r] of this._totals) if (this._scopeLive(cid)) agg.set(cid, r);
+      } else {
+        for (let k = 0; k < Math.ceil(windowMs / 1000); k++) {
+          const sec = nowSec - k;
+          const b = this._activity[__slot(sec)];
+          if (!b || b.second !== sec) continue;
+          sampledMs += b.sampledMs;
+          for (const [cid, r] of b.rows) {
+            if (!this._scopeLive(cid)) continue;
+            const a = __activityRow(agg, cid);
+            a.changes += r.changes;
+            a.renders += r.renders;
+            a.renderMs += r.renderMs;
           }
-          a.changes += r.changes;
-          a.renders += r.renders;
-          a.renderMs += r.renderMs;
         }
       }
       const ranked = [...agg].toSorted(
@@ -1179,10 +1193,10 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       const t = this._nodeTotals;
       // module scopes count as rows like components (rows + other = total)
       const scopes = this._instances.size + this._modules.size;
-      const until = Date.now();
       return {
         epoch: this._epoch,
         window: {
+          range: sinceLoad ? 'load' : 'window',
           ms: windowMs,
           since: until - windowMs,
           until,
@@ -1203,7 +1217,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       };
     },
 
-    // Request { requestId?, epoch?, topK?, windowMs? } (same correlation as
+    // Request { requestId?, epoch?, topK?, range?, windowMs? } (same correlation as
     // the graph).
     sendReactiveSummary(request) {
       const req = request ?? {};
@@ -1249,6 +1263,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
         // this tick samples 200 ms of wall time (window.sampledActiveMs)
         const bucket = this._bucket();
         bucket.sampledMs = Math.min(1000, bucket.sampledMs + 200);
+        this._sampledTotalMs += 200;
       }
       const ids = this._pollIds;
       const due = [];
@@ -1405,7 +1420,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       this._stateTimeline.push(change);
       this._timelineBytes += bytes;
       // sampled change count: independent of the ring
-      this._activityRow(entry.meta.componentId).changes++;
+      this._bumpActivity(entry.meta.componentId, 'changes', 1);
       this._stateSnapshots.set(nodeId, newValue);
       // Trimmed in bulk, not one splice per change (a poll tick can record
       // thousands): before every read, and here once past __TIMELINE_TRIM_AT

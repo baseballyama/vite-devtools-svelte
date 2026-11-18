@@ -53,7 +53,8 @@
   const GRAPH_LIMIT = 400;
   /** Every graph poll makes the app walk the requested scope: slow, visible-only. */
   const POLL_MS = 5000;
-  const SUMMARY = { topK: 50, windowMs: 10000 } as const;
+  const SUMMARY_TOP_K = 50;
+  const SUMMARY_WINDOW_MS = 10000;
   const SUMMARY_POLL_MS = 2000;
 
   type Tab = 'overview' | 'local' | 'full';
@@ -65,16 +66,36 @@
     if (reactiveScope.current) untrack(() => (tab = 'local'));
   });
 
-  /** Overview of components (runtime summary) or of states (timeline buffer); each works without the other. */
-  let overviewOf = $state<'components' | 'states'>('components');
+  /** Components come from the runtime summary, states from the timeline buffer; each works without the other. */
+  let overviewOf = $state<'file' | 'instance' | 'states'>('file');
+  // The last 10 s alone empties the list as soon as the app goes idle.
+  const range = persisted<'load' | 'window'>('reactive:range', 'load');
+  // A $derived, so switching Components / Instances does not re-run the poll.
+  const summaryOn = $derived(tab === 'overview' && overviewOf !== 'states');
 
-  const summary = resource<ReactiveSummary | null>(() => fetchSummary(SUMMARY), {
-    initial: null,
-    interval: SUMMARY_POLL_MS,
-    when: () => tab === 'overview' && overviewOf === 'components',
+  const summary = resource<ReactiveSummary | null>(
+    () =>
+      fetchSummary(
+        untrack(() => range.value) === 'load'
+          ? { topK: SUMMARY_TOP_K, range: 'load' }
+          : { topK: SUMMARY_TOP_K, windowMs: SUMMARY_WINDOW_MS },
+      ),
+    {
+      initial: null,
+      interval: SUMMARY_POLL_MS,
+      when: () => summaryOn,
+    },
+  );
+
+  let lastRange = range.value;
+  $effect(() => {
+    const r = range.value;
+    untrack(() => {
+      if (r === lastRange) return;
+      lastRange = r;
+      void summary.refresh();
+    });
   });
-
-  let group = $state<'file' | 'instance'>('file');
 
   // Read from the server buffer only; the app is not asked.
   const timeline = resource<StateTimelineEntry[]>(
@@ -291,24 +312,25 @@
     />
     {#if tab === 'overview'}
       <Segmented
-        label="Overview of"
+        label="List"
         bind:value={overviewOf}
         options={[
-          { value: 'components', label: 'Components' },
+          { value: 'file', label: 'Components' },
+          { value: 'instance', label: 'Instances' },
           { value: 'states', label: 'States' },
         ]}
       />
-    {/if}
-    {#if tab === 'overview' && overviewOf === 'components'}
-      <Segmented
-        label="Group"
-        bind:value={group}
-        options={[
-          { value: 'file', label: 'By file' },
-          { value: 'instance', label: 'By instance' },
-        ]}
-      />
-    {:else if tab !== 'overview'}
+      {#if overviewOf !== 'states'}
+        <Segmented
+          label="Count activity"
+          bind:value={range.value}
+          options={[
+            { value: 'load', label: 'Since load' },
+            { value: 'window', label: `Last ${SUMMARY_WINDOW_MS / 1000} s` },
+          ]}
+        />
+      {/if}
+    {:else}
       <Segmented
         label="Signal kind"
         bind:value={type}
@@ -361,7 +383,7 @@
     {#if overviewOf === 'states'}
       <HotStates {timeline} {states} baseline={statesBaseline} />
     {:else}
-      <ComponentsOverview {summary} {group} onfullgraph={() => (tab = 'full')} />
+      <ComponentsOverview {summary} group={overviewOf} onfullgraph={() => (tab = 'full')} />
     {/if}
   {:else if tab === 'local' && !scope}
     <EmptyState icon="reactive" title="Pick a component">

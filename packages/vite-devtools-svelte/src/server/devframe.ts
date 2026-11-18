@@ -161,6 +161,7 @@ export function createRpcFunctions(host: SvelteDevtoolsHost) {
         z
           .object({
             topK: z.number().int().positive().optional(),
+            range: z.enum(['window', 'load']).optional(),
             windowMs: z.number().int().positive().optional(),
           })
           .optional(),

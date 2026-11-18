@@ -448,6 +448,29 @@ describe('reactive summary', () => {
     expect(s.window.sampledActiveMs).toBeGreaterThan(0);
   });
 
+  it('range "load" keeps counting after the window has passed, until unmount', () => {
+    let now = 10_000;
+    const h = createRuntime({ clock: () => now });
+    const list = mountList(h, 3, 1);
+    const poll = pollFn(h);
+    poll();
+    const states = list.signals.filter((s: any) => s.deps === null);
+    now += 200;
+    states[1].v += 1;
+    poll();
+    h.dt.recordRender(list.ids[1]);
+    now += 30_000; // nothing happens for longer than the window
+    expect(h.dt.getReactiveSummary({ windowMs: 10_000 }).rows).toEqual([]);
+    const s = h.dt.getReactiveSummary({ range: 'load', windowMs: 10_000 });
+    expect(s.window.range).toBe('load');
+    expect(s.components.withActivity).toBe(1);
+    expect(s.rows).toMatchObject([{ componentId: list.ids[1], changes: 1, renders: 1 }]);
+    expect(s.window.sampledActiveMs).toBeGreaterThan(0);
+    h.dt.unmount(list.ids[1]);
+    expect(h.dt.getReactiveSummary({ range: 'load' }).rows).toEqual([]);
+    expect(h.dt._totals.has(list.ids[1])).toBe(false);
+  });
+
   it('counts follow unmount, re-tracking a signal, and same-name signals', () => {
     const h = createRuntime();
     const list = mountList(h, 3, 2);

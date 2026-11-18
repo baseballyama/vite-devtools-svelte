@@ -159,7 +159,7 @@ const entry = (
 async function states() {
   render(ReactiveGraph);
   await settle();
-  await userEvent.click(radio('Overview of', 'States'));
+  await userEvent.click(radio('List', 'States'));
   await settle();
 }
 
@@ -184,7 +184,7 @@ describe('ReactiveGraph: components overview', () => {
   it('summarises activity per file without fetching a graph', async () => {
     render(ReactiveGraph);
     await settle();
-    expect(rpc.getReactiveSummary).toHaveBeenCalledWith({ topK: 50, windowMs: 10000 });
+    expect(rpc.getReactiveSummary).toHaveBeenCalledWith({ topK: 50, range: 'load' });
     expect(rpc.getReactiveGraph).not.toHaveBeenCalled();
     // one short line; coverage and capability details stay in the MCP answer
     expect(text()).toMatch(/3 components · 3 active\s+in the last 10 s/);
@@ -197,10 +197,32 @@ describe('ReactiveGraph: components overview', () => {
     expect(screen.getByText(/Other: unknown\./)).toBeTruthy();
   });
 
+  it('counts since the page loaded by default and can switch to the last 10 s', async () => {
+    const loaded = summary({ window: { ...emptySummary.window, range: 'load' } });
+    vi.mocked(rpc.getReactiveSummary).mockResolvedValue(loaded);
+    render(ReactiveGraph);
+    await settle();
+    expect(text()).toMatch(/3 active\s+since the page loaded/);
+    vi.mocked(rpc.getReactiveSummary).mockResolvedValue(summary());
+    await userEvent.click(radio('Count activity', 'Last 10 s'));
+    await settle();
+    expect(rpc.getReactiveSummary).toHaveBeenLastCalledWith({ topK: 50, windowMs: 10000 });
+    expect(text()).toMatch(/3 active\s+in the last 10 s/);
+  });
+
+  it('restores the last range and hides it for states', async () => {
+    localStorage.setItem('svelte-devtools:reactive:range', '"window"');
+    render(ReactiveGraph);
+    await settle();
+    expect(rpc.getReactiveSummary).toHaveBeenCalledWith({ topK: 50, windowMs: 10000 });
+    await userEvent.click(radio('List', 'States'));
+    expect(screen.queryByRole('radiogroup', { name: 'Count activity' })).toBeNull();
+  });
+
   it('groups by instance and sorts by a column', async () => {
     render(ReactiveGraph);
     await settle();
-    await userEvent.click(radio('Group', 'By instance'));
+    await userEvent.click(radio('List', 'Instances'));
     expect(
       options('Most active components').map(r => r.querySelector('.num')?.textContent),
     ).toEqual([' #1', ' #2', ' #3']);
@@ -306,7 +328,7 @@ describe('ReactiveGraph: components overview', () => {
     vi.mocked(rpc.getReactiveSummary).mockResolvedValue(summary({ rows: [] }));
     render(ReactiveGraph);
     await settle();
-    expect(screen.getByText('No component was active in the window')).toBeTruthy();
+    expect(screen.getByText('No component was active in the last 10 s')).toBeTruthy();
     expect(screen.getByText(/Listed: 0\s+components/)).toBeTruthy();
   });
 });

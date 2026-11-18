@@ -6,6 +6,7 @@ import type {
   ComponentInstance,
   ComponentRelation,
   ModuleNode,
+  ReactiveSummaryRequest,
   ReactiveGraph,
   RenderProfile,
   RouteInfo,
@@ -514,9 +515,10 @@ export function createMockBackend(scale = 5000) {
       };
     },
     // per-instance counters over a window, top-K + the rest as `other`.
-    'svelte-devtools:get-reactive-summary': (args?: { topK?: number; windowMs?: number }) => {
+    'svelte-devtools:get-reactive-summary': (args?: ReactiveSummaryRequest) => {
       const topK = args?.topK ?? 50;
-      const windowMs = args?.windowMs ?? 10000;
+      const range = args?.range === 'load' ? 'load' : 'window';
+      const windowMs = range === 'load' ? 60_000 : (args?.windowMs ?? 10000);
       const byComponent = new Map<
         number,
         { file: string; state: number; derived: number; effect: number }
@@ -547,7 +549,7 @@ export function createMockBackend(scale = 5000) {
       const until = Date.now();
       return {
         epoch: MOCK_EPOCH,
-        window: { ms: windowMs, since: until - windowMs, until, sampledActiveMs: windowMs },
+        window: { range, ms: windowMs, since: until - windowMs, until, sampledActiveMs: windowMs },
         policy: 'sampled-200ms',
         coverage: 'component-init',
         components: { total: all.length, withActivity: active.length },

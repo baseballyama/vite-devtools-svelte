@@ -175,6 +175,8 @@ export interface ReactiveGraphResult extends ReactiveGraph {
 
 export interface ReactiveSummaryRequest {
   topK?: number;
+  /** `load`: count since the app page loaded (`windowMs` is ignored). Default `window`. */
+  range?: 'window' | 'load';
   windowMs?: number;
 }
 
@@ -188,9 +190,9 @@ export interface ReactiveSummaryRow {
    */
   kind?: 'module';
   nodes: { state: number; derived: number; effect: number };
-  /** Sampled state changes in the window (≤ 1 per node per 200 ms tick); not a rate. */
+  /** Sampled state changes in the range (≤ 1 per node per 200 ms tick); not a rate. */
   changes: number;
-  /** Renders in the window. */
+  /** Renders in the range. */
   renders: number;
   renderMs: number;
 }
@@ -201,7 +203,14 @@ export interface ReactiveSummaryRow {
  */
 export interface ReactiveSummary {
   epoch: string | null;
-  window: { ms: number; since: number; until: number; sampledActiveMs: number };
+  /** `range` is what the runtime counted: an older runtime answers `window` even when asked for `load`. */
+  window: {
+    range: 'window' | 'load';
+    ms: number;
+    since: number;
+    until: number;
+    sampledActiveMs: number;
+  };
   policy: 'sampled-200ms';
   /**
    * Tracked: signals created during a component's init (and its later block

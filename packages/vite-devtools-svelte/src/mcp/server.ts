@@ -295,13 +295,15 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     {
       title: 'Reactive overview (top components)',
       description:
-        'Busiest component instances from runtime counters over all instances, without capturing the graph. Counts are sampled state changes (at most one per state per 200 ms) and renders within the window, not rates. Tracked: state created during component init and shared state of .svelte.js/.ts modules (rows with kind "module"; their componentId is a module scope id, usable with get_reactive_scope). `rows` + `other` add up to the totals; null means unknown. Use get_reactive_scope with a componentId to look at one instance. The same request is answered from a cache for up to 1 s; `window.until` says when the answer was computed.',
+        'Busiest component instances from runtime counters over all instances, without capturing the graph. Counts are sampled state changes (at most one per state per 200 ms) and renders within the last `windowMs` (default 10 s), or since the app page loaded with range "load", not rates. State changes are sampled only while DevTools is watching (compare window.sampledActiveMs with window.ms). Tracked: state created during component init and shared state of .svelte.js/.ts modules (rows with kind "module"; their componentId is a module scope id, usable with get_reactive_scope). `rows` + `other` add up to the totals; null means unknown. Use get_reactive_scope with a componentId to look at one instance. The same request is answered from a cache for up to 1 s; `window.until` says when the answer was computed.',
       inputSchema: {
         topK: z.number().int().min(1).max(200).optional(),
+        range: z.enum(['window', 'load']).optional(),
         windowMs: z.number().int().min(1000).max(60000).optional(),
       },
     },
-    async ({ topK, windowMs }) => text(await deps.getReactiveSummary({ topK, windowMs })),
+    async ({ topK, range, windowMs }) =>
+      text(await deps.getReactiveSummary({ topK, range, windowMs })),
   );
 
   server.registerTool(

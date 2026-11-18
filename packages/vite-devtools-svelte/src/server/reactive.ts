@@ -44,12 +44,13 @@ export function emptyGraph(
 
 export function emptySummary(
   epoch: string | null,
+  range: 'window' | 'load',
   windowMs: number,
   reason: 'timeout' | 'no-runtime',
 ): ReactiveSummary {
   return {
     epoch,
-    window: { ms: windowMs, since: 0, until: 0, sampledActiveMs: 0 },
+    window: { range, ms: range === 'load' ? 0 : windowMs, since: 0, until: 0, sampledActiveMs: 0 },
     policy: 'sampled-200ms',
     coverage: 'component-init',
     components: { total: null, withActivity: 0 },
@@ -161,6 +162,7 @@ export function normalizeSummary(data: Payload | undefined, epoch: string | null
   return {
     epoch: typeof data?.epoch === 'string' ? data.epoch : epoch,
     window: {
+      range: w?.range === 'load' ? 'load' : 'window',
       ms: nonNegInt(w?.ms),
       since: nonNegInt(w?.since),
       until: nonNegInt(w?.until),

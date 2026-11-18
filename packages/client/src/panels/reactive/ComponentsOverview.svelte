@@ -107,6 +107,12 @@
     },
   ];
 
+  const rangeLabel = $derived(
+    summary.data?.window.range === 'load'
+      ? 'since the page loaded'
+      : `in the last ${Math.round((summary.data?.window.ms ?? 0) / 1000)} s`,
+  );
+
   /** Scoped selections need the page load the id belongs to; without one there is nothing to validate. */
   function select(r: ReactiveSummaryRow, epoch: string | null) {
     if (epoch) reactiveScope.scopeTo(r.componentId, r.file, epoch);
@@ -130,7 +136,7 @@
   <div class="overview">
     <p class="record">
       {totalLabel(s.components.total)} components · {s.components.withActivity.toLocaleString()} active
-      in the last {Math.round(s.window.ms / 1000)} s
+      {rangeLabel}
     </p>
     {#if baseline}<p class="record warn">{baseline}</p>{/if}
     {#if stale}<p class="record warn">{stale}</p>{/if}
@@ -163,7 +169,7 @@
             {/if}
             <span
               class="end num"
-              title="at least this many changes in the window (sampled every 200 ms); not a rate"
+              title="at least this many changes {rangeLabel} (sampled every 200 ms); not a rate"
               >≥ {r.changes.toLocaleString()}</span
             >
             <span class="end num">{r.renders.toLocaleString()}</span>
@@ -172,7 +178,7 @@
           {/snippet}
           {#snippet empty()}<EmptyState
               icon="reactive"
-              title="No component was active in the window"
+              title="No component was active {rangeLabel}"
             />{/snippet}
         </DataTable>
         {#snippet aside()}
