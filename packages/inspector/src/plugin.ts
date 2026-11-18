@@ -10,6 +10,8 @@ import { log } from './utils/log.js';
 const BUILTIN_INSPECTOR_NAME = 'vite-plugin-svelte-inspector';
 
 // vite-devtools-svelte: the inspector lives in the Vite DevTools dock
+/** name of `@vitejs/devtools`' config plugin (the same check as svelteDevtools()) */
+const VITE_DEVTOOLS_PLUGIN = 'vite:devtools';
 const DOCK_MODULE_ID = '\0virtual:vite-devtools-svelte-inspector-dock';
 
 /** The parts of the Vite DevTools node context (`DevToolsNodeContext`) the inspector uses */
@@ -75,7 +77,7 @@ export function svelteInspector(options: InspectorOptions = {}): InspectorPlugin
     },
 
     configResolved(config) {
-      dock = config.plugins.some(p => p.name.startsWith('vite:devtools'));
+      dock = config.plugins.some(p => p.name === VITE_DEVTOOLS_PLUGIN);
       builtin = config.plugins.find(p => p.name === BUILTIN_INSPECTOR_NAME);
 
       // vite-devtools-svelte: this plugin is always on once it is added, so
@@ -103,7 +105,8 @@ export function svelteInspector(options: InspectorOptions = {}): InspectorPlugin
           type: 'action',
           toggle: true,
           action: {
-            // so the key combo works before the first click
+            // so the key combo works before the first click; the hub loads it once it trusts
+            // the browser, so the inspector needs Vite DevTools to be authorized first
             eager: true,
             // a url: the host would read `virtual:` as a url scheme
             importFrom: `${base()}/@id/__x00__${DOCK_MODULE_ID.slice(1)}`,

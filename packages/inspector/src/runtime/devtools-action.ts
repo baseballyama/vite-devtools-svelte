@@ -14,19 +14,26 @@ interface Loc {
 
 /** The parts of the devframe dock client script context (`DockClientScriptContext`) used here */
 interface DockContext {
+  /** 'standalone' is the DevTools page of its own, with no app to inspect */
+  clientType: 'embedded' | 'standalone';
   current: {
     entryMeta: { id: string };
     isActive: boolean;
     events: { on(event: 'entry:activated' | 'entry:deactivated', listener: () => void): void };
   };
-  docks?: DockActions;
+  docks: {
+    setActionActive(id: string, active: boolean): Promise<boolean>;
+    toggleEntry(id: string): Promise<boolean>;
+  };
   rpc: { call(name: string, ...args: unknown[]): Promise<unknown> };
-  commands?: { register(command: Record<string, unknown>): void };
+  commands: { register(command: Record<string, unknown>): void };
 }
 
-interface DockActions {
-  setActionActive(id: string, active: boolean): void;
-  toggleEntry(id: string): void;
+/** shown in the page console, like vite client errors */
+function report(what: string) {
+  return (error: unknown) => {
+    console.error(`[svelte-inspector] failed to ${what}`, error);
+  };
 }
 
 /** `file` resolved against the vite root (Vite DevTools opens paths inside its workspace) */
@@ -37,8 +44,10 @@ function absolute(file: string): string {
 }
 
 export default function setup(ctx: DockContext): void {
+  // the hub also runs eager scripts in its standalone page
+  if (ctx.clientType !== 'embedded') return;
   const id = ctx.current.entryMeta.id;
-  const docks = ctx.docks ?? (ctx as unknown as DockActions);
+  const { docks } = ctx;
 
   const target = document.createElement('div');
   target.setAttribute('id', 'svelte-inspector-host');
@@ -48,10 +57,7 @@ export default function setup(ctx: DockContext): void {
     openInEditor(loc: Loc) {
       ctx.rpc
         .call('vite:core:open-in-editor', `${absolute(loc.file)}:${loc.line}:${loc.column + 1}`)
-        .catch((error: unknown) => {
-          // shown in the page console, like vite client errors
-          console.error('[svelte-inspector] failed to open editor', error);
-        });
+        .catch(report('open editor'));
     },
     ignore(e: Event) {
       // the dock is rendered in the page
@@ -61,7 +67,9 @@ export default function setup(ctx: DockContext): void {
     },
     onenabledchange(enabled: boolean) {
       // sync the dock button when the inspector toggles itself
-      if (ctx.current.isActive !== enabled) docks.setActionActive(id, enabled);
+      if (ctx.current.isActive !== enabled) {
+        docks.setActionActive(id, enabled).catch(report('sync the dock button'));
+      }
     },
   };
   const inspector = mount(Inspector, { target, props }) as unknown as {
@@ -70,13 +78,13 @@ export default function setup(ctx: DockContext): void {
   };
 
   // client-side so it toggles this tab only; no keybinding of its own, toggleKeyCombo already is one
-  ctx.commands?.register({
+  ctx.commands.register({
     id: 'svelte:toggle-inspector',
     source: 'client',
     title: 'Toggle Svelte Inspector',
     icon: 'logos:svelte-icon',
     category: 'svelte',
-    action: () => docks.toggleEntry(id),
+    action: () => docks.toggleEntry(id).catch(report('toggle the inspector')),
   });
 
   // deferred, or the activating click reaches the inspector's window click handler and disables it
