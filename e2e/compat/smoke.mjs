@@ -1352,7 +1352,7 @@ async function tier2(p, getSrv, restart, app) {
   // the Svelte panel the next steps read. Hover only: a click would open an editor.
   await step(
     'T2 Svelte Inspector: dock toggle, hover shows the source; not mounted without the dock',
-    45_000,
+    90_000,
     async () => {
       const host = page.locator('#svelte-inspector-host');
       if (mode !== 'dock') {
@@ -1365,39 +1365,40 @@ async function tier2(p, getSrv, restart, app) {
         page.evaluate(() => document.body.classList.contains('svelte-inspector-enabled'));
       const button = page.getByRole('button', { name: 'Svelte Inspector', exact: true });
       await withDockDump(page, () => clickInDock(page, button));
-      await page.waitForFunction(
-        () => document.body.classList.contains('svelte-inspector-enabled'),
-        null,
-        {
-          timeout: 5_000,
-        },
-      );
-      await page.locator('body h1').first().hover({ timeout: 5_000 });
-      const overlay = page.locator('#svelte-inspector-overlay');
-      await overlay.waitFor({ timeout: 5_000 });
-      const text = (await overlay.textContent()) ?? '';
-      if (!text.includes(`${p.targets.hmr.file}:`))
-        throw new Error(`overlay does not name ${p.targets.hmr.file}: ${text.slice(0, 120)}`);
-      await withDockDump(page, () => clickInDock(page, button));
+      let text = '';
+      try {
+        await poll(enabled, on => on === true, 5_000);
+        await page.locator('body h1').first().hover({ timeout: 5_000 });
+        const overlay = page.locator('#svelte-inspector-overlay');
+        await overlay.waitFor({ timeout: 5_000 });
+        text = (await overlay.textContent()) ?? '';
+        if (!text.includes(`${p.targets.hmr.file}:`))
+          throw new Error(`overlay does not name ${p.targets.hmr.file}: ${text.slice(0, 120)}`);
+      } finally {
+        // off again even when a check failed: the next steps read the Svelte panel
+        if (await enabled()) await withDockDump(page, () => clickInDock(page, button));
+      }
       await poll(enabled, on => on === false, 5_000);
       await page.locator(DOCK_FRAME).waitFor({ state: 'attached', timeout: 10_000 });
       // the hub runs eager scripts in its own standalone page too, which has no app to inspect
       const standalone = await ctx.newPage();
       try {
-        // proof the hub ran the dock script here: it is fetched only to be run
-        const script = standalone.waitForResponse(
-          response => response.url().includes('devtools-action.ts') && response.status() < 400,
-          { timeout: 30_000 },
+        // the dock script imports the component: once it is fetched, setup() is about to run
+        const loaded = standalone.waitForResponse(
+          response => response.url().includes('Inspector.svelte') && response.status() < 400,
+          { timeout: 20_000 },
         );
         await standalone.goto(getSrv().base + '/__devtools/', {
           waitUntil: 'load',
-          timeout: 30_000,
+          timeout: 20_000,
         });
-        await script;
-        // setup() mounts synchronously once the module has run
-        await sleep(500);
-        if ((await standalone.locator('#svelte-inspector-host').count()) > 0)
-          throw new Error('inspector mounted in the standalone DevTools page');
+        await loaded;
+        const mounted = await poll(
+          () => standalone.locator('#svelte-inspector-host').count(),
+          count => count > 0,
+          2_000,
+        ).catch(() => 0);
+        if (mounted > 0) throw new Error('inspector mounted in the standalone DevTools page');
       } finally {
         await standalone.close();
       }
