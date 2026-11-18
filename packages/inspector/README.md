@@ -62,7 +62,7 @@ export default {
 ```
 
 - **Svelte Inspector** on the dock bar turns the inspector on and off, as do the `toggleKeyCombo` and the **Toggle Svelte Inspector** command in the command palette; all of them stay in sync.
-- Picked files open through Vite DevTools' `vite:core:open-in-editor`.
+- Picked files open through Vite DevTools' `vite:core:open-in-editor`. It refuses files outside the workspace root (e.g. a linked package), which open through Vite's `/__open-in-editor` instead, as upstream.
 - The inspector loads once the browser is authorized for Vite DevTools.
 
 ## Upstream documentation

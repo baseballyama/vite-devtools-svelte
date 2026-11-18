@@ -66,7 +66,7 @@
   let hold_start_ts = $state<number | null>(null);
 
   function mousemove(e: MouseEvent) {
-    if (menu) return;
+    if (menu || ignore(e)) return;
     x = e.x;
     y = e.y;
   }

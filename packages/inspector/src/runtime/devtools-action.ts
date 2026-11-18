@@ -1,5 +1,5 @@
 // Client script of the `svelte:inspector` dock action
-import { mount } from 'svelte';
+import { mount, unmount } from 'svelte';
 import options from 'virtual:vite-devtools-svelte-inspector-options';
 import Inspector from 'virtual:vite-devtools-svelte-inspector-path:Inspector.svelte';
 
@@ -19,14 +19,16 @@ interface DockContext {
   current: {
     entryMeta: { id: string };
     isActive: boolean;
-    events: { on(event: 'entry:activated' | 'entry:deactivated', listener: () => void): void };
+    events: {
+      on(event: 'entry:activated' | 'entry:deactivated', listener: () => void): () => void;
+    };
   };
   docks: {
     setActionActive(id: string, active: boolean): Promise<boolean>;
     toggleEntry(id: string): Promise<boolean>;
   };
   rpc: { call(name: string, ...args: unknown[]): Promise<unknown> };
-  commands: { register(command: Record<string, unknown>): void };
+  commands: { register(command: Record<string, unknown>): () => void };
 }
 
 /** shown in the page console, like vite client errors */
@@ -36,16 +38,49 @@ function report(what: string) {
   };
 }
 
+/** Whether `file` is absolute, POSIX (`/a`) or Windows (`C:/a`, `C:\a`) */
+function isAbsolute(file: string): boolean {
+  if (file.startsWith('/')) return true;
+  const letter = file.charAt(0).toLowerCase();
+  const separator = file.charAt(2);
+  return (
+    letter >= 'a' &&
+    letter <= 'z' &&
+    file.charAt(1) === ':' &&
+    (separator === '/' || separator === '\\')
+  );
+}
+
 /** `file` resolved against the vite root (Vite DevTools opens paths inside its workspace) */
 function absolute(file: string): string {
   const root = options.__internal.root;
-  if (!root || file.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(file)) return file;
-  return `${root.replace(/[\\/]$/, '')}/${file}`;
+  if (!root || isAbsolute(file)) return file;
+  const base = root.endsWith('/') || root.endsWith('\\') ? root.slice(0, -1) : root;
+  return `${base}/${file}`;
 }
+
+/** Vite's own endpoint, which upstream uses; it opens files outside the workspace too */
+function openWithVite(file: string) {
+  fetch(`${options.__internal.base}/__open-in-editor?file=${encodeURIComponent(file)}`).catch(
+    report('open editor'),
+  );
+}
+
+/** Whether `e` comes from the dock, which devframe renders in the page as `<devframes-*>` elements */
+function fromDock(e: Event): boolean {
+  return e
+    .composedPath()
+    .some(node => node instanceof Element && node.tagName.startsWith('DEVFRAMES-'));
+}
+
+/** What the last run of `setup` mounted, torn down when the hub runs the script again */
+let teardown: (() => void) | undefined;
 
 export default function setup(ctx: DockContext): void {
   // the hub also runs eager scripts in its standalone page
   if (ctx.clientType !== 'embedded') return;
+  // e.g. a new RPC client after a reconnect: one inspector, wired to the latest context
+  teardown?.();
   const id = ctx.current.entryMeta.id;
   const { docks } = ctx;
 
@@ -55,16 +90,11 @@ export default function setup(ctx: DockContext): void {
 
   const props = {
     openInEditor(loc: Loc) {
-      ctx.rpc
-        .call('vite:core:open-in-editor', `${absolute(loc.file)}:${loc.line}:${loc.column + 1}`)
-        .catch(report('open editor'));
+      const file = `${absolute(loc.file)}:${loc.line}:${loc.column + 1}`;
+      // Vite DevTools refuses paths outside its workspace root, e.g. linked packages
+      ctx.rpc.call('vite:core:open-in-editor', file).catch(() => openWithVite(file));
     },
-    ignore(e: Event) {
-      // the dock is rendered in the page
-      return e
-        .composedPath()
-        .some(node => node instanceof Element && node.tagName.startsWith('DEVFRAMES-'));
-    },
+    ignore: fromDock,
     onenabledchange(enabled: boolean) {
       // sync the dock button when the inspector toggles itself
       if (ctx.current.isActive !== enabled) {
@@ -78,7 +108,7 @@ export default function setup(ctx: DockContext): void {
   };
 
   // client-side so it toggles this tab only; no keybinding of its own, toggleKeyCombo already is one
-  ctx.commands.register({
+  const unregister = ctx.commands.register({
     id: 'svelte:toggle-inspector',
     source: 'client',
     title: 'Toggle Svelte Inspector',
@@ -87,9 +117,20 @@ export default function setup(ctx: DockContext): void {
     action: () => docks.toggleEntry(id).catch(report('toggle the inspector')),
   });
 
-  // deferred, or the activating click reaches the inspector's window click handler and disables it
-  ctx.current.events.on('entry:activated', () => {
-    setTimeout(() => inspector.enable());
+  // deferred, or the activating click reaches the inspector's window click handler and disables
+  // it; skipped when the entry was turned off again in the meantime
+  const offActivated = ctx.current.events.on('entry:activated', () => {
+    setTimeout(() => {
+      if (ctx.current.isActive) inspector.enable();
+    });
   });
-  ctx.current.events.on('entry:deactivated', () => inspector.disable());
+  const offDeactivated = ctx.current.events.on('entry:deactivated', () => inspector.disable());
+
+  teardown = () => {
+    offActivated();
+    offDeactivated();
+    unregister();
+    void unmount(inspector);
+    target.remove();
+  };
 }

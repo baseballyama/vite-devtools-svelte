@@ -606,6 +606,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: ^5.1.0
         version: 5.1.0(vitest@5.1.0)
+      happy-dom:
+        specifier: ^21.0.4
+        version: 21.0.4
       svelte:
         specifier: ^5.57.3
         version: 5.57.3(@typescript-eslint/types@8.73.0)
