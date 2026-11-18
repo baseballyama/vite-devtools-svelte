@@ -67,6 +67,10 @@ describe('panel registry', () => {
     expect(requestedPanelView('?view=unknown', false)).toBeNull();
     expect(requestedPanelView('', true)).toBe('overview');
     expect(requestedPanelView('', false)).toBeNull();
+    expect(requestedPanelView('?view=nope', true)).toBe('overview');
+    for (const key of ['constructor', '__proto__', 'toString'])
+      expect(requestedPanelView(`?view=${key}`, false)).toBeNull();
+    expect(panelsForView(true, null)).toEqual(visiblePanels(true));
   });
 
   it.each(panels.map(p => p.id))('panelById(%j) finds it', id => {

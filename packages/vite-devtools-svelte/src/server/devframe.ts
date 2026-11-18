@@ -30,7 +30,7 @@ import type { Collector } from './collector.js';
 import { resolveWithinRoot } from './security.js';
 
 export const DEVFRAME_ID = 'svelte-devtools';
-const INSPECT_DOCK_ID = 'svelte-devtools:inspect';
+export const workflowDockId = (view: string): string => `${DEVFRAME_ID}:${view}`;
 /** Same base for both hosts (standalone and Vite DevTools), so the SPA URL never changes. */
 export const DEVFRAME_BASE = '/.svelte-devtools/';
 export const PICK_BROADCAST = 'element-picked';
@@ -247,7 +247,7 @@ export function createSvelteDevframe(host: SvelteDevtoolsHost): DevframeDefiniti
         void scoped.rpc
           .broadcast({ method: PICK_BROADCAST, args: [pick], event: true, optional: true })
           .catch(() => {});
-        docks?.activate?.(INSPECT_DOCK_ID);
+        docks?.activate?.(workflowDockId('inspect'));
       });
     },
   });

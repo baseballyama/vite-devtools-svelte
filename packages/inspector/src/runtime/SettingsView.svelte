@@ -106,7 +106,7 @@
 </script>
 
 <div class="sis">
-  <main class="sis-main">
+  <div class="sis-main">
     <header class="sis-header">
       <h2>Inspector settings</h2>
     </header>
@@ -187,7 +187,7 @@
           </div>
           <div class="sis-nav">
             {#each nav as [name, text] (name)}
-              <div class="sis-nav-item-key" title={text}>
+              <div class="sis-nav-item" title={text}>
                 <span class="sis-nav-label">{text}</span>
                 <KeyInput
                   mode="key"
@@ -235,7 +235,7 @@
         >
       </footer>
     </div>
-  </main>
+  </div>
 </div>
 
 <style>
@@ -440,7 +440,7 @@
       grid-template-columns: repeat(2, auto);
       gap: 6px 14px;
     }
-    .sis-nav-item-key {
+    .sis-nav-item {
       display: flex;
       align-items: center;
       gap: 6px;

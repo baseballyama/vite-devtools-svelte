@@ -303,6 +303,41 @@ describe('workflow views', () => {
       within(tabs).getByRole('link', { name: 'Load functions' }).getAttribute('aria-current'),
     ).toBe('page');
   });
+
+  it('opens the first tab of the view for a panel of another workflow', async () => {
+    await renderApp('#/routes', '?view=inspect');
+    await waitFor(() => expect(location.hash).toBe('#/components'));
+    await waitFor(() => expect(visiblePanel().getAttribute('aria-label')).toBe('Components'));
+  });
+
+  it('leaves another workflow when the project lookup fails too', async () => {
+    vi.mocked(rpc.getProject).mockRejectedValue(new Error('down'));
+    await renderApp('#/routes', '?view=problems');
+    await waitFor(() => expect(location.hash).toBe('#/errors'));
+  });
+
+  it('drops the SvelteKit tabs of a view without SvelteKit', async () => {
+    withoutKit();
+    await renderApp('#/routes', '?view=project');
+    await waitFor(() => expect(location.hash).toBe('#/modules'));
+    const tabs = screen.getByRole('navigation', { name: 'Workflow tools' });
+    expect(
+      within(tabs)
+        .getAllByRole('link')
+        .map(link => link.textContent?.trim()),
+    ).toEqual(['Modules', 'Assets', 'Social preview']);
+  });
+
+  it('is the Overview dock in Vite DevTools, and the full UI in any other frame', async () => {
+    const key = '__DEVFRAME_HUB_CLIENT_CONTEXT__';
+    (window as unknown as Record<string, unknown>)[key] = { clientType: 'embedded' };
+    try {
+      await renderApp('#/overview');
+      expect(screen.queryByRole('navigation', { name: 'Panels' })).toBeNull();
+    } finally {
+      delete (window as unknown as Record<string, unknown>)[key];
+    }
+  });
 });
 
 describe('App keyboard shortcuts and command palette', () => {
@@ -391,8 +426,18 @@ describe('element picks', () => {
     await renderApp('#/overview', '?view=overview');
     emitPick({ epoch: 'e1', componentId: 2 });
     flushSync();
-    expect(location.hash).toBe('#/overview');
     expect(elementPick.pending).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Components', hidden: true })).toBeNull();
+  });
+
+  it('a pick in the Inspect dock opens Components with the pick pending', async () => {
+    await renderApp('#/reactive', '?view=inspect');
+    const pick = { epoch: 'e1', componentId: 2 };
+    emitPick(pick);
+    flushSync();
+    expect(location.hash).toBe('#/components');
+    expect(elementPick.pending).toBe(pick);
+    elementPick.done(pick);
   });
 
   it('a pick on the app page opens Components with the pick pending', async () => {

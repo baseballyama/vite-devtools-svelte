@@ -31,7 +31,7 @@ import {
 } from './runtime/transform.js';
 import { Collector, HOT_EVENTS } from './server/collector.js';
 import { captureCompilerWarnings } from './server/compiler-warnings.js';
-import { createSvelteDevframe, DEVFRAME_BASE } from './server/devframe.js';
+import { createSvelteDevframe, DEVFRAME_BASE, workflowDockId } from './server/devframe.js';
 import type { SvelteDevtoolsHost } from './server/devframe.js';
 import {
   LOAD_RECORDER,
@@ -362,7 +362,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
           },
         ] as const) {
           ctx.docks?.register({
-            id: `svelte-devtools:${entry.id}`,
+            id: workflowDockId(entry.id),
             title: entry.title,
             description: entry.description,
             icon: entry.icon,

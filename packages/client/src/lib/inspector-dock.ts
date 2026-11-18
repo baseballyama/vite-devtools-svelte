@@ -21,6 +21,11 @@ function hubContext(): HubContext | undefined {
   }
 }
 
+/** Whether this UI is a dock of Vite DevTools, rather than the standalone page in any frame */
+export function inDevtoolsDock(): boolean {
+  return hubContext() !== undefined;
+}
+
 /**
  * Turns the Svelte Inspector on in the app page this UI is docked in, or null outside the
  * dock or without the inspector. Sets the dock action on (a no-op when it is on already),

@@ -188,14 +188,12 @@ export function svelteInspector(options: InspectorOptions = {}): InspectorPlugin
             icon: 'logos:svelte-icon',
             type: 'group',
             category: 'framework',
-            categoryOrder: { default: -100 },
             accentColor: '#ff3e00',
           });
         } catch (error) {
           log.debug('svelte dock group already registered', error, 'inspector');
         }
 
-        // on the bar so the picker stays one click away
         ctx.docks.register({
           id: 'svelte:inspector',
           title: 'Pick element',

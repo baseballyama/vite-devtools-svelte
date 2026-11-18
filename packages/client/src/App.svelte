@@ -17,10 +17,8 @@
     panelById,
     panelsForView,
     requestedPanelView,
-    visiblePanels,
     type PanelGroup,
     type PanelId,
-    type PanelView,
   } from './lib/panels.js';
   import { persisted } from './lib/persisted.svelte.js';
   import { resource } from './lib/resource.svelte.js';
@@ -31,7 +29,6 @@
   const theme = createThemeStore();
   const navPref = persisted<'expanded' | 'collapsed' | null>('nav', null);
   const requestedView = requestedPanelView();
-  const view: PanelView = requestedView ?? 'overview';
 
   let viewportWidth = $state(window.innerWidth);
   const collapsed = $derived(navPref.value ? navPref.value === 'collapsed' : viewportWidth < 900);
@@ -51,15 +48,12 @@
     when: () => !connectionSupported || connection.state.status === 'connected',
   });
   // A failed lookup shows every panel rather than hiding any for good.
-  const panels = $derived(
-    requestedView
-      ? panelsForView(project.error ? true : project.data?.kit, view)
-      : visiblePanels(project.error ? true : project.data?.kit),
-  );
+  const panels = $derived(panelsForView(project.error ? true : project.data?.kit, requestedView));
 
-  // A link or reload to a SvelteKit-only panel in an app without SvelteKit.
+  // A link or reload to a SvelteKit-only panel in an app without SvelteKit, or to a panel of
+  // another workflow in a dock.
   $effect(() => {
-    if (project.data && !panels.some(p => p.id === router.current))
+    if ((project.data || project.error) && !panels.some(p => p.id === router.current))
       router.replace(panels[0]?.id ?? 'overview');
   });
 
