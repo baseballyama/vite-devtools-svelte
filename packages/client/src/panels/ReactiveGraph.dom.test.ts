@@ -161,7 +161,7 @@ const entry = (
 async function states() {
   render(ReactiveGraph);
   await settle();
-  await userEvent.click(radio('Overview of', 'States'));
+  await userEvent.click(radio('List', 'States'));
   await settle();
 }
 
@@ -202,10 +202,13 @@ describe('ReactiveGraph: components overview', () => {
     expect(screen.getByText(/Other: unknown\./)).toBeTruthy();
   });
 
-  it('groups by instance and sorts by a column', async () => {
+  it('groups by instance without asking the app again, and sorts by a column', async () => {
     render(ReactiveGraph);
     await settle();
-    await userEvent.click(radio('Group', 'By instance'));
+    const calls = vi.mocked(rpc.getReactiveSummary).mock.calls.length;
+    await userEvent.click(radio('List', 'Instances'));
+    await settle();
+    expect(rpc.getReactiveSummary).toHaveBeenCalledTimes(calls);
     expect(
       options('Most active components').map(r => r.querySelector('.num')?.textContent),
     ).toEqual([' #1', ' #2', ' #3']);

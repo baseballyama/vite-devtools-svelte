@@ -65,16 +65,16 @@
     if (reactiveScope.current) untrack(() => (tab = 'local'));
   });
 
-  /** Overview of components (runtime summary) or of states (timeline buffer); each works without the other. */
-  let overviewOf = $state<'components' | 'states'>('components');
+  /** Components come from the runtime summary, states from the timeline buffer; each works without the other. */
+  let overviewOf = $state<'file' | 'instance' | 'states'>('file');
+  // A $derived, so switching Components / Instances does not re-run the poll.
+  const summaryOn = $derived(tab === 'overview' && overviewOf !== 'states');
 
   const summary = resource<ReactiveSummary | null>(() => fetchSummary(SUMMARY), {
     initial: null,
     interval: SUMMARY_POLL_MS,
-    when: () => tab === 'overview' && overviewOf === 'components',
+    when: () => summaryOn,
   });
-
-  let group = $state<'file' | 'instance'>('file');
 
   // Read from the server buffer only; the app is not asked.
   const timeline = resource<StateTimelineEntry[]>(
@@ -291,24 +291,15 @@
     />
     {#if tab === 'overview'}
       <Segmented
-        label="Overview of"
+        label="List"
         bind:value={overviewOf}
         options={[
-          { value: 'components', label: 'Components' },
+          { value: 'file', label: 'Components' },
+          { value: 'instance', label: 'Instances' },
           { value: 'states', label: 'States' },
         ]}
       />
-    {/if}
-    {#if tab === 'overview' && overviewOf === 'components'}
-      <Segmented
-        label="Group"
-        bind:value={group}
-        options={[
-          { value: 'file', label: 'By file' },
-          { value: 'instance', label: 'By instance' },
-        ]}
-      />
-    {:else if tab !== 'overview'}
+    {:else}
       <Segmented
         label="Signal kind"
         bind:value={type}
@@ -361,7 +352,7 @@
     {#if overviewOf === 'states'}
       <HotStates {timeline} {states} baseline={statesBaseline} />
     {:else}
-      <ComponentsOverview {summary} {group} onfullgraph={() => (tab = 'full')} />
+      <ComponentsOverview {summary} group={overviewOf} onfullgraph={() => (tab = 'full')} />
     {/if}
   {:else if tab === 'local' && !scope}
     <EmptyState icon="reactive" title="Pick a component">
