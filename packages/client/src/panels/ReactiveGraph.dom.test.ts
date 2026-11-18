@@ -188,9 +188,9 @@ describe('ReactiveGraph: components overview', () => {
     expect(rpc.getReactiveSummary).toHaveBeenCalledWith({ topK: 50, windowMs: 10000 });
     expect(rpc.getReactiveGraph).not.toHaveBeenCalled();
     expect(panelHeading().textContent).toContain('3');
-    const record = screen.getByRole('group', { name: 'What this overview covers' });
-    expect(record.textContent).toContain('3 active of 3 registered');
-    expect(record.textContent).toContain('full values, per-signal history, update cause');
+    // one short line; coverage and capability details stay in the MCP answer
+    expect(text()).toMatch(/3 components · 3 active\s+in the last 10 s/);
+    expect(text()).not.toMatch(/Window|Coverage|Not available yet/);
     const rows = options('Most active components');
     // Grouped by file, most changes first.
     expect(rows.map(r => r.querySelector('.mono')?.textContent)).toEqual(['Counter', 'App']);
@@ -271,10 +271,9 @@ describe('ReactiveGraph: components overview', () => {
     const body = text();
     expect(body).toContain('top 3 of 9 active');
     expect(body).toContain('Other: 6 components with 40 signals.');
-    expect(body).toContain('9 active of unknown registered');
+    expect(body).toMatch(/unknown components · 9 active\s+in the last 10 s/);
     expect(body).toContain('no app page is connected');
     expect(body).toContain('Sampling baseline: 1 state pending');
-    expect(body).toMatch(/Not available yet\s*none/);
   });
 
   it('shows an unavailable overview with a way to the full graph', async () => {
