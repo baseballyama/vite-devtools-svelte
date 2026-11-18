@@ -23,6 +23,7 @@ export const icons = {
   errors:
     '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
   inspect: '<path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/>',
+  pick: '<path d="M4 4l6.5 16 2.3-6.7L19.5 11z"/><path d="m13.5 13.5 6 6"/>',
   og: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M7 13h10M7 16h6"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
   close: '<path d="M6 6l12 12M18 6 6 18"/>',

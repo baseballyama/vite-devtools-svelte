@@ -18,7 +18,8 @@
   import type { CaptureInfo } from '../lib/capture.svelte.js';
   import { countBy, groupBy } from '../lib/collections.js';
   import { elementPick } from '../lib/element-pick.svelte.js';
-  import { componentName, shortPath } from '../lib/format.js';
+  import { componentName, errorMessage, shortPath } from '../lib/format.js';
+  import { inspectorPicker } from '../lib/inspector-dock.js';
   import { buildLiveTree, type LiveNode } from '../lib/live-tree.js';
   import { matcher } from '../lib/match.js';
   import { persisted } from '../lib/persisted.svelte.js';
@@ -184,6 +185,13 @@
     });
   });
 
+  const startPicker = inspectorPicker();
+  let pickError = $state<string | null>(null);
+  function pickElement(start: () => Promise<void>) {
+    pickError = null;
+    start().catch((e: unknown) => (pickError = errorMessage(e)));
+  }
+
   const relations = resource<ComponentRelation[]>(getComponentRelations, {
     initial: [],
     when: () => mode.value === 'files' || treeSelected != null,
@@ -310,6 +318,14 @@
     {/if}
   {/snippet}
   {#snippet actions()}
+    {#if startPicker}
+      <Button
+        icon="pick"
+        title={pickError ??
+          'Turns on the Svelte Inspector in the app: click an element to select its component here and open it in your editor (Esc cancels)'}
+        onclick={() => pickElement(startPicker)}>Pick element</Button
+      >
+    {/if}
     {#if mode.value !== 'tree'}
       <RefreshButton res={relations} label="Re-analyze" />
     {/if}

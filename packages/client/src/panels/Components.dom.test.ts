@@ -1,6 +1,6 @@
 import { render, screen, within } from '@testing-library/svelte';
 import { userEvent } from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { elementPick } from '../lib/element-pick.svelte.js';
 import { reactiveScope } from '../lib/reactive-selection.svelte.js';
@@ -444,5 +444,47 @@ describe('Components: element picked on the app page', () => {
     }
     await settle();
     expect(row('Row').getAttribute('aria-selected')).toBe('true');
+  });
+});
+
+// The Vite DevTools hub's client context, which the docked UI finds on its parent window.
+const KEY = '__DEVFRAME_HUB_CLIENT_CONTEXT__';
+const setHub = (ctx: unknown) => {
+  (window as unknown as Record<string, unknown>)[KEY] = ctx;
+};
+const hub = (setActionActive = vi.fn(() => Promise.resolve(true))) => ({
+  clientType: 'embedded',
+  docks: { entries: [{ id: 'svelte:inspector' }], setActionActive },
+});
+
+describe('Components: Pick element', () => {
+  afterEach(() => {
+    delete (window as unknown as Record<string, unknown>)[KEY];
+  });
+
+  it.each([
+    ['outside the Vite DevTools dock', undefined],
+    ['in a dock without the inspector', { ...hub(), docks: { entries: [] } }],
+    ['in the standalone Vite DevTools page', { ...hub(), clientType: 'standalone' }],
+  ])('is not shown %s', async (_, ctx) => {
+    setHub(ctx);
+    render(Components);
+    await settle();
+    expect(screen.queryByRole('button', { name: 'Pick element' })).toBeNull();
+  });
+
+  it("turns the inspector's dock action on (not a toggle); a failure shows in its tooltip", async () => {
+    const setActionActive = vi.fn(() => Promise.resolve(true));
+    setHub(hub(setActionActive));
+    render(Components);
+    await settle();
+    const button = screen.getByRole('button', { name: 'Pick element' });
+    await userEvent.click(button);
+    expect(setActionActive).toHaveBeenCalledExactlyOnceWith('svelte:inspector', true);
+    setActionActive.mockRejectedValueOnce(new Error('not trusted'));
+    await userEvent.click(button);
+    await settle();
+    expect(setActionActive).toHaveBeenCalledTimes(2);
+    expect(button.getAttribute('title')).toBe('not trusted');
   });
 });
