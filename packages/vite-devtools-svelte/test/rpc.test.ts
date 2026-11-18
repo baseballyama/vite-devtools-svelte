@@ -82,12 +82,10 @@ describe('devframe definition', () => {
 describe('project analysis RPCs', () => {
   const rpc = rpcHandlers(createTestHost(FIXTURES_DIR, { publicBase: () => '/base/' }));
 
-  it('get-project / get-routes / get-component-relations / get-svelte-files', async () => {
+  it('get-project / get-routes / get-component-relations', async () => {
     expect((await rpc.get('svelte-devtools:get-project')!()).name).toBeTruthy();
     expect((await rpc.get('svelte-devtools:get-routes')!()).length).toBeGreaterThan(0);
     expect((await rpc.get('svelte-devtools:get-component-relations')!()).length).toBeGreaterThan(0);
-    const files = await rpc.get('svelte-devtools:get-svelte-files')!();
-    expect(files[0]).toEqual({ file: expect.any(String), name: expect.any(String) });
   });
 
   it('get-assets returns a previewable public URL under the Vite base', async () => {
@@ -200,52 +198,18 @@ describe('file access sandbox', () => {
   const host = createTestHost(FIXTURES_DIR);
   const rpc = rpcHandlers(host);
 
-  it('inspect-file refuses paths outside the root (absolute and traversal)', async () => {
-    expect((await rpc.get('svelte-devtools:inspect-file')!({ file: '/etc/passwd' })).source).toBe(
-      '',
+  it('open-in-editor refuses traversal and symlinks escaping the root', () => {
+    const traversal = path.relative(FIXTURES_DIR, '/etc/hosts');
+    expect(() => rpc.get('svelte-devtools:open-in-editor')!({ file: traversal })).toThrow(
+      /outside/,
     );
-    expect(
-      (await rpc.get('svelte-devtools:inspect-file')!({ file: '../../../etc/passwd' })).source,
-    ).toBe('');
-  });
-
-  it('inspect-file refuses symlinks escaping the root', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sdt-link-'));
     fs.symlinkSync('/etc', path.join(root, 'escape'));
     const r = rpcHandlers(createTestHost(root));
-    expect((await r.get('svelte-devtools:inspect-file')!({ file: 'escape/hosts' })).source).toBe(
-      '',
+    expect(() => r.get('svelte-devtools:open-in-editor')!({ file: 'escape/hosts' })).toThrow(
+      /outside/,
     );
-  });
-
-  it('inspect-file returns source, and compiled output + map from the dev server', async () => {
-    const transformRequest = vi.fn(() =>
-      Promise.resolve({
-        code: 'compiled',
-        map: JSON.stringify({ mappings: 'AAAA', sources: ['Counter.svelte'] }),
-      }),
-    );
-    const r = rpcHandlers(createTestHost(FIXTURES_DIR, { transformRequest }));
-    const result = await r.get('svelte-devtools:inspect-file')!({
-      file: 'src/lib/components/Counter.svelte',
-    });
-    expect(result.source).toContain('$state');
-    expect(result).toMatchObject({
-      compiled: 'compiled',
-      mappings: 'AAAA',
-      sources: ['Counter.svelte'],
-    });
-    expect(transformRequest).toHaveBeenCalledWith(fs.realpathSync(COUNTER));
-  });
-
-  it('inspect-file reports transform failures without throwing', async () => {
-    const r = rpcHandlers(
-      createTestHost(FIXTURES_DIR, {
-        transformRequest: () => Promise.reject(new Error('x')),
-      }),
-    );
-    const result = await r.get('svelte-devtools:inspect-file')!({ file: COUNTER });
-    expect(result.compiled).toBe('// Transform failed');
+    fs.rmSync(root, { recursive: true, force: true });
   });
 
   it('open-in-editor resolves inside the root and passes file:line to the editor', async () => {
@@ -362,10 +326,6 @@ describe('every RPC with valid input', () => {
       'get-routes': [[], r => expect(r.map((x: any) => x.id).toSorted()).toEqual(['/', 'api'])],
       'get-assets': [[], r => expect(r.map((a: any) => a.url)).toEqual(['/a.txt'])],
       'get-component-relations': [[], r => expect(r).toHaveLength(2)],
-      'get-svelte-files': [
-        [],
-        r => expect(r.map((f: any) => f.name).toSorted()).toEqual(['+page', 'C']),
-      ],
       'get-live-components': [[], r => expect(r).toEqual([])],
       'get-live-components-meta': [
         [],
@@ -399,10 +359,6 @@ describe('every RPC with valid input', () => {
       'get-compiler-warnings': [[], r => expect(r).toEqual([])],
       'get-runtime-errors': [[], r => expect(r).toEqual([])],
       'clear-errors': [[], () => {}],
-      'inspect-file': [
-        [{ file: 'src/lib/C.svelte' }],
-        r => expect(r).toEqual({ source: '<p>c</p>', compiled: '', file: 'src/lib/C.svelte' }),
-      ],
       'get-module-graph': [[], r => expect(r).toEqual({ modules: [], cycles: [] })],
       'get-og-preview': [[{ url: 'http://localhost:5173/' }], r => expect(r.title).toBe('t')],
       'get-build-analysis': [[], r => expect(r.chunks).toEqual([])],
@@ -452,8 +408,6 @@ describe('RPC input validation', () => {
     ['get-state-timeline-delta', [{ since: -1 }]],
     ['get-state-timeline-delta', [{ since: 0.5 }]],
     ['get-state-timeline-delta', [undefined]],
-    ['inspect-file', [{ file: '' }]],
-    ['inspect-file', [{}]],
     ['get-og-preview', [{ url: long(8193) }]],
     ['get-og-preview', [{ url: 5 }]],
   ])('%s rejects %j before the handler runs', async (name, args) => {
@@ -513,48 +467,6 @@ describe('RPC behaviour details', () => {
     await rpc.get('svelte-devtools:get-reactive-summary')!({ topK: 3 });
     expect(graph.mock.calls).toEqual([[{}], [{ componentId: 2, epoch: 'e' }]]);
     expect(summary.mock.calls).toEqual([[{}], [{ topK: 3 }]]);
-  });
-
-  it.each<[label: string, result: any, expected: Record<string, unknown>]>([
-    ['null result', null, { compiled: '', mappings: undefined, sources: undefined }],
-    ['no map', { code: 'c' }, { compiled: 'c', mappings: undefined, sources: undefined }],
-    [
-      'object map',
-      { code: 'c', map: { mappings: 'AA', sources: ['a'] } },
-      { mappings: 'AA', sources: ['a'] },
-    ],
-    [
-      'JSON string map',
-      { code: 'c', map: '{"mappings":"AB","sources":["s"]}' },
-      { mappings: 'AB', sources: ['s'] },
-    ],
-    [
-      'JSON map with bad fields',
-      { code: 'c', map: '{"mappings":1,"sources":[1]}' },
-      { compiled: 'c', mappings: undefined, sources: undefined },
-    ],
-    [
-      'JSON non-object map',
-      { code: 'c', map: '5' },
-      { compiled: 'c', mappings: undefined, sources: undefined },
-    ],
-    ['invalid JSON map', { code: 'c', map: '{oops' }, { compiled: '// Transform failed' }],
-  ])('inspect-file with a transform giving %s', async (_label, result, expected) => {
-    const r = rpcHandlers(
-      createTestHost(FIXTURES_DIR, { transformRequest: () => Promise.resolve(result) }),
-    );
-    const out = await r.get('svelte-devtools:inspect-file')!({ file: COUNTER });
-    expect(out.source).toContain('$state');
-    expect(out).toMatchObject(expected);
-  });
-
-  it('inspect-file of a missing file is empty', async () => {
-    const r = rpcHandlers(createTestHost(FIXTURES_DIR));
-    expect(await r.get('svelte-devtools:inspect-file')!({ file: 'nope.svelte' })).toEqual({
-      source: '',
-      compiled: '',
-      file: 'nope.svelte',
-    });
   });
 });
 

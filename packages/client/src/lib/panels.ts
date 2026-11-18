@@ -71,15 +71,6 @@ export const panels = [
     load: () => import('../panels/StateTimeline.svelte'),
   },
   {
-    id: 'inspect',
-    label: 'Compiled output',
-    icon: 'inspect',
-    group: 'inspect',
-    description: 'Source ↔ compiled JS with source-map links',
-    keywords: 'inspect compile sourcemap',
-    load: () => import('../panels/Inspect.svelte'),
-  },
-  {
     id: 'render',
     label: 'Render',
     icon: 'render',
@@ -176,7 +167,7 @@ export function visiblePanels(kit: boolean | undefined): (PanelDef & { id: Panel
 const viewPanels: Record<PanelView, readonly PanelId[]> = {
   overview: ['overview'],
   problems: ['errors'],
-  inspect: ['components', 'reactive', 'timeline', 'inspect'],
+  inspect: ['components', 'reactive', 'timeline'],
   profile: ['render', 'loads', 'fps', 'build'],
   project: ['routes', 'api', 'modules', 'assets', 'og'],
 };

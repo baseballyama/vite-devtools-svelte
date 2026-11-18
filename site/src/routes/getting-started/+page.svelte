@@ -2,6 +2,7 @@
   import { resolve } from '$app/paths';
 
   import CodeBlock from '#lib/CodeBlock.svelte';
+  import { panels } from '#lib/panels.ts';
 
   const installCode = `npm install -D @sveltejs/vite-devtools-svelte`;
 
@@ -191,7 +192,7 @@ export default defineConfig({
         <h2 class="content-h2">Next steps</h2>
         <ul>
           <li>
-            <a href={resolve('/#panels')}>Browse the 15 panels</a>
+            <a href={resolve('/#panels')}>Browse the {panels.length} panels</a>
           </li>
           <li>
             <a

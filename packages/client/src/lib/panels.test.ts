@@ -43,7 +43,6 @@ describe('panel registry', () => {
       'components',
       'reactive',
       'timeline',
-      'inspect',
     ]);
     expect(panelsForView(true, 'profile').map(p => p.id)).toEqual([
       'render',

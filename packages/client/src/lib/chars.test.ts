@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { digitsOf, isDigits, isSpace, isWord, leadingDigits, words } from './chars.js';
+import { digitsOf, isDigits, isSpace, leadingDigits, words } from './chars.js';
 
 describe('chars', () => {
   it('isSpace matches what a regex `\\s` matches', () => {
@@ -8,11 +8,6 @@ describe('chars', () => {
       expect(isSpace(c)).toBe(true);
     }
     for (const c of ['a', '0', '_', '', undefined]) expect(isSpace(c)).toBe(false);
-  });
-
-  it('isWord is ASCII letters, digits and `_`', () => {
-    expect(['a', 'Z', '0', '_'].every(isWord)).toBe(true);
-    expect(['$', '-', 'é', undefined].some(isWord)).toBe(false);
   });
 
   it('words splits on any run of whitespace and drops empties', () => {

@@ -1,6 +1,5 @@
 // Large, deterministic data so the client UI can be stress-tested without a
 // SvelteKit app. Never bundled: only `dev/vite.mock.config.ts` imports it.
-import { compile } from 'svelte/compiler';
 
 import type {
   ComponentInstance,
@@ -379,8 +378,6 @@ export function createMockBackend(scale = 5000) {
     return out;
   };
 
-  const SAMPLE = `<script lang="ts">\n  let { items = [] } = $props()\n  let query = $state('')\n  let open = $state(false)\n  const filtered = $derived(items.filter((i) => i.name.includes(query)))\n\n  $effect(() => {\n    if (open) console.log('opened with', filtered.length)\n  })\n</script>\n\n<div class="card">\n  <input bind:value={query} placeholder="Search" />\n  <button onclick={() => (open = !open)}>Toggle</button>\n  {#if open}\n    <ul>\n      {#each filtered as item (item.id)}\n        <li class:active={item.active}>{item.name}</li>\n      {/each}\n    </ul>\n  {/if}\n</div>\n\n<style>\n  .card {\n    padding: 12px;\n  }\n  .active {\n    color: tomato;\n  }\n</style>\n`;
-
   // Mirror the dev server's bounded buffers (src/collector.ts LIMITS, `tail`
   // = newest kept) so >cap apps reproduce the real truncation, including
   // subtrees whose ancestors fall outside the capture. MOCK_CAP=0 disables.
@@ -586,21 +583,6 @@ export function createMockBackend(scale = 5000) {
       (errors.length = 0),
       versions.errors++
     ),
-    'svelte-devtools:get-svelte-files': () => files,
-    'svelte-devtools:inspect-file': ({ file }: { file: string }) => {
-      const res = compile(SAMPLE, {
-        filename: file.split('/').pop(),
-        generate: 'client',
-        dev: false,
-      });
-      return {
-        source: SAMPLE,
-        compiled: res.js.code,
-        file,
-        mappings: res.js.map.mappings,
-        sources: res.js.map.sources,
-      };
-    },
     'svelte-devtools:get-module-graph': () => ({ modules, cycles }),
     'svelte-devtools:get-og-preview': ({ url }: { url: string }) => ({
       url,

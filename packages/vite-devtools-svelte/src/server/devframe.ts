@@ -20,7 +20,6 @@ import { findReactiveLine } from '../analyzers/source.js';
 import type {
   CaptureInfoMap,
   ElementPick,
-  InspectResult,
   OGPreview,
   ReactiveGraphResult,
   ReactiveSummary,
@@ -55,10 +54,6 @@ export interface SvelteDevtoolsHost {
   routesDir: () => string | undefined;
   publicBase: () => string;
   modules: () => GraphModuleLike[];
-  transformRequest?: (file: string) => Promise<{
-    code: string;
-    map?: { mappings?: string; sources?: string[] } | string | null;
-  } | null>;
   resolveFile?: ResolveFile;
   /** The OG preview may call these. */
   serverOrigins: () => string[];
@@ -100,9 +95,6 @@ export function createRpcFunctions(host: SvelteDevtoolsHost) {
     query('get-routes', routes),
     query('get-assets', () => analyzeAssets(project().staticDir, host.publicBase())),
     query('get-component-relations', () => analyzeComponents(host.root())),
-    query('get-svelte-files', () =>
-      analyzeComponents(host.root()).map(c => ({ file: c.file, name: c.name })),
-    ),
     query('get-live-components', () => collector.liveComponents),
     query('get-live-components-meta', (): LiveComponentsMeta => ({
       total: collector.liveComponentsTotal,
@@ -207,14 +199,6 @@ export function createRpcFunctions(host: SvelteDevtoolsHost) {
     query('get-compiler-warnings', () => collector.compilerWarnings),
     query('get-runtime-errors', () => collector.runtimeErrors),
     action('clear-errors', () => collector.clearErrors()),
-    defineRpcFunction({
-      name: 'inspect-file',
-      type: 'query',
-      jsonSerializable: true,
-      args: [z.object({ file: filePath })],
-      returns: z.custom<InspectResult>(),
-      handler: ({ file }) => inspectFile(host, file),
-    }),
     query('get-module-graph', () => buildModuleGraph(host.root(), host.modules())),
     defineRpcFunction({
       name: 'get-og-preview',
@@ -228,31 +212,6 @@ export function createRpcFunctions(host: SvelteDevtoolsHost) {
     query('get-fps', () => collector.fpsSamples),
     action('clear-fps', () => collector.clearFps()),
   ] as const;
-}
-
-async function inspectFile(host: SvelteDevtoolsHost, file: string): Promise<InspectResult> {
-  let resolved: string;
-  let source: string;
-  try {
-    resolved = resolveWithinRoot(host.root(), file);
-    source = fs.readFileSync(resolved, 'utf-8');
-  } catch {
-    return { source: '', compiled: '', file };
-  }
-  if (!host.transformRequest) return { source, compiled: '', file };
-  try {
-    const result = await host.transformRequest(resolved);
-    const map = parseSourceMap(result?.map);
-    return {
-      source,
-      compiled: result?.code ?? '',
-      file,
-      mappings: map?.mappings,
-      sources: map?.sources,
-    };
-  } catch {
-    return { source, compiled: '// Transform failed', file };
-  }
 }
 
 export function createSvelteDevframe(host: SvelteDevtoolsHost): DevframeDefinition {
@@ -292,18 +251,4 @@ export function createSvelteDevframe(host: SvelteDevtoolsHost): DevframeDefiniti
       });
     },
   });
-}
-
-function parseSourceMap(
-  map: { mappings?: string; sources?: string[] } | string | null | undefined,
-): { mappings?: string; sources?: string[] } | undefined {
-  if (typeof map !== 'string') return map ?? undefined;
-  const parsed: unknown = JSON.parse(map);
-  if (typeof parsed !== 'object' || parsed === null) return undefined;
-  const { mappings, sources } = parsed as { mappings?: unknown; sources?: unknown };
-  return {
-    mappings: typeof mappings === 'string' ? mappings : undefined,
-    sources:
-      Array.isArray(sources) && sources.every(s => typeof s === 'string') ? sources : undefined,
-  };
 }

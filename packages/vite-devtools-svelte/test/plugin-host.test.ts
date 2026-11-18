@@ -65,7 +65,6 @@ function setup(
     },
     config: { server: {}, logger: { info: vi.fn(), error: vi.fn() } },
     environments: {} as Record<string, unknown>,
-    transformRequest: vi.fn((_file: string) => Promise.resolve({ code: 'compiled', map: null })),
     resolvedUrls: { local: [] as string[], network: [] as string[] },
     ...serverOverrides,
   };
@@ -125,18 +124,6 @@ describe('devframe host wiring', () => {
     s.configure();
     const graph = await (await hub(s.plugins))('get-module-graph');
     expect(graph.modules.map((m: { file: string }) => m.file)).toEqual([PAGE]);
-  });
-
-  it('inspect-file compiles through the live server, and not after it closed', async () => {
-    const s = setup();
-    const call = await hub(s.plugins);
-    s.configure();
-    const result = await call('inspect-file', { file: 'src/routes/+page.svelte' });
-    expect(s.server.transformRequest).toHaveBeenCalledWith(PAGE);
-    expect(result.compiled).toBe('compiled');
-    expect(result.source.length).toBeGreaterThan(0);
-    s.httpServer.emit('close');
-    expect((await call('inspect-file', { file: 'src/routes/+page.svelte' })).compiled).toBe('');
   });
 
   it("API endpoints follow re-exports through the dev server's SSR resolver", async () => {

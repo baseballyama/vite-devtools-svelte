@@ -148,7 +148,6 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     routesDir: () => routesDir,
     publicBase: () => config?.base ?? '/',
     modules: () => (server ? collectModules(server) : []),
-    transformRequest: file => (server ? server.transformRequest(file) : Promise.resolve(null)),
     resolveFile: serverResolver(() => server),
     serverOrigins: () => {
       const urls = server?.resolvedUrls;
@@ -337,7 +336,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
           {
             id: 'inspect',
             title: 'Inspect',
-            description: 'Components, reactivity, state and compiled output',
+            description: 'Components, reactivity and state over time',
             icon: 'ph:binoculars-duotone',
             view: 'inspect',
             panel: 'components',

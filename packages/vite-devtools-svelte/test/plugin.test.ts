@@ -258,7 +258,7 @@ describe('mainPlugin devtools hook (Vite DevTools)', () => {
       {
         id: 'svelte-devtools:inspect',
         title: 'Inspect',
-        description: 'Components, reactivity, state and compiled output',
+        description: 'Components, reactivity and state over time',
         icon: 'ph:binoculars-duotone',
         type: 'iframe',
         url: '/.svelte-devtools/?view=inspect#/components',
