@@ -11,6 +11,16 @@ minimumReleaseAgeExclude:
   - '@vitejs/devtools-rolldown'
   - 'devframe'
   - '@devframes/*'
+  - '@sveltejs/*'
+  - 'svelte'
+  - 'esrap'
+  - 'devalue'
+  - 'dts-buddy'
+  - 'zimmerframe'
+  - 'prettier-plugin-svelte'
+  - 'svelte-check'
+  - 'svelte2tsx'
+  - 'esm-env'
 
 # pnpm >= 11 reads settings only from this file (not package.json "pnpm").
 allowBuilds:
