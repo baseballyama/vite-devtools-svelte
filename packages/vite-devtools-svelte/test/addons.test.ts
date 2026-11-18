@@ -31,7 +31,7 @@ const KYSELY = {
   description: 'sv add-on for kysely',
   version: '0.0.1',
   downloads: 36,
-  npmUrl: 'https://www.npmjs.com/package/@natoboram/sv-kysely',
+  url: 'https://npmx.dev/package/@natoboram/sv-kysely',
 };
 
 function handlers(hub: AddonHub, search = () => Promise.resolve([KYSELY])) {
@@ -156,7 +156,7 @@ describe('community add-ons', () => {
     expect(list.map(a => a.name)).toEqual(['vite-plugin-svelte-md', '@acme/sv']);
     expect(list[1]).toMatchObject({
       avatar: 'https://github.com/acme.png?size=64',
-      npmUrl: 'https://www.npmjs.com/package/@acme/sv',
+      url: 'https://npmx.dev/package/@acme/sv',
     });
     expect(list[0]!.description).toBe('');
   });

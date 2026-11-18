@@ -163,8 +163,8 @@
                 <span class="meta" title="Downloads in the last 30 days">
                   {compact.format(addon.downloads)}/month · v{addon.version}
                 </span>
-                <a class="npm" href={addon.npmUrl} target="_blank" rel="noopener noreferrer">
-                  npm <Icon name="external" size={11} />
+                <a class="npm" href={addon.url} target="_blank" rel="noopener noreferrer">
+                  npmx <Icon name="external" size={11} />
                 </a>
               </div>
               <div class="foot">

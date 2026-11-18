@@ -23,7 +23,7 @@ const community: CommunityAddonsResult = {
       description: 'Kysely setup',
       version: '1.2.0',
       downloads: 1500,
-      npmUrl: 'https://www.npmjs.com/package/@acme/sv-kysely',
+      url: 'https://npmx.dev/package/@acme/sv-kysely',
       avatar: 'https://github.com/acme.png?size=64',
       installed: false,
     },
@@ -56,7 +56,7 @@ describe('Addons', () => {
     expect(within(card('Drizzle')).getByText('SvelteKit')).toBeTruthy();
     expect(within(card('kysely')).getByText('1.5K/month · v1.2.0')).toBeTruthy();
     expect(within(card('kysely')).getByRole('link').getAttribute('href')).toBe(
-      community.addons[0]!.npmUrl,
+      community.addons[0]!.url,
     );
   });
 

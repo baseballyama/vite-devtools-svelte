@@ -204,7 +204,7 @@ export async function searchCommunityAddons(
         description: (p.description ?? '').replaceAll(REGEX_HTML_TAG, '').trim(),
         version: p.version,
         downloads: downloads?.monthly ?? 0,
-        npmUrl: `https://www.npmjs.com/package/${p.name}`,
+        url: `https://npmx.dev/package/${p.name}`,
         avatar: owner ? `https://github.com/${owner}.png?size=64` : undefined,
       };
     })

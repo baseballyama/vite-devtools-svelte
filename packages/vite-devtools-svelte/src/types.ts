@@ -444,7 +444,8 @@ export interface CommunityAddon {
   version: string;
   /** Last 30 days, from npm. */
   downloads: number;
-  npmUrl: string;
+  /** Its npmx page. */
+  url: string;
   /** GitHub avatar of the repository owner. */
   avatar?: string;
   installed: boolean;
