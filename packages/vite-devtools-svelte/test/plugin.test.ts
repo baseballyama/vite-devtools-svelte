@@ -8,6 +8,13 @@ import { svelteDevtools } from '../src/plugin.js';
 import { HOOKS_FILE, HOOKS_MODULE_ID } from '../src/runtime/index.js';
 import { callHook, kitSetup, resolvePlugins } from './helpers.js';
 
+// The app's Svelte as svelteSupport finds it from the root (svelte-support.test.ts
+// covers the lookup): one with the devtools events, unless a test changes it.
+const svelte = vi.hoisted(() => ({
+  version: '5.99.0' as string | undefined,
+  devtoolsEvents: true,
+}));
+vi.mock('../src/svelte-support.js', () => ({ svelteSupport: () => ({ ...svelte }) }));
 const shape = (p: Plugin) => ({
   name: p.name,
   enforce: p.enforce,
@@ -144,6 +151,89 @@ describe('experimental.devtools', () => {
 
   it('does nothing without vite-plugin-svelte', () => {
     expect(() => resolvePlugins(svelteDevtools())).not.toThrow();
+  });
+});
+
+/** Serve with vite-plugin-svelte, recording the warnings. */
+function serveWithSvelte(plugins = svelteDevtools()) {
+  const api = { options: { compilerOptions: { dev: true } } };
+  const warn = vi.fn();
+  const resolved = resolvePlugins(plugins, {
+    plugins: [{ name: 'vite-plugin-svelte:config', api }],
+    logger: { warn },
+  });
+  const byName = (name: string) => plugins.find(p => p.name === name)!;
+  return { api, resolved, warn, byName };
+}
+
+// An older Svelte throws on `experimental.devtools` (options_unrecognised) and
+// has no `svelte/internal/devtools` for the hooks to import: the app must
+// still run, without tracking.
+describe('a Svelte without devtools events', () => {
+  const vitest = process.env['VITEST'];
+  beforeEach(() => {
+    delete process.env['VITEST'];
+    svelte.version = '5.57.3';
+    svelte.devtoolsEvents = false;
+  });
+  afterEach(() => {
+    process.env['VITEST'] = vitest;
+    svelte.version = '5.99.0';
+    svelte.devtoolsEvents = true;
+  });
+
+  it('leaves the compiler options and fs.allow as they are', () => {
+    const { api, resolved } = serveWithSvelte();
+    expect(api.options.compilerOptions).toEqual({ dev: true });
+    expect(resolved.server.fs.allow).toEqual(['/test']);
+  });
+
+  it('does not import the hooks into Svelte modules', () => {
+    const { byName } = serveWithSvelte();
+    expect(
+      callHook(
+        byName('vite-devtools-svelte:tracking').transform,
+        'export const cart = $.proxy({})',
+        '/test/src/cart.svelte.ts',
+      ),
+    ).toBeNull();
+  });
+
+  it('says why, with the version', () => {
+    const { warn } = serveWithSvelte();
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn.mock.calls[0]![0]).toContain('svelte@5.57.3 has no devtools events');
+  });
+
+  it('says so when Svelte is not found', () => {
+    svelte.version = undefined;
+    const { warn } = serveWithSvelte();
+    expect(warn.mock.calls[0]![0]).toContain('Svelte was not found');
+  });
+
+  it('is quiet inside Vitest', () => {
+    process.env['VITEST'] = 'true';
+    expect(serveWithSvelte().warn).not.toHaveBeenCalled();
+  });
+
+  it('follows the Svelte of each restart (the plugin instance is reused)', () => {
+    const plugins = svelteDevtools();
+
+    svelte.devtoolsEvents = true;
+    const tracked = serveWithSvelte(plugins);
+    expect(tracked.api.options.compilerOptions).toEqual({
+      dev: true,
+      experimental: { devtools: [HOOKS_FILE] },
+    });
+
+    svelte.devtoolsEvents = false;
+    expect(serveWithSvelte(plugins).api.options.compilerOptions).toEqual({ dev: true });
+
+    svelte.devtoolsEvents = true;
+    expect(serveWithSvelte(plugins).api.options.compilerOptions).toEqual({
+      dev: true,
+      experimental: { devtools: [HOOKS_FILE] },
+    });
   });
 });
 

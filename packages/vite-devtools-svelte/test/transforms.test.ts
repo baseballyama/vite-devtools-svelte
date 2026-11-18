@@ -13,6 +13,11 @@ import { HOT_EVENTS } from '../src/server/collector.js';
 import { loadProfileOf, parseLoadReport } from '../src/server/load-profile.js';
 import { callHook, codeOf, kitSetup, resolvePlugins } from './helpers.js';
 
+// The app's Svelte has the devtools events (plugin.test.ts covers one without them).
+vi.mock('../src/svelte-support.js', () => ({
+  svelteSupport: () => ({ version: '5.99.0', devtoolsEvents: true }),
+}));
+
 const HOOKS_IMPORT = `import '${HOOKS_MODULE_ID}';`;
 
 describe('injectModuleTracking', () => {
