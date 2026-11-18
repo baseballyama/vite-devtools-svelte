@@ -72,7 +72,8 @@ export function createMockBackend(scale = 5000) {
     if (live.length >= scale) return;
     const id = nextId++;
     const f = depth === 0 ? { file: 'src/routes/+layout.svelte', name: 'Layout' } : pick(files);
-    live.push({ id, file: f.file, name: f.name, parentId, mounted: true });
+    // Live files are absolute module ids, relation files root-relative.
+    live.push({ id, file: `${root}/${f.file}`, name: f.name, parentId, mounted: true });
     const kids =
       depth === 0 ? 8 : depth < 3 ? 2 + Math.floor(r() * 8) : depth < 14 ? Math.floor(r() * 4) : 0;
     for (let k = 0; k < kids; k++) grow(id, depth + 1);
@@ -88,7 +89,13 @@ export function createMockBackend(scale = 5000) {
     for (let i = 0; i < n; i++) {
       const p = pick(live);
       const f = pick(files);
-      live.push({ id: nextId++, file: f.file, name: f.name, parentId: p.id, mounted: true });
+      live.push({
+        id: nextId++,
+        file: `${root}/${f.file}`,
+        name: f.name,
+        parentId: p.id,
+        mounted: true,
+      });
     }
   }
 
@@ -432,6 +439,7 @@ export function createMockBackend(scale = 5000) {
       total: live.length,
       kept: CAP > 0 ? Math.min(live.length, CAP) : live.length,
       truncated: CAP > 0 && live.length > CAP,
+      root,
     }),
     'svelte-devtools:get-state-timeline-delta': (args?: { since?: number }) => {
       const since = args?.since;

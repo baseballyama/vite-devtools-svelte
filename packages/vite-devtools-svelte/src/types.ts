@@ -318,6 +318,12 @@ export interface LiveComponentsMeta {
   /** Instances returned by `getLiveComponents()` (parents first). */
   kept: number;
   truncated: boolean;
+  /**
+   * Project root as live `file`s spell it (symlinks resolved, `/`-separated):
+   * a live `file` is an absolute module id, a {@link ComponentRelation} `file`
+   * is relative to this root.
+   */
+  root: string;
   /** App page load (epoch) being shown; several app tabs → the one that pushed most recently. */
   epoch?: string;
   /** App page loads currently tracked (≤ 4). */

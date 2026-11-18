@@ -14,15 +14,16 @@ const c = (
   id: number,
   name: string,
   parentId: number | null,
-  file = `src/lib/${name}.svelte`,
+  file = `/app/src/lib/${name}.svelte`,
   mounted = true,
 ): ComponentInstance => ({ id, name, parentId, file, mounted });
 
-// App > Layout > Page > (Row, Row)
+// App > Layout > Page > (Row, Row). Live files are absolute module ids;
+// relation files are relative to the project root (`meta().root`).
 const instances: ComponentInstance[] = [
-  c(1, 'App', null, 'src/App.svelte'),
-  c(2, 'Layout', 1, 'src/routes/+layout.svelte'),
-  c(3, 'Page', 2, 'src/routes/+page.svelte'),
+  c(1, 'App', null, '/app/src/App.svelte'),
+  c(2, 'Layout', 1, '/app/src/routes/+layout.svelte'),
+  c(3, 'Page', 2, '/app/src/routes/+page.svelte'),
   c(4, 'Row', 3),
   c(5, 'Row', 3),
 ];
@@ -41,6 +42,7 @@ const meta = (over: Partial<LiveComponentsMeta> = {}): LiveComponentsMeta => ({
   total: 5,
   kept: 5,
   truncated: false,
+  root: '/app',
   epoch: 'e1',
   epochs: 1,
   ...over,
@@ -129,7 +131,7 @@ describe('Components: live tree', () => {
     await userEvent.click(within(aside).getByRole('button', { name: /^Icon/ }));
     expect(rpc.openInEditor).toHaveBeenLastCalledWith('src/lib/Icon.svelte');
     await userEvent.click(within(aside).getByRole('button', { name: 'Open in editor' }));
-    expect(rpc.openInEditor).toHaveBeenLastCalledWith('src/routes/+page.svelte');
+    expect(rpc.openInEditor).toHaveBeenLastCalledWith('/app/src/routes/+page.svelte');
 
     await userEvent.click(within(aside).getByRole('button', { name: 'Layout' }));
     await settle();
@@ -155,7 +157,7 @@ describe('Components: live tree', () => {
       componentId: 4,
       epoch: 'e1',
       label: '<Row>',
-      file: 'src/lib/Row.svelte',
+      file: '/app/src/lib/Row.svelte',
     });
     expect(router.current).toBe('reactive');
     expect(location.hash).toBe('#/reactive');
@@ -199,7 +201,7 @@ describe('Components: live tree', () => {
     await settle();
     tree().focus();
     await userEvent.keyboard('{ArrowDown}{Enter}');
-    expect(rpc.openInEditor).toHaveBeenCalledWith('src/App.svelte');
+    expect(rpc.openInEditor).toHaveBeenCalledWith('/app/src/App.svelte');
   });
 
   it('"N mounted instances" jumps to the file in Files mode', async () => {
@@ -215,7 +217,7 @@ describe('Components: live tree', () => {
 
   it('shows unmounted instances and detached subtrees', async () => {
     vi.mocked(rpc.getLiveComponents).mockResolvedValue([
-      c(1, 'App', null, 'src/App.svelte', false),
+      c(1, 'App', null, '/app/src/App.svelte', false),
       c(7, 'Orphan', 99),
     ]);
     vi.mocked(rpc.getLiveComponentsMeta).mockResolvedValue(
@@ -278,6 +280,20 @@ describe('Components: files', () => {
     expect(cells).toEqual(['', '1', '2']);
     // Persisted across reloads.
     expect(localStorage.getItem('svelte-devtools:components:mode')).toBe('"files"');
+  });
+
+  it('counts only live files under the root, whose spelling may end with a slash', async () => {
+    vi.mocked(rpc.getLiveComponents).mockResolvedValue([
+      c(1, 'App', null, '/app/src/App.svelte'),
+      c(2, 'Row', 1, '/elsewhere/src/lib/Row.svelte'),
+    ]);
+    vi.mocked(rpc.getLiveComponentsMeta).mockResolvedValue(meta({ root: '/app/' }));
+    await files();
+    const mounted = within(table())
+      .getAllByRole('option')
+      .map(o => o.querySelectorAll('.end')[2]?.textContent);
+    // App, Page, Row
+    expect(mounted).toEqual(['1', '–', '–']);
   });
 
   it('sorts by a column', async () => {

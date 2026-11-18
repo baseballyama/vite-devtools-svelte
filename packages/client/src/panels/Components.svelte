@@ -84,7 +84,18 @@
       : null;
   });
 
-  const instancesPerFile = $derived(countBy(liveList, c => c.file));
+  /**
+   * A live `file` (absolute module id) as a relation `file` (root-relative),
+   * the key Files mode and the relations use.
+   */
+  function relationKey(file: string): string {
+    const root = live.data.meta?.root;
+    if (!root) return file;
+    const prefix = root.endsWith('/') ? root : `${root}/`;
+    return file.startsWith(prefix) ? file.slice(prefix.length) : file;
+  }
+
+  const instancesPerFile = $derived(countBy(liveList, c => relationKey(c.file)));
 
   let expanded = $state(new Set<string>());
   let treeSelected = $state<string | null>(null);
@@ -278,7 +289,7 @@
   }
 
   function showInstancesOf(file: string) {
-    const first = liveList.find(c => c.file === file);
+    const first = liveList.find(c => relationKey(c.file) === file);
     mode.value = 'tree';
     query = '';
     if (first) queueMicrotask(() => revealInstance(first.id));
@@ -382,9 +393,10 @@
       {#snippet aside()}
         {#if selectedNode}
           {@const c = selectedNode.c}
-          {@const rel = relationByFile.get(c.file)}
+          {@const fileKey = relationKey(c.file)}
+          {@const rel = relationByFile.get(fileKey)}
           {@const ancestors = ancestorsOf(c.id)}
-          {@const sameFile = instancesPerFile.get(c.file) ?? 1}
+          {@const sameFile = instancesPerFile.get(fileKey) ?? 1}
           <Inspector title="<{c.name}>" subtitle={c.file} onclose={() => (treeSelected = null)}>
             {#snippet badges()}
               <Badge tone={c.mounted ? 'green' : 'neutral'}
@@ -421,7 +433,7 @@
               <dd class="num">{selectedNode.children.length}</dd>
               <dt>Same file</dt>
               <dd>
-                <button type="button" class="link" onclick={() => showFile(c.file)}>
+                <button type="button" class="link" onclick={() => showFile(fileKey)}>
                   {sameFile} mounted instance{sameFile === 1 ? '' : 's'}
                 </button>
               </dd>
