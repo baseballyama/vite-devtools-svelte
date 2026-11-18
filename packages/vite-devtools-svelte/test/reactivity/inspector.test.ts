@@ -6,7 +6,8 @@ import { dt, instances, render } from './harness.js';
 
 // The forked Svelte Inspector (packages/inspector) mounted on the page with
 // the DevTools link, over real compiled components: hover names the component
-// instance, a click picks it, Alt+click opens the editor as upstream does.
+// instance, a click picks it, Alt+click opens the editor as upstream does, and
+// the right-click menu offers both.
 
 // DOM surface the test touches (the package type-checks against Node's lib only).
 interface El {
@@ -14,6 +15,8 @@ interface El {
   querySelector(selector: string): El | null;
   querySelectorAll(selector: string): Iterable<El>;
   textContent: string | null;
+  tagName: string;
+  click(): void;
   classList: { contains(name: string): boolean };
   addEventListener(type: string, fn: () => void): void;
 }
@@ -23,8 +26,10 @@ const win = globalThis as unknown as {
     documentElement: { append(el: object): void };
     createElement(tag: string): object;
     querySelector(selector: string): El | null;
+    activeElement: El | null;
   };
   MouseEvent: new (type: string, init?: object) => unknown;
+  KeyboardEvent: new (type: string, init?: object) => unknown;
 };
 
 // Specifiers in variables: the inspector's runtime is resolved by the harness plugin.
@@ -107,6 +112,13 @@ function click(el: El, init: object = {}) {
   el.dispatchEvent(new win.MouseEvent('click', { bubbles: true, cancelable: true, ...init }));
   flushSync();
 }
+function rightClick(el: El) {
+  el.dispatchEvent(new win.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+  flushSync();
+}
+// The menu's rows (close first), as their text
+const menuButtons = () => [...overlay()!.querySelectorAll('button')];
+const rowText = (el: El) => el.textContent!.replaceAll(/\s+/g, ' ').trim();
 function turnOn() {
   controls.enable();
   flushSync();
@@ -132,7 +144,7 @@ describe('inspector with the DevTools link', () => {
     const text = overlay()!.textContent!.replaceAll(/\s+/g, ' ');
     expect(text).toContain('<Child>');
     expect(text).toMatch(/Child\.svelte:6/);
-    expect(text).toMatch(/click: inspect · (⌥|Alt\+)click: open in editor/);
+    expect(text).toMatch(/click: inspect · (⌥|Alt\+)click: open in editor · right-click: more/);
     controls.disable();
   });
 
@@ -186,5 +198,94 @@ describe('inspector with the DevTools link', () => {
       controls.disable();
       flushSync();
     }
+  });
+
+  describe('right-click menu', () => {
+    it('lists the instance to inspect, then the element and its parents to open', () => {
+      turnOn();
+      const second = $('span')[1]!;
+      hover(second);
+      rightClick(second);
+      const rows = menuButtons();
+      expect(rows.map(rowText)).toEqual([
+        'close',
+        '<Child> inspect in DevTools',
+        expect.stringMatching(/^<span> .*Child\.svelte:6$/),
+        expect.stringMatching(/^<Child> .*Picked\.svelte:9$/),
+      ]);
+      // native buttons in that order, focus on "close" as upstream: Tab reaches both actions
+      expect(rows.every(b => b.tagName === 'BUTTON')).toBe(true);
+      expect(win.document.activeElement).toBe(rows[0]);
+      controls.disable();
+      flushSync();
+    });
+
+    it('"inspect in DevTools" picks the instance and turns the inspector off', () => {
+      turnOn();
+      const second = $('span')[1]!;
+      hover(second);
+      rightClick(second);
+      menuButtons()[1]!.click();
+      flushSync();
+      expect(sent).toEqual([
+        {
+          event: 'svelte-devtools:element-picked',
+          data: expect.objectContaining({ componentId: instances('Child')[1]!.id }),
+        },
+      ]);
+      expect(fetches).not.toHaveBeenCalled();
+      expect(enabled()).toBe(false);
+    });
+
+    it('the element row opens it in the editor', () => {
+      turnOn();
+      const second = $('span')[1]!;
+      hover(second);
+      rightClick(second);
+      menuButtons()[2]!.click();
+      flushSync();
+      expect(sent).toEqual([]);
+      expect(fetches).toHaveBeenCalledWith(
+        expect.stringMatching(/^\/__open-in-editor\?file=.*Child\.svelte%3A6%3A1$/),
+      );
+      controls.disable();
+      flushSync();
+    });
+
+    it('opens from the keyboard (openMenuKey) with the same rows', () => {
+      turnOn();
+      hover($('b')[0]!);
+      win.document.body.dispatchEvent(
+        new win.KeyboardEvent('keydown', { key: ' ', code: 'Space', bubbles: true }),
+      );
+      flushSync();
+      expect(menuButtons().map(rowText).slice(0, 3)).toEqual([
+        'close',
+        '<Picked> inspect in DevTools',
+        expect.stringMatching(/^<b> .*Picked\.svelte:6$/),
+      ]);
+      controls.disable();
+      flushSync();
+    });
+
+    it('without a known instance only the upstream rows', () => {
+      const bold = $('b')[0]!;
+      const ctx = (bold as any).__svelte_meta.component;
+      const id = dt()._idByContext.get(ctx);
+      dt()._idByContext.delete(ctx);
+      try {
+        turnOn();
+        hover(bold);
+        rightClick(bold);
+        expect(menuButtons().map(rowText)).toEqual([
+          'close',
+          expect.stringMatching(/^<b> .*Picked\.svelte:6$/),
+        ]);
+      } finally {
+        dt()._idByContext.set(ctx, id);
+        controls.disable();
+        flushSync();
+      }
+    });
   });
 });

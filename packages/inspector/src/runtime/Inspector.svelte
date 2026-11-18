@@ -181,6 +181,15 @@
     }
   }
 
+  // vite-devtools-svelte: the menu's "inspect in DevTools" row
+  function inspect_menu_el() {
+    if (devtools!.pick(active_el!)) {
+      disable();
+    } else {
+      send(active_el!.__svelte_meta.loc);
+    }
+  }
+
   function get_stack(target: ElementWithMetadata) {
     const el = find_selectable_parent(target, true)!;
     const meta = el.__svelte_meta;
@@ -506,7 +515,17 @@
 
       <hr />
 
+      <!-- vite-devtools-svelte: the element's component instance can also be inspected -->
+      {@const component = active_el && devtools?.describe(active_el)}
       <ul class="svelte-inspector-grid">
+        {#if component}
+          <li>
+            <button type="button" class="svelte-inspector-menu-row" onclick={inspect_menu_el}>
+              <span class="svelte-inspector-tag">&lt;{component.name}&gt;</span>
+              <span class="svelte-inspector-file">inspect in DevTools</span>
+            </button>
+          </li>
+        {/if}
         {#each menu.stack as item, i (`${item.file}:${item.line}:${i}`)}
           <li>
             <button type="button" class="svelte-inspector-menu-row" onclick={() => send(item)}>
@@ -532,7 +551,7 @@
           <div class="svelte-inspector-hint">
             {component
               ? `click: inspect · ${alt_key}click: open in editor`
-              : 'click: open in editor'}
+              : 'click: open in editor'} · right-click: more
           </div>
         {/if}
       </div>
