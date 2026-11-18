@@ -1384,18 +1384,18 @@ async function tier2(p, getSrv, restart, app) {
       // the hub runs eager scripts in its own standalone page too, which has no app to inspect
       const standalone = await ctx.newPage();
       try {
+        // proof the hub ran the dock script here: it is fetched only to be run
+        const script = standalone.waitForResponse(
+          response => response.url().includes('devtools-action.ts') && response.status() < 400,
+          { timeout: 30_000 },
+        );
         await standalone.goto(getSrv().base + '/__devtools/', {
           waitUntil: 'load',
           timeout: 30_000,
         });
-        await standalone.waitForFunction(
-          () => '__DEVFRAME_HUB_CLIENT_CONTEXT__' in globalThis,
-          null,
-          {
-            timeout: 15_000,
-          },
-        );
-        await sleep(3_000);
+        await script;
+        // setup() mounts synchronously once the module has run
+        await sleep(500);
         if ((await standalone.locator('#svelte-inspector-host').count()) > 0)
           throw new Error('inspector mounted in the standalone DevTools page');
       } finally {
