@@ -234,6 +234,8 @@ svelteDevtools({
 
 `SVELTE_INSPECTOR_TOGGLE` and an options object in `SVELTE_INSPECTOR_OPTIONS` (shell or `.env` files) take precedence over them, for personal preferences.
 
+The **Svelte Inspector settings** view, in the dock's **Svelte tools** group, edits your personal shortcut, keys and styles. Vite DevTools keeps them for your user in `~/.vite/devtools/settings/svelte-inspector.json`, so they apply to all your projects (a dev server that is already running picks up changes made in another project when it restarts) and take precedence over both. **Reset to defaults** removes them.
+
 ## How It Works
 
 1. **Runtime wrapper** — Intercepts `svelte/internal/client` to track component lifecycle and reactive signals (`$state`, `$derived`, `$effect`). It only polls state / samples FPS while a DevTools tab or an MCP agent is watching.

@@ -16,7 +16,8 @@ export function isInspectorRuntime(id: string): boolean {
 /**
  * Options of the Svelte Inspector, a fork of the one in `@sveltejs/vite-plugin-svelte`.
  * Environment variables (`SVELTE_INSPECTOR_OPTIONS` with an options object,
- * `SVELTE_INSPECTOR_TOGGLE`) take precedence over these.
+ * `SVELTE_INSPECTOR_TOGGLE`) take precedence over these, and the settings saved in the
+ * Vite DevTools dock take precedence over both.
  */
 export interface InspectorOptions {
   /**

@@ -1,10 +1,13 @@
 import process from 'node:process';
 
 import { normalizePath } from 'vite';
-import type { Plugin } from 'vite';
+import type { Plugin, ViteDevServer } from 'vite';
 
 import { defaultInspectorOptions, parseEnvironmentOptions } from './options.js';
-import { INSPECTOR_ICON_SVG } from './runtime/icon.js';
+import { INSPECTOR_ICON_URL, INSPECTOR_SETTINGS_ICON_SVG, svgDataUrl } from './runtime/icon.js';
+import { RESET_SETTINGS, SAVE_SETTINGS } from './runtime/settings-shared.js';
+import type { ActionResult, Settings } from './runtime/settings-shared.js';
+import { mergeOptions, pickOptions, updateSaved, validateSettings } from './settings.js';
 import type { InspectorOptions } from './types.js';
 import { log } from './utils/log.js';
 
@@ -28,10 +31,33 @@ function builtinConfigured(plugins: readonly Plugin[]): boolean {
 /** name of `@vitejs/devtools`' config plugin (the same check as svelteDevtools()) */
 const VITE_DEVTOOLS_PLUGIN = 'vite:devtools';
 const DOCK_MODULE_ID = '\0virtual:vite-devtools-svelte-inspector-dock';
+const SETTINGS_MODULE_ID = '\0virtual:vite-devtools-svelte-inspector-settings';
+const OPTIONS_MODULE_ID = 'virtual:vite-devtools-svelte-inspector-options';
+const SVELTE_DOCK_GROUP = 'svelte';
+/** namespace of the saved settings in Vite DevTools, a file in its per-user settings directory */
+const SETTINGS_NAMESPACE = 'svelte-inspector';
+/** the key the settings view saves the changed options under */
+const SAVED_OPTIONS = 'options';
+
+/** the parts of a Vite DevTools settings store (`DevframeSettingsStore`) the inspector uses */
+interface SettingsStore {
+  get(key: string): Promise<unknown>;
+  set(key: string, value: unknown): Promise<void>;
+  delete(key: string): Promise<void>;
+}
 
 /** The parts of the Vite DevTools node context (`DevToolsNodeContext`) the inspector uses */
 interface DevtoolsContext {
   docks: { register(entry: Record<string, unknown>): void };
+  rpc: {
+    register(fn: {
+      name: string;
+      type: 'action';
+      setup: () => { handler: (params?: unknown) => Promise<ActionResult> };
+    }): void;
+  };
+  scope(namespace: string): { settings: { global: SettingsStore } };
+  viteServer?: Pick<ViteDevServer, 'config' | 'environments'>;
 }
 
 /** The inspector plugin, with the hook Vite DevTools (`@vitejs/devtools`) calls */
@@ -39,8 +65,16 @@ export type InspectorPlugin = Omit<Plugin, 'devtools'> & {
   devtools: { setup(ctx: DevtoolsContext): void };
 };
 
-/** `svg` as a data url */
-const dataUrl = (svg: string) => `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+/** a settings action that reports a failure instead of throwing */
+const action =
+  (handler: (params: unknown) => Promise<ActionResult>) =>
+  async (params?: unknown): Promise<ActionResult> => {
+    try {
+      return await handler(params ?? {});
+    } catch (error) {
+      return { ok: false, status: `Couldn't save: ${(error as Error).message}` };
+    }
+  };
 
 /** The directory of the browser runtime the plugin serves, with a trailing `/` */
 export function getInspectorPath(): string {
@@ -65,13 +99,46 @@ export function svelteInspector(options: InspectorOptions = {}): InspectorPlugin
   const inspectorPath = getInspectorPath();
   log.debug(`svelte inspector path: ${inspectorPath}`, null, 'inspector');
 
-  let inspectorOptions: InspectorOptions | undefined;
+  /** `__internal` of the served options */
+  let internal: NonNullable<InspectorOptions['__internal']> | undefined;
   /** Vite DevTools is installed, so the dock mounts the inspector */
   let dock = false;
   /** the inspector plugin of vite-plugin-svelte, always in the config but not always on */
   let builtin: Plugin | undefined;
+  /** options before the saved settings apply, what reset to defaults returns to */
+  let baseOptions: Settings = mergeOptions(defaultInspectorOptions as Settings, options);
+  /** where the settings view saves, once Vite DevTools has set the plugin up */
+  let store: SettingsStore | undefined;
+  let server: DevtoolsContext['viteServer'];
 
-  const base = () => inspectorOptions?.__internal?.base ?? '';
+  const base = () => internal?.base ?? '';
+
+  /** the saved settings the inspector can run with */
+  const savedOptions = async () => {
+    let stored: unknown;
+    try {
+      stored = await store?.get(SAVED_OPTIONS);
+    } catch (error) {
+      log.warn('could not read the saved settings', error, 'inspector');
+    }
+    const { options: saved, invalid } = pickOptions(stored);
+    if (invalid.length > 0) {
+      log.warn(`ignoring invalid saved settings: ${invalid.join(', ')}`, null, 'inspector');
+    }
+    return saved;
+  };
+
+  /** serve the options again, and reload the pages so the inspector picks them up */
+  const apply = (done: string): ActionResult => {
+    const client = server?.environments.client;
+    const mod = client?.moduleGraph.getModuleById(OPTIONS_MODULE_ID);
+    if (mod) client?.moduleGraph.invalidateModule(mod);
+    if (!client || server?.config.server.hmr === false) {
+      return { ok: true, status: `${done} Reload the page to apply.` };
+    }
+    client.hot.send({ type: 'full-reload' });
+    return { ok: true, status: `${done} Reloading…` };
+  };
 
   return {
     name: 'vite-devtools-svelte-inspector',
@@ -106,25 +173,43 @@ export function svelteInspector(options: InspectorOptions = {}): InspectorPlugin
       // vite-devtools-svelte: this plugin is always on once it is added, so
       // `SVELTE_INSPECTOR_OPTIONS=true|false` does not toggle it; an options
       // object or `SVELTE_INSPECTOR_TOGGLE` still applies as a personal preference.
-      const environmentOptions = parseEnvironmentOptions(config);
-
-      inspectorOptions = {
-        ...defaultInspectorOptions,
-        ...options,
-        ...(typeof environmentOptions === 'object' ? environmentOptions : {}),
-        __internal: {
-          base: config.base.endsWith('/') ? config.base.slice(0, -1) : config.base,
-          cwd: process.cwd(),
-        },
+      // They come before the saved settings, so reset to defaults keeps them.
+      const { options: fromEnvironment, invalid } = pickOptions(parseEnvironmentOptions(config));
+      if (invalid.length > 0) {
+        log.warn(
+          `ignoring invalid options in environment SVELTE_INSPECTOR_OPTIONS: ${invalid.join(', ')}`,
+          null,
+          'inspector',
+        );
+      }
+      baseOptions = mergeOptions(defaultInspectorOptions as Settings, options, fromEnvironment);
+      internal = {
+        base: config.base.endsWith('/') ? config.base.slice(0, -1) : config.base,
+        cwd: process.cwd(),
+        defaults: baseOptions,
       };
     },
     devtools: {
       setup(ctx: DevtoolsContext) {
+        // registering fails when another svelte tool added the group first
+        try {
+          ctx.docks.register({
+            id: SVELTE_DOCK_GROUP,
+            title: 'Svelte tools',
+            icon: 'logos:svelte-icon',
+            type: 'group',
+            category: 'framework',
+          });
+        } catch (error) {
+          log.debug('svelte dock group already registered', error, 'inspector');
+        }
+
+        // on the bar so the picker stays one click away
         ctx.docks.register({
           id: 'svelte:inspector',
           title: 'Svelte Inspector',
           description: 'Pick an element to open its source in your editor',
-          icon: dataUrl(INSPECTOR_ICON_SVG),
+          icon: INSPECTOR_ICON_URL,
           type: 'action',
           toggle: true,
           action: {
@@ -134,6 +219,42 @@ export function svelteInspector(options: InspectorOptions = {}): InspectorPlugin
             // a url: the host would read `virtual:` as a url scheme
             importFrom: `${base()}/@id/__x00__${DOCK_MODULE_ID.slice(1)}`,
           },
+        });
+
+        ctx.docks.register({
+          id: 'svelte:inspector-settings',
+          title: 'Svelte Inspector settings',
+          description: 'Your shortcut, keys and styles for the Svelte Inspector',
+          icon: svgDataUrl(INSPECTOR_SETTINGS_ICON_SVG),
+          groupId: SVELTE_DOCK_GROUP,
+          category: 'inspector',
+          type: 'custom-render',
+          renderer: {
+            importFrom: `${base()}/@id/__x00__${SETTINGS_MODULE_ID.slice(1)}`,
+          },
+        });
+
+        store = ctx.scope(SETTINGS_NAMESPACE).settings.global;
+        server = ctx.viteServer;
+        const register = (name: string, handler: (params: unknown) => Promise<ActionResult>) =>
+          ctx.rpc.register({ name, type: 'action', setup: () => ({ handler: action(handler) }) });
+
+        register(SAVE_SETTINGS, async params => {
+          const result = validateSettings(params);
+          if ('error' in result) return { ok: false, status: result.error };
+          const saved = updateSaved(await savedOptions(), result.options, baseOptions);
+          if (Object.keys(saved).length === 0) {
+            await store?.delete(SAVED_OPTIONS);
+            return apply('Same as the defaults, nothing to save.');
+          }
+          await store?.set(SAVED_OPTIONS, saved);
+          log.debug('saved inspector settings', saved, 'inspector');
+          return apply('Saved.');
+        });
+
+        register(RESET_SETTINGS, async () => {
+          await store?.delete(SAVED_OPTIONS);
+          return apply('Reset to defaults.');
         });
       },
     },
@@ -145,7 +266,10 @@ export function svelteInspector(options: InspectorOptions = {}): InspectorPlugin
         if (id === DOCK_MODULE_ID || id === DOCK_MODULE_ID.slice(1)) {
           return DOCK_MODULE_ID;
         }
-        if (id === 'virtual:vite-devtools-svelte-inspector-options') {
+        if (id === SETTINGS_MODULE_ID || id === SETTINGS_MODULE_ID.slice(1)) {
+          return SETTINGS_MODULE_ID;
+        }
+        if (id === OPTIONS_MODULE_ID) {
           return id;
         }
         if (id.startsWith('virtual:vite-devtools-svelte-inspector-path:') && !id.includes('..')) {
@@ -163,15 +287,22 @@ export function svelteInspector(options: InspectorOptions = {}): InspectorPlugin
         id: {
           include: [
             /^virtual:vite-devtools-svelte-inspector-options$/,
-            /^\0virtual:vite-devtools-svelte-inspector-dock$/,
+            /^\0virtual:vite-devtools-svelte-inspector-(dock|settings)$/,
           ],
         },
       },
-      handler(id) {
+      async handler(id) {
+        if (id === SETTINGS_MODULE_ID) {
+          return 'export { default } from "virtual:vite-devtools-svelte-inspector-path:settings-view.ts";';
+        }
         if (id === DOCK_MODULE_ID) {
           return 'export { default } from "virtual:vite-devtools-svelte-inspector-path:devtools-action.ts";';
         }
-        return `export default ${JSON.stringify(inspectorOptions ?? {})}`;
+        const served: InspectorOptions = {
+          ...mergeOptions(baseOptions, await savedOptions()),
+          __internal: internal,
+        };
+        return `export default ${JSON.stringify(served)}`;
       },
     },
   };

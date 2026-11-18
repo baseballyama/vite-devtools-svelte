@@ -14,7 +14,7 @@ This package is the master copy of the inspector: it does not track upstream, an
 except for what running in the Vite DevTools dock needs:
 
 - options come from the plugin argument (`svelteInspector(options)`, which `svelteDevtools({ inspector })` passes on) instead of `vitePlugin.inspector` in `svelte.config.js`
-- adding the plugin always enables it: `SVELTE_INSPECTOR_OPTIONS=true|false` does not toggle it (an options object and `SVELTE_INSPECTOR_TOGGLE` still apply)
+- adding the plugin always enables it: `SVELTE_INSPECTOR_OPTIONS=true|false` does not toggle it (an options object and `SVELTE_INSPECTOR_TOGGLE` still apply). Invalid values in the options object are dropped with a warning, and `navKeys` may set only some of the keys
 - it only runs in the [Vite DevTools dock](#in-the-vite-devtools-dock): without `@vitejs/devtools` in the Vite config it does nothing. This part is new, not copied from upstream
 - there is no floating toggle button (`showToggleButton` and `toggleButtonPos` are gone): the dock has its own
 - when vite-plugin-svelte's built-in inspector is configured (`vitePlugin.inspector`) and both would run in the dock, the dev server fails to start with an error that says to turn that one off. When only `SVELTE_INSPECTOR_OPTIONS` / `SVELTE_INSPECTOR_TOGGLE` switch it on, it is turned off instead
@@ -63,7 +63,10 @@ export default {
 
 - **Svelte Inspector** on the dock bar turns the inspector on and off, as do the `toggleKeyCombo` and the **Toggle Svelte Inspector** command in the command palette; all of them stay in sync.
 - Picked files open through Vite DevTools' `vite:core:open-in-editor`. It refuses files outside the workspace root (e.g. a linked package), which open through Vite's `/__open-in-editor` instead, as upstream.
+- **Svelte Inspector settings**, in the dock's **Svelte tools** group, edits your personal options: the shortcut, the keys used while picking (click one and press the key to record it), hold mode and styles. Saving keeps the options that differ from the defaults (the `inspector` options and `SVELTE_INSPECTOR_*`) in Vite DevTools' per-user settings, `~/.vite/devtools/settings/svelte-inspector.json`, and reloads the page to apply them. They apply to all your projects, and take precedence over the `inspector` options and `SVELTE_INSPECTOR_*`. Saving changes only the options you edited, so what another project saved stays; a dev server that is already running picks up changes made in another project when it restarts. **Reset to defaults** removes them again. This part is new, not copied from upstream
 - The inspector loads once the browser is authorized for Vite DevTools.
+
+The **Svelte tools** group (id `svelte`) is meant to be shared by Svelte tools: other plugins can add their dock entries to it with `groupId: 'svelte'`. Whichever plugin registers it first keeps its registration.
 
 ## Upstream documentation
 
@@ -85,7 +88,7 @@ SVELTE_INSPECTOR_OPTIONS='{"holdMode": false, "openKey": "o"}'
 
 ```
 
-> Inspector options set on the environment take precedence over the `inspector` options passed to `svelteDevtools()`. Unlike upstream, `SVELTE_INSPECTOR_OPTIONS=true|false` is ignored: the inspector cannot be turned off. These variables also switch vite-plugin-svelte's built-in inspector on; in the dock, this plugin turns that one off again.
+> Inspector options set on the environment take precedence over the `inspector` options passed to `svelteDevtools()`, and the settings saved in the dock take precedence over both. Unlike upstream, `SVELTE_INSPECTOR_OPTIONS=true|false` is ignored: the inspector cannot be turned off. These variables also switch vite-plugin-svelte's built-in inspector on; in the dock, this plugin turns that one off again.
 
 ### Plugin options
 

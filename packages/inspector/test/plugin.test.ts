@@ -95,6 +95,19 @@ describe('svelteInspector', () => {
     expect(await loadOptions(await start())).toMatchObject({ toggleKeyCombo: 'meta-i' });
   });
 
+  it('drops invalid values in the variable and keeps the other navigation keys', async () => {
+    vi.stubEnv(
+      'SVELTE_INSPECTOR_OPTIONS',
+      '{"holdMode":"no","escapeKeys":"x","navKeys":{"parent":"w"}}',
+    );
+    const options = await loadOptions(await start());
+    expect(options).toMatchObject({
+      holdMode: true,
+      escapeKeys: ['Backspace', 'Escape'],
+      navKeys: { parent: 'w', child: 'ArrowDown', next: 'ArrowRight', prev: 'ArrowLeft' },
+    });
+  });
+
   it.each([
     ['SVELTE_INSPECTOR_TOGGLE', 'meta-i', { toggleKeyCombo: 'meta-i' }],
     ['SVELTE_INSPECTOR_OPTIONS', '{"holdMode":false}', { holdMode: false }],

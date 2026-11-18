@@ -35,7 +35,7 @@ export function parseEnvironmentOptions(
         if (Array.isArray(parsed)) {
           throw new TypeError('invalid type, expected object map but got array');
         }
-        // Values are not validated, as upstream: the options object is the user's own.
+        // values are checked by the plugin (`pickOptions`), which drops the invalid ones
         const record = parsed as Record<string, unknown>;
         const defaultKeys = Object.keys(defaultInspectorOptions);
         const unknownKeys = Object.keys(record).filter(k => !defaultKeys.includes(k));
