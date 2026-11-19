@@ -418,3 +418,41 @@ export interface FpsSample {
   timestamp: number;
   fps: number;
 }
+
+export type PackageManager = 'pnpm' | 'yarn' | 'bun' | 'npm';
+
+export interface AddonInfo {
+  id: string;
+  name: string;
+  description: string;
+  /** sv refuses it without SvelteKit. */
+  kit?: boolean;
+  /** Guessed from package.json deps. */
+  installed: boolean;
+}
+
+export interface AddonsResult {
+  /** False without the Vite DevTools terminals to run `sv add` in. */
+  available: boolean;
+  addons: AddonInfo[];
+}
+
+export interface CommunityAddon {
+  /** The npm package, which is what `sv add` takes. */
+  name: string;
+  description: string;
+  version: string;
+  /** Last 30 days, from npm. */
+  downloads: number;
+  /** Its npmx page. */
+  url: string;
+  /** GitHub avatar of the repository owner. */
+  avatar?: string;
+  installed: boolean;
+}
+
+export interface CommunityAddonsResult {
+  addons: CommunityAddon[];
+  /** Set when npm could not be reached; `addons` is then empty. */
+  error?: string;
+}

@@ -32,4 +32,6 @@ export type {
   ReactiveSummary,
   CaptureInfo,
   CaptureInfoMap,
+  AddonsResult,
+  CommunityAddonsResult,
 } from '../../../vite-devtools-svelte/src/types.js';

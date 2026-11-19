@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { inspectorPicker } from './inspector-dock.js';
+import { inspectorPicker, showTerminals } from './inspector-dock.js';
 
 const KEY = '__DEVFRAME_HUB_CLIENT_CONTEXT__';
 
@@ -51,5 +51,38 @@ describe('inspectorPicker', () => {
     };
     await inspectorPicker()?.();
     expect(setActionActive).toHaveBeenCalledExactlyOnceWith('svelte:inspector', true);
+  });
+});
+
+describe('showTerminals', () => {
+  afterEach(() => {
+    delete (window as unknown as Record<string, unknown>)[KEY];
+  });
+
+  it('opens Terminals focused on the requested session', async () => {
+    const call = vi.fn(() => Promise.resolve());
+    (window as unknown as Record<string, unknown>)[KEY] = {
+      clientType: 'embedded',
+      rpc: { call },
+      docks: {
+        entries: [{ id: 'devframes_plugin_terminals' }],
+      },
+    };
+    await showTerminals('new-session');
+    expect(call).toHaveBeenCalledExactlyOnceWith('hub:docks:activate', {
+      dockId: 'devframes_plugin_terminals',
+      params: { sessionId: 'new-session' },
+    });
+  });
+
+  it('does nothing without a Terminals dock', async () => {
+    const call = vi.fn();
+    (window as unknown as Record<string, unknown>)[KEY] = {
+      clientType: 'embedded',
+      rpc: { call },
+      docks: { entries: [] },
+    };
+    await showTerminals('new-session');
+    expect(call).not.toHaveBeenCalled();
   });
 });

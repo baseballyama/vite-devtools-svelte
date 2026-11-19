@@ -296,6 +296,7 @@ describe('calls', () => {
       ['get-state-timeline-delta', { since: 7 }],
     ],
     ['getOGPreview', r => r.getOGPreview('/p'), ['get-og-preview', { url: '/p' }]],
+    ['installAddon', r => r.installAddon('vitest'), ['install-addon', { id: 'vitest' }]],
   ])('%s sends the right method and arguments', async (_, run, expected) => {
     const c = fakeClient();
     connectDevframe.mockResolvedValue(c);
@@ -330,6 +331,8 @@ describe('calls', () => {
       [rpc.getBuildAnalysis, 'get-build-analysis'],
       [rpc.getFps, 'get-fps'],
       [rpc.clearFps, 'clear-fps'],
+      [rpc.getAddons, 'get-addons'],
+      [rpc.getCommunityAddons, 'get-community-addons'],
     ];
     for (const [fn, method] of pairs) {
       await fn();

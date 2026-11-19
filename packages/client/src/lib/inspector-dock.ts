@@ -3,9 +3,13 @@
 const CLIENT_CONTEXT_KEY = '__DEVFRAME_HUB_CLIENT_CONTEXT__';
 // The dock action of packages/inspector, which mounts the inspector in the app page.
 const INSPECTOR_DOCK_ID = 'svelte:inspector';
+const TERMINALS_DOCK_ID = 'devframes_plugin_terminals';
 
 interface HubContext {
   clientType: 'embedded' | 'standalone';
+  rpc: {
+    call(method: string, args: unknown): Promise<unknown>;
+  };
   docks: {
     entries: { id: string }[];
     setActionActive(id: string, active: boolean): Promise<boolean>;
@@ -38,4 +42,16 @@ export function inspectorPicker(): (() => Promise<void>) | null {
   return async () => {
     await ctx.docks.setActionActive(INSPECTOR_DOCK_ID, true);
   };
+}
+
+/**
+ * Shows the dock's Terminals and focuses a session, including when it mounts after activation.
+ */
+export async function showTerminals(sessionId: string): Promise<void> {
+  const ctx = hubContext();
+  if (!ctx?.docks.entries.some(e => e.id === TERMINALS_DOCK_ID)) return;
+  await ctx.rpc.call('hub:docks:activate', {
+    dockId: TERMINALS_DOCK_ID,
+    params: { sessionId },
+  });
 }

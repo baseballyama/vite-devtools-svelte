@@ -288,6 +288,17 @@ describe('mainPlugin devtools hook (Vite DevTools)', () => {
         category: 'default',
         defaultOrder: 40,
       },
+      {
+        id: 'svelte-devtools:add',
+        title: 'Add',
+        description: 'Install sv add-ons in one click',
+        icon: 'ph:plus-circle-duotone',
+        type: 'iframe',
+        url: '/.svelte-devtools/?view=add#/addons',
+        groupId: 'svelte',
+        category: 'default',
+        defaultOrder: 70,
+      },
     ]);
   });
 });
