@@ -59,23 +59,30 @@ describe('showTerminals', () => {
     delete (window as unknown as Record<string, unknown>)[KEY];
   });
 
-  it('switches the dock to its Terminals like a click', async () => {
-    const switchEntry = vi.fn(() => Promise.resolve(true));
+  it('opens Terminals focused on the requested session', async () => {
+    const call = vi.fn(() => Promise.resolve());
     (window as unknown as Record<string, unknown>)[KEY] = {
       clientType: 'embedded',
-      docks: { entries: [{ id: 'devframes_plugin_terminals' }], switchEntry },
+      rpc: { call },
+      docks: {
+        entries: [{ id: 'devframes_plugin_terminals' }],
+      },
     };
-    await showTerminals();
-    expect(switchEntry).toHaveBeenCalledExactlyOnceWith('devframes_plugin_terminals');
+    await showTerminals('new-session');
+    expect(call).toHaveBeenCalledExactlyOnceWith('hub:docks:activate', {
+      dockId: 'devframes_plugin_terminals',
+      params: { sessionId: 'new-session' },
+    });
   });
 
   it('does nothing without a Terminals dock', async () => {
-    const switchEntry = vi.fn();
+    const call = vi.fn();
     (window as unknown as Record<string, unknown>)[KEY] = {
       clientType: 'embedded',
-      docks: { entries: [], switchEntry },
+      rpc: { call },
+      docks: { entries: [] },
     };
-    await showTerminals();
-    expect(switchEntry).not.toHaveBeenCalled();
+    await showTerminals('new-session');
+    expect(call).not.toHaveBeenCalled();
   });
 });

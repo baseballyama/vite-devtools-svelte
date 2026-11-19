@@ -35,8 +35,8 @@
     running = id;
     error = null;
     try {
-      await installAddon(id);
-      await showTerminals();
+      const { sessionId } = await installAddon(id);
+      await showTerminals(sessionId);
     } catch (e) {
       error = errorMessage(e);
     } finally {

@@ -7,10 +7,12 @@ const TERMINALS_DOCK_ID = 'devframes_plugin_terminals';
 
 interface HubContext {
   clientType: 'embedded' | 'standalone';
+  rpc: {
+    call(method: string, args: unknown): Promise<unknown>;
+  };
   docks: {
     entries: { id: string }[];
     setActionActive(id: string, active: boolean): Promise<boolean>;
-    switchEntry(id: string | null): Promise<boolean>;
   };
 }
 
@@ -43,11 +45,13 @@ export function inspectorPicker(): (() => Promise<void>) | null {
 }
 
 /**
- * Shows the dock's Terminals, like a click on it. Not the server's `docks.activate`: the hub
- * then reloads the dock opened next on the Terminals URL, so the Add panel cannot come back.
+ * Shows the dock's Terminals and focuses a session, including when it mounts after activation.
  */
-export async function showTerminals(): Promise<void> {
+export async function showTerminals(sessionId: string): Promise<void> {
   const ctx = hubContext();
   if (!ctx?.docks.entries.some(e => e.id === TERMINALS_DOCK_ID)) return;
-  await ctx.docks.switchEntry(TERMINALS_DOCK_ID);
+  await ctx.rpc.call('hub:docks:activate', {
+    dockId: TERMINALS_DOCK_ID,
+    params: { sessionId },
+  });
 }
