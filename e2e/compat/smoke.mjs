@@ -545,7 +545,8 @@ async function fixtureComponentsListed(p, srv, ms) {
 }
 
 const ANSI = new RegExp(`${String.fromCodePoint(27)}\\[[0-9;]*m`, 'g');
-const DOCK_FRAME = 'iframe[data-iframe-pane="svelte-devtools"]';
+// The Inspect entry of the Svelte tools group lists the components.
+const DOCK_FRAME = 'iframe[data-iframe-pane="svelte-devtools:inspect"]';
 
 // The dock auto-minimizes (buttons get pointer-events: none) unless a
 // mousemove reached it within inactiveTimeout (3 s) or a panel is open. A move
@@ -627,6 +628,25 @@ async function clickInDock(page, target) {
   throw last;
 }
 
+// Entries of the Svelte tools group live in the menu its dock button opens (the hub also
+// pins recent ones to the bar). With one of them open, that button closes it instead, so
+// it may take a second click.
+async function clickSvelteTool(page, title) {
+  const item = page
+    .locator('devframes-dock-embedded')
+    .getByRole('button', { name: title, exact: true })
+    .first();
+  for (let i = 0; i < 3; i++) {
+    if (await item.isVisible()) {
+      await item.click({ timeout: 2_500 }).catch(() => clickInDock(page, item));
+      return;
+    }
+    await clickInDock(page, page.getByRole('button', { name: 'Svelte tools', exact: true }));
+    await item.waitFor({ state: 'visible', timeout: 1_500 }).catch(() => {});
+  }
+  throw new Error(`'${title}' not in the Svelte tools menu`);
+}
+
 // Goes into failure messages: never input values, codes or screenshots.
 function dockDump(page) {
   return page
@@ -679,12 +699,11 @@ async function openDockEntry(page) {
     const iframe = page.locator(DOCK_FRAME);
     // After a reload the hub restores the selected entry with its iframe;
     // clicking the entry again would toggle it closed.
-    const restored = await iframe.waitFor({ state: 'attached', timeout: 3_000 }).then(
+    const restored = await iframe.waitFor({ state: 'visible', timeout: 3_000 }).then(
       () => true,
       () => false,
     );
-    if (!restored)
-      await clickInDock(page, page.getByRole('button', { name: 'Svelte', exact: true }));
+    if (!restored) await clickSvelteTool(page, 'Inspect');
     await iframe.waitFor({ state: 'attached', timeout: 15_000 });
     // relative at first, absolute with the SPA hash route after a restart
     const src = await iframe.getAttribute('src');
@@ -1289,8 +1308,8 @@ async function tier2(p, getSrv, restart, app) {
       await host.waitFor({ state: 'attached', timeout: 15_000 });
       const enabled = () =>
         page.evaluate(() => document.body.classList.contains('svelte-inspector-enabled'));
-      const button = page.getByRole('button', { name: 'Svelte Inspector', exact: true });
-      await withDockDump(page, () => clickInDock(page, button));
+      const toggle = () => withDockDump(page, () => clickSvelteTool(page, 'Pick element'));
+      await toggle();
       let text = '';
       try {
         await poll(enabled, on => on === true, 5_000);
@@ -1302,10 +1321,11 @@ async function tier2(p, getSrv, restart, app) {
           throw new Error(`overlay does not name ${p.targets.hmr.file}: ${text.slice(0, 120)}`);
       } finally {
         // off again even when a check failed: the next steps read the Svelte panel
-        if (await enabled()) await withDockDump(page, () => clickInDock(page, button));
+        if (await enabled()) await toggle();
       }
       await poll(enabled, on => on === false, 5_000);
-      await page.locator(DOCK_FRAME).waitFor({ state: 'attached', timeout: 10_000 });
+      // the next steps read the Inspect panel, which the inspector toggle may have closed
+      await openDockEntry(page);
       // the hub runs eager scripts in its own standalone page too, which has no app to inspect
       const standalone = await ctx.newPage();
       try {
