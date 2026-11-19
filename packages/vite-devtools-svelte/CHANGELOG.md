@@ -1,5 +1,11 @@
 # vite-devtools-svelte
 
+## 0.11.0
+
+### Minor Changes
+
+- [#231](https://github.com/sveltejs/vite-devtools-svelte/pull/231) [`c2e5f8b`](https://github.com/sveltejs/vite-devtools-svelte/commit/c2e5f8b0528470123ea9f27fc554bf13c885d850) Thanks [@jycouet](https://github.com/jycouet)! - feat: new Add panel in the Vite DevTools dock installs official `sv` add-ons in one click, and community ones (experimental) from npm. It opens the newly started installation terminal for answering prompts.
+
 ## 0.10.0
 
 ### Minor Changes
