@@ -1,0 +1,76 @@
+:root[data-theme='light'],
+.svelte-devtools-theme {
+  color-scheme: light;
+  --bg: hsl(0 0% 100%);
+  --bg-subtle: hsl(0 0% 99.3%);
+  --bg-elevated: hsl(0 0% 100%);
+  --bg-inset: hsl(0 0% 98.2%);
+  --bg-hover: hsl(0 0% 95%);
+  --bg-active: hsl(0 0% 95%);
+  --bg-selected: hsl(12 93% 43% / 0.1);
+  --bg-selected-strong: hsl(12 93% 43% / 0.17);
+  --border: hsl(0 0% 92%);
+  --border-strong: hsl(0 0% 82%);
+  --fg: hsl(0 0% 15%);
+  --fg-muted: hsl(0 0% 40%);
+  --fg-faint: hsl(0 0% 50%);
+  --accent: hsl(12 93% 43%);
+  --accent-hover: hsl(12 93% 36%);
+  --accent-fg: hsl(12 93% 43%);
+  --focus: hsl(12 93% 43%);
+  --mark: hsl(60 100% 80%);
+  --selection: hsl(204 100% 63% / 0.3);
+  --shadow: 0 12px 40px rgb(0 0 0 / 0.16), 0 0 0 1px var(--border-strong);
+
+  --green: #116a33;
+  --green-bg: rgb(22 163 74 / 0.1);
+  --yellow: hsl(30 100% 30%);
+  --yellow-bg: rgb(234 179 8 / 0.14);
+  --red: #b01e1e;
+  --red-bg: rgb(220 38 38 / 0.09);
+  --blue: hsl(204 100% 38%);
+  --blue-bg: rgb(37 99 235 / 0.09);
+  --purple: #7e2cc9;
+  --purple-bg: rgb(147 51 234 / 0.09);
+  --cyan: #0c6179;
+  --cyan-bg: rgb(14 116 144 / 0.1);
+}
+
+:root,
+:root[data-theme='dark'],
+.svelte-devtools-theme[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: hsl(220 10% 12%);
+  --bg-subtle: hsl(220 8% 10%);
+  --bg-elevated: hsl(220 12% 14%);
+  --bg-inset: hsl(220 8% 10%);
+  --bg-hover: hsl(220 15% 21%);
+  --bg-active: hsl(220 15% 21%);
+  --bg-selected: hsl(15 100% 35% / 0.3);
+  --bg-selected-strong: hsl(15 100% 35% / 0.45);
+  --border: hsl(220 15% 22%);
+  --border-strong: hsl(220 15% 32%);
+  --fg: hsl(220 3% 80%);
+  --fg-muted: hsl(220 5% 65%);
+  --fg-faint: hsl(220 5% 55%);
+  --accent: hsl(15 100% 35%);
+  --accent-hover: hsl(15 100% 42%);
+  --accent-fg: hsl(12 94% 62%);
+  --focus: hsl(12 94% 62%);
+  --mark: hsl(60 100% 15%);
+  --selection: hsl(204 100% 63% / 0.3);
+  --shadow: 0 10px 40px rgb(0 0 0 / 0.5), 0 0 0 1px var(--border-strong);
+
+  --green: #4ade80;
+  --green-bg: rgb(74 222 128 / 0.12);
+  --yellow: hsl(41 37% 68%);
+  --yellow-bg: rgb(251 191 36 / 0.12);
+  --red: #f87171;
+  --red-bg: rgb(248 113 113 / 0.12);
+  --blue: hsl(204 88% 65%);
+  --blue-bg: rgb(96 165 250 / 0.12);
+  --purple: #c084fc;
+  --purple-bg: rgb(192 132 252 / 0.12);
+  --cyan: #22d3ee;
+  --cyan-bg: rgb(34 211 238 / 0.12);
+}

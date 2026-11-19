@@ -11,3 +11,8 @@ declare module 'virtual:vite-devtools-svelte-inspector-path:*.svelte' {
   const component: Component;
   export default component;
 }
+
+declare module '*.css?raw' {
+  const css: string;
+  export default css;
+}

@@ -1,4 +1,6 @@
-/* Everything a component needs is a token here so light/dark only differ in this file. */
+@import '../../../inspector/src/runtime/theme.css';
+
+/* Components consume tokens so theme differences stay out of their styles. */
 
 :root {
   --font-sans:
@@ -29,81 +31,6 @@
   --ease: cubic-bezier(0.2, 0, 0, 1);
   --dur-fast: 90ms;
   --dur: 160ms;
-
-  --accent: #ff3e00;
-  --accent-hover: #ff5a24;
-}
-
-:root,
-:root[data-theme='dark'] {
-  color-scheme: dark;
-  --bg: #111214;
-  --bg-subtle: #16171a;
-  --bg-elevated: #1c1d21;
-  --bg-inset: #0c0d0e;
-  --bg-hover: rgb(255 255 255 / 0.045);
-  --bg-active: rgb(255 255 255 / 0.08);
-  --bg-selected: rgb(255 62 0 / 0.14);
-  --bg-selected-strong: rgb(255 62 0 / 0.22);
-  --border: rgb(255 255 255 / 0.075);
-  --border-strong: rgb(255 255 255 / 0.13);
-  --fg: #e8e8ea;
-  --fg-muted: #b1b3b9;
-  /* ≥ 4.5:1 on every surface incl. hover/active/selected overlays (axe color-contrast) */
-  --fg-faint: #9497a0;
-  --accent-fg: #ff7a4d;
-  --focus: #ff7a4d;
-  --mark: rgb(255 170 0 / 0.28);
-  --shadow: 0 10px 40px rgb(0 0 0 / 0.5), 0 0 0 1px var(--border-strong);
-
-  --green: #4ade80;
-  --green-bg: rgb(74 222 128 / 0.12);
-  --yellow: #fbbf24;
-  --yellow-bg: rgb(251 191 36 / 0.12);
-  --red: #f87171;
-  --red-bg: rgb(248 113 113 / 0.12);
-  --blue: #60a5fa;
-  --blue-bg: rgb(96 165 250 / 0.12);
-  --purple: #c084fc;
-  --purple-bg: rgb(192 132 252 / 0.12);
-  --cyan: #22d3ee;
-  --cyan-bg: rgb(34 211 238 / 0.12);
-}
-
-:root[data-theme='light'] {
-  color-scheme: light;
-  --bg: #ffffff;
-  --bg-subtle: #f7f7f8;
-  --bg-elevated: #ffffff;
-  --bg-inset: #f3f3f5;
-  --bg-hover: rgb(0 0 0 / 0.04);
-  --bg-active: rgb(0 0 0 / 0.07);
-  --bg-selected: rgb(255 62 0 / 0.1);
-  --bg-selected-strong: rgb(255 62 0 / 0.17);
-  --border: rgb(0 0 0 / 0.08);
-  --border-strong: rgb(0 0 0 / 0.15);
-  --fg: #1c1d21;
-  --fg-muted: #474b53;
-  /* ≥ 4.5:1 on every surface incl. hover/active/selected overlays (axe color-contrast) */
-  --fg-faint: #5f636b;
-  /* accent text + tone colors: ≥ 4.5:1 incl. on their tinted badge bg and on selected rows (axe) */
-  --accent-fg: #b82e00;
-  --focus: #ff3e00;
-  --mark: rgb(255 170 0 / 0.35);
-  --shadow: 0 12px 40px rgb(0 0 0 / 0.16), 0 0 0 1px var(--border-strong);
-
-  --green: #116a33;
-  --green-bg: rgb(22 163 74 / 0.1);
-  --yellow: #895306;
-  --yellow-bg: rgb(234 179 8 / 0.14);
-  --red: #b01e1e;
-  --red-bg: rgb(220 38 38 / 0.09);
-  --blue: #1f53c5;
-  --blue-bg: rgb(37 99 235 / 0.09);
-  --purple: #7e2cc9;
-  --purple-bg: rgb(147 51 234 / 0.09);
-  --cyan: #0c6179;
-  --cyan-bg: rgb(14 116 144 / 0.1);
 }
 
 *,
@@ -167,7 +94,7 @@ mark {
 }
 
 ::selection {
-  background: rgb(255 62 0 / 0.3);
+  background: var(--selection);
 }
 
 * {

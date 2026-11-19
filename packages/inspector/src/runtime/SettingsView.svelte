@@ -7,6 +7,8 @@
   import { same } from './settings-shared.js';
   import type { ActionResult, Settings } from './settings-shared.js';
 
+  import theme from './theme.css?raw';
+
   interface Props {
     /** the options the inspector currently runs with */
     current: Settings;
@@ -105,7 +107,8 @@
   ] as const;
 </script>
 
-<div class="sis">
+<div class="sis svelte-devtools-theme">
+  <svelte:element this={"style"}>{theme}</svelte:element>
   <div class="sis-main">
     <header class="sis-header">
       <h2>Inspector settings</h2>
@@ -242,15 +245,15 @@
   /* injected to reach the shadow root of the dock panel, global as KeyInput.svelte shares it */
   :global {
     .sis {
-      --sis-bg: #ffffff;
-      --sis-surface: #f7f7f8;
-      --sis-fg: #1c1d21;
-      --sis-muted: #5f636b;
-      --sis-border: rgba(0, 0, 0, 0.08);
-      --sis-border-strong: rgba(0, 0, 0, 0.15);
-      --sis-hover: rgba(0, 0, 0, 0.04);
-      --sis-accent: #ff3e00;
-      --sis-danger: #d4321c;
+      --sis-bg: var(--bg);
+      --sis-surface: var(--bg-subtle);
+      --sis-fg: var(--fg);
+      --sis-muted: var(--fg-muted);
+      --sis-border: var(--border);
+      --sis-border-strong: var(--border-strong);
+      --sis-hover: var(--bg-hover);
+      --sis-accent: var(--accent);
+      --sis-danger: var(--red);
       box-sizing: border-box;
       height: 100%;
       overflow: hidden;
@@ -262,18 +265,6 @@
         -apple-system,
         'Segoe UI',
         sans-serif;
-      color-scheme: light;
-    }
-    .sis[data-theme='dark'] {
-      --sis-bg: #111214;
-      --sis-surface: #16171a;
-      --sis-fg: #e8e8ea;
-      --sis-muted: #9497a0;
-      --sis-border: rgba(255, 255, 255, 0.075);
-      --sis-border-strong: rgba(255, 255, 255, 0.13);
-      --sis-hover: rgba(255, 255, 255, 0.045);
-      --sis-danger: #ff7a66;
-      color-scheme: dark;
     }
     .sis *,
     .sis *::before,
