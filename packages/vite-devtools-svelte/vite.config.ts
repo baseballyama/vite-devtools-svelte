@@ -56,7 +56,7 @@ export default defineConfig({
       fileName: (_format, name) => `${name}.mjs`,
     },
     rolldownOptions: {
-      external: ['vite', /^@vitejs\/devtools-kit/, /^devframe(\/|$)/, /^node:/],
+      external: ['vite', /^devframe(\/|$)/, /^node:/],
       output: {
         chunkFileNames: chunk =>
           chunk.name === INSPECTOR_CHUNK ? '[name].mjs' : '[name]-[hash].mjs',

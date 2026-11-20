@@ -10,17 +10,10 @@ import { SessionStore } from '../src/mcp/sessions.js';
 import * as mcpToolsModule from '../src/mcp/tools.js';
 import type { McpDeps } from '../src/mcp/tools.js';
 import { svelteDevtools } from '../src/plugin.js';
-import { callHook, kitSetup, resolvePlugins } from './helpers.js';
+import { callHook, devtoolsContext, kitSetup, resolvePlugins } from './helpers.js';
 
 const editor = vi.hoisted(() => ({ launchEditor: vi.fn() }));
 vi.mock('devframe/utils/launch-editor', () => editor);
-
-const kit = vi.hoisted(() => ({
-  createPluginFromDevframe: vi.fn((def: any) => ({
-    devtools: { setup: (ctx: unknown) => def.setup(ctx) },
-  })),
-}));
-vi.mock('@vitejs/devtools-kit/node', () => kit);
 
 vi.mock('../src/mcp/tools.js', async importOriginal => {
   const real = await importOriginal<typeof mcpToolsModule>();
@@ -87,12 +80,14 @@ function setup(
 
 async function hub(plugins: Plugin[]) {
   const handlers = new Map<string, Handler>();
-  await (plugins[0]!.devtools as any).setup({
-    scope: () => ({
-      rpc: { register: (fn: any) => handlers.set(fn.name, fn.handler) },
+  await (plugins[0] as any).devtools.setup(
+    devtoolsContext({
+      scope: () => ({
+        rpc: { register: (fn: any) => handlers.set(fn.name, fn.handler) },
+      }),
+      docks: { register: vi.fn() },
     }),
-    docks: { register: vi.fn() },
-  });
+  );
   return (name: string, ...args: unknown[]) => handlers.get(name)!(...args);
 }
 
