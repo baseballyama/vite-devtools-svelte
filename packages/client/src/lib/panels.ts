@@ -122,6 +122,16 @@ export const panels = [
     load: () => import('../panels/Routes.svelte'),
   },
   {
+    id: 'remote',
+    kit: true,
+    label: 'Remote functions',
+    icon: 'remote',
+    group: 'project',
+    description: 'SvelteKit query, command, form and prerender functions',
+    keywords: 'remote query command form prerender rpc kit',
+    load: () => import('../panels/RemoteFunctions.svelte'),
+  },
+  {
     id: 'api',
     kit: true,
     label: 'API',
@@ -185,7 +195,7 @@ const viewPanels: Record<PanelView, readonly PanelId[]> = {
   problems: ['errors'],
   inspect: ['components', 'reactive', 'timeline'],
   profile: ['render', 'loads', 'fps', 'build'],
-  project: ['routes', 'api', 'modules', 'assets', 'og'],
+  project: ['routes', 'remote', 'api', 'modules', 'assets', 'og'],
   add: ['addons'],
 };
 

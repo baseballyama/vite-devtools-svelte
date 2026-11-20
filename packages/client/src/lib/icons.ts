@@ -20,6 +20,8 @@ export const icons = {
   build:
     '<rect x="4" y="12" width="4" height="8" rx="1"/><rect x="10" y="4" width="4" height="16" rx="1"/><rect x="16" y="8" width="4" height="12" rx="1"/>',
   api: '<path d="m8 8-4 4 4 4M16 8l4 4-4 4M14 4l-4 16"/>',
+  remote:
+    '<path d="M7 18a4.5 4.5 0 0 1-.6-9A6 6 0 0 1 18 10a4 4 0 0 1-.5 8z"/><path d="M12 11v5M10 14l2 2 2-2"/>',
   errors:
     '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
   pick: '<path d="M4 4l6.5 16 2.3-6.7L19.5 11z"/><path d="m13.5 13.5 6 6"/>',

@@ -104,6 +104,7 @@ const defaults: { [K in FnKey]: RealRpc[K] } = {
   submitAuthCode: () => Promise.resolve(true),
   getProject: () => Promise.resolve(project),
   getRoutes: () => Promise.resolve([]),
+  getRemoteFunctions: () => Promise.resolve({ enabled: true, functions: [], errors: [] }),
   getAssets: () => Promise.resolve([]),
   getComponentRelations: () => Promise.resolve([]),
   getLiveComponents: () => Promise.resolve([]),
@@ -150,6 +151,7 @@ export const requestAuthCode = fake('requestAuthCode');
 export const submitAuthCode = fake('submitAuthCode');
 export const getProject = fake('getProject');
 export const getRoutes = fake('getRoutes');
+export const getRemoteFunctions = fake('getRemoteFunctions');
 export const getAssets = fake('getAssets');
 export const getComponentRelations = fake('getComponentRelations');
 export const getLiveComponents = fake('getLiveComponents');
@@ -187,6 +189,7 @@ const all: { [K in FnKey]: Mock<RealRpc[K]> } = {
   submitAuthCode,
   getProject,
   getRoutes,
+  getRemoteFunctions,
   getAssets,
   getComponentRelations,
   getLiveComponents,

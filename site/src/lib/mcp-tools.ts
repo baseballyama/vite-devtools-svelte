@@ -115,6 +115,13 @@ export const MCP_TOOL_GROUPS: McpToolGroup[] = [
         summary: 'The SvelteKit routes tree from static analysis.',
       },
       {
+        name: 'get_remote_functions',
+        input: '—',
+        summary:
+          'SvelteKit remote functions with their kind, file and line: those in remote modules (`*.remote.js`, `*.remote.ts`, …) of the source directory and of direct dependencies that declare `@sveltejs/kit` as a peer dependency, plus any other the app has loaded. `enabled: false` when remote functions are off; `errors` lists files that could not be parsed.',
+        note: 'No module is run: entries the app has not loaded yet (`loaded: false`) come from the source and have no request id.',
+      },
+      {
         name: 'get_live_components',
         input: 'includeMeta?: boolean, limit?: 1–50000',
         summary:

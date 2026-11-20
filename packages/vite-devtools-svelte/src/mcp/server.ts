@@ -9,6 +9,7 @@ import type {
   ComponentInstance,
   ProjectInfo,
   RouteInfo,
+  RemoteFunctionsResult,
   ComponentRelation,
   CaptureInfoMap,
   ReactiveGraphRequest,
@@ -26,6 +27,7 @@ import { avg, avgRenderTime, max, min, round } from './stats.js';
 export interface McpDeps {
   getProject: () => ProjectInfo;
   getRoutes: () => RouteInfo[];
+  getRemoteFunctions: () => RemoteFunctionsResult;
   /** The served page load's components with its epoch, read together. */
   getLiveSnapshot: () => { epoch: string | null; total: number; components: ComponentInstance[] };
   getComponentRelations: () => ComponentRelation[];
@@ -253,6 +255,17 @@ export function buildMcpServer(deps: McpDeps): McpServer {
       inputSchema: {},
     },
     () => text(deps.getRoutes()),
+  );
+
+  server.registerTool(
+    'get_remote_functions',
+    {
+      title: 'SvelteKit remote functions',
+      description:
+        'SvelteKit remote functions (`query`, `query_batch`, `query_live`, `command`, `form`, `prerender`) with their file and line: those in remote modules (`*.remote.js`, `*.remote.ts`, …) of the source directory and of direct dependencies that declare `@sveltejs/kit` as a peer dependency, plus any other the app has loaded. `loaded: true` entries also have the id their requests use (`/_app/remote/<id>`); `loaded: false` ones were read from the source only, as no module is run. `enabled: false` means SvelteKit or `experimental.remoteFunctions` is off; `errors` lists files that could not be parsed.',
+      inputSchema: {},
+    },
+    () => text(deps.getRemoteFunctions()),
   );
 
   server.registerTool(

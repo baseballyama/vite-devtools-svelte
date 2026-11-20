@@ -63,7 +63,7 @@ describe('App shell', () => {
         .map(a => a.textContent?.trim()),
     ).toEqual(['Overview', 'Problems']);
     expect(within(general).getByText('General').classList.contains('sr-only')).toBe(true);
-    expect(within(nav()).getAllByRole('link')).toHaveLength(14);
+    expect(within(nav()).getAllByRole('link')).toHaveLength(15);
     expect(current()?.textContent).toContain('Overview');
     expect(current()?.getAttribute('href')).toBe('#/overview');
     expect(document.title).toBe('Overview · Svelte DevTools');
@@ -174,7 +174,7 @@ describe('App shell', () => {
   });
 });
 
-const KIT_ONLY = ['Routes', 'Load functions', 'API', 'Build'];
+const KIT_ONLY = ['Routes', 'Remote functions', 'Load functions', 'API', 'Build'];
 const labels = () =>
   within(nav())
     .getAllByRole('link')
@@ -222,7 +222,7 @@ describe('App without SvelteKit', () => {
     await renderApp();
     expect(within(nav()).getAllByRole('link')).toHaveLength(10);
     resolve(project);
-    await waitFor(() => expect(within(nav()).getAllByRole('link')).toHaveLength(14));
+    await waitFor(() => expect(within(nav()).getAllByRole('link')).toHaveLength(15));
   });
 
   it('never loads a SvelteKit-only panel while the project is unknown', async () => {
@@ -264,13 +264,13 @@ describe('App without SvelteKit', () => {
     emitConnection({ status: 'disconnected', host: 'standalone' });
     flushSync();
     emitConnection({ status: 'connected', host: 'standalone' });
-    await waitFor(() => expect(within(nav()).getAllByRole('link')).toHaveLength(14));
+    await waitFor(() => expect(within(nav()).getAllByRole('link')).toHaveLength(15));
   });
 
   it('shows every panel when the project lookup fails', async () => {
     vi.mocked(rpc.getProject).mockRejectedValue(new Error('down'));
     await renderApp();
-    await waitFor(() => expect(within(nav()).getAllByRole('link')).toHaveLength(14));
+    await waitFor(() => expect(within(nav()).getAllByRole('link')).toHaveLength(15));
   });
 });
 

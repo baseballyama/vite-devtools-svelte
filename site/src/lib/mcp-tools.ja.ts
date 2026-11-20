@@ -81,6 +81,11 @@ const TOOLS_JA: Record<string, JaText> = {
   get_routes: {
     summary: '静的解析による SvelteKit のルートツリー。',
   },
+  get_remote_functions: {
+    summary:
+      'SvelteKit のリモート関数の種類・ファイル・行。ソースディレクトリと、`@sveltejs/kit` を peer dependency に持つ直接の依存パッケージにあるリモートモジュール（`*.remote.js`、`*.remote.ts` など）に加え、アプリが読み込んだものも含みます。リモート関数が無効なら `enabled: false`、解析できなかったファイルは `errors` に入ります。',
+    note: 'モジュールは実行しません。アプリがまだ読み込んでいないもの（`loaded: false`）はソースから読み取るため、リクエストの id はありません。',
+  },
   get_live_components: {
     summary:
       'ブラウザにマウントされているコンポーネントインスタンス（親が先）。includeMeta 付きでは `{ epoch, total, captured, truncated, components }` を返し、既定で 1000 件までです。',

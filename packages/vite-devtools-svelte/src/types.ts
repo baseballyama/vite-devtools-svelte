@@ -36,6 +36,31 @@ export interface RouteFile {
   path: string;
 }
 
+export interface RemoteFunctionInfo {
+  /** The export name. */
+  name: string;
+  /** `query`, `query_batch`, `query_live`, `command`, `form` or `prerender`. */
+  type: string;
+  /** Relative to the project root. */
+  file: string;
+  /** 1-based line of the declaration. */
+  line?: number;
+  /** Whether the app has loaded the module on the server; only then is `id` known. */
+  loaded: boolean;
+  /** `<hash>/<name>`, the tail of the request URL (`/_app/remote/<id>`). */
+  id?: string;
+  /** The package that ships the module, for one in node_modules. */
+  package?: string;
+}
+
+export interface RemoteFunctionsResult {
+  /** SvelteKit with `experimental.remoteFunctions` on. */
+  enabled: boolean;
+  functions: RemoteFunctionInfo[];
+  /** Remote modules that could not be parsed. */
+  errors: Array<{ file: string; message: string }>;
+}
+
 export interface AssetInfo {
   name: string;
   path: string;

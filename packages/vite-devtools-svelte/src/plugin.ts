@@ -10,6 +10,12 @@ import { serverResolver } from './analyzers/api.js';
 import { analyzeComponents } from './analyzers/components.js';
 import type { GraphModuleLike } from './analyzers/module-graph.js';
 import { analyzeProject } from './analyzers/project.js';
+import {
+  analyzeRemoteFunctions,
+  remoteSrcDirOf,
+  scanRemoteFiles,
+} from './analyzers/remote-functions.js';
+import type { EvaluatedModuleLike, RemoteScan } from './analyzers/remote-functions.js';
 import { analyzeRoutes } from './analyzers/routes.js';
 import { inspectorPlugin, isInspectorRuntime } from './inspector.js';
 import type { InspectorOptions } from './inspector.js';
@@ -114,6 +120,8 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
   let root: string;
   // SvelteKit's resolved `files.routes` (absolute); undefined without SvelteKit.
   let routesDir: string | undefined;
+  // SvelteKit's `files.src` when remote functions are on.
+  let remoteSrcDir: string | null = null;
   // When `@vitejs/devtools` is installed the hub mounts the devframe through
   // our `devtools` hook; otherwise we mount it ourselves. Never both: they
   // would claim the same base.
@@ -139,6 +147,23 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     return sessions;
   }
 
+  // The modules SvelteKit's SSR runner has evaluated. Read by shape, not
+  // `isRunnableDevEnvironment`: that is an `instanceof` check, false when the
+  // app's Vite is another copy than ours.
+  const evaluatedServerModules = (): Iterable<EvaluatedModuleLike> => {
+    const ssr = server?.environments.ssr as
+      | { runner?: { evaluatedModules?: { idToModuleMap?: Map<string, EvaluatedModuleLike> } } }
+      | undefined;
+    return ssr?.runner?.evaluatedModules?.idToModuleMap?.values() ?? [];
+  };
+  // The UI polls this; the parse is redone only after a file changes.
+  let remoteScan: RemoteScan | null = null;
+  const remoteFunctions = () => {
+    if (remoteSrcDir === null) return analyzeRemoteFunctions(root, null, []);
+    remoteScan ??= scanRemoteFiles(root, remoteSrcDir);
+    return analyzeRemoteFunctions(root, remoteSrcDir, evaluatedServerModules(), remoteScan);
+  };
+
   const collector = new Collector({
     onFpsSample: sample => getSessions().recordFpsSample(sample),
     onLoadProfile: profile => getSessions().recordLoadProfile(profile),
@@ -148,6 +173,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     collector,
     root: () => root,
     routesDir: () => routesDir,
+    remoteFunctions,
     publicBase: () => config?.base ?? '/',
     modules: () => (server ? collectModules(server) : []),
     resolveFile: serverResolver(() => server),
@@ -181,6 +207,8 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
         | undefined;
       const routes = kit?.options?.files?.routes;
       routesDir = typeof routes === 'string' ? normalizePath(routes) : undefined;
+      remoteSrcDir = remoteSrcDirOf(kit?.options);
+      remoteScan = null;
       hostedByViteDevtools = config.plugins.some(p => p.name === VITE_DEVTOOLS_PLUGIN);
     },
 
@@ -189,7 +217,10 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       const generation = ++serverGeneration;
       collector.attach(devServer.hot);
       // The watcher closes with its server, so these listeners need no cleanup.
-      const sourceChanged = () => collector.sourceChanged();
+      const sourceChanged = () => {
+        remoteScan = null;
+        collector.sourceChanged();
+      };
       devServer.watcher.on('add', sourceChanged);
       devServer.watcher.on('change', sourceChanged);
       devServer.watcher.on('unlink', sourceChanged);
@@ -249,6 +280,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
             buildMcpServer({
               getProject: () => analyzeProject(root, routesDir !== undefined),
               getRoutes: () => analyzeRoutes(routesDir),
+              getRemoteFunctions: remoteFunctions,
               getLiveSnapshot: () => collector.liveSnapshot,
               getComponentRelations: () => analyzeComponents(root),
               getRenderProfiles: () => collector.renderProfiles,

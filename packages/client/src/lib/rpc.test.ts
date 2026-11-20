@@ -312,6 +312,7 @@ describe('calls', () => {
     const pairs: [() => Promise<unknown>, string][] = [
       [rpc.getProject, 'get-project'],
       [rpc.getRoutes, 'get-routes'],
+      [rpc.getRemoteFunctions, 'get-remote-functions'],
       [rpc.getAssets, 'get-assets'],
       [rpc.getComponentRelations, 'get-component-relations'],
       [rpc.getLiveComponents, 'get-live-components'],

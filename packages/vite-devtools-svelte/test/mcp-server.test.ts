@@ -26,6 +26,7 @@ const BASE_TOOLS = [
   'get_render_profile',
   'get_project_info',
   'get_routes',
+  'get_remote_functions',
   'get_live_components',
   'get_component_relations',
   'start_session',
@@ -87,6 +88,13 @@ function makeDeps(data: Partial<Data> = {}, persistDir?: string): McpDeps & { da
     data: d,
     getProject: () => ({ name: 'app' }) as any,
     getRoutes: () => [{ id: '/', path: '/' }] as any,
+    getRemoteFunctions: () => ({
+      enabled: true,
+      functions: [
+        { name: 'getA', type: 'query', id: 'h/getA', file: 'src/a.remote.ts', loaded: true },
+      ],
+      errors: [],
+    }),
     getLiveSnapshot: () => ({ epoch: 'e1', total: 1, components: [{ id: 1 } as any] }),
     getComponentRelations: () => [{ file: 'src/A.svelte', name: 'A', imports: [] }],
     getRenderProfiles: getters.getRenderProfiles,
@@ -189,6 +197,10 @@ describe('every tool answers valid input', () => {
       ],
       get_project_info: [{}, r => expect(r).toEqual({ name: 'app' })],
       get_routes: [{}, r => expect(r).toEqual([{ id: '/', path: '/' }])],
+      get_remote_functions: [
+        {},
+        r => expect(r.functions.map((f: any) => f.id)).toEqual(['h/getA']),
+      ],
       get_live_components: [{}, r => expect(r).toEqual([{ id: 1 }])],
       get_component_relations: [{}, r => expect(r[0].name).toBe('A')],
       // windowMs was removed: not passed on
