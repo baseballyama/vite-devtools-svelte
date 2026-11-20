@@ -68,7 +68,7 @@ const slowLoad = (severity: string) => [['slow-load', severity]];
 const busy = (severity: string) => [['effect-overconnected', severity]];
 const drop = (severity: string, dropCount: number, minFps: number): PerformanceIssue[] => [
   {
-    id: 'fps-drops:100',
+    id: 'fps-drop:100',
     kind: 'fps-drop',
     severity: severity as PerformanceIssue['severity'],
     summary: `${dropCount} FPS samples below 40 (min ${minFps})`,
@@ -94,7 +94,7 @@ describe('slow-component-render (avg render time ≥ threshold, default 4 ms)', 
   it('reports file, metrics and the follow-up tool', () => {
     const [issue] = listPerformanceIssues({ ...EMPTY, renderProfiles: [profile(3, 15.005)] });
     expect(issue).toEqual({
-      id: 'slow-render:/src/C1.svelte:1',
+      id: 'slow-component-render:/src/C1.svelte:1',
       kind: 'slow-component-render',
       severity: 'low',
       summary: 'C1 averages 5.00ms per render (3 renders)',
@@ -125,7 +125,7 @@ describe('over-rendered-component (render count ≥ threshold, default 30)', () 
   it('describes the over-rendered component', () => {
     const [issue] = listPerformanceIssues({ ...EMPTY, renderProfiles: [profile(31, 0)] });
     expect(issue).toEqual({
-      id: 'over-render:/src/C1.svelte:1',
+      id: 'over-rendered-component:/src/C1.svelte:1',
       kind: 'over-rendered-component',
       severity: 'low',
       summary: 'C1 rendered 31 times',
@@ -207,7 +207,7 @@ describe('effect-overconnected (dependencies ≥ threshold, default 8)', () => {
   it('describes the over-connected effect', () => {
     const [issue] = listPerformanceIssues({ ...EMPTY, reactiveGraph: effectWithDeps(9) });
     expect(issue).toEqual({
-      id: 'effect-deps:e',
+      id: 'effect-overconnected:e',
       kind: 'effect-overconnected',
       severity: 'low',
       summary: 'effect "e" depends on 9 reactive values',
@@ -281,11 +281,11 @@ describe('ordering', () => {
       loadProfiles: [load(1000)],
     });
     expect(issues.map(i => [i.id, i.severity])).toEqual([
-      ['slow-render:/src/C2.svelte:2', 'high'],
+      ['slow-component-render:/src/C2.svelte:2', 'high'],
       ['slow-load:/r:5', 'high'],
-      ['slow-render:/src/C3.svelte:3', 'medium'],
-      ['slow-render:/src/C1.svelte:1', 'low'],
-      ['slow-render:/src/C4.svelte:4', 'low'],
+      ['slow-component-render:/src/C3.svelte:3', 'medium'],
+      ['slow-component-render:/src/C1.svelte:1', 'low'],
+      ['slow-component-render:/src/C4.svelte:4', 'low'],
     ]);
   });
 
@@ -311,6 +311,25 @@ describe('ordering', () => {
         },
       ),
     );
+  });
+});
+
+describe('issue ids', () => {
+  it('start with the issue kind', () => {
+    const issues = listPerformanceIssues({
+      renderProfiles: [profile(30, 300)],
+      reactiveGraph: effectWithDeps(8),
+      loadProfiles: [load(1000)],
+      fpsSamples: fps(10),
+    });
+    expect(issues.map(i => i.kind).toSorted()).toEqual([
+      'effect-overconnected',
+      'fps-drop',
+      'over-rendered-component',
+      'slow-component-render',
+      'slow-load',
+    ]);
+    for (const i of issues) expect(i.id.startsWith(`${i.kind}:`)).toBe(true);
   });
 });
 

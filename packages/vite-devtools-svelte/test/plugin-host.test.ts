@@ -217,7 +217,7 @@ async function mcpDeps(s: ReturnType<typeof setup>): Promise<McpDeps> {
     () => ({ connect: () => Promise.reject(new Error('x')), close: async () => {} }) as never,
   );
   const res = { statusCode: 200, headersSent: false, setHeader: vi.fn(), end: vi.fn() };
-  s.mcp()({ headers: { 'x-svelte-devtools-token': s.token() } }, res);
+  s.mcp()({ method: 'POST', headers: { 'x-svelte-devtools-token': s.token() } }, res);
   s.emit('state-timeline', { epoch: 'e1', reset: true, changes: [] }); // activation snapshot
   await vi.waitFor(() => expect(build).toHaveBeenCalledOnce());
   return build.mock.calls[0]![0];

@@ -32,11 +32,13 @@ export interface IssueThresholds {
   effectMaxDeps?: number;
 }
 
+export const DEFAULT_FPS_DROP_THRESHOLD = 40;
+
 const DEFAULTS: Required<IssueThresholds> = {
   avgRenderTimeMs: 4,
   renderCount: 30,
   loadDurationMs: 200,
-  fpsDropThreshold: 40,
+  fpsDropThreshold: DEFAULT_FPS_DROP_THRESHOLD,
   effectMaxDeps: 8,
 };
 
@@ -82,7 +84,7 @@ export function listPerformanceIssues(
     const avg = avgRenderTime(p);
     if (avg >= t.avgRenderTimeMs) {
       out.push({
-        id: `slow-render:${p.file}:${p.componentId}`,
+        id: `slow-component-render:${p.file}:${p.componentId}`,
         kind: 'slow-component-render',
         severity: severity(avg, t.avgRenderTimeMs, 2, 4),
         summary: `${p.name} averages ${avg.toFixed(2)}ms per render (${p.renderCount} renders)`,
@@ -97,7 +99,7 @@ export function listPerformanceIssues(
     }
     if (p.renderCount >= t.renderCount) {
       out.push({
-        id: `over-render:${p.file}:${p.componentId}`,
+        id: `over-rendered-component:${p.file}:${p.componentId}`,
         kind: 'over-rendered-component',
         severity: severity(p.renderCount, t.renderCount, 3, 8),
         summary: `${p.name} rendered ${p.renderCount} times`,
@@ -129,7 +131,7 @@ export function listPerformanceIssues(
       0,
     );
     out.push({
-      id: `fps-drops:${inputs.fpsSamples[0]?.timestamp ?? 0}`,
+      id: `fps-drop:${inputs.fpsSamples[0]?.timestamp ?? 0}`,
       kind: 'fps-drop',
       severity: minFps < 15 ? 'high' : minFps < 30 ? 'medium' : 'low',
       summary: `${fpsDrops.length} FPS samples below ${t.fpsDropThreshold} (min ${minFps})`,
@@ -140,7 +142,7 @@ export function listPerformanceIssues(
 
   for (const effect of overconnectedEffects(inputs.reactiveGraph, t.effectMaxDeps)) {
     out.push({
-      id: `effect-deps:${effect.id}`,
+      id: `effect-overconnected:${effect.id}`,
       kind: 'effect-overconnected',
       severity: severity(effect.depCount, t.effectMaxDeps, 2, 3),
       summary: `effect "${effect.name}" depends on ${effect.depCount} reactive values`,
