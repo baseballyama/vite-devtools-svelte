@@ -6,9 +6,9 @@ import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 
 import pkg from '../package.json' with { type: 'json' };
-import { buildMcpServer, MCP_TIMELINE_LIMIT } from '../src/mcp/server.js';
-import type { McpDeps } from '../src/mcp/server.js';
 import { SessionStore } from '../src/mcp/sessions.js';
+import { buildMcpServer, MCP_TIMELINE_LIMIT } from '../src/mcp/tools.js';
+import type { McpDeps } from '../src/mcp/tools.js';
 import type {
   FpsSample,
   LoadProfile,
@@ -79,22 +79,17 @@ function makeDeps(data: Partial<Data> = {}, persistDir?: string): McpDeps & { da
   const d: Data = { render: [], load: [], fps: [], graph: { nodes: [], edges: [] }, ...data };
   const dir = persistDir ?? fs.mkdtempSync(path.join(os.tmpdir(), 'sdt-mcp-'));
   dirs.push(dir);
-  const getters = {
-    getRenderProfiles: () => d.render,
-    getLoadProfiles: () => d.load,
-    getFpsSamples: () => d.fps,
-  };
   return {
     data: d,
     getProject: () => ({ name: 'app' }) as any,
     getRoutes: () => [{ id: '/', path: '/' }] as any,
     getLiveSnapshot: () => ({ epoch: 'e1', total: 1, components: [{ id: 1 } as any] }),
     getComponentRelations: () => [{ file: 'src/A.svelte', name: 'A', imports: [] }],
-    getRenderProfiles: getters.getRenderProfiles,
+    getRenderProfiles: () => d.render,
     getReactiveGraph: () => Promise.resolve(d.graph),
-    getLoadProfiles: getters.getLoadProfiles,
-    getFpsSamples: getters.getFpsSamples,
-    sessions: new SessionStore({ persistDir: dir, getters }),
+    getLoadProfiles: () => d.load,
+    getFpsSamples: () => d.fps,
+    sessions: new SessionStore({ persistDir: dir, getRenderProfiles: () => d.render }),
     getReactiveSummary: req => Promise.resolve({ req } as any),
     getReactiveScope: req => Promise.resolve({ req } as any),
     getStateTimelineDelta: () => ({ cursor: 1, reset: true, changes: [] }),

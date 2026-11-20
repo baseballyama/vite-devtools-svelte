@@ -15,8 +15,8 @@ import { inspectorPlugin, isInspectorRuntime } from './inspector.js';
 import type { InspectorOptions } from './inspector.js';
 import { createMcpMiddleware, MCP_PATH } from './mcp/http.js';
 import { registerServer, registryDir } from './mcp/registry.js';
-import { buildMcpServer } from './mcp/server.js';
 import { SessionStore } from './mcp/sessions.js';
+import { buildMcpServer } from './mcp/tools.js';
 import { HOT_EVENTS } from './runtime/ids.js';
 import {
   RUNTIME_MODULE_ID,
@@ -128,11 +128,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
   function getSessions(): SessionStore {
     sessions ??= new SessionStore({
       persistDir: path.join(root, 'node_modules', '.vite-devtools-svelte', 'sessions'),
-      getters: {
-        getRenderProfiles: () => collector.renderProfiles,
-        getLoadProfiles: () => collector.loadProfiles,
-        getFpsSamples: () => collector.fpsSamples,
-      },
+      getRenderProfiles: () => collector.renderProfiles,
     });
     return sessions;
   }

@@ -12,9 +12,9 @@ import pkg from '../package.json' with { type: 'json' };
 import { createMcpMiddleware } from '../src/mcp/http.js';
 import type { McpServer } from '../src/mcp/protocol.js';
 import { createRelay } from '../src/mcp/relay.js';
-import { buildMcpServer, type McpDeps } from '../src/mcp/server.js';
 import { SessionStore } from '../src/mcp/sessions.js';
 import { serveStdio } from '../src/mcp/stdio.js';
+import { buildMcpServer, type McpDeps } from '../src/mcp/tools.js';
 import type { Collector } from '../src/server/collector.js';
 
 // The exact bytes MCP clients get, which must match the
@@ -36,7 +36,7 @@ const deps: McpDeps = {
   getFpsSamples: () => [],
   sessions: new SessionStore({
     persistDir: path.join(dir, 'sessions'),
-    getters: { getRenderProfiles: () => [], getLoadProfiles: () => [], getFpsSamples: () => [] },
+    getRenderProfiles: () => [],
   }),
   getReactiveSummary: () => Promise.resolve({} as never),
   getReactiveScope: () => Promise.resolve({} as never),

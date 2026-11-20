@@ -9,13 +9,10 @@ const USAGE = `Usage: vite-devtools-svelte mcp
         project in the current directory (or VITE_DEVTOOLS_SVELTE_URL with
         VITE_DEVTOOLS_SVELTE_TOKEN).`;
 
-/**
- * Entry of the `vite-devtools-svelte` bin. Returns the exit code, or `null`
- * while serving. `outdatedLocal`: version of a project install without a CLI.
- */
+/** Entry of the `vite-devtools-svelte` bin. Returns the exit code, or `null` while serving. */
 export function run(
   argv: string[],
-  { outdatedLocal }: { outdatedLocal?: string } = {},
+  { outdatedLocalVersion }: { outdatedLocalVersion?: string } = {},
 ): number | null {
   const [command] = argv;
   if (command === 'mcp') {
@@ -24,7 +21,7 @@ export function run(
       env: process.env,
       registry: registryDir(),
       version: pkg.version,
-      outdatedLocal,
+      outdatedLocalVersion,
     });
     serveStdio(server, process.stdin, process.stdout);
     return null;

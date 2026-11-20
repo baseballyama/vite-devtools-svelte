@@ -23,7 +23,7 @@ import {
   listPerformanceIssues,
   summarizeReactiveProblems,
 } from './issues.js';
-import { createMcpServer, error, text, ToolRegistry, type McpServer } from './protocol.js';
+import { createMcpServer, text, toolError, ToolRegistry, type McpServer } from './protocol.js';
 import type { SessionStore } from './sessions.js';
 import { isSessionId, PANEL_FPS_DROP_LINE } from './sessions.js';
 import { avg, avgRenderTime, max, min, round } from './stats.js';
@@ -152,12 +152,7 @@ export function devServerTools(deps: McpDeps): ToolRegistry {
     },
     ({ route }) => {
       const profiles = deps.getLoadProfiles().filter(p => !route || p.route === route);
-      const byRoute = new Map<string, LoadProfile[]>();
-      for (const p of profiles) {
-        const group = byRoute.get(p.route);
-        if (group) group.push(p);
-        else byRoute.set(p.route, [p]);
-      }
+      const byRoute = Map.groupBy(profiles, p => p.route);
       const groups = [...byRoute].map(([r, ps]) => {
         const durations = ps.map(p => p.duration);
         return {
@@ -302,7 +297,7 @@ export function devServerTools(deps: McpDeps): ToolRegistry {
     },
     async ({ componentId, epoch, maxNodes, maxEdges }) => {
       if (componentId !== undefined && epoch === undefined) {
-        return error(
+        return toolError(
           'componentId requires epoch (from get_live_components with includeMeta: true)',
         );
       }
@@ -417,7 +412,7 @@ export function devServerTools(deps: McpDeps): ToolRegistry {
     },
     ({ id }) => {
       const rec = deps.sessions.get(id);
-      if (!rec) return error(`Session not found: ${id}`);
+      if (!rec) return toolError(`Session not found: ${id}`);
       const delta = rec.endedAt === undefined ? null : deps.sessions.deltaOf(rec);
       return text({ ...rec, delta });
     },

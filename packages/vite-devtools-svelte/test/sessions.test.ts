@@ -11,7 +11,7 @@ import * as fc from 'fast-check';
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 
 import { SessionStore, isSessionId } from '../src/mcp/sessions.js';
-import type { FpsSample, LoadProfile, RenderProfile } from '../src/types.js';
+import type { LoadProfile, RenderProfile } from '../src/types.js';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -25,7 +25,7 @@ function store() {
   const persistDir = path.join(base, 'sessions');
   const s = new SessionStore({
     persistDir,
-    getters: { getRenderProfiles: () => [], getLoadProfiles: () => [], getFpsSamples: () => [] },
+    getRenderProfiles: () => [],
   });
   return { s, persistDir };
 }
@@ -85,7 +85,7 @@ describe('session ids', () => {
 
     const again = new SessionStore({
       persistDir,
-      getters: { getRenderProfiles: () => [], getLoadProfiles: () => [], getFpsSamples: () => [] },
+      getRenderProfiles: () => [],
     });
     expect(again.get(rec.id)?.label).toBe('baseline');
     expect(again.list().map(r => r.id)).toEqual([rec.id]);
@@ -110,24 +110,14 @@ describe('session ids', () => {
   });
 });
 
-interface Metrics {
-  render: RenderProfile[];
-  load: LoadProfile[];
-  fps: FpsSample[];
-}
-
 function liveStore(persistDir?: string) {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sdt-sessions-'));
   dirs.push(base);
-  const metrics: Metrics = { render: [], load: [], fps: [] };
+  const metrics: { render: RenderProfile[] } = { render: [] };
   const dir = persistDir ?? path.join(base, 'sessions');
   const s = new SessionStore({
     persistDir: dir,
-    getters: {
-      getRenderProfiles: () => metrics.render,
-      getLoadProfiles: () => metrics.load,
-      getFpsSamples: () => metrics.fps,
-    },
+    getRenderProfiles: () => metrics.render,
   });
   return { s, metrics, persistDir: dir };
 }
@@ -200,7 +190,7 @@ describe('session lifecycle', () => {
     expect(ended.endedAt).toBe(1_700_000_000_250);
     expect(ended.fpsSamples).toEqual([{ timestamp: 2, fps: 50 }]);
     expect(ended.loadProfiles).toEqual([lp(7)]);
-    expect(st.s.delta(rec.id).durationMs).toBe(250);
+    expect(st.s.deltaOf(ended).durationMs).toBe(250);
     expect(st.s.list()[0]).toMatchObject({ active: false });
   });
 
@@ -211,11 +201,24 @@ describe('session lifecycle', () => {
     expect(() => st.s.start('b', false)).toThrow(`A session is already active: ${rec.id}`);
   });
 
-  it('delta() refuses a session that has not ended', () => {
+  it('deltaOf() refuses a session that has not ended', () => {
     const st = liveStore();
     const rec = st.s.start('a', false);
-    expect(() => st.s.delta(rec.id)).toThrow(`Session ${rec.id} has not been ended yet`);
-    expect(() => st.s.delta('s_zz_000000')).toThrow('Session not found: s_zz_000000');
+    expect(() => st.s.deltaOf(rec)).toThrow(`Session ${rec.id} has not been ended yet`);
+  });
+
+  it('snapshots keep only the render profile fields deltas read', () => {
+    const st = liveStore();
+    st.metrics.render = [rp(1, 2, 6)];
+    st.s.start('a', false);
+    const rec = st.s.end('memory');
+    const snapshot = {
+      renderProfiles: [
+        { componentId: 1, file: '/C1.svelte', name: 'C1', renderCount: 2, totalRenderTime: 6 },
+      ],
+    };
+    expect(rec.startSnapshot).toStrictEqual(snapshot);
+    expect(rec.endSnapshot).toStrictEqual(snapshot);
   });
 
   it.each<[keep: 'memory' | 'disk' | 'discard', persist: boolean, kept: boolean, onDisk: boolean]>([
@@ -280,7 +283,7 @@ describe('session lifecycle', () => {
     // a fresh store sees only the persisted ones
     const fresh = new SessionStore({
       persistDir: st.persistDir,
-      getters: { getRenderProfiles: () => [], getLoadProfiles: () => [], getFpsSamples: () => [] },
+      getRenderProfiles: () => [],
     });
     expect(st.s.list().map(r => [r.label, r.persisted])).toEqual([
       ['c', true],
@@ -318,14 +321,11 @@ describe('persisted session files', () => {
     startedAt: 10,
     endedAt: 20,
     persist: true,
-    startSnapshot: { renderProfiles: [], loadProfilesCount: 0, fpsCount: 0, takenAt: 10 },
+    startSnapshot: { renderProfiles: [] },
     endSnapshot: {
       renderProfiles: [
         { componentId: 1, file: '/A.svelte', name: 'A', renderCount: 2, totalRenderTime: 6 },
       ],
-      loadProfilesCount: 0,
-      fpsCount: 0,
-      takenAt: 20,
     },
     loadProfiles: [lp(10)],
     fpsSamples: [{ timestamp: 1, fps: 60 }],
@@ -343,7 +343,7 @@ describe('persisted session files', () => {
         active: false,
       },
     ]);
-    expect(s.delta('s_abc_123456')).toMatchObject({
+    expect(s.deltaOf(s.get('s_abc_123456')!)).toMatchObject({
       durationMs: 10,
       components: [
         { componentId: 1, renderCountDelta: 2, totalRenderTimeDelta: 6, avgRenderTimeDelta: 3 },
@@ -351,11 +351,25 @@ describe('persisted session files', () => {
     });
   });
 
+  it('a file written with the older snapshot fields still loads and diffs', () => {
+    const old = { loadProfilesCount: 0, fpsCount: 0, takenAt: 10 };
+    const s = withFile({
+      ...valid,
+      startSnapshot: { ...valid.startSnapshot, ...old },
+      endSnapshot: { ...valid.endSnapshot, ...old },
+    });
+    expect(s.list().map(r => r.id)).toEqual(['s_abc_123456']);
+    expect(s.deltaOf(s.get('s_abc_123456')!)).toMatchObject({
+      durationMs: 10,
+      components: [{ componentId: 1, renderCountDelta: 2 }],
+    });
+  });
+
   it('an unended persisted session loads without a delta', () => {
     const { endedAt: _e, endSnapshot: _s, ...open } = valid;
     const s = withFile(open);
     expect(s.get('s_abc_123456')?.endedAt).toBeUndefined();
-    expect(() => s.delta('s_abc_123456')).toThrow('has not been ended yet');
+    expect(() => s.deltaOf(s.get('s_abc_123456')!)).toThrow('has not been ended yet');
   });
 
   it.each<[label: string, content: unknown]>([
@@ -378,11 +392,10 @@ describe('persisted session files', () => {
     const s = withFile(content);
     expect(s.get('s_abc_123456')).toBeUndefined();
     expect(s.list()).toEqual([]);
-    expect(() => s.delta('s_abc_123456')).toThrow('Session not found');
   });
 });
 
-describe('delta() maths', () => {
+describe('deltaOf() maths', () => {
   beforeEach(() => {
     vi.useFakeTimers({ now: 0 });
   });
@@ -393,7 +406,7 @@ describe('delta() maths', () => {
   it('an empty session is all zeros', () => {
     const st = liveStore();
     const id = session(st, { ms: 0 });
-    expect(st.s.delta(id)).toEqual({
+    expect(st.s.deltaOf(st.s.get(id)!)).toEqual({
       durationMs: 0,
       components: [],
       loadProfiles: { count: 0, avgDuration: 0, p95Duration: 0 },
@@ -409,7 +422,7 @@ describe('delta() maths', () => {
       // 1: +2 renders / +10 ms; 2: unchanged; 3: remounted (count dropped);
       // 4: new; 5: unmounted
     });
-    expect(st.s.delta(id).components).toEqual([
+    expect(st.s.deltaOf(st.s.get(id)!).components).toEqual([
       {
         componentId: 4,
         file: '/C4.svelte',
@@ -438,7 +451,7 @@ describe('delta() maths', () => {
   ])('load durations %j → avg %f, p95 %f', (durations, avg, p95) => {
     const st = liveStore();
     const id = session(st, { loads: durations });
-    expect(st.s.delta(id).loadProfiles).toEqual({
+    expect(st.s.deltaOf(st.s.get(id)!).loadProfiles).toEqual({
       count: durations.length,
       avgDuration: avg,
       p95Duration: p95,
@@ -452,7 +465,7 @@ describe('delta() maths', () => {
         xs => {
           const st = liveStore();
           const id = session(st, { loads: xs });
-          const p95 = st.s.delta(id).loadProfiles.p95Duration;
+          const p95 = st.s.deltaOf(st.s.get(id)!).loadProfiles.p95Duration;
           const atOrBelow = xs.filter(x => x <= p95).length;
           expect(atOrBelow / xs.length).toBeGreaterThanOrEqual(0.95);
           // smallest such value: fewer than 95% are strictly below it
@@ -470,7 +483,7 @@ describe('delta() maths', () => {
   ])('fps %j', (values, expected) => {
     const st = liveStore();
     const id = session(st, { fps: values });
-    expect(st.s.delta(id).fps).toEqual({ samples: values.length, ...expected });
+    expect(st.s.deltaOf(st.s.get(id)!).fps).toEqual({ samples: values.length, ...expected });
   });
 
   it('handles more fps samples than fit in a call stack', () => {
@@ -478,7 +491,7 @@ describe('delta() maths', () => {
     st.s.start('long', false);
     for (let i = 0; i < 300_000; i++) st.s.recordFpsSample({ timestamp: i, fps: 60 - (i % 3) });
     const rec = st.s.end('memory');
-    expect(st.s.delta(rec.id).fps).toMatchObject({ samples: 300_000, min: 58 });
+    expect(st.s.deltaOf(rec).fps).toMatchObject({ samples: 300_000, min: 58 });
   });
 });
 

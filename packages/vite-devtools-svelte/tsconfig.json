@@ -1,7 +1,8 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["node"]
+    "types": ["node"],
+    "lib": ["ES2024"]
   },
   "include": ["src/**/*.ts", "test/**/*.ts", "*.config.ts"],
   "exclude": ["test/**/fixtures/**"]

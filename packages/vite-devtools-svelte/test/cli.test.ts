@@ -23,11 +23,11 @@ describe('cli', () => {
       env: process.env,
       registry: '/registry',
       version: pkg.version,
-      outdatedLocal: undefined,
+      outdatedLocalVersion: undefined,
     });
-    run(['mcp'], { outdatedLocal: '0.8.0' });
+    run(['mcp'], { outdatedLocalVersion: '0.8.0' });
     expect(createRelay).toHaveBeenLastCalledWith(
-      expect.objectContaining({ outdatedLocal: '0.8.0' }),
+      expect.objectContaining({ outdatedLocalVersion: '0.8.0' }),
     );
     expect(serveStdio).toHaveBeenCalledWith(relay, process.stdin, process.stdout);
   });

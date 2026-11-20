@@ -1,4 +1,4 @@
-/** MCP `instructions` of the dev server endpoint: sent to the client on initialize. */
+/** `instructions` of the dev server endpoint. */
 export const MCP_INSTRUCTIONS = [
   'Reads metrics of a running Svelte / SvelteKit dev server: render hotspots, the reactive graph, $state changes, SvelteKit load timing, FPS, and measurement sessions to compare before and after a change. Read only: edit files with your own tools.',
   'The metrics come from the app open in the browser. When they are empty, ask the user to open and use the app, then read them again.',

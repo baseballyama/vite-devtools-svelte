@@ -2,16 +2,15 @@ import { MCP_PATH } from './http.js';
 import { RELAY_INSTRUCTIONS } from './instructions.js';
 import {
   createMcpServer,
-  error,
   text,
+  toolError,
   type McpServer,
   type ToolInfo,
   type ToolResult,
 } from './protocol.js';
 import { listServers, selectServer, type RegistryEntry } from './registry.js';
-import { devServerTools, type McpDeps } from './server.js';
+import { devServerTools, type McpDeps } from './tools.js';
 
-/** Where a tool call goes. */
 type Target = Pick<RegistryEntry, 'url' | 'token'>;
 
 export interface RelayOptions {
@@ -23,7 +22,7 @@ export interface RelayOptions {
   registry: string;
   version: string;
   /** Version of a project install too old to register its dev server. */
-  outdatedLocal?: string;
+  outdatedLocalVersion?: string;
 }
 
 const LIST_DEV_SERVERS: ToolInfo = {
@@ -93,7 +92,6 @@ async function forward(target: Target, name: string, args: object): Promise<Tool
 
 const describeEntry = (e: RegistryEntry) => `${e.id}: ${e.packageName} at ${e.root}`;
 
-/** The MCP endpoint URL for a dev server origin or a full endpoint URL. */
 function endpointUrl(raw: string): string {
   const url = new URL(raw);
   if (url.pathname === '/' || url.pathname === '') url.pathname = MCP_PATH;
@@ -131,9 +129,9 @@ export function createRelay(opts: RelayOptions): McpServer {
         ? `No running dev server for ${opts.cwd}. Ask the user to start the app's dev server (e.g. \`vite dev\`) with the vite-devtools-svelte plugin.`
         : `No running dev server matches "${name}".`,
     ];
-    if (name === undefined && opts.outdatedLocal) {
+    if (name === undefined && opts.outdatedLocalVersion) {
       lines.push(
-        `The project has @sveltejs/vite-devtools-svelte ${opts.outdatedLocal}, which does not announce its dev server: ask the user to upgrade it.`,
+        `The project has @sveltejs/vite-devtools-svelte ${opts.outdatedLocalVersion}, which does not announce its dev server: ask the user to upgrade it.`,
       );
     }
     if (selection.others.length > 0) {
@@ -164,17 +162,17 @@ export function createRelay(opts: RelayOptions): McpServer {
         })),
       });
     }
-    if (!tools.some(t => t.name === name)) return error(`Unknown tool: ${name}`);
+    if (!tools.some(t => t.name === name)) return toolError(`Unknown tool: ${name}`);
     const { server, ...rest } = args;
     if (server !== undefined && typeof server !== 'string') {
-      return error('`server` must be a string.');
+      return toolError('`server` must be a string.');
     }
     const target = resolveTarget(server);
-    if (typeof target === 'string') return error(target);
+    if (typeof target === 'string') return toolError(target);
     try {
       return await forward(target, name, rest);
     } catch (e) {
-      return error(
+      return toolError(
         `The dev server at ${target.url} did not answer: ${e instanceof Error ? e.message : String(e)}`,
       );
     }

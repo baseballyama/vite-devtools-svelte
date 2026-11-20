@@ -38,7 +38,7 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
     sourcemap: true,
-    target: 'node18',
+    target: 'node22',
     lib: {
       entry: { index: 'src/index.ts', cli: 'src/cli/index.ts' },
       formats: ['es'],

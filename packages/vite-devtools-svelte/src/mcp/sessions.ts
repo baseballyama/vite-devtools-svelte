@@ -13,9 +13,6 @@ interface SessionSnapshot {
     renderCount: number;
     totalRenderTime: number;
   }>;
-  loadProfilesCount: number;
-  fpsCount: number;
-  takenAt: number;
 }
 
 export interface SessionRecord {
@@ -77,30 +74,20 @@ interface SessionSummary {
   active: boolean;
 }
 
-export interface MetricGetters {
-  getRenderProfiles: () => RenderProfile[];
-  getLoadProfiles: () => LoadProfile[];
-  getFpsSamples: () => FpsSample[];
-}
-
 const UNCHANGED_RENDER_THRESHOLD_MS = 1;
 const UNCHANGED_LOAD_THRESHOLD_MS = 5;
 const UNCHANGED_FPS_THRESHOLD = 1;
 export const PANEL_FPS_DROP_LINE = 30;
 
-function takeSnapshot(getters: MetricGetters): SessionSnapshot {
-  const renderProfiles = getters.getRenderProfiles().map(p => ({
-    componentId: p.componentId,
-    file: p.file,
-    name: p.name,
-    renderCount: p.renderCount,
-    totalRenderTime: p.totalRenderTime,
-  }));
+function takeSnapshot(renderProfiles: RenderProfile[]): SessionSnapshot {
   return {
-    renderProfiles,
-    loadProfilesCount: getters.getLoadProfiles().length,
-    fpsCount: getters.getFpsSamples().length,
-    takenAt: Date.now(),
+    renderProfiles: renderProfiles.map(p => ({
+      componentId: p.componentId,
+      file: p.file,
+      name: p.name,
+      renderCount: p.renderCount,
+      totalRenderTime: p.totalRenderTime,
+    })),
   };
 }
 
@@ -138,18 +125,18 @@ export function isSessionId(id: unknown): id is string {
 
 export interface SessionStoreOptions {
   persistDir: string;
-  getters: MetricGetters;
+  getRenderProfiles: () => RenderProfile[];
 }
 
 export class SessionStore {
   private sessions = new Map<string, SessionRecord>();
   private active: string | null = null;
   private readonly persistDir: string;
-  private readonly getters: MetricGetters;
+  private readonly getRenderProfiles: () => RenderProfile[];
 
   constructor(opts: SessionStoreOptions) {
     this.persistDir = path.resolve(opts.persistDir);
-    this.getters = opts.getters;
+    this.getRenderProfiles = opts.getRenderProfiles;
   }
 
   start(label: string, persist: boolean): SessionRecord {
@@ -164,7 +151,7 @@ export class SessionStore {
       label,
       startedAt: Date.now(),
       persist,
-      startSnapshot: takeSnapshot(this.getters),
+      startSnapshot: takeSnapshot(this.getRenderProfiles()),
       loadProfiles: [],
       fpsSamples: [],
     };
@@ -186,11 +173,10 @@ export class SessionStore {
   }
 
   end(keep: 'memory' | 'disk' | 'discard'): SessionRecord {
-    if (!this.active) throw new Error('No active session');
     const rec = this.activeRecord;
-    if (!rec) throw new Error('Active session missing from store');
+    if (!rec) throw new Error('No active session');
     rec.endedAt = Date.now();
-    rec.endSnapshot = takeSnapshot(this.getters);
+    rec.endSnapshot = takeSnapshot(this.getRenderProfiles());
     this.active = null;
 
     if (keep === 'discard') {
@@ -289,19 +275,15 @@ export class SessionStore {
     };
   }
 
-  delta(id: string): SessionDelta {
-    return this.deltaOf(this.found(id));
-  }
-
-  private found(id: string): SessionRecord {
+  private getOrThrow(id: string): SessionRecord {
     const rec = this.get(id);
     if (!rec) throw new Error(`Session not found: ${id}`);
     return rec;
   }
 
   compare(idA: string, idB: string): SessionDiff {
-    const recA = this.found(idA);
-    const recB = this.found(idB);
+    const recA = this.getOrThrow(idA);
+    const recB = this.getOrThrow(idB);
     const a = this.deltaOf(recA);
     const b = this.deltaOf(recB);
     const totalA = a.components.reduce((s, c) => s + c.totalRenderTimeDelta, 0);
