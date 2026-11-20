@@ -4,7 +4,7 @@ export const RESOLVED_RUNTIME_ID = '\0' + RUNTIME_MODULE_ID;
 export const WRAPPER_MODULE_ID = '\0svelte-devtools:wrapped-client';
 
 /**
- * Stable contract with the browser runtime. client.js (loaded `?raw`) repeats all but
+ * Stable contract with the browser runtime. page-runtime.js (loaded `?raw`) repeats all but
  * `loadProfile` as literals; the load wrapper generated in server/load-profile.ts reads it from here.
  */
 export const HOT_EVENTS = {

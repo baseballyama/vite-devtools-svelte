@@ -15,7 +15,6 @@ function chainVisits(len: number): number {
   for (let k = 0; k < len; k++) dep = { v: k, deps: [dep] };
   const tail = { v: 1, deps: [dep] };
   h.dt.trackDerived(tail, 'tail', id);
-  h.dt.registered(id);
   let graph: any;
   const visits = countVisits(() => {
     graph = h.dt.getReactiveGraph();

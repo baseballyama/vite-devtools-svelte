@@ -53,12 +53,12 @@ const all = (target: object, selector: string): El[] => [
 /** Runs `fn` while `el`'s component context is not tracked (as for a library component). */
 function asUntracked<T>(el: El, fn: () => T): T {
   const ctx = (el as any).__svelte_meta.component;
-  const id = dt()._idByContext.get(ctx);
-  dt()._idByContext.delete(ctx);
+  const id = dt().idByContext.get(ctx);
+  dt().idByContext.delete(ctx);
   try {
     return fn();
   } finally {
-    dt()._idByContext.set(ctx, id);
+    dt().idByContext.set(ctx, id);
   }
 }
 
@@ -227,15 +227,15 @@ describe('the menu rows of the components around an element', () => {
     const r = render(Outer);
     const two = leafByText(r.target, 'two');
     const card = (two as any).__svelte_meta.component.p;
-    const id = dt()._idByContext.get(card);
-    dt()._idByContext.delete(card);
+    const id = dt().idByContext.get(card);
+    dt().idByContext.delete(card);
     try {
       expect(parentRows(two)).toEqual([
         `Leaf@Card.svelte:8 -> ${instances('Leaf')[1]!.id}`,
         'Card@Outer.svelte:9 -> none',
       ]);
     } finally {
-      dt()._idByContext.set(card, id);
+      dt().idByContext.set(card, id);
     }
     r.destroy();
   });

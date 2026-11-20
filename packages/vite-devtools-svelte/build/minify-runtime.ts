@@ -5,7 +5,7 @@ import { minifySync, normalizePath } from 'vite';
 import type { Plugin } from 'vite';
 
 const RUNTIME_DIR = fileURLToPath(new URL('../src/runtime/', import.meta.url));
-const RUNTIME_FILES = ['client.js', 'wrapper.js'];
+const RUNTIME_FILES = ['page-runtime.js', 'wrapper.js'];
 
 // The browser runtime is sent as text into every dev page, where its comments and
 // whitespace are dead weight. Names are not mangled, so errors from it stay readable.

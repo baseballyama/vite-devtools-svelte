@@ -95,22 +95,26 @@ function __clampInt(v, lo, hi, d) {
 
 if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
   const __NO_VALUE = Symbol('no value');
-  // State timeline ring: every read sees at most 500 entries and
-  // __TIMELINE_BYTES (also the server's buffer budget). The raw array may
-  // hold up to __TIMELINE_TRIM_AT (2 x the 500 cap) between bulk trims.
+  // State timeline ring: every read sees at most __TIMELINE_CAP entries and
+  // __TIMELINE_BYTES (both the server's budgets, which a `?raw` file cannot
+  // import); the raw array may reach __TIMELINE_TRIM_AT between bulk trims.
+  const __TIMELINE_CAP = 500;
   const __TIMELINE_BYTES = 4 * 1024 * 1024;
-  const __TIMELINE_TRIM_AT = 1000;
+  const __TIMELINE_TRIM_AT = 2 * __TIMELINE_CAP;
+  // entries per HMR message
+  const __TIMELINE_BATCH = 200;
+  // Members the wrapper and the injected code use have no underscore. The perf
+  // scripts and tests also read underscore members, so update them on a rename.
   const __SVELTE_DT = {
     _nextId: 0,
     _instances: new Map(),
-    _stack: [],
-    _pendingParent: undefined,
-    _pendingFile: null,
-    _debounceTimer: null,
+    // Set by the component transform right before the component's push().
+    pendingFile: null,
+    _componentsTimer: null,
 
     _profiles: new Map(),
     _initStartTimes: new Map(),
-    _profileDebounceTimer: null,
+    _profilesTimer: null,
 
     _reactiveNodes: new Map(),
     _reactiveProxies: new Map(),
@@ -122,15 +126,15 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     // For objects the compare key is the JSON string, or length+hash when large.
     _stateSnapshots: new Map(),
     _stateSnapshotStrs: new Map(),
-    _timelineDebounceTimer: null,
+    _timelineTimer: null,
     // A scoped graph resolves dependencies without scanning every node.
     _idBySignal: new WeakMap(),
     _idByProxy: new WeakMap(),
     // Set by the wrapper on mount.
-    _idByContext: new WeakMap(),
-    // Svelte's FILENAME symbol, set by the wrapper: `ctx.function[_FILENAME]` is
-    // relative like `__svelte_meta` files.
-    _FILENAME: null,
+    idByContext: new WeakMap(),
+    // Svelte's FILENAME symbol, set by the wrapper: `ctx.function[filenameSymbol]`
+    // is relative like `__svelte_meta` files.
+    filenameSymbol: null,
     // Names declared more than once per instance ({@const} in {#each} items,
     // several $state class instances).
     _nameSeq: new Map(),
@@ -143,7 +147,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     // it to its proxy's node (a tag_proxy node, or a state signal holding a proxy).
     _proxyNames: new Map(),
     // Set by the module transform.
-    _moduleFile: null,
+    moduleFile: null,
     // Effect names are numbered per component, so instances of one file match.
     _effectSeq: new Map(),
     // For the incremental liveness sweep.
@@ -191,7 +195,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     _profilesCost: { ms: 0, bytes: 0 },
     // = collector LIMITS.renderProfiles (pinned by a unit test): the server
     // keeps only the newest entries, so sending more is wasted bytes.
-    _profileCap: 5000,
+    _profilesCap: 5000,
     _sampling: null,
     _baselining: false,
     // A first observation is a seed, not a change (no timeline entry, activity
@@ -201,20 +205,11 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     _sentPendingNodes: null,
     _fpsGen: 0,
 
-    register(file) {
+    register(file, parentHint) {
       const id = this._nextId++;
-      // Parent: the wrapper's context-derived hint (components created by a
-      // later block update) when it names a live instance, else
-      // the synchronous init stack (children created during the parent's own
-      // init, before the parent is mapped).
-      const hint = this._pendingParent;
-      this._pendingParent = undefined;
-      const parentId =
-        hint !== undefined && hint !== null && this._instances.has(hint)
-          ? hint
-          : this._stack.length > 0
-            ? this._stack.at(-1)
-            : null;
+      // The wrapper's hint can name an unmounted component: idByContext is a
+      // WeakMap nobody clears on unmount, so only a live instance is a parent.
+      const parentId = this._instances.has(parentHint) ? parentHint : null;
       const baseName = file.slice(file.lastIndexOf('/') + 1);
       const name = baseName.endsWith('.svelte') ? baseName.slice(0, -'.svelte'.length) : baseName;
       // children is a Set so unmounting one row of a 5 000-row list is O(1).
@@ -229,36 +224,29 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
         const parent = this._instances.get(parentId);
         if (parent) parent.children.add(id);
       }
-      this._stack.push(id);
       if (this._active) this._pendingAdded.add(id);
-      this._scheduleUpdate();
+      this._scheduleComponentsUpdate();
       return id;
-    },
-
-    registered(id) {
-      const idx = this._stack.indexOf(id);
-      if (idx !== -1) this._stack.splice(idx, 1);
     },
 
     unmount(id) {
       this._removeInstance(id);
-      this._scheduleUpdate();
-      this._scheduleProfileUpdate();
+      this._scheduleComponentsUpdate();
+      this._scheduleProfilesUpdate();
     },
 
     // A component whose init threw (the wrapper unwinds its stack): it never
-    // mounted and never will, so it leaves the tree and the init stack.
+    // mounted and never will, so it leaves the tree.
     abortInit(id) {
-      this.registered(id);
       this._removeInstance(id);
-      this._scheduleUpdate();
+      this._scheduleComponentsUpdate();
     },
 
     _removeInstance(id) {
       const instance = this._instances.get(id);
       if (!instance) return;
       if (instance.parentId !== null) this._instances.get(instance.parentId)?.children.delete(id);
-      this._removeChildren(id);
+      this._removeDescendants(id);
       this._cleanupComponent(id);
     },
 
@@ -325,20 +313,20 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       return scope ? scope.file : '';
     },
 
-    _enterModule(file) {
-      this._moduleFile = file;
-      // a module body that throws (or awaits) never reaches _leaveModule
+    enterModule(file) {
+      this.moduleFile = file;
+      // a module body that throws (or awaits) never reaches leaveModule
       queueMicrotask(() => {
-        if (this._moduleFile === file) this._moduleFile = null;
+        if (this.moduleFile === file) this.moduleFile = null;
       });
     },
 
-    _leaveModule() {
-      this._moduleFile = null;
+    leaveModule() {
+      this.moduleFile = null;
     },
 
     trackModuleSignal(kind, target, name) {
-      const file = this._moduleFile;
+      const file = this.moduleFile;
       let id = this._moduleByFile.get(file);
       if (id === undefined) {
         id = this._nextId++;
@@ -357,7 +345,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       if (!entry) return null;
       const signal = entry.signal.deref();
       if (signal && this._scopeLive(entry.meta.componentId) && this._ownerAlive(entry)) {
-        if (!entry.effect) return signal;
+        if (!entry.boundEffect) return signal;
         // a bound effect is destroyed when Svelte clears its callback
         if (signal.fn !== null) return signal;
       }
@@ -397,7 +385,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       const known = byIdentity.get(identity);
       if (known !== undefined && this._reactiveNodes.has(known)) return known;
       const base = componentId + ':' + name;
-      if (!this._reactiveNodes.has(base) || !this._liveSignal(base)) return base;
+      if (!this._liveSignal(base)) return base;
       let seq = this._nameSeq.get(componentId);
       if (!seq) {
         seq = new Map();
@@ -408,7 +396,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       do {
         k++;
         id = base + '#' + k;
-      } while (this._reactiveNodes.has(id) && this._liveSignal(id));
+      } while (this._liveSignal(id));
       seq.set(name, k);
       return id;
     },
@@ -445,18 +433,15 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       if (this._sweepDebt > 0) this._scheduleSweep();
     },
 
-    _registerNode(nodeId, componentId, type, name, signalRef, owner, extra) {
+    _registerNode(nodeId, componentId, type, name, signalRef, owner) {
       this._trackNodeCount(nodeId, componentId, type);
-      const entry = {
+      this._reactiveNodes.set(nodeId, {
         signal: signalRef,
         owner: owner ? new WeakRef(owner) : null,
         meta: { id: nodeId, type, name, componentId, componentFile: this._scopeFile(componentId) },
-      };
-      if (extra) Object.assign(entry, extra);
-      this._reactiveNodes.set(nodeId, entry);
+      });
       this._indexNode(nodeId, componentId);
       this._sweepAdd(nodeId);
-      return entry;
     },
 
     _indexNode(nodeId, componentId) {
@@ -510,38 +495,36 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       return r;
     },
 
-    _removeChildren(parentId) {
+    _removeDescendants(parentId) {
       const parent = this._instances.get(parentId);
       if (!parent) return;
       // a copy: _cleanupComponent() changes this set
       for (const childId of Array.from(parent.children)) {
-        this._removeChildren(childId);
+        this._removeDescendants(childId);
         this._cleanupComponent(childId);
       }
     },
 
-    // Full-list pushes are throttled, not debounced: a pending timer is not
-    // reset, so continuous churn still produces updates (a debounce would
-    // starve), and the interval adapts to the last push's cost so a 10 000+
-    // instance app can't spend its main thread serializing.
-    _sendInterval(cost, min) {
-      return Math.max(min, 20 * cost.ms, cost.bytes > 1000000 ? 1000 : 0);
+    // Full-list pushes are throttled: a pending timer is not reset, so
+    // continuous churn still produces updates, and the interval adapts to the
+    // last push's cost so a 10 000+ instance app can't spend its main thread
+    // serializing.
+    _componentsInterval() {
+      const cost = this._componentsCost;
+      return Math.max(100, 20 * cost.ms, cost.bytes > 1000000 ? 1000 : 0);
     },
 
-    _scheduleUpdate() {
-      if (!this._active || this._debounceTimer) return;
-      this._debounceTimer = setTimeout(
-        () => {
-          this._debounceTimer = null;
-          this._sendUpdate();
-        },
-        this._sendInterval(this._componentsCost, 100),
-      );
+    _scheduleComponentsUpdate() {
+      if (!this._active || this._componentsTimer) return;
+      this._componentsTimer = setTimeout(() => {
+        this._componentsTimer = null;
+        this._sendComponentsUpdate();
+      }, this._componentsInterval());
     },
 
     // The full form replaces the server's tree for this epoch. Deltas send
     // removed ids first, then added in registration order (parents first).
-    _sendUpdate(forceFull) {
+    _sendComponentsUpdate(forceFull) {
       // Nobody watching: keep the registry, skip the O(N) payload. A full
       // snapshot is sent on activation.
       if (!this._active) return;
@@ -602,16 +585,20 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       const initTime = performance.now() - start;
       this._initStartTimes.delete(id);
       if (!this._newProfile(id, initTime)) return;
-      this._scheduleProfileUpdate();
+      this._scheduleProfilesUpdate();
     },
 
-    recordRender(id) {
+    recordRender(id, duration = 0) {
       const profile = this._profiles.get(id) ?? this._newProfile(id, 0);
       if (!profile) return;
       profile.renderCount++;
+      profile.totalRenderTime += duration;
+      profile.lastRenderTime = duration;
       profile.lastRenderAt = Date.now();
-      this._activityRow(id).renders++;
-      this._scheduleProfileUpdate();
+      const row = this._activityRow(id);
+      row.renders++;
+      row.renderMs += duration;
+      this._scheduleProfilesUpdate();
     },
 
     _newProfile(id, initTime) {
@@ -631,20 +618,11 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       return profile;
     },
 
-    recordRenderTime(id, duration) {
-      const profile = this._profiles.get(id);
-      if (profile) {
-        profile.totalRenderTime += duration;
-        profile.lastRenderTime = duration;
-        this._activityRow(id).renderMs += duration;
-      }
-    },
-
     // Profiles push, throttled like components, but the floor grows with the
     // payload: every push carries the whole retained map, so a large app
     // coalesces bursts instead of resending ~1 MB twice a second. Hard cap
     // 2 s: a slow serialization must not stretch the latency beyond it.
-    _profileInterval() {
+    _profilesInterval() {
       const cost = this._profilesCost;
       return Math.min(
         2000,
@@ -652,27 +630,27 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       );
     },
 
-    _scheduleProfileUpdate() {
-      if (!this._active || this._profileDebounceTimer) return;
-      this._profileDebounceTimer = setTimeout(() => {
-        this._profileDebounceTimer = null;
-        this._sendProfileUpdate();
-      }, this._profileInterval());
+    _scheduleProfilesUpdate() {
+      if (!this._active || this._profilesTimer) return;
+      this._profilesTimer = setTimeout(() => {
+        this._profilesTimer = null;
+        this._sendProfilesUpdate();
+      }, this._profilesInterval());
     },
 
     // Also the forced path (activation / resync): a pending throttled push is
     // cancelled so the same state is not sent twice.
-    _sendProfileUpdate() {
-      if (this._profileDebounceTimer) {
-        clearTimeout(this._profileDebounceTimer);
-        this._profileDebounceTimer = null;
+    _sendProfilesUpdate() {
+      if (this._profilesTimer) {
+        clearTimeout(this._profilesTimer);
+        this._profilesTimer = null;
       }
       if (!this._active) return;
       const t0 = performance.now();
       const all = Array.from(this._profiles.values());
       // Exactly what the collector retains: its tail, in the same order.
       const profiles =
-        all.length > this._profileCap ? all.slice(all.length - this._profileCap) : all;
+        all.length > this._profilesCap ? all.slice(all.length - this._profilesCap) : all;
       this._send('svelte-devtools:profiles', { epoch: this._epoch, profiles, total: all.length });
       // Payload size from a small sample (entries differ mainly by file path).
       const k = Math.min(8, profiles.length);
@@ -726,7 +704,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       }
       const name = kind + '_' + ++seq[kind];
       const nodeId = componentId + ':' + name;
-      const placeholder = { v: undefined, _isEffect: true };
+      const placeholder = { v: undefined };
       this._registerNode(nodeId, componentId, 'effect', name, { deref: () => placeholder }, owner);
       return nodeId;
     },
@@ -735,7 +713,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       const entry = nodeId !== null && this._reactiveNodes.get(nodeId);
       if (!entry || !effect || typeof effect !== 'object') return;
       entry.signal = new WeakRef(effect);
-      entry.effect = true;
+      entry.boundEffect = true;
       this._idBySignal.set(effect, nodeId);
     },
 
@@ -919,21 +897,17 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
         // Svelte computes a derived lazily: until something reads it, v is
         // the UNINITIALIZED marker (a symbol)
         node.unevaluated = true;
-      } else if (node.type !== 'effect' && signal.v !== undefined && typeof signal.v !== 'symbol') {
-        try {
-          const v = signal.v;
-          if (
-            typeof v === 'number' ||
-            typeof v === 'string' ||
-            typeof v === 'boolean' ||
-            v === null
-          ) {
-            node.value = v;
-          } else {
-            node.value = '(object)';
-          }
-        } catch {
-          /* ignore */
+      } else if (node.type !== 'effect') {
+        const v = signal.v;
+        if (
+          typeof v === 'number' ||
+          typeof v === 'string' ||
+          typeof v === 'boolean' ||
+          v === null
+        ) {
+          node.value = v;
+        } else if (v !== undefined && typeof v !== 'symbol') {
+          node.value = '(object)';
         }
       }
       return node;
@@ -969,7 +943,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       // No reactions: not a derived.
       const templateOf = effect => {
         if (!effect || 'reactions' in effect || !effect.ctx) return null;
-        const cid = this._idByContext.get(effect.ctx);
+        const cid = this.idByContext.get(effect.ctx);
         if (cid === undefined || !this._instances.has(cid)) return null;
         const id = cid + ':(template)';
         templates.set(id, cid);
@@ -1449,16 +1423,19 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       this._scheduleTimelineUpdate();
     },
 
-    // Ring: at most 500 entries and __TIMELINE_BYTES (the newest entry is
+    // Ring: at most __TIMELINE_CAP entries and __TIMELINE_BYTES (the newest entry is
     // always kept). Removed entries that were never pushed are disclosed
     // as dropped; pushed ones are already on the server.
     _trimTimeline() {
       const all = this._stateTimeline;
       let cut = 0;
       let bytesLeft = this._timelineBytes;
-      while (cut < all.length - 1 && (all.length - cut > 500 || bytesLeft > __TIMELINE_BYTES)) {
+      while (
+        cut < all.length - 1 &&
+        (all.length - cut > __TIMELINE_CAP || bytesLeft > __TIMELINE_BYTES)
+      ) {
         const info = this._entryInfo.get(all[cut]);
-        const reason = all.length - cut > 500 ? 'runtime-count' : 'runtime-bytes';
+        const reason = all.length - cut > __TIMELINE_CAP ? 'runtime-count' : 'runtime-bytes';
         if (info.seq > this._pushedSeq) this._timelineDropped[reason]++;
         bytesLeft -= info.bytes;
         cut++;
@@ -1469,30 +1446,32 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       }
     },
 
-    // A throttle, not a debounce: a pending timer is never re-armed, so unsent
-    // entries leave within 300 ms even under continuous change. Flushed at once
-    // when 200 entries (one message) are unsent: one poll tick can record thousands.
+    // A pending timer is never re-armed, so unsent entries leave within 300 ms
+    // even under continuous change. Flushed at once when a full message
+    // (__TIMELINE_BATCH entries) is unsent: one poll tick can record thousands.
     _scheduleTimelineUpdate() {
       if (!this._active || this._baselining) return;
-      if (this._timelineSeq - this._pushedSeq >= 200) {
+      if (this._timelineSeq - this._pushedSeq >= __TIMELINE_BATCH) {
         this._flushTimeline();
         return;
       }
-      if (this._timelineDebounceTimer) return;
-      this._timelineDebounceTimer = setTimeout(() => {
-        this._timelineDebounceTimer = null;
+      if (this._timelineTimer) return;
+      this._timelineTimer = setTimeout(() => {
+        this._timelineTimer = null;
         this._flushTimeline();
       }, 300);
     },
 
     _flushTimeline() {
-      if (this._timelineDebounceTimer) {
-        clearTimeout(this._timelineDebounceTimer);
-        this._timelineDebounceTimer = null;
+      if (this._timelineTimer) {
+        clearTimeout(this._timelineTimer);
+        this._timelineTimer = null;
       }
+      // _timelineDeltas() marks entries as pushed, so it must not run when nothing can be
+      // sent. Activation's _timelineFull() needs no guard: subscriptions only arrive over HMR.
       if (!import.meta.hot) return;
       for (const msg of this._timelineDeltas()) {
-        import.meta.hot.send('svelte-devtools:state-timeline', msg);
+        this._send('svelte-devtools:state-timeline', msg);
       }
     },
 
@@ -1536,8 +1515,8 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       const first = this._timelineReset || this._hasTimelineDisclosure();
       // A first message goes out even with no pending changes (disclosure only).
       const end = first ? Math.max(pending.length, 1) : pending.length;
-      for (let i = 0; i < end; i += 200) {
-        const msg = { epoch: this._epoch, changes: pending.slice(i, i + 200) };
+      for (let i = 0; i < end; i += __TIMELINE_BATCH) {
+        const msg = { epoch: this._epoch, changes: pending.slice(i, i + __TIMELINE_BATCH) };
         if (i === 0 && this._timelineReset) msg.reset = true;
         if (i === 0) this._takeTimelineDisclosure(msg);
         else msg.baseline = this._baselineInfo();
@@ -1590,7 +1569,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       if (import.meta.hot) import.meta.hot.send(event, data);
     },
 
-    // Only timestamps: no allocations per frame beyond a single array push.
+    // Raw frame timestamps only; _sampleFps does the counting off the frame path.
     _fpsFrameTimes: [],
 
     _fpsLoop(gen) {
@@ -1612,20 +1591,16 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
         this._pendingAdded.clear();
         this._pendingRemoved.clear();
       }
-      // resync: the server holds no full base for this epoch, or we reconnected to a possibly restarted server.
+      // data.resync: the server holds no full base for this epoch. Activation or
+      // resync resends everything once, in the order components -> profiles ->
+      // timeline(reset: true); the reset push marks the snapshot complete.
       const resync = this._resync || !!data?.resync;
       this._resync = false;
       if (this._active && !wasActive) this._pollBaseline();
       if (this._active && (!wasActive || resync)) {
-        // Collector state may be stale or empty (first activation, resync, or a
-        // reconnect to a possibly restarted server): resend everything once, in
-        // the order components -> profiles -> timeline(reset: true); the
-        // reset push marks the activation snapshot complete.
-        this._sendUpdate(true);
-        this._sendProfileUpdate();
-        if (import.meta.hot) {
-          import.meta.hot.send('svelte-devtools:state-timeline', this._timelineFull());
-        }
+        this._sendComponentsUpdate(true);
+        this._sendProfilesUpdate();
+        this._send('svelte-devtools:state-timeline', this._timelineFull());
       }
       this._syncSampling();
     },
@@ -1697,10 +1672,10 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
   // as `__svelte_meta.component`; library components and the context `mount`
   // creates are not tracked, so the nearest tracked ancestor (`ctx.p`,
   // Svelte's parent context) is used. undefined when there is none.
-  const instanceOf = element => {
+  const instanceOfElement = element => {
     let id;
     for (let ctx = element?.__svelte_meta?.component; ctx && id === undefined; ctx = ctx.p) {
-      id = __SVELTE_DT._idByContext.get(ctx);
+      id = __SVELTE_DT.idByContext.get(ctx);
     }
     return id === undefined ? undefined : __SVELTE_DT._instances.get(id);
   };
@@ -1722,12 +1697,12 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     if (calls.length > 0) calls.at(-1).caller = last.file;
 
     const found = new Map();
-    const FILENAME = __SVELTE_DT._FILENAME;
+    const FILENAME = __SVELTE_DT.filenameSymbol;
     let ctx = element?.__svelte_meta?.component ?? null;
     for (const { entry, caller } of calls) {
       if (!ctx || !FILENAME) break;
       const parent = ctx.p ?? null;
-      const id = __SVELTE_DT._idByContext.get(ctx);
+      const id = __SVELTE_DT.idByContext.get(ctx);
       const instance = id === undefined ? undefined : __SVELTE_DT._instances.get(id);
       if (
         instance?.name === entry.componentTag &&
@@ -1742,7 +1717,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
   };
   window.addEventListener('svelte-inspector:describe', event => {
     const detail = event.detail;
-    const instance = instanceOf(detail?.element);
+    const instance = instanceOfElement(detail?.element);
     if (instance) detail.name = instance.name;
     if (detail?.parents instanceof Map) {
       for (const [entry, found] of parentInstances(detail.element)) {
@@ -1754,7 +1729,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     // only the menu's Inspect is cancelable; a click, the open key or Open only opens the editor
     if (!event.cancelable) return;
     const { element, entry } = event.detail ?? {};
-    const instance = entry ? parentInstances(element).get(entry) : instanceOf(element);
+    const instance = entry ? parentInstances(element).get(entry) : instanceOfElement(element);
     if (!instance) return;
     // the inspector then opens no editor
     event.preventDefault();
