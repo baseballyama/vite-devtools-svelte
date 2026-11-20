@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { defineRpcFunction } from 'devframe';
-import { z } from 'zod';
 
+import * as v from '../schema.js';
 import type {
   AddonInfo,
   AddonsResult,
@@ -272,8 +272,8 @@ export function createAddonRpcFunctions(
       name: 'install-addon',
       type: 'action',
       jsonSerializable: true,
-      args: [z.object({ id: z.string().max(214) })],
-      returns: z.object({ sessionId: z.string() }),
+      args: [v.object({ id: v.string({ max: 214 }) })],
+      returns: v.object({ sessionId: v.string() }),
       handler: async ({ id }) => {
         if (!isSvAddon(id) && !(await isCommunityAddon(id))) {
           throw new Error(`Unknown sv add-on: ${id}`);

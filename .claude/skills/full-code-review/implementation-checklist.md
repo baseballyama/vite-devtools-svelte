@@ -23,7 +23,7 @@ Priority: security > effect on production > correctness > performance > readabil
 
 - Every new Vite hook or transform bails out when not serving; `transform` skips `node_modules`, SSR and virtual (`\0`) ids where relevant.
 - HMR events: added to `HOT_EVENTS`, both `send` and `on` present, payloads validated on receipt (they come from the page). Request/reply waits time out and remove the pending entry.
-- RPC functions: zod-validated arguments, typed results in `src/types.ts` mirrored by `packages/client/src/lib/types.ts`, client wrapper in `rpc.ts`.
+- RPC functions: arguments validated with `src/schema.ts`, typed results in `src/types.ts` mirrored by `packages/client/src/lib/types.ts`, client wrapper in `rpc.ts`.
 - Datasets that grow over a dev session are capped (`Ring` or equivalent) and report truncation through `CaptureInfo`.
 - Expensive scans (`analyze*`, module graph) are not repeated per call without need; no O(n²) lookups over modules, components or routes (use a `Map`).
 - Dev-server restarts and multiple servers (`middlewareMode`) do not leak listeners, intervals or mounts; `dispose` paths are complete.

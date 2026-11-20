@@ -4,7 +4,6 @@ import path from 'node:path';
 
 import { defineDevframe, defineRpcFunction } from 'devframe';
 import type { DevframeDefinition } from 'devframe';
-import { z } from 'zod';
 
 import { analyzeApiEndpoints } from '../analyzers/api.js';
 import type { ResolveFile } from '../analyzers/api.js';
@@ -18,6 +17,7 @@ import { analyzeProject } from '../analyzers/project.js';
 import { findReactiveLine } from '../analyzers/reactive-line.js';
 import { analyzeRoutes } from '../analyzers/routes.js';
 import { MAX_EPOCH_LENGTH } from '../limits.js';
+import * as v from '../schema.js';
 import { resolveWithinRoot } from '../security.js';
 import type {
   CaptureInfoMap,
@@ -110,7 +110,7 @@ export interface DevframeDeps {
   openInEditor: (target: string) => void;
 }
 
-const filePath = z.string().min(1).max(4096);
+const filePath = v.string({ min: 1, max: 4096 });
 
 const query = <N extends string, R>(name: N, handler: () => R) =>
   defineRpcFunction({ name, type: 'query', jsonSerializable: true, handler });
@@ -156,8 +156,8 @@ export function createRpcFunctions(deps: DevframeDeps) {
       name: 'set-active',
       type: 'action',
       jsonSerializable: true,
-      args: [z.object({ client: z.string().min(1).max(64), active: z.boolean() })],
-      returns: z.void(),
+      args: [v.object({ client: v.string({ min: 1, max: 64 }), active: v.boolean() })],
+      returns: v.nothing(),
       handler: ({ client, active }) => {
         if (active) collector.lease(`ui:${client}`);
         else collector.release(`ui:${client}`);
@@ -167,8 +167,8 @@ export function createRpcFunctions(deps: DevframeDeps) {
       name: 'open-in-editor',
       type: 'action',
       jsonSerializable: true,
-      args: [z.object({ file: filePath, line: z.number().int().nonnegative().optional() })],
-      returns: z.void(),
+      args: [v.object({ file: filePath, line: v.optional(v.integer({ min: 0 })) })],
+      returns: v.nothing(),
       handler: ({ file, line }) => {
         const resolved = resolveWithinRoot(deps.root(), file);
         deps.openInEditor(line ? `${resolved}:${line}` : resolved);
@@ -180,8 +180,10 @@ export function createRpcFunctions(deps: DevframeDeps) {
       name: 'open-reactive-in-editor',
       type: 'action',
       jsonSerializable: true,
-      args: [z.object({ file: filePath, name: z.string().max(256), type: z.string().max(32) })],
-      returns: z.void(),
+      args: [
+        v.object({ file: filePath, name: v.string({ max: 256 }), type: v.string({ max: 32 }) }),
+      ],
+      returns: v.nothing(),
       handler: ({ file, name, type }) => {
         const resolved = resolveWithinRoot(deps.root(), file);
         let line = 0;
@@ -199,30 +201,24 @@ export function createRpcFunctions(deps: DevframeDeps) {
       type: 'query',
       jsonSerializable: true,
       args: [
-        z
-          .object({
-            componentId: z.number().int().nonnegative().optional(),
-            epoch: z.string().max(MAX_EPOCH_LENGTH).optional(),
-            maxNodes: z.number().int().positive().optional(),
-            maxEdges: z.number().int().positive().optional(),
-          })
-          .optional(),
+        v.optional(
+          v.object({
+            componentId: v.optional(v.integer({ min: 0 })),
+            epoch: v.optional(v.string({ max: MAX_EPOCH_LENGTH })),
+            maxNodes: v.optional(v.integer({ positive: true })),
+            maxEdges: v.optional(v.integer({ positive: true })),
+          }),
+        ),
       ],
-      returns: z.custom<ReactiveGraphResult>(),
+      returns: v.unchecked<ReactiveGraphResult>(),
       handler: req => collector.requestReactiveGraph(req ?? {}),
     }),
     defineRpcFunction({
       name: 'get-reactive-summary',
       type: 'query',
       jsonSerializable: true,
-      args: [
-        z
-          .object({
-            topK: z.number().int().positive().optional(),
-          })
-          .optional(),
-      ],
-      returns: z.custom<ReactiveSummary>(),
+      args: [v.optional(v.object({ topK: v.optional(v.integer({ positive: true })) }))],
+      returns: v.unchecked<ReactiveSummary>(),
       handler: req => collector.requestReactiveSummary(req ?? {}),
     }),
     query('get-capture-info', (): CaptureInfoMap => collector.getCaptureInfo()),
@@ -233,8 +229,8 @@ export function createRpcFunctions(deps: DevframeDeps) {
       name: 'get-state-timeline-delta',
       type: 'query',
       jsonSerializable: true,
-      args: [z.object({ since: z.number().int().nonnegative().optional() })],
-      returns: z.custom<StateTimelineDelta>(),
+      args: [v.object({ since: v.optional(v.integer({ min: 0 })) })],
+      returns: v.unchecked<StateTimelineDelta>(),
       // Served from the buffer the runtime pushes into; never pulls the app.
       handler: ({ since }) => collector.getStateTimelineDelta(since),
     }),
@@ -251,8 +247,8 @@ export function createRpcFunctions(deps: DevframeDeps) {
       name: 'get-og-preview',
       type: 'action',
       jsonSerializable: true,
-      args: [z.object({ url: z.string().max(8192) })],
-      returns: z.custom<OGPreview>(),
+      args: [v.object({ url: v.string({ max: 8192 }) })],
+      returns: v.unchecked<OGPreview>(),
       handler: ({ url }) => getOGPreview(url, { allowedOrigins: deps.serverOrigins() }),
     }),
     query('get-build-analysis', () => analyzeBuild(deps.root())),
