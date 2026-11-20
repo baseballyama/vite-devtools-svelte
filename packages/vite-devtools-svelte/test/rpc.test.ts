@@ -324,6 +324,7 @@ describe('every RPC with valid input', () => {
     const calls: Record<string, [args: unknown[], check: (r: any) => void]> = {
       'get-project': [[], r => expect(r).toMatchObject({ name: 'rpc-app', version: '2.0.0' })],
       'get-routes': [[], r => expect(r.map((x: any) => x.id).toSorted()).toEqual(['/', 'api'])],
+      'get-remote-functions': [[], r => expect(r).toMatchObject({ enabled: false })],
       'get-assets': [[], r => expect(r.map((a: any) => a.url)).toEqual(['/a.txt'])],
       'get-component-relations': [[], r => expect(r).toHaveLength(2)],
       'get-live-components': [[], r => expect(r).toEqual([])],

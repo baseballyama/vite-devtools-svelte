@@ -52,6 +52,7 @@ const REQUIRED_TOOLS = [
   'get_load_waterfall',
   'get_project_info',
   'get_reactive_graph_problems',
+  'get_remote_functions',
   'get_render_profile',
   'get_routes',
   'list_performance_issues',

@@ -280,6 +280,27 @@ describe('MCP server wiring', () => {
     expect(deps.getProject().kit).toBe(false);
   });
 
+  it('remote functions follow experimental.remoteFunctions and files.src', async () => {
+    const off = setup();
+    off.configure();
+    expect(await (await mcpDeps(off)).getRemoteFunctions()).toEqual({
+      enabled: false,
+      functions: [],
+      errors: [],
+    });
+    // A fake SSR environment cannot run modules, so each file is an error.
+    const on = setup({ environments: { ssr: {} } }, [
+      kitSetup(path.join(FIXTURES, 'src/routes'), {
+        experimental: { remoteFunctions: true },
+        files: { routes: path.join(FIXTURES, 'src/routes'), src: path.join(FIXTURES, 'src') },
+      }),
+    ]);
+    on.configure();
+    const result = await (await mcpDeps(on)).getRemoteFunctions();
+    expect(result.enabled).toBe(true);
+    expect(result.errors.map(e => e.file)).toEqual(['src/lib/server/data.remote.ts']);
+  });
+
   it('sessions measure the live collector', async () => {
     const s = setup();
     s.configure();

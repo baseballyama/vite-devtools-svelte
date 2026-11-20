@@ -22,6 +22,7 @@ import type {
   ElementPick,
   OGPreview,
   ReactiveGraphResult,
+  RemoteFunctionsResult,
   ReactiveSummary,
   StateTimelineDelta,
   LiveComponentsMeta,
@@ -54,6 +55,8 @@ export interface SvelteDevtoolsHost {
   collector: Collector;
   root: () => string;
   routesDir: () => string | undefined;
+  /** Runs the app's remote modules in the SSR environment. */
+  remoteFunctions: () => Promise<RemoteFunctionsResult>;
   publicBase: () => string;
   modules: () => GraphModuleLike[];
   resolveFile?: ResolveFile;
@@ -95,6 +98,7 @@ export function createRpcFunctions(host: SvelteDevtoolsHost) {
   return [
     query('get-project', project),
     query('get-routes', routes),
+    query('get-remote-functions', () => host.remoteFunctions()),
     query('get-assets', () => analyzeAssets(project().staticDir, host.publicBase())),
     query('get-component-relations', () => analyzeComponents(host.root())),
     query('get-live-components', () => collector.liveComponents),

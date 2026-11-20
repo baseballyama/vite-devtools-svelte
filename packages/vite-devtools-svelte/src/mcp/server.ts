@@ -9,6 +9,7 @@ import type {
   ComponentInstance,
   ProjectInfo,
   RouteInfo,
+  RemoteFunctionsResult,
   ComponentRelation,
   CaptureInfoMap,
   ReactiveGraphRequest,
@@ -26,6 +27,7 @@ import { avg, avgRenderTime, max, min, round } from './stats.js';
 export interface McpDeps {
   getProject: () => ProjectInfo;
   getRoutes: () => RouteInfo[];
+  getRemoteFunctions: () => Promise<RemoteFunctionsResult>;
   /** The served page load's components with its epoch, read together. */
   getLiveSnapshot: () => { epoch: string | null; total: number; components: ComponentInstance[] };
   getComponentRelations: () => ComponentRelation[];
@@ -253,6 +255,17 @@ export function buildMcpServer(deps: McpDeps): McpServer {
       inputSchema: {},
     },
     () => text(deps.getRoutes()),
+  );
+
+  server.registerTool(
+    'get_remote_functions',
+    {
+      title: 'SvelteKit remote functions',
+      description:
+        'Every remote function (`query`, `query_batch`, `query_live`, `command`, `form`, `prerender`) in `*.remote.ts` files under `src`, with its file, line and the id its requests use (`/_app/remote/<id>`). Loads those modules in the dev server, so their top-level code runs. `enabled: false` means SvelteKit or `experimental.remoteFunctions` is off; `errors` lists modules that failed to load.',
+      inputSchema: {},
+    },
+    async () => text(await deps.getRemoteFunctions()),
   );
 
   server.registerTool(

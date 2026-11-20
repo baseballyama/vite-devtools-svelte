@@ -3,13 +3,15 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { launchEditor } from 'devframe/utils/launch-editor';
-import { normalizePath } from 'vite';
+import { isRunnableDevEnvironment, normalizePath } from 'vite';
 import type { Plugin, ResolvedConfig, ViteDevServer } from 'vite';
 
 import { serverResolver } from './analyzers/api.js';
 import { analyzeComponents } from './analyzers/components.js';
 import type { GraphModuleLike } from './analyzers/module-graph.js';
 import { analyzeProject } from './analyzers/project.js';
+import { analyzeRemoteFunctions, remoteConfigOf } from './analyzers/remote-functions.js';
+import type { ImportModule, RemoteConfig } from './analyzers/remote-functions.js';
 import { analyzeRoutes } from './analyzers/routes.js';
 import { inspectorPlugin, isInspectorRuntime } from './inspector.js';
 import type { InspectorOptions } from './inspector.js';
@@ -114,6 +116,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
   let root: string;
   // SvelteKit's resolved `files.routes` (absolute); undefined without SvelteKit.
   let routesDir: string | undefined;
+  let remoteConfig: RemoteConfig | null = null;
   // When `@vitejs/devtools` is installed the hub mounts the devframe through
   // our `devtools` hook; otherwise we mount it ourselves. Never both: they
   // would claim the same base.
@@ -139,6 +142,15 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     return sessions;
   }
 
+  // The SSR environment, where SvelteKit attaches its metadata to remote exports.
+  const importServerModule = (): ImportModule | null => {
+    const ssr = server?.environments.ssr;
+    return ssr && isRunnableDevEnvironment(ssr)
+      ? file => ssr.runner.import<Record<string, unknown>>(file)
+      : null;
+  };
+  const remoteFunctions = () => analyzeRemoteFunctions(root, remoteConfig, importServerModule());
+
   const collector = new Collector({
     onFpsSample: sample => getSessions().recordFpsSample(sample),
     onLoadProfile: profile => getSessions().recordLoadProfile(profile),
@@ -148,6 +160,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     collector,
     root: () => root,
     routesDir: () => routesDir,
+    remoteFunctions,
     publicBase: () => config?.base ?? '/',
     modules: () => (server ? collectModules(server) : []),
     resolveFile: serverResolver(() => server),
@@ -181,6 +194,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
         | undefined;
       const routes = kit?.options?.files?.routes;
       routesDir = typeof routes === 'string' ? normalizePath(routes) : undefined;
+      remoteConfig = remoteConfigOf(kit?.options);
       hostedByViteDevtools = config.plugins.some(p => p.name === VITE_DEVTOOLS_PLUGIN);
     },
 
@@ -249,6 +263,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
             buildMcpServer({
               getProject: () => analyzeProject(root, routesDir !== undefined),
               getRoutes: () => analyzeRoutes(routesDir),
+              getRemoteFunctions: remoteFunctions,
               getLiveSnapshot: () => collector.liveSnapshot,
               getComponentRelations: () => analyzeComponents(root),
               getRenderProfiles: () => collector.renderProfiles,

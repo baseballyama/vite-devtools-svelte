@@ -115,6 +115,13 @@ export const MCP_TOOL_GROUPS: McpToolGroup[] = [
         summary: 'The SvelteKit routes tree from static analysis.',
       },
       {
+        name: 'get_remote_functions',
+        input: '—',
+        summary:
+          'SvelteKit remote functions in `*.remote.ts` files under `src`: kind, file, line and request id. `enabled: false` when remote functions are off.',
+        note: 'Loads those modules in the dev server, so their top-level code runs.',
+      },
+      {
         name: 'get_live_components',
         input: 'includeMeta?: boolean, limit?: 1–50000',
         summary:
