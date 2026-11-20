@@ -3,7 +3,7 @@ import { userEvent } from '@testing-library/user-event';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import * as rpc from '../lib/rpc.js';
-import type { AssetInfo, ComponentInstance, RouteInfo } from '../lib/types.js';
+import type { AssetInfo, LiveComponentsMeta, RouteInfo } from '../lib/types.js';
 import { settle } from '../test/dom.js';
 import { project } from '../test/fake-rpc.js';
 import Overview from './Overview.svelte';
@@ -30,8 +30,8 @@ function asset(name: string, size: number): AssetInfo {
   return { name, path: name, relativePath: name, url: `/${name}`, size, type: 'image', mtime: 0 };
 }
 
-function instance(id: number, file: string): ComponentInstance {
-  return { id, file, name: file, parentId: null, mounted: true };
+function liveMeta(kept: number, files: number): LiveComponentsMeta {
+  return { total: kept, kept, truncated: false, files, root: '/app', epochs: 1 };
 }
 
 function withData() {
@@ -46,12 +46,8 @@ function withData() {
     route('/api', false, true),
   ]);
   vi.mocked(rpc.getAssets).mockResolvedValue([asset('a.png', 1024), asset('b.png', 1024)]);
-  vi.mocked(rpc.getModuleGraph).mockResolvedValue({ modules: [], cycles: [['a', 'b']] });
-  vi.mocked(rpc.getLiveComponents).mockResolvedValue([
-    instance(1, 'A.svelte'),
-    instance(2, 'A.svelte'),
-    instance(3, 'B.svelte'),
-  ]);
+  vi.mocked(rpc.getModuleGraphStats).mockResolvedValue({ modules: 0, cycles: 1 });
+  vi.mocked(rpc.getLiveComponentsMeta).mockResolvedValue(liveMeta(3, 2));
   vi.mocked(rpc.getCompilerWarnings).mockResolvedValue([
     { code: 'a11y', message: 'm', file: 'x.svelte' },
   ]);
@@ -100,6 +96,8 @@ describe('Overview panel', () => {
     expect(tile('Routes').textContent).toContain('2 pages · 1 endpoints');
     expect(tile('Mounted components').textContent).toContain('from 2 files');
     expect(tile('Modules').textContent).toContain('1 circular');
+    expect(rpc.getModuleGraph).not.toHaveBeenCalled();
+    expect(rpc.getLiveComponents).not.toHaveBeenCalled();
     expect(tile('Static assets').textContent).toContain('2');
     expect(tile('Static assets').textContent).toContain('2.0 KB');
     expect(tile('Problems').textContent).toContain('1 errors · 1 warnings');
@@ -107,7 +105,7 @@ describe('Overview panel', () => {
 
   it('shows "—" for stats whose RPC failed and "no cycles" when there are none', async () => {
     vi.mocked(rpc.getRoutes).mockRejectedValue(new Error('no kit'));
-    vi.mocked(rpc.getLiveComponents).mockRejectedValue(new Error('no runtime'));
+    vi.mocked(rpc.getLiveComponentsMeta).mockRejectedValue(new Error('no runtime'));
     vi.mocked(rpc.getRuntimeErrors).mockRejectedValue(new Error('x'));
     render(Overview);
     await settle();
@@ -118,7 +116,7 @@ describe('Overview panel', () => {
   });
 
   it('does not claim "no cycles" when the module graph could not be read', async () => {
-    vi.mocked(rpc.getModuleGraph).mockRejectedValue(new Error('no graph'));
+    vi.mocked(rpc.getModuleGraphStats).mockRejectedValue(new Error('no graph'));
     render(Overview);
     await settle();
     expect(tile('Modules').textContent).toContain('—');
@@ -145,16 +143,12 @@ describe('Overview panel', () => {
     await vi.advanceTimersByTimeAsync(0);
     // first load: the runtime has not reported its components yet
     expect(tile('Mounted components').textContent).toContain('from 0 files');
-    const calls = vi.mocked(rpc.getLiveComponents).mock.calls.length;
+    const calls = vi.mocked(rpc.getLiveComponentsMeta).mock.calls.length;
 
     await vi.advanceTimersByTimeAsync(2000);
-    expect(vi.mocked(rpc.getLiveComponents).mock.calls.length).toBe(calls); // version unchanged
+    expect(vi.mocked(rpc.getLiveComponentsMeta).mock.calls.length).toBe(calls); // version unchanged
 
-    vi.mocked(rpc.getLiveComponents).mockResolvedValue([
-      instance(1, 'src/App.svelte'),
-      instance(2, 'src/Box.svelte'),
-      instance(3, 'src/Box.svelte'),
-    ]);
+    vi.mocked(rpc.getLiveComponentsMeta).mockResolvedValue(liveMeta(3, 2));
     components = 1;
     await vi.advanceTimersByTimeAsync(2000);
     expect(tile('Mounted components').textContent).toContain('3');
@@ -219,7 +213,8 @@ describe('Overview panel', () => {
     await settle();
     expect(rpc.getProject).toHaveBeenCalledTimes(2);
     expect(rpc.getRoutes).toHaveBeenCalledTimes(2);
-    expect(rpc.getLiveComponents).toHaveBeenCalledTimes(2);
+    expect(rpc.getModuleGraphStats).toHaveBeenCalledTimes(2);
+    expect(rpc.getLiveComponentsMeta).toHaveBeenCalledTimes(2);
     expect(tile('Routes').textContent).toContain('3');
     expect(tile('Mounted components').textContent).toContain('from 2 files');
   });

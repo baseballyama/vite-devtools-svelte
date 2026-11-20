@@ -3,9 +3,9 @@ import os from 'node:os';
 import path from 'node:path';
 
 import * as fc from 'fast-check';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
-import { buildModuleGraph } from '../src/analyzers/module-graph.js';
+import { buildModuleGraph, moduleGraphStats } from '../src/analyzers/module-graph.js';
 import type { GraphModuleLike } from '../src/analyzers/module-graph.js';
 
 const ROOT = path.join(os.tmpdir(), 'sdt-mg-root');
@@ -81,6 +81,35 @@ describe('buildModuleGraph: which modules are nodes', () => {
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
+  });
+});
+
+describe('moduleGraphStats', () => {
+  it('counts the nodes and cycles of buildModuleGraph without reading files', () => {
+    const a = at('src/a.svelte');
+    const aStyle = at('src/a.svelte');
+    const b = at('src/b.ts');
+    const gen = at('.svelte-kit/generated/root.js');
+    const dep = at('node_modules/dep/index.js');
+    const outside = mod(path.join(path.dirname(ROOT), 'other/x.ts'));
+    link(a, b, dep, outside);
+    link(aStyle, a);
+    link(b, a, gen);
+    link(gen, gen);
+    const mods = [a, aStyle, b, gen, dep, outside, mod(null)];
+    const graph = buildModuleGraph(ROOT, mods);
+    const stat = vi.spyOn(fs, 'statSync');
+    try {
+      expect(moduleGraphStats(ROOT, mods)).toEqual({
+        modules: graph.modules.length,
+        cycles: graph.cycles.length,
+      });
+      expect(stat).not.toHaveBeenCalled();
+    } finally {
+      stat.mockRestore();
+    }
+    expect(graph.modules).toHaveLength(3);
+    expect(graph.cycles).toHaveLength(1);
   });
 });
 
@@ -240,6 +269,10 @@ describe('buildModuleGraph properties', () => {
         const mods = Array.from({ length: n }, (_, i) => at(`m${i}.ts`));
         for (const [a, b] of edges) link(mods[a]!, mods[b]!);
         const graph = buildModuleGraph(ROOT, mods);
+        expect(moduleGraphStats(ROOT, mods)).toEqual({
+          modules: graph.modules.length,
+          cycles: graph.cycles.length,
+        });
         const reach = reachability(n, edges);
 
         const byId = new Map(graph.modules.map(m => [m.id, m]));

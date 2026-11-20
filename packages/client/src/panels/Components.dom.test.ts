@@ -42,6 +42,7 @@ const meta = (over: Partial<LiveComponentsMeta> = {}): LiveComponentsMeta => ({
   total: 5,
   kept: 5,
   truncated: false,
+  files: 3,
   root: '/app',
   epoch: 'e1',
   epochs: 1,

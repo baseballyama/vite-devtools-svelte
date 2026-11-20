@@ -17,6 +17,7 @@ export type {
   RuntimeError,
   ModuleNode,
   ModuleGraphData,
+  ModuleGraphStats,
   OGPreview,
   BuildChunk,
   BuildAnalysis,

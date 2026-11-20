@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import { isSvelteModule } from '../runtime/transform.js';
 import { isInside } from '../security.js';
-import type { ModuleGraphData, ModuleNode } from '../types.js';
+import type { ModuleGraphData, ModuleGraphStats, ModuleNode } from '../types.js';
 
 /** Minimal shape of a Vite module-graph node that we read. */
 export interface GraphModuleLike {
@@ -34,6 +34,16 @@ function classify(file: string): ModuleNode['type'] {
  * cycle through it unless an earlier listed cycle already contains it.
  */
 export function buildModuleGraph(root: string, allModules: GraphModuleLike[]): ModuleGraphData {
+  return graphOf(root, allModules, true);
+}
+
+/** The node and cycle counts of {@link buildModuleGraph}, without reading any file. */
+export function moduleGraphStats(root: string, allModules: GraphModuleLike[]): ModuleGraphStats {
+  const graph = graphOf(root, allModules, false);
+  return { modules: graph.modules.length, cycles: graph.cycles.length };
+}
+
+function graphOf(root: string, allModules: GraphModuleLike[], withSize: boolean): ModuleGraphData {
   const modules: ModuleNode[] = [];
   const byFile = new Map<string, ModuleNode>();
 
@@ -44,10 +54,12 @@ export function buildModuleGraph(root: string, allModules: GraphModuleLike[]): M
     // a node_modules path segment (not `src/node_modules_utils.ts`)
     if (segments.includes('node_modules')) continue;
     let size: number | undefined;
-    try {
-      size = fs.statSync(mod.file).size;
-    } catch {
-      // Gone since Vite saw it: listed without a size.
+    if (withSize) {
+      try {
+        size = fs.statSync(mod.file).size;
+      } catch {
+        // Gone since Vite saw it: listed without a size.
+      }
     }
     const node: ModuleNode = {
       id,

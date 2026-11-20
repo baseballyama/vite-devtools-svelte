@@ -325,6 +325,7 @@ describe('calls', () => {
       [rpc.getRuntimeErrors, 'get-runtime-errors'],
       [rpc.clearErrors, 'clear-errors'],
       [rpc.getModuleGraph, 'get-module-graph'],
+      [rpc.getModuleGraphStats, 'get-module-graph-stats'],
       [rpc.getBuildAnalysis, 'get-build-analysis'],
       [rpc.getFps, 'get-fps'],
       [rpc.clearFps, 'clear-fps'],

@@ -18,8 +18,8 @@
     getProject,
     getRoutes,
     getAssets,
-    getModuleGraph,
-    getLiveComponents,
+    getModuleGraphStats,
+    getLiveComponentsMeta,
     getCompilerWarnings,
     getRuntimeErrors,
   } from '../lib/rpc.js';
@@ -40,10 +40,10 @@
           () => null,
         );
       }
-      const [routes, assets, modules, warnings, errors] = await Promise.all([
+      const [routes, assets, graph, warnings, errors] = await Promise.all([
         settle(getRoutes()),
         settle(getAssets()),
-        settle(getModuleGraph()),
+        settle(getModuleGraphStats()),
         settle(getCompilerWarnings()),
         settle(getRuntimeErrors()),
       ]);
@@ -53,8 +53,8 @@
         endpoints: routes?.filter(r => r.hasEndpoint).length ?? null,
         assets: assets?.length ?? null,
         assetBytes: assets?.reduce((s, a) => s + a.size, 0) ?? null,
-        modules: modules?.modules.length ?? null,
-        cycles: modules?.cycles.length ?? null,
+        modules: graph?.modules ?? null,
+        cycles: graph?.cycles ?? null,
         warnings: warnings?.length ?? null,
         errors: errors?.length ?? null,
       };
@@ -67,8 +67,8 @@
   // like the Components panel (skipped while the server's counter is unchanged).
   const live = resource(
     async () => {
-      const list = await getLiveComponents();
-      return { count: list.length, files: new Set(list.map(c => c.file)).size };
+      const meta = await getLiveComponentsMeta();
+      return { count: meta.kept, files: meta.files };
     },
     { initial: null, interval: 2000, version: datasetVersion('components') },
   );

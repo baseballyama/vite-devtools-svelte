@@ -10,7 +10,7 @@ import type { ResolveFile } from '../analyzers/api.js';
 import { analyzeAssets } from '../analyzers/assets.js';
 import { analyzeBuild } from '../analyzers/build.js';
 import { analyzeComponents } from '../analyzers/components.js';
-import { buildModuleGraph } from '../analyzers/module-graph.js';
+import { buildModuleGraph, moduleGraphStats } from '../analyzers/module-graph.js';
 import type { GraphModuleLike } from '../analyzers/module-graph.js';
 import { getOGPreview } from '../analyzers/og.js';
 import { analyzeProject } from '../analyzers/project.js';
@@ -149,6 +149,7 @@ export function createRpcFunctions(deps: DevframeDeps) {
       total: collector.liveComponentsTotal,
       kept: collector.liveComponents.length,
       truncated: collector.liveComponentsTotal > collector.liveComponents.length,
+      files: collector.liveComponentFiles,
       root: idRoot(),
       ...collector.epochInfo,
     })),
@@ -242,6 +243,7 @@ export function createRpcFunctions(deps: DevframeDeps) {
     query('get-runtime-errors', () => collector.runtimeErrors),
     action('clear-errors', () => collector.clearErrors()),
     query('get-module-graph', () => buildModuleGraph(deps.root(), deps.modules())),
+    query('get-module-graph-stats', () => moduleGraphStats(deps.root(), deps.modules())),
     defineRpcFunction({
       name: 'get-og-preview',
       type: 'action',

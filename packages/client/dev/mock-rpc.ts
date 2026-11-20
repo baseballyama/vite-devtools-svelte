@@ -436,6 +436,7 @@ export function createMockBackend(scale = 5000) {
       total: live.length,
       kept: CAP > 0 ? Math.min(live.length, CAP) : live.length,
       truncated: CAP > 0 && live.length > CAP,
+      files: new Set(headCapped(live).map(c => c.file)).size,
       root,
     }),
     'svelte-devtools:get-state-timeline-delta': (args?: { since?: number }) => {
@@ -583,6 +584,10 @@ export function createMockBackend(scale = 5000) {
       versions.errors++
     ),
     'svelte-devtools:get-module-graph': () => ({ modules, cycles }),
+    'svelte-devtools:get-module-graph-stats': () => ({
+      modules: modules.length,
+      cycles: cycles.length,
+    }),
     'svelte-devtools:get-og-preview': ({ url }: { url: string }) => ({
       url,
       title: 'Acme Store — Everything for your desk',

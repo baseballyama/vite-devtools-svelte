@@ -80,6 +80,7 @@ const liveMeta: LiveComponentsMeta = {
   total: 0,
   kept: 0,
   truncated: false,
+  files: 0,
   root: '/app',
   epochs: 1,
 };
@@ -130,6 +131,7 @@ const defaults: { [K in FnKey]: RealRpc[K] } = {
   getRuntimeErrors: () => Promise.resolve([]),
   clearErrors: () => Promise.resolve(),
   getModuleGraph: () => Promise.resolve(moduleGraph),
+  getModuleGraphStats: () => Promise.resolve({ modules: 0, cycles: 0 }),
   getOGPreview: () => Promise.resolve(og),
   getBuildAnalysis: () => Promise.resolve(build),
   getFps: () => Promise.resolve([]),
@@ -170,6 +172,7 @@ export const getCompilerWarnings = fake('getCompilerWarnings');
 export const getRuntimeErrors = fake('getRuntimeErrors');
 export const clearErrors = fake('clearErrors');
 export const getModuleGraph = fake('getModuleGraph');
+export const getModuleGraphStats = fake('getModuleGraphStats');
 export const getOGPreview = fake('getOGPreview');
 export const getBuildAnalysis = fake('getBuildAnalysis');
 export const getFps = fake('getFps');
@@ -206,6 +209,7 @@ const all: { [K in FnKey]: Mock<RealRpc[K]> } = {
   getRuntimeErrors,
   clearErrors,
   getModuleGraph,
+  getModuleGraphStats,
   getOGPreview,
   getBuildAnalysis,
   getFps,
