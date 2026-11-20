@@ -964,10 +964,9 @@ async function main() {
       return { required: REQUIRED_TOOLS.length, listed: names.length };
     });
     await step('T1 MCP session id traversal rejected (C-7)', 20_000, async () => {
-      // Judged by protocol, not message text: the SDK turns an input
-      // validation error into isError: true; a JSON-RPC -32602 error is
-      // accepted too. Without isError the handler ran = FAIL. Read-only probes
-      // (never delete_session).
+      // Judged by protocol, not message text: an input validation error is an
+      // isError: true result; a JSON-RPC -32602 error is accepted too. Without
+      // isError the handler ran = FAIL. Read-only probes (never delete_session).
       const probes = ['../c7-smoke-probe', '/tmp/c7-smoke-probe', 'a/b', 's_c7smoke_zzzzzz', ''];
       const before = JSON.stringify(await tool(srv, 'list_sessions'));
       for (const id of probes) {

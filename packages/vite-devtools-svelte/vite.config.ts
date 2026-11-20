@@ -49,7 +49,6 @@ export default defineConfig({
         'vite',
         /^@vitejs\/devtools-kit/,
         /^devframe(\/|$)/,
-        /^@modelcontextprotocol\/sdk/,
         'zod',
         /^node:/,
         'fs',

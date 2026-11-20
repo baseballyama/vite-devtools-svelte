@@ -1,4 +1,3 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
 import pkg from '../../package.json' with { type: 'json' };
@@ -24,6 +23,7 @@ import {
   listPerformanceIssues,
   summarizeReactiveProblems,
 } from './issues.js';
+import { createMcpServer, error, text, ToolRegistry, type McpServer } from './protocol.js';
 import type { SessionStore } from './sessions.js';
 import { isSessionId, PANEL_FPS_DROP_LINE } from './sessions.js';
 import { avg, avgRenderTime, max, min, round } from './stats.js';
@@ -67,19 +67,6 @@ function capValue(value: unknown, maxChars: number): unknown {
 /** Anything but an issued session id is rejected before the store. */
 const sessionId = z.string().max(64).refine(isSessionId, 'not a session id');
 
-export function text(value: unknown) {
-  return {
-    content: [
-      {
-        type: 'text' as const,
-        text: typeof value === 'string' ? value : JSON.stringify(value),
-      },
-    ],
-  };
-}
-
-export const error = (message: string) => ({ ...text(message), isError: true });
-
 function renderStats(p: RenderProfile) {
   return {
     file: p.file,
@@ -93,13 +80,11 @@ function renderStats(p: RenderProfile) {
   };
 }
 
-export function buildMcpServer(deps: McpDeps): McpServer {
-  const server = new McpServer(
-    { name: 'vite-devtools-svelte', version: pkg.version },
-    { instructions: MCP_INSTRUCTIONS },
-  );
+/** The dev server endpoint's tools, answered from `deps`. */
+export function devServerTools(deps: McpDeps): ToolRegistry {
+  const tools = new ToolRegistry();
 
-  server.registerTool(
+  tools.registerTool(
     'list_performance_issues',
     {
       title: 'List performance issues',
@@ -128,7 +113,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     },
   );
 
-  server.registerTool(
+  tools.registerTool(
     'get_component_hotspots',
     {
       title: 'Component render hotspots',
@@ -145,7 +130,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     },
   );
 
-  server.registerTool(
+  tools.registerTool(
     'get_reactive_graph_problems',
     {
       title: 'Reactive graph problems',
@@ -157,7 +142,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
       text(summarizeReactiveProblems(await deps.getReactiveGraph(), { effectMaxDeps })),
   );
 
-  server.registerTool(
+  tools.registerTool(
     'get_load_waterfall',
     {
       title: 'SvelteKit load waterfall',
@@ -189,7 +174,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     },
   );
 
-  server.registerTool(
+  tools.registerTool(
     'get_fps_drops',
     {
       title: 'FPS drops',
@@ -216,7 +201,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     },
   );
 
-  server.registerTool(
+  tools.registerTool(
     'get_render_profile',
     {
       title: 'Render profile for a specific file',
@@ -233,7 +218,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     },
   );
 
-  server.registerTool(
+  tools.registerTool(
     'get_project_info',
     {
       title: 'Project info',
@@ -243,7 +228,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     () => text(deps.getProject()),
   );
 
-  server.registerTool(
+  tools.registerTool(
     'get_routes',
     {
       title: 'SvelteKit routes',
@@ -253,7 +238,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     () => text(deps.getRoutes()),
   );
 
-  server.registerTool(
+  tools.registerTool(
     'get_live_components',
     {
       title: 'Currently mounted components',
@@ -279,7 +264,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     },
   );
 
-  server.registerTool(
+  tools.registerTool(
     'get_component_relations',
     {
       title: 'Component import graph',
@@ -289,7 +274,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     () => text(deps.getComponentRelations()),
   );
 
-  server.registerTool(
+  tools.registerTool(
     'get_reactive_summary',
     {
       title: 'Reactive overview (top components)',
@@ -302,7 +287,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     async ({ topK }) => text(await deps.getReactiveSummary({ topK })),
   );
 
-  server.registerTool(
+  tools.registerTool(
     'get_reactive_scope',
     {
       title: 'Reactive graph of one component',
@@ -325,7 +310,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     },
   );
 
-  server.registerTool(
+  tools.registerTool(
     'get_state_timeline',
     {
       title: 'State changes since a cursor',
@@ -351,7 +336,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     },
   );
 
-  server.registerTool(
+  tools.registerTool(
     'get_capture_info',
     {
       title: 'What the DevTools hold versus what the app reported',
@@ -362,7 +347,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     () => text(deps.getCaptureInfo()),
   );
 
-  server.registerTool(
+  tools.registerTool(
     'start_session',
     {
       title: 'Start measurement session',
@@ -379,7 +364,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     },
   );
 
-  server.registerTool(
+  tools.registerTool(
     'end_session',
     {
       title: 'End current measurement session',
@@ -402,7 +387,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     },
   );
 
-  server.registerTool(
+  tools.registerTool(
     'compare_sessions',
     {
       title: 'Compare two sessions',
@@ -413,7 +398,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     ({ a, b }) => text(deps.sessions.compare(a, b)),
   );
 
-  server.registerTool(
+  tools.registerTool(
     'list_sessions',
     {
       title: 'List sessions',
@@ -423,7 +408,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     () => text(deps.sessions.list()),
   );
 
-  server.registerTool(
+  tools.registerTool(
     'load_session',
     {
       title: 'Load a session by id',
@@ -438,7 +423,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     },
   );
 
-  server.registerTool(
+  tools.registerTool(
     'delete_session',
     {
       title: 'Delete a session',
@@ -448,5 +433,12 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     ({ id }) => text({ deleted: deps.sessions.delete(id) }),
   );
 
-  return server;
+  return tools;
+}
+
+export function buildMcpServer(deps: McpDeps): McpServer {
+  return createMcpServer(
+    { name: 'vite-devtools-svelte', version: pkg.version, instructions: MCP_INSTRUCTIONS },
+    devServerTools(deps),
+  );
 }
