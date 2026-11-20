@@ -6,6 +6,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 
+import pkg from '../package.json' with { type: 'json' };
 import { buildMcpServer, MCP_TIMELINE_LIMIT } from '../src/mcp/server.js';
 import type { McpDeps } from '../src/mcp/server.js';
 import { SessionStore } from '../src/mcp/sessions.js';
@@ -137,6 +138,18 @@ describe('tool registration', () => {
     const { tools } = await (await connect(makeDeps())).listTools();
     expect(tools.map(t => t.name).toSorted()).toEqual(
       [...BASE_TOOLS, ...REACTIVITY_TOOLS].toSorted(),
+    );
+  });
+
+  it('reports the package version', async () => {
+    const client = await connect(makeDeps());
+    expect(client.getServerVersion()?.version).toBe(pkg.version);
+  });
+
+  it('end_session names the directory sessions are saved to', async () => {
+    const { tools } = await (await connect(makeDeps())).listTools();
+    expect(tools.find(t => t.name === 'end_session')?.description).toContain(
+      'node_modules/.vite-devtools-svelte/sessions/',
     );
   });
 
@@ -495,8 +508,34 @@ describe('read tools', () => {
     const client = await connect(makeDeps({ render: [rp(1, 4, 10), rp(12, 1, 1)] }));
     const r = parse(await call(client, 'get_render_profile', { file: 'C1' }));
     expect(r.map((x: any) => x.componentId)).toEqual([1, 12]);
-    expect(r[0]).toMatchObject({ initTime: 1, totalRenderTimeMs: 10, avgRenderTimeMs: 2.5 });
+    expect(r[0]).toEqual({
+      file: '/src/C1.svelte',
+      name: 'C1',
+      componentId: 1,
+      renderCount: 4,
+      totalRenderTimeMs: 10,
+      avgRenderTimeMs: 2.5,
+      lastRenderTimeMs: 0.5,
+      lastRenderAt: 99,
+      initTimeMs: 1,
+    });
     expect(parse(await call(client, 'get_render_profile', { file: 'nope' }))).toEqual([]);
+  });
+
+  it('answers compact JSON', async () => {
+    const client = await connect(makeDeps({ render: [rp(1, 4, 10)] }));
+    const { text } = (await call(client, 'get_component_hotspots')).content[0]!;
+    expect(text).toBe(JSON.stringify(JSON.parse(text)));
+  });
+
+  it('get_fps_drops and list_performance_issues share the default threshold', async () => {
+    const client = await connect(makeDeps({ fps: [{ timestamp: 1, fps: 35 }] }));
+    expect(parse(await call(client, 'get_fps_drops'))).toMatchObject({
+      threshold: 40,
+      dropCount: 1,
+    });
+    const r = parse(await call(client, 'list_performance_issues'));
+    expect(r.issues[0]).toMatchObject({ kind: 'fps-drop', metric: { threshold: 40 } });
   });
 
   it('list_performance_issues forwards thresholds', async () => {

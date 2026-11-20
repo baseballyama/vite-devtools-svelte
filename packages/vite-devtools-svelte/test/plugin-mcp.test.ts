@@ -143,7 +143,7 @@ describe('MCP endpoint errors', () => {
       const close = failingServer(reason);
       const s = setup();
       const res = fakeResponse();
-      s.handler({ headers: { 'x-svelte-devtools-token': s.token } }, res);
+      s.handler({ method: 'POST', headers: { 'x-svelte-devtools-token': s.token } }, res);
       s.sendSnapshot();
       await vi.waitFor(() => expect(res.end).toHaveBeenCalled());
       expect(res.statusCode).toBe(500);
@@ -162,7 +162,7 @@ describe('MCP endpoint errors', () => {
     });
     const s = setup();
     const res = fakeResponse();
-    s.handler({ headers: { 'x-svelte-devtools-token': s.token } }, res);
+    s.handler({ method: 'POST', headers: { 'x-svelte-devtools-token': s.token } }, res);
     s.sendSnapshot();
     await vi.waitFor(() => expect(res.end).toHaveBeenCalledOnce());
     expect(res.statusCode).toBe(500);
@@ -178,7 +178,7 @@ describe('MCP endpoint errors', () => {
     failingServer();
     const s = setup();
     const res = { ...fakeResponse(), headersSent: true };
-    s.handler({ headers: { 'x-svelte-devtools-token': s.token } }, res);
+    s.handler({ method: 'POST', headers: { 'x-svelte-devtools-token': s.token } }, res);
     s.sendSnapshot();
     await vi.waitFor(() => expect(s.server.config.logger.error).toHaveBeenCalled());
     expect(res.end).not.toHaveBeenCalled();
@@ -275,6 +275,18 @@ describe('MCP endpoint over HTTP', () => {
     expect(s.server.config.logger.error).toHaveBeenCalledWith(
       expect.stringContaining('[svelte-devtools] MCP transport error:'),
     );
+  });
+
+  it('refuses the GET SSE stream without taking a lease', async () => {
+    const s = setup();
+    const url = await listen(s.handler);
+    const res = await fetch(url, {
+      headers: { accept: 'text/event-stream', 'x-svelte-devtools-token': s.token },
+    });
+    expect(res.status).toBe(405);
+    expect(res.headers.get('allow')).toBe('POST');
+    expect(s.subscriptions()).toEqual([]);
+    expect((await fetch(url, { headers: { accept: 'text/event-stream' } })).status).toBe(403);
   });
 
   it('a duplicated token header (joined by Node) is rejected', async () => {

@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
+import pkg from '../../package.json' with { type: 'json' };
 import type {
   RenderProfile,
   ReactiveGraph,
@@ -18,9 +19,13 @@ import type {
   StateTimelineDelta,
 } from '../types.js';
 import { MCP_INSTRUCTIONS } from './instructions.js';
-import { listPerformanceIssues, summarizeReactiveProblems } from './issues.js';
+import {
+  DEFAULT_FPS_DROP_THRESHOLD,
+  listPerformanceIssues,
+  summarizeReactiveProblems,
+} from './issues.js';
 import type { SessionStore } from './sessions.js';
-import { isSessionId } from './sessions.js';
+import { isSessionId, PANEL_FPS_DROP_LINE } from './sessions.js';
 import { avg, avgRenderTime, max, min, round } from './stats.js';
 
 export interface McpDeps {
@@ -67,7 +72,7 @@ export function text(value: unknown) {
     content: [
       {
         type: 'text' as const,
-        text: typeof value === 'string' ? value : JSON.stringify(value, null, 2),
+        text: typeof value === 'string' ? value : JSON.stringify(value),
       },
     ],
   };
@@ -75,9 +80,22 @@ export function text(value: unknown) {
 
 export const error = (message: string) => ({ ...text(message), isError: true });
 
+function renderStats(p: RenderProfile) {
+  return {
+    file: p.file,
+    name: p.name,
+    componentId: p.componentId,
+    renderCount: p.renderCount,
+    totalRenderTimeMs: round(p.totalRenderTime),
+    avgRenderTimeMs: round(avgRenderTime(p)),
+    lastRenderTimeMs: round(p.lastRenderTime),
+    lastRenderAt: p.lastRenderAt,
+  };
+}
+
 export function buildMcpServer(deps: McpDeps): McpServer {
   const server = new McpServer(
-    { name: 'vite-devtools-svelte', version: '0.1.0' },
+    { name: 'vite-devtools-svelte', version: pkg.version },
     { instructions: MCP_INSTRUCTIONS },
   );
 
@@ -120,16 +138,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     ({ topN = 20 }) => {
       const list = deps
         .getRenderProfiles()
-        .map(p => ({
-          file: p.file,
-          name: p.name,
-          componentId: p.componentId,
-          renderCount: p.renderCount,
-          totalRenderTimeMs: round(p.totalRenderTime),
-          avgRenderTimeMs: round(avgRenderTime(p)),
-          lastRenderTimeMs: round(p.lastRenderTime),
-          lastRenderAt: p.lastRenderAt,
-        }))
+        .map(renderStats)
         .toSorted((a, b) => b.totalRenderTimeMs - a.totalRenderTimeMs)
         .slice(0, topN);
       return text(list);
@@ -184,13 +193,13 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     'get_fps_drops',
     {
       title: 'FPS drops',
-      description: 'Samples whose FPS fell below `threshold`. Returns timestamp + fps for each.',
+      description: `Samples whose FPS fell below \`threshold\` (default ${DEFAULT_FPS_DROP_THRESHOLD}). Returns timestamp + fps for each.`,
       inputSchema: {
         threshold: z.number().min(1).max(120).optional(),
         sinceMs: z.number().nonnegative().optional(),
       },
     },
-    ({ threshold = 40, sinceMs }) => {
+    ({ threshold = DEFAULT_FPS_DROP_THRESHOLD, sinceMs }) => {
       const cutoff = sinceMs === undefined ? -Infinity : Date.now() - sinceMs;
       const samples = deps.getFpsSamples().filter(s => s.timestamp >= cutoff);
       const drops = samples.filter(s => s.fps < threshold);
@@ -219,18 +228,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
       const matches = deps
         .getRenderProfiles()
         .filter(p => p.file.includes(file))
-        .map(p => ({
-          componentId: p.componentId,
-          file: p.file,
-          name: p.name,
-          initTime: p.initTime,
-          renderCount: p.renderCount,
-          totalRenderTime: p.totalRenderTime,
-          lastRenderTime: p.lastRenderTime,
-          lastRenderAt: p.lastRenderAt,
-          totalRenderTimeMs: round(p.totalRenderTime),
-          avgRenderTimeMs: round(avgRenderTime(p)),
-        }));
+        .map(p => Object.assign(renderStats(p), { initTimeMs: round(p.initTime) }));
       return text(matches);
     },
   );
@@ -385,8 +383,7 @@ export function buildMcpServer(deps: McpDeps): McpServer {
     'end_session',
     {
       title: 'End current measurement session',
-      description:
-        'Closes the active session and returns its delta. `keep` decides disposal: "memory" keeps it for this dev-server lifetime, "disk" writes to .vite-devtools-svelte/sessions/, "discard" deletes it.',
+      description: `Closes the active session and returns its delta. \`keep\` decides disposal: "memory" keeps it for this dev-server lifetime, "disk" writes to node_modules/.vite-devtools-svelte/sessions/, "discard" deletes it. \`delta.fps.drops\` counts samples below ${PANEL_FPS_DROP_LINE} fps, the line the FPS panel draws; list_performance_issues and get_fps_drops default to ${DEFAULT_FPS_DROP_THRESHOLD}.`,
       inputSchema: {
         keep: z.enum(['memory', 'disk', 'discard']).optional(),
       },

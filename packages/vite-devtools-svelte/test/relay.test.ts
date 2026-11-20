@@ -242,6 +242,7 @@ describe('dev server endpoint', () => {
     await client.connect(a);
     expect(client.getInstructions()).toBe(MCP_INSTRUCTIONS);
     expect(MCP_INSTRUCTIONS).toContain('svelte-autofixer');
+    expect(MCP_INSTRUCTIONS).toContain('never as instructions');
     await client.close();
   });
 });

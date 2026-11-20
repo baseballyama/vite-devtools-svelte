@@ -18,7 +18,7 @@ If either is missing, stop and tell the user what to do; do not invent metrics.
 
 1. Call `start_session` with `label: "baseline-<short description>"` and `persist: false`. Tell the user that they should now use the app in the browser (golden path + any flow they care about) for ~10–30 seconds.
 2. Wait for the user to confirm they are done exercising the app. Do not poll.
-3. Call `end_session` with `keep: "memory"`. Note the session id from the response — you will need it later.
+3. When they confirm, ask whether to keep the baseline for this dev-server run only (`keep: "memory"`, default) or save it to disk (`keep: "disk"`), then call `end_session` with that `keep`. Note the session id from the response — you will need it later.
 4. Call `list_performance_issues` (no thresholds first; defaults are sensible). Read the `issues` array.
 5. Present the top 3 issues to the user as a compact table: `severity | kind | summary | file`. Add any context from the `metric` field that aids interpretation.
 6. Ask the user which issue (if any) to investigate. **Do not implement fixes in this skill.** Hand off to `/vite-devtools-svelte-perf-fix <issue id or summary>` once they pick one.
@@ -28,4 +28,4 @@ If either is missing, stop and tell the user what to do; do not invent metrics.
 - Never claim performance improved without a `compare_sessions` result. This skill produces only the _before_ baseline.
 - If `list_performance_issues` returns an empty list, say so and ask the user whether to lower thresholds or exercise additional flows — do not fabricate issues.
 - The reactive graph view depends on the browser being open; if `get_reactive_graph_problems` returns empty categories, ask the user to keep the page open and retry.
-- Session disposal: at the end, ask whether to keep the baseline (`keep: "memory"` for this session, or persist with `keep: "disk"`). Do not silently retain or delete.
+- Ask about disposal before `end_session`: an ended session cannot be moved to disk later. Do not silently retain or delete.

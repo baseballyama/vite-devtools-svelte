@@ -44,6 +44,15 @@ export function createMcpMiddleware(opts: {
       res.end('Forbidden');
       return;
     }
+    // Stateless with no server-initiated messages: the SDK would hold a GET SSE
+    // stream (with a server and keep-alive timer) open for the client's lifetime.
+    // SDK clients take 405 as "no stream".
+    if (req.method !== 'POST') {
+      res.statusCode = 405;
+      res.setHeader('Allow', 'POST');
+      res.end();
+      return;
+    }
     // Keep the runtime sampling; if this request woke it up, wait for its
     // activation snapshot so the first answer isn't stale.
     if (collector.lease('mcp', 60_000)) await collector.waitForSnapshot(1000);

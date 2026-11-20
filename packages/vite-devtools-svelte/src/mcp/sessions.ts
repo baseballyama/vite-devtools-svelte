@@ -86,7 +86,7 @@ export interface MetricGetters {
 const UNCHANGED_RENDER_THRESHOLD_MS = 1;
 const UNCHANGED_LOAD_THRESHOLD_MS = 5;
 const UNCHANGED_FPS_THRESHOLD = 1;
-const FPS_DROP_THRESHOLD = 30;
+export const PANEL_FPS_DROP_LINE = 30;
 
 function takeSnapshot(getters: MetricGetters): SessionSnapshot {
   const renderProfiles = getters.getRenderProfiles().map(p => ({
@@ -284,7 +284,7 @@ export class SessionStore {
         samples: fpsValues.length,
         avg: avg(fpsValues),
         min: min(fpsValues, 0),
-        drops: fpsValues.filter(f => f < FPS_DROP_THRESHOLD).length,
+        drops: fpsValues.filter(f => f < PANEL_FPS_DROP_LINE).length,
       },
     };
   }
