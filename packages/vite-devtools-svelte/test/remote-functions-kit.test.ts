@@ -77,6 +77,9 @@ beforeAll(async () => {
     // Only the server render matters here; the client prebundle would pick
     // up kit-lib's remote file as an entry, which SvelteKit externalizes.
     optimizeDeps: { noDiscovery: true },
+    // A cold SSR prebundle is redone during the first request ("new version
+    // of the pre-bundle"), which fails that render in CI.
+    ssr: { optimizeDeps: { noDiscovery: true } },
     plugins: [
       svelteDevtools({ componentTracking: false }),
       sveltekit({ experimental: { remoteFunctions: true } }),
