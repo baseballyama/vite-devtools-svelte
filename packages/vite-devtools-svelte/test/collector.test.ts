@@ -177,8 +177,8 @@ describe('Collector ingestion caps', () => {
   });
 });
 
-function comp(id: number, parentId: number | null = null) {
-  return { id, file: '/C.svelte', name: `C${id}`, parentId, mounted: true };
+function comp(id: number, parentId: number | null = null, file = '/C.svelte') {
+  return { id, file, name: `C${id}`, parentId, mounted: true };
 }
 
 /** Live components whose parent is not live (the parent gate must prevent these). */
@@ -212,6 +212,25 @@ describe('Collector component deltas + per-epoch state', () => {
     expect(c.liveComponentsTotal).toBe(n + 1);
     c.ingestComponents({ epoch: 'a', added: [], removed: [5] });
     expect(c.liveComponents).toHaveLength(n - 1);
+  });
+
+  it('counts distinct live files, following deltas and the served epoch', () => {
+    const c = new Collector();
+    expect(c.liveComponentFiles).toBe(0);
+    c.ingestComponents({
+      epoch: 'a',
+      components: [comp(1, null, '/A.svelte'), comp(2, 1, '/A.svelte')],
+    });
+    expect(c.liveComponentFiles).toBe(1);
+    c.ingestComponents({ epoch: 'a', added: [comp(3, 1, '/B.svelte')], removed: [] });
+    expect(c.liveComponentFiles).toBe(2);
+    c.ingestComponents({ epoch: 'a', added: [], removed: [3] });
+    expect(c.liveComponentFiles).toBe(1);
+    c.ingestComponents({
+      epoch: 'b',
+      components: [comp(1, null, '/X.svelte'), comp(2, 1, '/Y.svelte')],
+    });
+    expect(c.liveComponentFiles).toBe(2);
   });
 
   it('serves the most recently pushing epoch and keeps other tabs intact', () => {

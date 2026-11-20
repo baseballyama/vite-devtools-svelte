@@ -20,6 +20,7 @@ import type {
   CompilerWarning,
   RuntimeError,
   ModuleGraphData,
+  ModuleGraphStats,
   OGPreview,
   BuildAnalysis,
   FpsSample,
@@ -336,6 +337,10 @@ export async function clearErrors(): Promise<void> {
 
 export function getModuleGraph(): Promise<ModuleGraphData> {
   return call('get-module-graph');
+}
+
+export function getModuleGraphStats(): Promise<ModuleGraphStats> {
+  return call('get-module-graph-stats');
 }
 
 export function getOGPreview(url: string): Promise<OGPreview> {

@@ -326,6 +326,8 @@ export interface LiveComponentsMeta {
   /** Instances returned by `getLiveComponents()` (parents first). */
   kept: number;
   truncated: boolean;
+  /** Distinct component files among the kept instances. */
+  files: number;
   /**
    * Project root as live `file`s spell it (symlinks resolved, `/`-separated):
    * a live `file` is an absolute module id, a {@link ComponentRelation} `file`
@@ -385,6 +387,11 @@ export interface ModuleNode {
 export interface ModuleGraphData {
   modules: ModuleNode[];
   cycles: string[][];
+}
+
+export interface ModuleGraphStats {
+  modules: number;
+  cycles: number;
 }
 
 export interface OGTag {

@@ -115,7 +115,7 @@ export class Collector {
   // pushed most recently is the one served.
   private epochs = new Map<string, EpochState>();
   private servedEpoch: string | undefined;
-  private liveCache: ComponentInstance[] | undefined;
+  private liveCache: { list: ComponentInstance[]; files?: number } | undefined;
   /** Epochs asked for a full snapshot after a delta without a base; asked once per epoch. */
   private resyncRequested = new Set<string>();
 
@@ -247,12 +247,21 @@ export class Collector {
     return this.warnings.items;
   }
 
-  get liveComponents(): ComponentInstance[] {
+  private live(): { list: ComponentInstance[]; files?: number } {
     if (!this.liveCache) {
       const state = this.servedState();
-      this.liveCache = state ? [...state.components.values()] : [];
+      this.liveCache = { list: state ? [...state.components.values()] : [] };
     }
     return this.liveCache;
+  }
+
+  get liveComponents(): ComponentInstance[] {
+    return this.live().list;
+  }
+
+  get liveComponentFiles(): number {
+    const live = this.live();
+    return (live.files ??= new Set(live.list.map(c => c.file)).size);
   }
 
   // Read together so a component id is never paired with another page load's epoch.

@@ -137,6 +137,7 @@ beforeEach(() => {
     total: 3,
     kept: 3,
     truncated: false,
+    files: 3,
     root: '/app',
     epoch: 'e1',
     epochs: 1,

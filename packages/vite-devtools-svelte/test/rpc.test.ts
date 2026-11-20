@@ -148,6 +148,8 @@ describe('collector-backed RPCs', () => {
       total: 60_000,
       kept: 50_000,
       truncated: true,
+      // instances without a `file` share one undefined value
+      files: 1,
       root: fs.realpathSync.native(FIXTURES_DIR).split(path.sep).join('/'),
       epoch: '(legacy)',
       epochs: 1,
@@ -274,6 +276,10 @@ describe('module graph RPC', () => {
     expect(byId['src/a.ts'].imports).toEqual(['src/b.svelte', 'src/s.css']);
     expect(byId['src/b.svelte'].importedBy).toEqual(['src/a.ts']);
     expect(graph.cycles).toHaveLength(1);
+    expect(await r.get('svelte-devtools:get-module-graph-stats')!()).toEqual({
+      modules: 4,
+      cycles: 1,
+    });
     expect(byId['src/c.js'].isCyclic).toBe(true);
     expect(byId['src/s.css'].isCyclic).toBeUndefined();
   });
@@ -329,7 +335,7 @@ describe('every RPC with valid input', () => {
       'get-live-components': [[], r => expect(r).toEqual([])],
       'get-live-components-meta': [
         [],
-        r => expect(r).toMatchObject({ total: 0, kept: 0, truncated: false }),
+        r => expect(r).toMatchObject({ total: 0, kept: 0, truncated: false, files: 0 }),
       ],
       'set-active': [[{ client: 'c', active: false }], r => expect(r).toBeUndefined()],
       'open-in-editor': [
@@ -359,6 +365,7 @@ describe('every RPC with valid input', () => {
       'get-runtime-errors': [[], r => expect(r).toEqual([])],
       'clear-errors': [[], () => {}],
       'get-module-graph': [[], r => expect(r).toEqual({ modules: [], cycles: [] })],
+      'get-module-graph-stats': [[], r => expect(r).toEqual({ modules: 0, cycles: 0 })],
       'get-og-preview': [[{ url: 'http://localhost:5173/' }], r => expect(r.title).toBe('t')],
       'get-build-analysis': [[], r => expect(r.chunks).toEqual([])],
       'get-fps': [[], r => expect(r).toEqual([])],
