@@ -5,6 +5,8 @@ import { defineConfig, normalizePath } from 'vite';
 import type { Plugin } from 'vite';
 import dts from 'vite-plugin-dts';
 
+import { svAddons } from './build/sv-addons.js';
+
 // the bundled inspector serves its runtime from disk at runtime next to its own chunk
 const INSPECTOR_SRC = normalizePath(fileURLToPath(new URL('../inspector/src/', import.meta.url)));
 const INSPECTOR_RUNTIME = fileURLToPath(new URL('../inspector/src/runtime/', import.meta.url));
@@ -33,6 +35,7 @@ export default defineConfig({
       include: ['src/**/*.ts'],
     }),
     copyInspectorRuntime(),
+    svAddons(),
   ],
   build: {
     outDir: 'dist',
@@ -51,6 +54,7 @@ export default defineConfig({
         /^devframe(\/|$)/,
         /^@modelcontextprotocol\/sdk/,
         'zod',
+        /^package-manager-detector(\/|$)/,
         /^node:/,
         'fs',
         'fs/promises',
