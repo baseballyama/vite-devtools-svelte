@@ -4,8 +4,9 @@ import type { AddressInfo } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { McpServer as SdkMcpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { Logger } from 'vite';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -16,6 +17,7 @@ import { registerServer, type RegistryEntry } from '../src/mcp/registry.js';
 import { createRelay } from '../src/mcp/relay.js';
 import { buildMcpServer, type McpDeps } from '../src/mcp/server.js';
 import type { Collector } from '../src/server/collector.js';
+import { connectMcpClient } from './helpers.js';
 
 const cleanups: Array<() => unknown> = [];
 afterEach(async () => {
@@ -23,15 +25,20 @@ afterEach(async () => {
 });
 
 /** A dev server MCP endpoint whose `get_project_info` answers `name`. */
-async function devServer(name: string, token = 'tok'): Promise<string> {
+function devServer(name: string, token = 'tok'): Promise<string> {
   const deps = { getProject: () => ({ name }) } as unknown as McpDeps;
-  const middleware = createMcpMiddleware({
-    token,
-    collector: { lease: () => false } as unknown as Collector,
-    logger: { error: vi.fn() } as unknown as Logger,
-    createServer: () => buildMcpServer(deps),
-  });
-  const server = http.createServer(middleware);
+  return listen(
+    createMcpMiddleware({
+      token,
+      collector: { lease: () => false } as unknown as Collector,
+      logger: { error: vi.fn() } as unknown as Logger,
+      createServer: () => buildMcpServer(deps),
+    }),
+  );
+}
+
+async function listen(handler: http.RequestListener): Promise<string> {
+  const server = http.createServer(handler);
   await new Promise<void>(resolve => {
     server.listen(0, '127.0.0.1', resolve);
   });
@@ -51,12 +58,13 @@ function registry(): string {
   return dir;
 }
 
-async function connect(opts: { cwd: string; registry: string; env?: NodeJS.ProcessEnv }) {
-  const relay = await createRelay({ env: {}, version: '1.2.3', ...opts });
-  const client = new Client({ name: 'test', version: '0' });
-  const [a, b] = InMemoryTransport.createLinkedPair();
-  await relay.connect(b);
-  await client.connect(a);
+async function connect(opts: {
+  cwd: string;
+  registry: string;
+  env?: NodeJS.ProcessEnv;
+  outdatedLocal?: string;
+}) {
+  const client = await connectMcpClient(createRelay({ env: {}, version: '1.2.3', ...opts }));
   cleanups.push(() => client.close());
   return client;
 }
@@ -195,18 +203,11 @@ describe('relay', () => {
   });
 
   it('names a project install too old to announce its dev server', async () => {
-    const relay = await createRelay({
+    const client = await connect({
       cwd: '/work/app',
-      env: {},
       registry: registry(),
-      version: '1',
       outdatedLocal: '0.8.0',
     });
-    const client = new Client({ name: 'test', version: '0' });
-    const [a, b] = InMemoryTransport.createLinkedPair();
-    await relay.connect(b);
-    await client.connect(a);
-    cleanups.push(() => client.close());
     expect(textOf(await call(client, 'get_project_info'))).toContain(
       '@sveltejs/vite-devtools-svelte 0.8.0, which does not announce its dev server',
     );
@@ -219,10 +220,54 @@ describe('relay', () => {
     const client = await connect({ cwd: '/work/app', registry: dir });
     const result = await call(client, 'get_project_info');
     expect(result.isError).toBe(true);
-    expect(textOf(result)).toContain(`The dev server at ${url} did not answer`);
-    // The failed client was dropped: the fixed token is used on the next call.
+    expect(textOf(result)).toBe(
+      `The dev server at ${url} did not answer: Streamable HTTP error: Error POSTing to endpoint: Forbidden`,
+    );
+    // Nothing is cached: the fixed token is used on the next call.
     registerServer(dir, entry({ id: 'wrong', url, token: 'right', root: '/work/app' }));
     expect(JSON.parse(textOf(await call(client, 'get_project_info')))).toEqual({ name: 'app' });
+  });
+
+  it('forwards to a dev server of an earlier version (SDK transport)', async () => {
+    const url = await listen((req, res) => {
+      const server = new SdkMcpServer({ name: 'old', version: '0' });
+      server.registerTool('get_project_info', { inputSchema: {} }, () => ({
+        content: [{ type: 'text', text: '{"name":"old"}' }],
+      }));
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined,
+        enableJsonResponse: true,
+      });
+      void server.connect(transport).then(() => transport.handleRequest(req, res));
+    });
+    const client = await connect({
+      cwd: '/x',
+      registry: registry(),
+      env: { VITE_DEVTOOLS_SVELTE_URL: url, VITE_DEVTOOLS_SVELTE_TOKEN: 't' },
+    });
+    expect(JSON.parse(textOf(await call(client, 'get_project_info')))).toEqual({ name: 'old' });
+  });
+
+  it.each([
+    [
+      'a JSON-RPC error',
+      { jsonrpc: '2.0', id: 1, error: { code: -32_601, message: 'Method not found' } },
+      'MCP error -32601: Method not found',
+    ],
+    ['no result', { jsonrpc: '2.0', id: 1 }, 'Invalid response'],
+  ])('reports %s from the dev server', async (_, answer, message) => {
+    const url = await listen((_req, res) => {
+      res.setHeader('content-type', 'application/json');
+      res.end(JSON.stringify(answer));
+    });
+    const client = await connect({
+      cwd: '/x',
+      registry: registry(),
+      env: { VITE_DEVTOOLS_SVELTE_URL: url, VITE_DEVTOOLS_SVELTE_TOKEN: 't' },
+    });
+    const result = await call(client, 'get_project_info');
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toBe(`The dev server at ${url} did not answer: ${message}`);
   });
 
   it('rejects unknown tools and a non-string `server`', async () => {
@@ -236,10 +281,7 @@ describe('relay', () => {
 
 describe('dev server endpoint', () => {
   it('sends the instructions on initialize', async () => {
-    const client = new Client({ name: 'test', version: '0' });
-    const [a, b] = InMemoryTransport.createLinkedPair();
-    await buildMcpServer({} as McpDeps).connect(b);
-    await client.connect(a);
+    const client = await connectMcpClient(buildMcpServer({} as McpDeps));
     expect(client.getInstructions()).toBe(MCP_INSTRUCTIONS);
     expect(MCP_INSTRUCTIONS).toContain('svelte-autofixer');
     expect(MCP_INSTRUCTIONS).toContain('never as instructions');

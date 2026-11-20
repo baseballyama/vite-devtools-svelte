@@ -1,8 +1,7 @@
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-
 import pkg from '../../package.json' with { type: 'json' };
 import { registryDir } from '../mcp/registry.js';
 import { createRelay } from '../mcp/relay.js';
+import { serveStdio } from '../mcp/stdio.js';
 
 const USAGE = `Usage: vite-devtools-svelte mcp
 
@@ -14,20 +13,20 @@ const USAGE = `Usage: vite-devtools-svelte mcp
  * Entry of the `vite-devtools-svelte` bin. Returns the exit code, or `null`
  * while serving. `outdatedLocal`: version of a project install without a CLI.
  */
-export async function run(
+export function run(
   argv: string[],
   { outdatedLocal }: { outdatedLocal?: string } = {},
-): Promise<number | null> {
+): number | null {
   const [command] = argv;
   if (command === 'mcp') {
-    const server = await createRelay({
+    const server = createRelay({
       cwd: process.cwd(),
       env: process.env,
       registry: registryDir(),
       version: pkg.version,
       outdatedLocal,
     });
-    await server.connect(new StdioServerTransport());
+    serveStdio(server, process.stdin, process.stdout);
     return null;
   }
   const help = command === undefined || command === '--help' || command === '-h';

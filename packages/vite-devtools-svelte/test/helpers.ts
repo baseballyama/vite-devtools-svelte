@@ -2,8 +2,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import type { Plugin } from 'vite';
 
+import type { McpServer } from '../src/mcp/protocol.js';
 import { Collector } from '../src/server/collector.js';
 import { createRpcFunctions, DEVFRAME_ID } from '../src/server/devframe.js';
 import type { SvelteDevtoolsHost } from '../src/server/devframe.js';
@@ -101,4 +105,21 @@ export function authTokenPersisted(home: string, localStore: Map<string, string>
       const text = fs.readFileSync(path.join(e.parentPath, e.name), 'utf8');
       return tokens.some(t => text.includes(t));
     });
+}
+
+/** The real SDK client, connected in process to one of our MCP servers. */
+export async function connectMcpClient(server: McpServer): Promise<Client> {
+  const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+  const answer = async (message: JSONRPCMessage) => {
+    const response = await server.handle(message);
+    if (response) await serverSide.send(response as JSONRPCMessage);
+  };
+  // oxlint-disable-next-line unicorn/prefer-add-event-listener -- the SDK transport is not an EventTarget
+  serverSide.onmessage = message => {
+    void answer(message);
+  };
+  await serverSide.start();
+  const client = new Client({ name: 'test', version: '0' });
+  await client.connect(clientSide);
+  return client;
 }

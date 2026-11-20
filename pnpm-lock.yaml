@@ -623,9 +623,6 @@ importers:
 
   packages/vite-devtools-svelte:
     dependencies:
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.32.2
-        version: 1.32.2(supports-color@7.2.0)(zod@4.6.7)
       '@sveltejs/kit':
         specifier: ^3.3.0
         version: 3.3.1(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.58.0(@typescript-eslint/types@8.73.0))(vite@8.3.8))(svelte@5.58.0(@typescript-eslint/types@8.73.0))(typescript@6.0.3)(vite@8.3.8)
@@ -639,6 +636,9 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.32.2
+        version: 1.32.2(supports-color@7.2.0)(zod@4.6.7)
       '@sveltejs/vite-plugin-svelte':
         specifier: ^7.3.1
         version: 7.3.1(svelte@5.58.0(@typescript-eslint/types@8.73.0))(vite@8.3.8)

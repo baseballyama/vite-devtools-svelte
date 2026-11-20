@@ -1,17 +1,15 @@
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-  type Tool,
-} from '@modelcontextprotocol/sdk/types.js';
-
 import { MCP_PATH } from './http.js';
 import { RELAY_INSTRUCTIONS } from './instructions.js';
+import {
+  createMcpServer,
+  error,
+  text,
+  type McpServer,
+  type ToolInfo,
+  type ToolResult,
+} from './protocol.js';
 import { listServers, selectServer, type RegistryEntry } from './registry.js';
-import { buildMcpServer, error, text, type McpDeps } from './server.js';
+import { devServerTools, type McpDeps } from './server.js';
 
 /** Where a tool call goes. */
 type Target = Pick<RegistryEntry, 'url' | 'token'>;
@@ -28,7 +26,7 @@ export interface RelayOptions {
   outdatedLocal?: string;
 }
 
-const LIST_DEV_SERVERS: Tool = {
+const LIST_DEV_SERVERS: ToolInfo = {
   name: 'list_dev_servers',
   title: 'Running dev servers',
   description:
@@ -42,21 +40,55 @@ const SERVER_ARG = {
     'Dev server to ask: an id from list_dev_servers (or its root / package name). Needed only when more than one is running.',
 };
 
-const unavailable = () => {
-  throw new Error('not connected to a dev server');
-};
-
-/** The dev server endpoint's tools, read from a local copy that is never called. */
-async function devServerTools(): Promise<Tool[]> {
-  const deps = new Proxy({}, { get: () => unavailable }) as McpDeps;
-  const server = buildMcpServer(deps);
-  const client = new Client({ name: 'vite-devtools-svelte-relay', version: '0' });
-  const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
-  await server.connect(serverSide);
-  await client.connect(clientSide);
-  const { tools } = await client.listTools();
-  await client.close();
+/** The dev server endpoint's tools, each with a `server` argument. */
+function relayedTools(): ToolInfo[] {
+  // Only listed, never called here, so the handlers never read `deps`.
+  const tools = devServerTools({} as McpDeps).listTools();
+  for (const tool of tools) {
+    // `$schema` last keeps tools/list byte-identical to the SDK relay (see the mcp-wire snapshot).
+    const { $schema, ...schema } = tool.inputSchema;
+    tool.inputSchema = {
+      ...schema,
+      properties: { ...schema.properties, server: SERVER_ARG },
+      $schema,
+    };
+  }
   return tools;
+}
+
+/** Accepted by every plugin version the relay may reach. */
+const PROTOCOL_VERSION = '2025-06-18';
+/** The SDK client's default request timeout. */
+const CALL_TIMEOUT_MS = 60_000;
+
+/** One stateless `tools/call` POST: every plugin version answers it as JSON, without initialize. */
+async function forward(target: Target, name: string, args: object): Promise<ToolResult> {
+  const res = await fetch(target.url, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      accept: 'application/json, text/event-stream',
+      'mcp-protocol-version': PROTOCOL_VERSION,
+      'x-svelte-devtools-token': target.token,
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name, arguments: args },
+    }),
+    signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+  });
+  const body = await res.text();
+  if (!res.ok) throw new Error(`Streamable HTTP error: Error POSTing to endpoint: ${body}`);
+  const message = JSON.parse(body) as {
+    result?: ToolResult;
+    error?: { code: number; message: string };
+  } | null;
+  if (message?.error) throw new Error(`MCP error ${message.error.code}: ${message.error.message}`);
+  const result = message?.result;
+  if (!result || typeof result !== 'object') throw new Error('Invalid response');
+  return result;
 }
 
 const describeEntry = (e: RegistryEntry) => `${e.id}: ${e.packageName} at ${e.root}`;
@@ -73,36 +105,8 @@ function endpointUrl(raw: string): string {
  * server tools even when no dev server runs, and forwards each call to the
  * dev server the client means (see `selectServer`).
  */
-export async function createRelay(opts: RelayOptions): Promise<McpServer> {
-  const tools = await devServerTools();
-  for (const tool of tools) {
-    tool.inputSchema.properties = { ...tool.inputSchema.properties, server: SERVER_ARG };
-  }
-
-  // The low-level handlers: the tools are JSON Schemas taken from the dev
-  // server endpoint, which `registerTool` (zod only) cannot take.
-  const mcp = new McpServer(
-    { name: 'vite-devtools-svelte', version: opts.version },
-    { capabilities: { tools: {} }, instructions: RELAY_INSTRUCTIONS },
-  );
-  const { server } = mcp;
-
-  // One client per endpoint: the endpoint is stateless, so a cached client
-  // only saves the initialize round trip.
-  const clients = new Map<string, Promise<Client>>();
-  function connect(target: Target): { key: string; client: Promise<Client> } {
-    const key = `${target.url}\n${target.token}`;
-    let client = clients.get(key);
-    if (!client) {
-      const c = new Client({ name: 'vite-devtools-svelte-relay', version: opts.version });
-      const transport = new StreamableHTTPClientTransport(new URL(target.url), {
-        requestInit: { headers: { 'x-svelte-devtools-token': target.token } },
-      });
-      client = c.connect(transport).then(() => c);
-      clients.set(key, client);
-    }
-    return { key, client };
-  }
+export function createRelay(opts: RelayOptions): McpServer {
+  const tools = relayedTools();
 
   const { VITE_DEVTOOLS_SVELTE_URL: overrideUrl, VITE_DEVTOOLS_SVELTE_TOKEN: overrideToken } =
     opts.env;
@@ -141,20 +145,8 @@ export async function createRelay(opts: RelayOptions): Promise<McpServer> {
     return lines.join('\n');
   }
 
-  // oxlint-disable-next-line unicorn/prefer-add-event-listener -- `onclose` is the SDK's only close hook
-  server.onclose = () => {
-    for (const client of clients.values())
-      void client.then(
-        c => c.close(),
-        () => {},
-      );
-    clients.clear();
-  };
-
-  server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: [LIST_DEV_SERVERS, ...tools] }));
-
-  server.setRequestHandler(CallToolRequestSchema, async ({ params }) => {
-    if (params.name === LIST_DEV_SERVERS.name) {
+  async function callTool(name: string, args: Record<string, unknown> = {}): Promise<ToolResult> {
+    if (name === LIST_DEV_SERVERS.name) {
       const servers = listServers(opts.registry);
       const selection = selectServer(servers, opts.cwd);
       // The override takes every call, so no registered server is the default.
@@ -172,21 +164,24 @@ export async function createRelay(opts: RelayOptions): Promise<McpServer> {
         })),
       });
     }
-    if (!tools.some(t => t.name === params.name)) return error(`Unknown tool: ${params.name}`);
-    const { server: name, ...args } = params.arguments ?? {};
-    if (name !== undefined && typeof name !== 'string') return error('`server` must be a string.');
-    const target = resolveTarget(name);
+    if (!tools.some(t => t.name === name)) return error(`Unknown tool: ${name}`);
+    const { server, ...rest } = args;
+    if (server !== undefined && typeof server !== 'string') {
+      return error('`server` must be a string.');
+    }
+    const target = resolveTarget(server);
     if (typeof target === 'string') return error(target);
-    const { key, client } = connect(target);
     try {
-      return await (await client).callTool({ name: params.name, arguments: args });
+      return await forward(target, name, rest);
     } catch (e) {
-      clients.delete(key);
       return error(
         `The dev server at ${target.url} did not answer: ${e instanceof Error ? e.message : String(e)}`,
       );
     }
-  });
+  }
 
-  return mcp;
+  return createMcpServer(
+    { name: 'vite-devtools-svelte', version: opts.version, instructions: RELAY_INSTRUCTIONS },
+    { listTools: () => [LIST_DEV_SERVERS, ...tools], callTool },
+  );
 }

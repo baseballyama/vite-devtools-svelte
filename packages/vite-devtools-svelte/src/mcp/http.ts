@@ -1,11 +1,15 @@
 import crypto from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { Logger } from 'vite';
 
 import type { Collector } from '../server/collector.js';
+import {
+  isInitializeRequest,
+  isJsonRpcMessage,
+  PROTOCOL_VERSIONS,
+  type McpServer,
+} from './protocol.js';
 
 export const MCP_PATH = '/__svelte-devtools/mcp';
 
@@ -22,6 +26,121 @@ export function isValidMcpToken(header: string | string[] | undefined, token: st
 
 const describe = (e: unknown) => (e instanceof Error ? (e.stack ?? e.message) : String(e));
 
+const MAX_BODY_BYTES = 4 * 1024 * 1024;
+const MAX_BATCH = 100;
+
+/** The body as text, or `null` when it is over `MAX_BODY_BYTES`. */
+function readBody(req: IncomingMessage): Promise<string | null> {
+  return new Promise((resolve, reject) => {
+    if (Number(req.headers['content-length']) > MAX_BODY_BYTES) {
+      req.resume();
+      resolve(null);
+      return;
+    }
+    const chunks: Buffer[] = [];
+    let size = 0;
+    const onData = (chunk: Buffer) => {
+      size += chunk.length;
+      if (size <= MAX_BODY_BYTES) {
+        chunks.push(chunk);
+        return;
+      }
+      // Answer 413 now; the rest of the upload is drained, not awaited.
+      req.off('data', onData);
+      req.off('end', onEnd);
+      req.resume();
+      resolve(null);
+    };
+    // TextDecoder strips a leading BOM, which JSON.parse rejects.
+    const onEnd = () => resolve(new TextDecoder().decode(Buffer.concat(chunks)));
+    req.on('data', onData);
+    req.on('end', onEnd);
+    req.on('error', reject);
+  });
+}
+
+function send(res: ServerResponse, status: number, body?: unknown) {
+  res.statusCode = status;
+  if (body === undefined) {
+    res.end();
+    return;
+  }
+  res.setHeader('Content-Type', 'application/json');
+  res.end(JSON.stringify(body));
+}
+
+/**
+ * Stateless Streamable HTTP: one JSON answer per POST, no sessions and no
+ * server-initiated messages. Status codes and messages match the
+ * @modelcontextprotocol/sdk transport so SDK clients interoperate.
+ */
+async function serve(
+  server: McpServer,
+  req: IncomingMessage,
+  res: ServerResponse,
+  log: (message: string) => void,
+) {
+  const refuse = (status: number, code: number, message: string) => {
+    log(message);
+    send(res, status, { jsonrpc: '2.0', error: { code, message }, id: null });
+  };
+  const accept = req.headers.accept;
+  if (!accept?.includes('application/json') || !accept.includes('text/event-stream')) {
+    refuse(
+      406,
+      -32_000,
+      'Not Acceptable: Client must accept both application/json and text/event-stream',
+    );
+    return;
+  }
+  const type = req.headers['content-type']?.split(';', 1)[0]!.trim().toLowerCase();
+  if (type !== 'application/json') {
+    refuse(415, -32_000, 'Unsupported Media Type: Content-Type must be application/json');
+    return;
+  }
+  const body = await readBody(req);
+  if (body === null) {
+    refuse(413, -32_000, `Payload Too Large: Request body must not exceed ${MAX_BODY_BYTES} bytes`);
+    return;
+  }
+  let raw: unknown;
+  try {
+    raw = JSON.parse(body);
+  } catch {
+    refuse(400, -32_700, 'Parse error: Invalid JSON');
+    return;
+  }
+  if (Array.isArray(raw) && raw.length > MAX_BATCH) {
+    refuse(400, -32_600, `Invalid Request: Batch must not exceed ${MAX_BATCH} messages`);
+    return;
+  }
+  const messages: unknown[] = Array.isArray(raw) ? raw : [raw];
+  if (!messages.every(isJsonRpcMessage)) {
+    refuse(400, -32_700, 'Parse error: Invalid JSON-RPC message');
+    return;
+  }
+  if (messages.some(isInitializeRequest)) {
+    if (messages.length > 1) {
+      refuse(400, -32_600, 'Invalid Request: Only one initialization request is allowed');
+      return;
+    }
+  } else {
+    const version = req.headers['mcp-protocol-version'];
+    if (typeof version === 'string' && !PROTOCOL_VERSIONS.includes(version)) {
+      refuse(
+        400,
+        -32_000,
+        `Bad Request: Unsupported protocol version: ${version} (supported versions: ${PROTOCOL_VERSIONS.join(', ')})`,
+      );
+      return;
+    }
+  }
+  const answers = await Promise.all(messages.map(m => server.handle(m)));
+  const responses = answers.filter(a => a !== null);
+  if (responses.length === 0) send(res, 202);
+  else send(res, 200, responses.length === 1 ? responses[0] : responses);
+}
+
 /** Same-origin is not required: MCP clients are local processes, not browser tabs; the token is the gate. */
 export function createMcpMiddleware(opts: {
   token: string;
@@ -33,9 +152,10 @@ export function createMcpMiddleware(opts: {
   const fail = (res: ServerResponse, e: unknown) => {
     logger.error(`[svelte-devtools] MCP handler error: ${describe(e)}`);
     if (res.headersSent) return;
-    res.statusCode = 500;
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ error: String(e) }));
+    send(res, 500, { error: String(e) });
+  };
+  const logRefusal = (message: string) => {
+    logger.error(`[svelte-devtools] MCP transport error: ${message}`);
   };
 
   const handle = async (req: IncomingMessage, res: ServerResponse) => {
@@ -44,39 +164,16 @@ export function createMcpMiddleware(opts: {
       res.end('Forbidden');
       return;
     }
-    // Stateless with no server-initiated messages: the SDK would hold a GET SSE
-    // stream (with a server and keep-alive timer) open for the client's lifetime.
-    // SDK clients take 405 as "no stream".
+    // No server-initiated messages, so no GET SSE stream. Clients take 405 as "no stream".
     if (req.method !== 'POST') {
-      res.statusCode = 405;
       res.setHeader('Allow', 'POST');
-      res.end();
+      send(res, 405);
       return;
     }
     // Keep the runtime sampling; if this request woke it up, wait for its
     // activation snapshot so the first answer isn't stale.
     if (collector.lease('mcp', 60_000)) await collector.waitForSnapshot(1000);
-    // Stateless mode in the SDK still keeps per-instance bookkeeping that gets
-    // corrupted when one transport handles multiple requests.
-    const server = opts.createServer();
-    const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: undefined,
-      enableJsonResponse: true,
-    });
-    // oxlint-disable-next-line unicorn/prefer-add-event-listener -- the MCP transport is not an EventTarget; `onerror` is its only error hook
-    transport.onerror = err => {
-      logger.error(`[svelte-devtools] MCP transport error: ${describe(err)}`);
-    };
-    try {
-      await server.connect(transport);
-      // The SDK consumes the request body itself; pre-reading would leave it empty.
-      await transport.handleRequest(req, res);
-    } catch (e) {
-      fail(res, e);
-    } finally {
-      await transport.close().catch(() => {});
-      await server.close().catch(() => {});
-    }
+    await serve(opts.createServer(), req, res, logRefusal);
   };
 
   // Connect ignores the returned promise: answer on rejection instead of leaving the client hanging.

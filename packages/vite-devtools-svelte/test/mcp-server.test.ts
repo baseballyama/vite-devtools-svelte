@@ -2,8 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 
 import pkg from '../package.json' with { type: 'json' };
@@ -17,6 +16,7 @@ import type {
   RenderProfile,
   StateTimelineEntry,
 } from '../src/types.js';
+import { connectMcpClient } from './helpers.js';
 
 const BASE_TOOLS = [
   'list_performance_issues',
@@ -102,14 +102,7 @@ function makeDeps(data: Partial<Data> = {}, persistDir?: string): McpDeps & { da
   };
 }
 
-async function connect(deps: McpDeps) {
-  const server = buildMcpServer(deps);
-  const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
-  await server.connect(serverSide);
-  const client = new Client({ name: 'test', version: '0' });
-  await client.connect(clientSide);
-  return client;
-}
+const connect = (deps: McpDeps) => connectMcpClient(buildMcpServer(deps));
 
 type ToolResult = { content: Array<{ type: string; text: string }>; isError?: boolean };
 async function call(client: Client, name: string, args: Record<string, unknown> = {}) {

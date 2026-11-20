@@ -3,6 +3,7 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import os from 'node:os';
 import { join } from 'node:path';
+import { PassThrough, Readable } from 'node:stream';
 
 import type { Plugin } from 'vite';
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
@@ -63,6 +64,21 @@ function setup(serverConfig: Record<string, unknown> = {}) {
   };
 }
 
+/** An authorized MCP POST of one `ping`. */
+function postRequest(token: string) {
+  return Object.assign(
+    Readable.from([Buffer.from(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' }))]),
+    {
+      method: 'POST',
+      headers: {
+        'x-svelte-devtools-token': token,
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+      },
+    },
+  );
+}
+
 function fakeResponse() {
   return {
     statusCode: 200,
@@ -115,18 +131,12 @@ describe('MCP endpoint token gate', () => {
   });
 });
 
-/** The next MCP server built fails to connect with `reason`; returns its `close` spy. */
+/** The next MCP server built fails to answer with `reason`. */
 function failingServer(reason: unknown = new Error('boom')) {
-  const close = vi.fn(async () => {});
-  vi.mocked(mcpServerModule.buildMcpServer).mockImplementationOnce(
-    () =>
-      ({
-        // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- a non-Error rejection is a case under test
-        connect: () => Promise.reject(reason),
-        close,
-      }) as never,
-  );
-  return close;
+  vi.mocked(mcpServerModule.buildMcpServer).mockImplementationOnce(() => ({
+    // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- a non-Error rejection is a case under test
+    handle: () => Promise.reject(reason),
+  }));
 }
 
 describe('MCP endpoint errors', () => {
@@ -137,24 +147,20 @@ describe('MCP endpoint errors', () => {
   it.each([
     ['an Error', new Error('boom'), 'Error: boom'],
     ['a non-Error value', 'plain failure', 'plain failure'],
-  ])(
-    'answers 500 JSON when the handler throws %s, logs it, closes the server',
-    async (_, reason, text) => {
-      const close = failingServer(reason);
-      const s = setup();
-      const res = fakeResponse();
-      s.handler({ method: 'POST', headers: { 'x-svelte-devtools-token': s.token } }, res);
-      s.sendSnapshot();
-      await vi.waitFor(() => expect(res.end).toHaveBeenCalled());
-      expect(res.statusCode).toBe(500);
-      expect(res.headers['content-type']).toBe('application/json');
-      expect(JSON.parse(res.end.mock.calls[0]![0] as string)).toEqual({ error: text });
-      expect(s.server.config.logger.error).toHaveBeenCalledWith(
-        expect.stringContaining(`[svelte-devtools] MCP handler error: ${text}`),
-      );
-      await vi.waitFor(() => expect(close).toHaveBeenCalledOnce());
-    },
-  );
+  ])('answers 500 JSON when the handler throws %s and logs it', async (_, reason, text) => {
+    failingServer(reason);
+    const s = setup();
+    const res = fakeResponse();
+    s.handler(postRequest(s.token), res);
+    s.sendSnapshot();
+    await vi.waitFor(() => expect(res.end).toHaveBeenCalled());
+    expect(res.statusCode).toBe(500);
+    expect(res.headers['content-type']).toBe('application/json');
+    expect(JSON.parse(res.end.mock.calls[0]![0] as string)).toEqual({ error: text });
+    expect(s.server.config.logger.error).toHaveBeenCalledWith(
+      expect.stringContaining(`[svelte-devtools] MCP handler error: ${text}`),
+    );
+  });
 
   it('answers 500 (never hangs) when building the MCP server throws', async () => {
     vi.mocked(mcpServerModule.buildMcpServer).mockImplementationOnce(() => {
@@ -162,7 +168,7 @@ describe('MCP endpoint errors', () => {
     });
     const s = setup();
     const res = fakeResponse();
-    s.handler({ method: 'POST', headers: { 'x-svelte-devtools-token': s.token } }, res);
+    s.handler(postRequest(s.token), res);
     s.sendSnapshot();
     await vi.waitFor(() => expect(res.end).toHaveBeenCalledOnce());
     expect(res.statusCode).toBe(500);
@@ -178,7 +184,7 @@ describe('MCP endpoint errors', () => {
     failingServer();
     const s = setup();
     const res = { ...fakeResponse(), headersSent: true };
-    s.handler({ method: 'POST', headers: { 'x-svelte-devtools-token': s.token } }, res);
+    s.handler(postRequest(s.token), res);
     s.sendSnapshot();
     await vi.waitFor(() => expect(s.server.config.logger.error).toHaveBeenCalled());
     expect(res.end).not.toHaveBeenCalled();
@@ -275,6 +281,64 @@ describe('MCP endpoint over HTTP', () => {
     expect(s.server.config.logger.error).toHaveBeenCalledWith(
       expect.stringContaining('[svelte-devtools] MCP transport error:'),
     );
+  });
+
+  it.each([
+    ['declared', { 'content-length': String(4 * 1024 * 1024 + 1) }],
+    ['streamed', {}],
+  ])('refuses a body over 4 MB (%s length)', async (_, headers) => {
+    const s = setup();
+    const res = fakeResponse();
+    const req = Object.assign(Readable.from([Buffer.alloc(4 * 1024 * 1024 + 1)]), {
+      method: 'POST',
+      headers: {
+        ...postRequest(s.token).headers,
+        ...headers,
+      },
+    });
+    s.handler(req, res);
+    s.sendSnapshot();
+    await vi.waitFor(() => expect(res.end).toHaveBeenCalledOnce());
+    expect(res.statusCode).toBe(413);
+    expect(JSON.parse(res.end.mock.calls[0]![0] as string)).toEqual({
+      jsonrpc: '2.0',
+      error: {
+        code: -32_000,
+        message: 'Payload Too Large: Request body must not exceed 4194304 bytes',
+      },
+      id: null,
+    });
+  });
+
+  it('answers 413 before a streamed body over 4 MB ends', async () => {
+    const s = setup();
+    const res = fakeResponse();
+    const body = new PassThrough();
+    const req = Object.assign(body, { method: 'POST', headers: postRequest(s.token).headers });
+    s.handler(req, res);
+    s.sendSnapshot();
+    body.write(Buffer.alloc(4 * 1024 * 1024 + 1));
+    await vi.waitFor(() => expect(res.end).toHaveBeenCalledOnce());
+    expect(res.statusCode).toBe(413);
+    body.destroy();
+  });
+
+  it('accepts a body that starts with a UTF-8 BOM', async () => {
+    const s = setup();
+    const res = fakeResponse();
+    const req = Object.assign(
+      Readable.from([Buffer.from('\uFEFF{"jsonrpc":"2.0","id":1,"method":"ping"}')]),
+      { method: 'POST', headers: postRequest(s.token).headers },
+    );
+    s.handler(req, res);
+    s.sendSnapshot();
+    await vi.waitFor(() => expect(res.end).toHaveBeenCalledOnce());
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.end.mock.calls[0]![0] as string)).toEqual({
+      result: {},
+      jsonrpc: '2.0',
+      id: 1,
+    });
   });
 
   it('refuses the GET SSE stream without taking a lease', async () => {

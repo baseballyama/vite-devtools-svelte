@@ -213,9 +213,7 @@ describe('devframe host wiring', () => {
 async function mcpDeps(s: ReturnType<typeof setup>): Promise<McpDeps> {
   const build = vi.mocked(mcpServerModule.buildMcpServer);
   build.mockClear();
-  build.mockImplementationOnce(
-    () => ({ connect: () => Promise.reject(new Error('x')), close: async () => {} }) as never,
-  );
+  build.mockImplementationOnce(() => ({ handle: vi.fn() }));
   const res = { statusCode: 200, headersSent: false, setHeader: vi.fn(), end: vi.fn() };
   s.mcp()({ method: 'POST', headers: { 'x-svelte-devtools-token': s.token() } }, res);
   s.emit('state-timeline', { epoch: 'e1', reset: true, changes: [] }); // activation snapshot
