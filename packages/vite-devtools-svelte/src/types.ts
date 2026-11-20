@@ -405,6 +405,7 @@ export interface BuildChunk {
   name: string;
   file: string;
   size: number;
+  /** Whether Vite's build manifest marks the chunk as an entry (SvelteKit's route nodes are entries too). */
   isEntry: boolean;
 }
 
