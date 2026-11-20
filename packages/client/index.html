@@ -5,21 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Svelte DevTools</title>
     <script>
-      // Theme bootstrap — runs synchronously before stylesheet to prevent FOUC.
-      // Stored: 'dark' | 'light' (explicit user override)
-      // Otherwise: follow `prefers-color-scheme` and react to system changes.
+      // Sets the initial theme before the stylesheet loads to avoid a flash; theme.svelte.ts owns it afterwards.
       (() => {
         try {
           const stored = localStorage.getItem('svelte-devtools-theme');
-          const valid = stored === 'dark' || stored === 'light' ? stored : null;
-          const apply = () => {
-            const m = window.matchMedia('(prefers-color-scheme: dark)');
-            document.documentElement.dataset.theme = valid ?? (m.matches ? 'dark' : 'light');
-          };
-          apply();
-          if (!valid) {
-            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', apply);
-          }
+          document.documentElement.dataset.theme =
+            stored === 'dark' || stored === 'light'
+              ? stored
+              : window.matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light';
         } catch {
           document.documentElement.dataset.theme = 'dark';
         }

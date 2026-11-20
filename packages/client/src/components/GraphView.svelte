@@ -69,11 +69,8 @@
   function fitToView() {
     if (!containerEl || layout.width === 0) return;
     const rect = containerEl.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) {
-      // Container hasn't laid out yet — try again on the next frame.
-      requestAnimationFrame(() => fitToView());
-      return;
-    }
+    // Hidden or not laid out yet: the ResizeObserver refits once it has a size.
+    if (rect.width === 0 || rect.height === 0) return;
     const aspect = rect.width / rect.height;
     // Add breathing room around the graph so nodes don't kiss the edges.
     const PAD = NODE_W * 0.5;
