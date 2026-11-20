@@ -5,8 +5,7 @@
   "scripts": {
     "build:client": "pnpm -C packages/client build",
     "build:plugin": "pnpm -C packages/vite-devtools-svelte build",
-    "build:inspector": "pnpm -C packages/inspector build",
-    "build": "pnpm build:plugin && pnpm build:inspector && pnpm build:client",
+    "build": "pnpm build:plugin && pnpm build:client",
     "test": "pnpm --recursive --filter './packages/*' run test",
     "dev": "pnpm build && pnpm -C playground dev",
     "dev:ui": "pnpm build && pnpm -C playground dev:ui",
@@ -25,7 +24,7 @@
     "typecheck": "tsc -p packages/vite-devtools-svelte/tsconfig.json && tsc -p packages/client/tsconfig.node.json && pnpm -C packages/client run check && pnpm -C packages/inspector run check",
     "knip": "knip",
     "sherif": "sherif",
-    "publint": "pnpm -C packages/vite-devtools-svelte exec publint --strict && pnpm -C packages/vite-devtools-svelte exec attw --pack . --profile esm-only && pnpm -C packages/inspector exec publint --strict && pnpm -C packages/inspector exec attw --pack . --profile esm-only",
+    "publint": "pnpm -C packages/vite-devtools-svelte exec publint --strict && pnpm -C packages/vite-devtools-svelte exec attw --pack . --profile esm-only",
     "sync:kit": "pnpm --filter site --filter playground --filter \"./examples/kit-*\" --filter ./examples/sample-app --filter ./examples/strict-csp-app exec svelte-kit sync",
     "test:coverage": "pnpm --recursive --filter './packages/*' run test:coverage"
   },

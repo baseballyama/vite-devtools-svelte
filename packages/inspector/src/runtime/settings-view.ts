@@ -54,7 +54,7 @@ export default function setup(ctx: DockContext): void {
       target,
       props: {
         current,
-        defaults: __internal.defaults ?? current,
+        defaults: __internal.defaults,
         save: (settings: unknown) => call(SAVE_SETTINGS, settings),
         reset: () => call(RESET_SETTINGS),
       },

@@ -592,10 +592,6 @@ importers:
         version: 5.1.0(@types/node@25.9.9)(@vitest/browser-playwright@5.1.0)(@vitest/coverage-v8@5.1.0)(@vitest/ui@5.1.0)(happy-dom@21.0.4)(vite@8.3.8)
 
   packages/inspector:
-    dependencies:
-      obug:
-        specifier: ^3.0.0
-        version: 3.0.0
     devDependencies:
       '@sveltejs/vite-plugin-svelte':
         specifier: ^7.3.1
@@ -621,9 +617,6 @@ importers:
       vite:
         specifier: ^8.3.8
         version: 8.3.8(@types/node@25.9.9)(@vitejs/devtools@0.8.3)(jiti@2.7.0)(yaml@2.9.1)
-      vite-plugin-dts:
-        specifier: ^5.1.2
-        version: 5.1.2(rolldown@1.2.19)(supports-color@7.2.0)(typescript@6.0.3)(vite@8.3.8)
       vitest:
         specifier: ^5.1.0
         version: 5.1.0(@types/node@25.9.9)(@vitest/browser-playwright@5.1.0)(@vitest/coverage-v8@5.1.0)(@vitest/ui@5.1.0)(happy-dom@21.0.4)(vite@8.3.8)

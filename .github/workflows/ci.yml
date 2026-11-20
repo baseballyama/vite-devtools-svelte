@@ -74,7 +74,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup
 
-      - name: Build plugin, inspector and client UI
+      - name: Build plugin and client UI
         run: pnpm build
 
       # Coverage thresholds are enforced per package (vitest.config.ts).
@@ -199,7 +199,7 @@ jobs:
         with:
           chromium: 'true'
 
-      - name: Build plugin, inspector and client UI
+      - name: Build plugin and client UI
         run: pnpm build
 
       - name: Run
@@ -256,7 +256,7 @@ jobs:
           echo "version: $(node -p "require('./packages/vite-devtools-svelte/package.json').version")"
           sed -n 1,12p packages/vite-devtools-svelte/CHANGELOG.md
 
-      - name: Build plugin, inspector and client UI
+      - name: Build plugin and client UI
         run: pnpm build
 
       - name: Package contents (pnpm pack, not published)

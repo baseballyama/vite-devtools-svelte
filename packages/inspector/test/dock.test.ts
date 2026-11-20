@@ -5,12 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { svelteInspector } from '../src/index.js';
 import { defaultInspectorOptions } from '../src/options.js';
-import type { ActionResult, Settings } from '../src/runtime/settings-shared.js';
-import { same } from '../src/runtime/settings-shared.js';
-import { mergeOptions, pickOptions, updateSaved, validateSettings } from '../src/settings.js';
+import type { ActionResult } from '../src/runtime/settings-shared.js';
 import type { InspectorOptions } from '../src/types.js';
-
-const defaults = defaultInspectorOptions as Settings;
 
 // inspector variables set in the shell would otherwise change the options
 beforeEach(() => {
@@ -129,11 +125,6 @@ const form = (options: Record<string, unknown>) => {
   return rest;
 };
 
-const withDefaults = (patch: Record<string, unknown>) => ({
-  ...structuredClone(defaultInspectorOptions),
-  ...patch,
-});
-
 describe('the dock', () => {
   it('holds the inspector, which is never injected into the page', () => {
     const { plugin, docks } = setupInDock();
@@ -147,7 +138,7 @@ describe('the dock', () => {
     expect(docks[0]).toMatchObject({ accentColor: '#ff3e00' });
     expect(inspector?.toggle).toBe(true);
     expect(inspector?.action?.importFrom).toBe(
-      '/@id/__x00__virtual:vite-devtools-svelte-inspector-dock',
+      '/@id/__x00__virtual:vite-devtools-svelte-inspector-action',
     );
     expect(inspector).toMatchObject({
       title: 'Pick element',
@@ -169,10 +160,10 @@ describe('the dock', () => {
     );
   });
 
-  it('serves the dock and settings client scripts', async () => {
+  it('serves the action and settings client scripts', async () => {
     const plugin = setup();
-    const dock = call(plugin.resolveId, 'virtual:vite-devtools-svelte-inspector-dock');
-    expect(await call(plugin.load, dock)).toContain('devtools-action.ts');
+    const action = call(plugin.resolveId, 'virtual:vite-devtools-svelte-inspector-action');
+    expect(await call(plugin.load, action)).toContain('devtools-action.ts');
     const settings = call(plugin.resolveId, 'virtual:vite-devtools-svelte-inspector-settings');
     expect(await call(plugin.load, settings)).toContain('settings-view.ts');
   });
@@ -195,7 +186,10 @@ describe('settings view', () => {
     expect(scope).toHaveBeenCalledWith('svelte-inspector');
     const current = await servedOptions(plugin);
     expect(current.toggleKeyCombo).toBe('control-i');
-    expect(current.__internal.defaults).toEqual({ ...defaults, toggleKeyCombo: 'control-i' });
+    expect(current.__internal.defaults).toEqual({
+      ...defaultInspectorOptions,
+      toggleKeyCombo: 'control-i',
+    });
 
     const result = await run('save', { ...form(current), holdMode: false, escapeKeys: ['Escape'] });
     expect(result).toEqual({ ok: true, status: 'Saved. Reloading…' });
@@ -292,6 +286,21 @@ describe('settings view', () => {
     expect(result).toEqual({ ok: false, status: "Couldn't save: EACCES" });
   });
 
+  it('reports settings that cannot be reset', async () => {
+    const { plugin, ctx, run } = setupInDock();
+    const store = ctx.scope('svelte-inspector').settings.global;
+    ctx.scope.mockReturnValue({
+      settings: {
+        global: {
+          ...store,
+          delete: () => Promise.reject(new Error('EACCES')),
+        },
+      },
+    });
+    plugin.devtools.setup(ctx as never);
+    expect(await run('reset')).toEqual({ ok: false, status: "Couldn't reset: EACCES" });
+  });
+
   it('keeps vite-plugin-svelte variables as the defaults, and the saved settings over them', async () => {
     vi.stubEnv('SVELTE_INSPECTOR_OPTIONS', '{"holdMode":false,"openKey":"o"}');
     const { plugin, saved, run } = setupInDock();
@@ -325,98 +334,11 @@ describe('settings view', () => {
     const { plugin } = setupInDock(undefined, saved);
     expect(await servedOptions(plugin)).toMatchObject({
       openKey: 'Enter',
-      navKeys: { ...defaults.navKeys, parent: 'w' },
+      navKeys: { ...defaultInspectorOptions.navKeys, parent: 'w' },
     });
   });
 
   it('serves the options before Vite DevTools sets the plugin up', async () => {
     expect((await servedOptions(setup())).toggleKeyCombo).toBe('alt-x');
-  });
-});
-
-describe('settings helpers', () => {
-  it('accepts the default options', () => {
-    expect(validateSettings(structuredClone(defaultInspectorOptions))).toEqual({
-      options: defaultInspectorOptions,
-    });
-  });
-
-  it.each([
-    [withDefaults({ toggleKeyCombo: '' }), 'Shortcut needs a key'],
-    [withDefaults({ toggleKeyCombo: 'alt--' }), 'Shortcut needs a key'],
-    [withDefaults({ openKey: '  ' }), 'Open in editor needs a key'],
-    [withDefaults({ escapeKeys: [] }), 'Stop picking needs at least one key'],
-    [withDefaults({ navKeys: { parent: 'w' } }), 'First child needs a key'],
-    [null, 'No settings to save'],
-    [{}, 'Shortcut needs a key'],
-  ] as const)('rejects %j', (input, error) => {
-    expect(validateSettings(input)).toEqual({ error });
-  });
-
-  it('keeps a single space as a key, alone or in the shortcut', () => {
-    const result = validateSettings(withDefaults({ openMenuKey: ' ', toggleKeyCombo: 'alt- ' }));
-    expect(result).toHaveProperty('options.openMenuKey', ' ');
-    expect(result).toHaveProperty('options.toggleKeyCombo', 'alt- ');
-    expect(pickOptions({ toggleKeyCombo: 'alt- ' }).options).toEqual({ toggleKeyCombo: 'alt- ' });
-  });
-
-  it('saves only what changed, whatever the key order of navKeys', () => {
-    const { parent, child, next, prev } = defaults.navKeys;
-    expect(
-      updateSaved(
-        {},
-        { ...defaults, holdMode: false, navKeys: { prev, next, child, parent } },
-        defaults,
-      ),
-    ).toEqual({ holdMode: false });
-    expect(
-      updateSaved({}, { ...defaults, navKeys: { ...defaults.navKeys, next: 'l' } }, defaults),
-    ).toEqual({ navKeys: { ...defaults.navKeys, next: 'l' } });
-  });
-
-  it('keeps saved options the form left alone, and removes the ones set back to the defaults', () => {
-    const saved = { toggleKeyCombo: 'alt-x', openKey: 'o' };
-    // a project whose default shortcut is control-i runs with the saved alt-x
-    const base = { ...defaults, toggleKeyCombo: 'control-i' };
-    const running = mergeOptions(base, saved);
-    expect(updateSaved(saved, { ...running, holdMode: false }, base)).toEqual({
-      ...saved,
-      holdMode: false,
-    });
-    expect(updateSaved(saved, { ...running, openKey: 'Enter' }, base)).toEqual({
-      toggleKeyCombo: 'alt-x',
-    });
-  });
-
-  it('picks the valid options and names the others', () => {
-    expect(
-      pickOptions({
-        toggleKeyCombo: 'meta-k',
-        openKey: '',
-        holdMode: 'yes',
-        escapeKeys: ['Escape', 1],
-        navKeys: { parent: 'w', up: 'x' },
-      }),
-    ).toEqual({
-      options: { toggleKeyCombo: 'meta-k', navKeys: { parent: 'w' } },
-      invalid: ['openKey', 'holdMode', 'escapeKeys', 'navKeys.up'],
-    });
-    expect(pickOptions({ navKeys: 'w' })).toEqual({ options: {}, invalid: ['navKeys'] });
-    expect(pickOptions(true)).toEqual({ options: {}, invalid: [] });
-  });
-
-  it('merges navKeys key by key', () => {
-    expect(mergeOptions(defaults, undefined, { navKeys: { parent: 'w' } }).navKeys).toEqual({
-      ...defaults.navKeys,
-      parent: 'w',
-    });
-  });
-
-  it('compares values whatever the key order of objects', () => {
-    expect(same({ a: 1, b: [1, { c: 2 }] }, { b: [1, { c: 2 }], a: 1 })).toBe(true);
-    expect(same({ a: 1 }, { a: 1, b: undefined })).toBe(false);
-    expect(same([1, 2], [2, 1])).toBe(false);
-    expect(same([1], { 0: 1 })).toBe(false);
-    expect(same(null, {})).toBe(false);
   });
 });

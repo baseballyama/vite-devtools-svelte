@@ -37,46 +37,45 @@
   let status = $state<{ ok: boolean; text: string } | null>(null);
   let busy = $state(false);
   // what is saved, updated after a save or a reset too, as the page may not reload
-  let saved_form = $derived(current);
-  const dirty = $derived(!same(form, saved_form));
-  /** personal settings are saved */
-  let saved = $derived(!same(current, defaults));
+  let last_saved = $derived(current);
+  const dirty = $derived(!same(form, last_saved));
+  let has_saved_settings = $derived(!same(current, defaults));
   /** nothing to reset, no saved settings and the form shows the defaults */
-  const at_defaults = $derived(!saved && same(form, defaults));
+  const at_defaults = $derived(!has_saved_settings && same(form, defaults));
 
   function reset_to_defaults() {
     // only unsaved edits, nothing saved to remove
-    if (!saved) {
+    if (!has_saved_settings) {
       form = editable(defaults);
       status = null;
       return;
     }
-    void run(reset).then(ok => {
+    void run("Couldn't reset", reset).then(ok => {
       // a failed reset leaves the saved settings in use
       if (!ok) return;
       form = editable(defaults);
-      saved_form = defaults;
-      saved = false;
+      last_saved = defaults;
+      has_saved_settings = false;
     });
   }
 
   function save_form() {
     const settings = $state.snapshot(form);
-    void run(() => save(settings)).then(ok => {
+    void run("Couldn't save", () => save(settings)).then(ok => {
       if (!ok) return;
-      saved_form = settings;
-      saved = !same(settings, defaults);
+      last_saved = settings;
+      has_saved_settings = !same(settings, defaults);
     });
   }
 
-  async function run(action: () => Promise<ActionResult>) {
+  async function run(failure_prefix: string, action: () => Promise<ActionResult>) {
     busy = true;
     try {
       const r = await action();
       status = { ok: r.ok, text: r.status };
       return r.ok;
     } catch (e) {
-      status = { ok: false, text: `Couldn't save: ${(e as Error).message}` };
+      status = { ok: false, text: `${failure_prefix}: ${(e as Error).message}` };
       return false;
     } finally {
       busy = false;

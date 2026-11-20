@@ -1,77 +1,20 @@
-// Copied from @sveltejs/vite-plugin-svelte/src/public.d.ts
+import type { Settings } from './runtime/settings-shared.js';
+
 export interface InspectorOptions {
-  /**
-   * define a key combo to toggle inspector,
-   * @default 'alt-x'
-   *
-   * any number of modifiers `control` `shift` `alt` `meta` followed by zero or one regular key, separated by -
-   * examples: control-shift, control-o, control-alt-s  meta-x control-meta
-   * Some keys have native behavior (e.g. alt-s opens history menu on firefox).
-   * To avoid conflicts or accidentally typing into inputs, modifier only combinations are recommended.
-   */
   toggleKeyCombo?: string;
-
-  /**
-   * define keys to select elements with via keyboard
-   * @default {parent: 'ArrowUp', child: 'ArrowDown', next: 'ArrowRight', prev: 'ArrowLeft' }
-   *
-   * improves accessibility and also helps when you want to select elements that do not have a hoverable surface area
-   * due to tight wrapping
-   *
-   * A note for users of screen-readers:
-   * If you are using arrow keys to navigate the page itself, change the navKeys to avoid conflicts.
-   * e.g. navKeys: {parent: 'w', prev: 'a', child: 's', next: 'd'}
-   *
-   *
-   * parent: select closest parent
-   * child: select first child (or grandchild)
-   * next: next sibling (or parent if no next sibling exists)
-   * prev: previous sibling (or parent if no prev sibling exists)
-   */
   navKeys?: { parent: string; child: string; next: string; prev: string };
-
-  /**
-   * define key to open the editor for the currently selected dom node
-   *
-   * @default 'Enter'
-   */
   openKey?: string;
-
-  /**
-   * define key to open the context menu for the currently selected dom node
-   *
-   * @default ' '
-   */
   openMenuKey?: string;
-
-  /**
-   * define keys to close the inspector
-   * @default ['Backspace', 'Escape']
-   */
   escapeKeys?: string[];
-
-  /**
-   * inspector is automatically disabled when releasing toggleKeyCombo after holding it for a longpress
-   * @default true
-   */
   holdMode?: boolean;
-
-  /**
-   * inject custom styles when inspector is active
-   */
   customStyles?: boolean;
-
-  /**
-   * internal options that are automatically set, not to be set or used by users
-   * @internal
-   */
+  /** set by the plugin, not by users */
   __internal?: {
-    // vite base url
     base: string;
     // the directory Svelte makes `__svelte_meta.loc.file` relative to (its `rootDir`, which
     // defaults to process.cwd()), to open files by absolute path through Vite DevTools
-    cwd?: string;
+    cwd: string;
     // what the settings view resets to
-    defaults?: Omit<InspectorOptions, '__internal'>;
+    defaults: Settings;
   };
 }

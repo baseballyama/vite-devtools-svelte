@@ -33,7 +33,7 @@ interface DockContext {
 /** shown in the page console, like vite client errors */
 function report(what: string) {
   return (error: unknown) => {
-    console.error(`[svelte-inspector] failed to ${what}`, error);
+    console.error(`[vite-devtools-svelte:inspector] failed to ${what}`, error);
   };
 }
 
@@ -56,7 +56,7 @@ function isAbsolute(file: string): boolean {
  */
 function absolute(file: string): string {
   const cwd = options.__internal.cwd;
-  if (!cwd || isAbsolute(file)) return file;
+  if (isAbsolute(file)) return file;
   const base = cwd.endsWith('/') || cwd.endsWith('\\') ? cwd.slice(0, -1) : cwd;
   return `${base}/${file}`;
 }

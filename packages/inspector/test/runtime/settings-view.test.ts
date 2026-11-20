@@ -7,7 +7,8 @@ import Inspector from '../../src/runtime/Inspector.svelte';
 import KeyInput from '../../src/runtime/KeyInput.svelte';
 import SettingsView from '../../src/runtime/SettingsView.svelte';
 
-// a combo with a digit, whose `e.key` changes with shift, and letters to move by
+// a combo with a digit, whose `e.key` changes with shift, and letters to move by, listed out of
+// the parent, child, next, prev order
 vi.mock('virtual:vite-devtools-svelte-inspector-options', async importOriginal => {
   const { default: original } = await importOriginal<{ default: Record<string, unknown> }>();
   return {
@@ -15,7 +16,7 @@ vi.mock('virtual:vite-devtools-svelte-inspector-options', async importOriginal =
       ...original,
       toggleKeyCombo: 'shift-1',
       holdMode: false,
-      navKeys: { parent: 'w', child: 's', next: 'd', prev: 'a' },
+      navKeys: { prev: 'a', next: 'd', child: 's', parent: 'w' },
     },
   };
 });
@@ -92,13 +93,37 @@ describe('SettingsView with saved settings', () => {
   });
 
   it('keeps the form when the reset fails', async () => {
-    const reset = vi.fn(() => Promise.resolve({ ok: false, status: "Couldn't save: EACCES" }));
+    const reset = vi.fn(() => Promise.resolve({ ok: false, status: "Couldn't reset: EACCES" }));
     show(SettingsView, { current, defaults, save: vi.fn(), reset });
     button('Reset to defaults').click();
     await vi.waitFor(() =>
-      expect(document.querySelector('[role="status"]')?.textContent).toBe("Couldn't save: EACCES"),
+      expect(document.querySelector('[role="status"]')?.textContent).toBe("Couldn't reset: EACCES"),
     );
     expect(holdSwitch().checked).toBe(false);
+  });
+
+  it('names the reset when the call to reset fails', async () => {
+    const reset = vi.fn(() => Promise.reject(new Error('offline')));
+    show(SettingsView, { current, defaults, save: vi.fn(), reset });
+    button('Reset to defaults').click();
+    await vi.waitFor(() =>
+      expect(document.querySelector('[role="status"]')?.textContent).toBe(
+        "Couldn't reset: offline",
+      ),
+    );
+    expect(holdSwitch().checked).toBe(false);
+    expect(button('Reset to defaults').disabled).toBe(false);
+  });
+
+  it('names the save when the call to save fails', async () => {
+    const save = vi.fn(() => Promise.reject(new Error('offline')));
+    show(SettingsView, { current: defaults, defaults, save, reset: vi.fn() });
+    toggleHold();
+    button('Save').click();
+    await vi.waitFor(() =>
+      expect(document.querySelector('[role="status"]')?.textContent).toBe("Couldn't save: offline"),
+    );
+    expect(button('Save').disabled).toBe(false);
   });
 
   it('counts a save without a reload as saved', async () => {
@@ -134,6 +159,29 @@ describe('KeyInput', () => {
       new KeyboardEvent('keydown', { key: '!', code: 'Digit1', shiftKey: true, bubbles: true }),
     );
     expect(onchange).toHaveBeenCalledWith('shift-1');
+  });
+
+  it('records a letter by its code, as on an AZERTY keyboard where KeyQ types a', () => {
+    const onchange = vi.fn();
+    show(KeyInput, { mode: 'combo' as const, value: 'alt-x', label: 'Shortcut', onchange });
+    document.querySelector('button')!.click();
+    flushSync();
+    window.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'a', code: 'KeyQ', altKey: true, bubbles: true }),
+    );
+    expect(onchange).toHaveBeenCalledWith('alt-q');
+  });
+
+  it.each([
+    ['ArrowUp', 'ArrowUp'],
+    [' ', 'Space'],
+  ])('records the named key %j as it is', (k, code) => {
+    const onchange = vi.fn();
+    show(KeyInput, { mode: 'key' as const, value: 'Enter', label: 'Open', onchange });
+    document.querySelector('button')!.click();
+    flushSync();
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: k, code, bubbles: true }));
+    expect(onchange).toHaveBeenCalledWith(k);
   });
 });
 
@@ -178,5 +226,21 @@ describe('Inspector', () => {
     key({ key: 'z', code: 'KeyW' });
     flushSync();
     expect(outer.classList.contains('svelte-inspector-active-target')).toBe(true);
+    key({ key: 's', code: 'KeyS' });
+    flushSync();
+    expect(inner.classList.contains('svelte-inspector-active-target')).toBe(true);
+  });
+
+  it('removes its own style when unmounted', () => {
+    const props = { openInEditor: vi.fn(), onenabledchange: vi.fn(), ignore: () => false };
+    show(Inspector, props);
+    const first = document.querySelector('#svelte-inspector-style');
+    show(Inspector, props);
+    void unmount(mounted.pop()!);
+    const left = document.querySelectorAll('#svelte-inspector-style');
+    expect(left).toHaveLength(1);
+    expect(left[0]).toBe(first);
+    void unmount(mounted.pop()!);
+    expect(document.querySelector('#svelte-inspector-style')).toBeNull();
   });
 });
