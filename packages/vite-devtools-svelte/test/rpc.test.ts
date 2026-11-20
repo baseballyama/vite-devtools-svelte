@@ -319,12 +319,20 @@ describe('every RPC with valid input', () => {
         body: Readable.from([Buffer.from('<title>t</title>')]),
       }),
     );
-    const host = createTestHost(root, { serverOrigins: () => ['http://localhost:5173'] });
+    const remote = {
+      enabled: true,
+      functions: [],
+      errors: [{ file: 'a.remote.ts', message: 'x' }],
+    };
+    const host = createTestHost(root, {
+      serverOrigins: () => ['http://localhost:5173'],
+      remoteFunctions: () => remote,
+    });
     const rpc = await validated(host);
     const calls: Record<string, [args: unknown[], check: (r: any) => void]> = {
       'get-project': [[], r => expect(r).toMatchObject({ name: 'rpc-app', version: '2.0.0' })],
       'get-routes': [[], r => expect(r.map((x: any) => x.id).toSorted()).toEqual(['/', 'api'])],
-      'get-remote-functions': [[], r => expect(r).toMatchObject({ enabled: false })],
+      'get-remote-functions': [[], r => expect(r).toEqual(remote)],
       'get-assets': [[], r => expect(r.map((a: any) => a.url)).toEqual(['/a.txt'])],
       'get-component-relations': [[], r => expect(r).toHaveLength(2)],
       'get-live-components': [[], r => expect(r).toEqual([])],

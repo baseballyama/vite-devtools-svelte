@@ -1,6 +1,8 @@
 // Every data source must read the live dev server / collector it belongs to.
+import fs from 'node:fs';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
+import os from 'node:os';
 import path from 'node:path';
 
 import type { Plugin } from 'vite';
@@ -280,25 +282,56 @@ describe('MCP server wiring', () => {
     expect(deps.getProject().kit).toBe(false);
   });
 
-  it('remote functions follow experimental.remoteFunctions and files.src', async () => {
+  it('remote functions follow experimental.remoteFunctions, files.src and the SSR runner', async () => {
     const off = setup();
     off.configure();
-    expect(await (await mcpDeps(off)).getRemoteFunctions()).toEqual({
+    expect((await mcpDeps(off)).getRemoteFunctions()).toEqual({
       enabled: false,
       functions: [],
       errors: [],
     });
-    // A fake SSR environment cannot run modules, so each file is an error.
-    const on = setup({ environments: { ssr: {} } }, [
-      kitSetup(path.join(FIXTURES, 'src/routes'), {
-        experimental: { remoteFunctions: true },
-        files: { routes: path.join(FIXTURES, 'src/routes'), src: path.join(FIXTURES, 'src') },
-      }),
+    const file = path.join(FIXTURES, 'src/lib/server/data.remote.ts');
+    const getItems = Object.assign(() => [], { __: { type: 'query', id: 'h/getItems' } });
+    const runner = { evaluatedModules: { idToModuleMap: new Map() } };
+    const on = setup({ environments: { ssr: { runner } } }, [
+      kitSetup(path.join(FIXTURES, 'src/routes'), path.join(FIXTURES, 'src')),
     ]);
     on.configure();
-    const result = await (await mcpDeps(on)).getRemoteFunctions();
-    expect(result.enabled).toBe(true);
-    expect(result.errors.map(e => e.file)).toEqual(['src/lib/server/data.remote.ts']);
+    const deps = await mcpDeps(on);
+    const entry = { name: 'getItems', type: 'query', file: 'src/lib/server/data.remote.ts' };
+    expect(deps.getRemoteFunctions().functions).toEqual([{ ...entry, line: 4, loaded: false }]);
+    runner.evaluatedModules.idToModuleMap.set(file, {
+      file,
+      evaluated: true,
+      exports: { getItems },
+    });
+    expect(deps.getRemoteFunctions().functions).toEqual([
+      { ...entry, line: 4, loaded: true, id: 'h/getItems' },
+    ]);
+  });
+
+  it('parses remote files again only after a file changes', async () => {
+    const src = fs.mkdtempSync(path.join(os.tmpdir(), 'sdt-remote-src-'));
+    const file = path.join(src, 'a.remote.ts');
+    const write = (name: string) =>
+      fs.writeFileSync(
+        file,
+        `import { query } from '$app/server';\nexport const ${name} = query(() => 1);`,
+      );
+    try {
+      write('first');
+      const s = setup({}, [kitSetup(path.join(FIXTURES, 'src/routes'), src)]);
+      s.configure();
+      const deps = await mcpDeps(s);
+      const names = () => deps.getRemoteFunctions().functions.map(f => f.name);
+      expect(names()).toEqual(['first']);
+      write('second');
+      expect(names()).toEqual(['first']); // cached
+      s.watch('change', file);
+      expect(names()).toEqual(['second']);
+    } finally {
+      fs.rmSync(src, { recursive: true, force: true });
+    }
   });
 
   it('sessions measure the live collector', async () => {

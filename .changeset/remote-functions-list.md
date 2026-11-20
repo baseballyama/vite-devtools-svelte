@@ -2,4 +2,4 @@
 '@sveltejs/vite-devtools-svelte': minor
 ---
 
-Add the `get_remote_functions` MCP tool, which lists every SvelteKit remote function in `*.remote.ts` files under `src` with its kind, file, line and request id. It loads those modules in the dev server, so their top-level code runs.
+Add a Remote functions panel and a `get_remote_functions` MCP tool, which list the SvelteKit remote functions of your app and its dependencies with their kind, source and endpoint.

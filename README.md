@@ -10,7 +10,7 @@ Svelte DevTools for Vite. Inspect components, reactivity, renders, routes, `load
 
 - Vite >= 8.3.5
 - Svelte >= 5.46.4 (runes mode)
-- SvelteKit >= 3.3.0 (optional; without it the Routes, Load functions, API and Build panels are hidden)
+- SvelteKit >= 3.3.0 (optional; without it the Routes, Remote functions, Load functions, API and Build panels are hidden)
 - [`@vitejs/devtools`](https://devtools.vite.dev/) >= 0.8.0 (optional, but recommended)
 
 ## Setup

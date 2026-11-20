@@ -12,10 +12,17 @@ export interface TestHost extends SvelteDevtoolsHost {
   opened: string[];
 }
 
-/** SvelteKit's setup plugin as the plugin reads it, with `files.routes` resolved to `routes`. */
-export const kitSetup = (routes: string, options: Record<string, unknown> = {}) => ({
+/**
+ * SvelteKit's setup plugin as the plugin reads it, with `files.routes` resolved
+ * to `routes`; `src` turns remote functions on.
+ */
+export const kitSetup = (routes: string, src?: string) => ({
   name: 'vite-plugin-sveltekit-setup',
-  api: { options: { files: { routes }, ...options } },
+  api: {
+    options: src
+      ? { files: { routes, src }, experimental: { remoteFunctions: true } }
+      : { files: { routes } },
+  },
 });
 
 export function createTestHost(
@@ -27,7 +34,7 @@ export function createTestHost(
     collector: new Collector(),
     root: () => root,
     routesDir: () => path.join(root, 'src/routes'),
-    remoteFunctions: () => Promise.resolve({ enabled: false, functions: [], errors: [] }),
+    remoteFunctions: () => ({ enabled: false, functions: [], errors: [] }),
     publicBase: () => '/',
     modules: () => [],
     serverOrigins: () => [],

@@ -9,7 +9,7 @@ const { groupLabels, panelById, panels, panelsForView, requestedPanelView, visib
   await import('./panels.js');
 const { icons } = await import('./icons.js');
 
-const KIT_ONLY = new Set(['routes', 'loads', 'build', 'api']);
+const KIT_ONLY = new Set(['routes', 'remote', 'loads', 'build', 'api']);
 const DOCK_ONLY = new Set(['addons']);
 const visibleIds = (kit?: boolean, docked = true) => visiblePanels(kit, docked).map(p => p.id);
 
@@ -53,6 +53,7 @@ describe('panel registry', () => {
     ]);
     expect(panelsForView(true, 'project').map(p => p.id)).toEqual([
       'routes',
+      'remote',
       'api',
       'modules',
       'assets',

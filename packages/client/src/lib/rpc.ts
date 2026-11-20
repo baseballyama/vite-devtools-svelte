@@ -29,6 +29,7 @@ import type {
   LiveComponentsMeta,
   AddonsResult,
   CommunityAddonsResult,
+  RemoteFunctionsResult,
 } from './types.js';
 
 // Runs both standalone and inside the Vite DevTools dock; `connectDevframe()`
@@ -224,6 +225,10 @@ export function getProject(): Promise<ProjectInfo> {
 
 export function getRoutes(): Promise<RouteInfo[]> {
   return call('get-routes');
+}
+
+export function getRemoteFunctions(): Promise<RemoteFunctionsResult> {
+  return call('get-remote-functions');
 }
 
 export function getAssets(): Promise<AssetInfo[]> {

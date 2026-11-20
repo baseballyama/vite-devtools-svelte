@@ -38,7 +38,7 @@ export function analyzeComponents(root: string): ComponentRelation[] {
 }
 
 // `/`-separated on every platform: the client matches these against Vite ids.
-function relativeId(root: string, file: string): string {
+export function relativeId(root: string, file: string): string {
   return path.relative(root, file).split(path.sep).join('/');
 }
 

@@ -88,12 +88,13 @@ function makeDeps(data: Partial<Data> = {}, persistDir?: string): McpDeps & { da
     data: d,
     getProject: () => ({ name: 'app' }) as any,
     getRoutes: () => [{ id: '/', path: '/' }] as any,
-    getRemoteFunctions: () =>
-      Promise.resolve({
-        enabled: true,
-        functions: [{ name: 'getA', type: 'query', id: 'h/getA', file: 'src/a.remote.ts' }],
-        errors: [],
-      }),
+    getRemoteFunctions: () => ({
+      enabled: true,
+      functions: [
+        { name: 'getA', type: 'query', id: 'h/getA', file: 'src/a.remote.ts', loaded: true },
+      ],
+      errors: [],
+    }),
     getLiveSnapshot: () => ({ epoch: 'e1', total: 1, components: [{ id: 1 } as any] }),
     getComponentRelations: () => [{ file: 'src/A.svelte', name: 'A', imports: [] }],
     getRenderProfiles: getters.getRenderProfiles,

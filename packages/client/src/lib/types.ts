@@ -34,4 +34,6 @@ export type {
   CaptureInfoMap,
   AddonsResult,
   CommunityAddonsResult,
+  RemoteFunctionInfo,
+  RemoteFunctionsResult,
 } from '../../../vite-devtools-svelte/src/types.js';

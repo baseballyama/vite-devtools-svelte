@@ -83,8 +83,8 @@ const TOOLS_JA: Record<string, JaText> = {
   },
   get_remote_functions: {
     summary:
-      '`src` 以下の `*.remote.ts` にある SvelteKit のリモート関数（種類、ファイル、行、リクエストの id）。リモート関数が無効なら `enabled: false`。',
-    note: 'dev server でそれらのモジュールを読み込むため、トップレベルのコードが実行されます。',
+      'SvelteKit のリモート関数の種類・ファイル・行。ソースディレクトリと、`@sveltejs/kit` を peer dependency に持つ直接の依存パッケージにあるリモートモジュール（`*.remote.js`、`*.remote.ts` など）に加え、アプリが読み込んだものも含みます。リモート関数が無効なら `enabled: false`、解析できなかったファイルは `errors` に入ります。',
+    note: 'モジュールは実行しません。アプリがまだ読み込んでいないもの（`loaded: false`）はソースから読み取るため、リクエストの id はありません。',
   },
   get_live_components: {
     summary:

@@ -55,8 +55,7 @@ export interface SvelteDevtoolsHost {
   collector: Collector;
   root: () => string;
   routesDir: () => string | undefined;
-  /** Runs the app's remote modules in the SSR environment. */
-  remoteFunctions: () => Promise<RemoteFunctionsResult>;
+  remoteFunctions: () => RemoteFunctionsResult;
   publicBase: () => string;
   modules: () => GraphModuleLike[];
   resolveFile?: ResolveFile;
