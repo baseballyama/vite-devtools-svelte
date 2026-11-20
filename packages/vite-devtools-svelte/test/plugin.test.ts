@@ -12,7 +12,7 @@ import {
   WRAPPER_MODULE_ID,
   wrapperCode,
 } from '../src/runtime/index.js';
-import { callHook, kitSetup, resolvePlugins } from './helpers.js';
+import { callHook, devtoolsContext, kitSetup, resolvePlugins } from './helpers.js';
 
 const shape = (p: Plugin) => ({
   name: p.name,
@@ -139,14 +139,6 @@ describe('mainPlugin', () => {
   });
 });
 
-const kit = vi.hoisted(() => ({
-  createPluginFromDevframe: vi.fn((def: any, options: any) => ({
-    name: `devframe:${def.id}`,
-    devtools: { setup: (ctx: any) => def.setup(ctx), options },
-  })),
-}));
-vi.mock('@vitejs/devtools-kit/node', () => kit);
-
 // Observe devframe instances without running real transports (host.test.ts covers the real stack).
 const initiate = vi.hoisted(() => ({
   initDevframe: vi.fn((_def: unknown, _options: unknown) => ({
@@ -158,17 +150,18 @@ vi.mock('devframe/initiate', () => initiate);
 
 const FIXTURES = new URL('fixtures', import.meta.url).pathname;
 
-/** Run the hub path: devtools.setup → createPluginFromDevframe → def.setup(ctx). */
+/** Run the hub path: devtools.setup → ctx.install → def.setup(ctx). */
 async function hubHandlers(plugins: Plugin[]) {
   const handlers = new Map<string, (...args: any[]) => any>();
   const main = plugins.find(p => p.name === 'vite-devtools-svelte')!;
-  await (main.devtools as any).setup({
+  const ctx = devtoolsContext({
     scope: (id: string) => ({
       rpc: { register: (fn: any) => handlers.set(`${id}:${fn.name}`, fn.handler) },
     }),
     docks: { register: vi.fn() },
   });
-  return handlers;
+  await (main as any).devtools.setup(ctx);
+  return { handlers, install: ctx.install };
 }
 
 function resolve(plugins: Plugin[], config: Record<string, unknown> = {}) {
@@ -197,14 +190,14 @@ describe('mainPlugin devtools hook (Vite DevTools)', () => {
   it('is dev-only and declares no build capability', () => {
     const main = svelteDevtools().find(p => p.name === 'vite-devtools-svelte')!;
     expect(main.apply).toBe('serve');
-    expect((main.devtools as any).capabilities).toEqual({ dev: true, build: false });
+    expect((main as any).devtools.capabilities).toEqual({ dev: true, build: false });
   });
 
-  it('mounts the portable devframe through the kit at /.svelte-devtools/', async () => {
+  it('installs the portable devframe into the hub at /.svelte-devtools/', async () => {
     const plugins = svelteDevtools();
     resolve(plugins);
-    const handlers = await hubHandlers(plugins);
-    expect(kit.createPluginFromDevframe).toHaveBeenCalledWith(
+    const { handlers, install } = await hubHandlers(plugins);
+    expect(install).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'svelte-devtools', basePath: '/.svelte-devtools/' }),
       { base: '/.svelte-devtools/' },
     );
@@ -224,10 +217,9 @@ describe('mainPlugin devtools hook (Vite DevTools)', () => {
     resolve(plugins, { plugins: [kitSetup('/test/src/routes')] });
     const main = plugins.find(p => p.name === 'vite-devtools-svelte')!;
     const register = vi.fn();
-    await (main.devtools as any).setup({
-      scope: () => ({ rpc: { register: vi.fn() } }),
-      docks: { register },
-    });
+    await (main as any).devtools.setup(
+      devtoolsContext({ scope: () => ({ rpc: { register: vi.fn() } }), docks: { register } }),
+    );
     expect(register.mock.calls.map(([entry]) => entry)).toEqual([
       {
         id: 'svelte-devtools:problems',
@@ -295,10 +287,12 @@ describe('mainPlugin devtools hook (Vite DevTools)', () => {
     callHook(main.configureServer, m.server);
     const register = vi.fn();
     const activate = vi.fn();
-    await (main.devtools as any).setup({
-      scope: () => ({ rpc: { register: vi.fn(), broadcast: async () => {} } }),
-      docks: { register, activate },
-    });
+    await (main as any).devtools.setup(
+      devtoolsContext({
+        scope: () => ({ rpc: { register: vi.fn(), broadcast: async () => {} } }),
+        docks: { register, activate },
+      }),
+    );
     const onPick = m.server.hot.on.mock.calls.find(
       ([event]: [string]) => event === 'svelte-devtools:element-picked',
     )![1];
@@ -419,7 +413,7 @@ describe('middleware mode disposal (closeServer hook)', () => {
 });
 
 async function warnings(plugins: Plugin[]) {
-  return (await hubHandlers(plugins)).get('svelte-devtools:get-compiler-warnings')!();
+  return (await hubHandlers(plugins)).handlers.get('svelte-devtools:get-compiler-warnings')!();
 }
 
 describe('warningCapturePlugin', () => {
@@ -509,7 +503,9 @@ describe('loadProfilePlugin recorder', () => {
       duration: 1.234,
       dataSize: 10,
     });
-    const loads = await (await hubHandlers(plugins)).get('svelte-devtools:get-load-profiles')!();
+    const loads = await (
+      await hubHandlers(plugins)
+    ).handlers.get('svelte-devtools:get-load-profiles')!();
     expect(loads[0]).toMatchObject({ route: '/', duration: 1.23, dataSize: 10, type: 'universal' });
     // Outside the root (e.g. a symlinked root): kept absolute, not `../..`.
     expect(loads[0].file).toBe('/r/+page.ts');

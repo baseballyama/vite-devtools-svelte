@@ -6,6 +6,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import type { Plugin } from 'vite';
+import { vi } from 'vitest';
 
 import type { McpServer } from '../src/mcp/protocol.js';
 import { Collector } from '../src/server/collector.js';
@@ -48,6 +49,17 @@ export function rpcHandlers(deps: DevframeDeps): Map<string, (...args: any[]) =>
 }
 
 type AnyFn = (...args: any[]) => any;
+
+/** A Vite DevTools node context whose `install` runs the devframe's setup, as the hub does. */
+export function devtoolsContext<T extends object>(ctx: T) {
+  const full = {
+    ...ctx,
+    install: vi.fn(async (def: { setup: AnyFn }, _options?: unknown) => {
+      await def.setup(full);
+    }),
+  };
+  return full;
+}
 
 export function callHook(hook: unknown, ...args: unknown[]): any {
   const fn = typeof hook === 'function' ? hook : (hook as { handler: unknown }).handler;

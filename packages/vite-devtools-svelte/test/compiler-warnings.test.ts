@@ -7,15 +7,11 @@ import path from 'node:path';
 
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { createServer } from 'vite';
-import type { Plugin, ViteDevServer } from 'vite';
+import type { ViteDevServer } from 'vite';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 
 import { svelteDevtools } from '../src/plugin.js';
-
-// The hub path without a real hub: devtools.setup runs the devframe's setup.
-vi.mock('@vitejs/devtools-kit/node', () => ({
-  createPluginFromDevframe: (def: any) => ({ devtools: { setup: (ctx: any) => def.setup(ctx) } }),
-}));
+import { devtoolsContext } from './helpers.js';
 
 // Inside the package, so the compiled component resolves `svelte`.
 const root = fs.mkdtempSync(path.join(import.meta.dirname, '.tmp-warn-'));
@@ -44,11 +40,14 @@ describe('compiler warnings from vite-plugin-svelte', () => {
     vi.restoreAllMocks();
 
     const handlers = new Map<string, (...args: any[]) => any>();
-    await ((devtools[0] as Plugin).devtools as any).setup({
-      scope: (id: string) => ({
-        rpc: { register: (fn: any) => handlers.set(`${id}:${fn.name}`, fn.handler) },
+    await (devtools[0] as any).devtools.setup(
+      devtoolsContext({
+        scope: (id: string) => ({
+          rpc: { register: (fn: any) => handlers.set(`${id}:${fn.name}`, fn.handler) },
+        }),
+        docks: { register: vi.fn() },
       }),
-    });
+    );
     const warnings = await handlers.get('svelte-devtools:get-compiler-warnings')!();
     expect(warnings).toEqual([
       expect.objectContaining({

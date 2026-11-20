@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 
+import type { DevframeDefinition } from 'devframe';
 import { launchEditor } from 'devframe/utils/launch-editor';
 import { normalizePath } from 'vite';
 import type { Plugin, ResolvedConfig, ViteDevServer } from 'vite';
@@ -84,6 +85,19 @@ export interface SvelteDevtoolsOptions {
 /** When `@vitejs/devtools`' config plugin is present, the hub calls our `devtools.setup`. */
 const VITE_DEVTOOLS_PLUGIN = 'vite:devtools';
 
+/** The parts of the Vite DevTools node context (`DevToolsNodeContext`) the plugin uses */
+interface DevtoolsContext {
+  install(devframe: DevframeDefinition, options?: { base?: string }): Promise<void>;
+  docks: { register(entry: Record<string, unknown>): void };
+}
+
+type MainPlugin = Omit<Plugin, 'devtools'> & {
+  devtools: {
+    capabilities: { dev: boolean; build: boolean };
+    setup(ctx: DevtoolsContext): Promise<void>;
+  };
+};
+
 // Shared by every plugin instance in the process: a config-file restart
 // builds a *new* plugin instance for the new server, so only a process-wide
 // counter tells the old instance that a newer server exists.
@@ -155,7 +169,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
   const devframe = createSvelteDevframe(deps);
   const middlewareModeMounts: Array<{ generation: number; dispose: () => Promise<void> }> = [];
 
-  const mainPlugin: Plugin = {
+  const mainPlugin: MainPlugin = {
     name: 'vite-devtools-svelte',
     enforce: 'pre',
     apply: 'serve',
@@ -295,15 +309,12 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       return null;
     },
 
-    // Imported lazily so apps without Vite DevTools never load the kit.
     devtools: {
       capabilities: { dev: true, build: false },
       async setup(ctx) {
-        const { createPluginFromDevframe } = await import('@vitejs/devtools-kit/node');
-        const plugin = createPluginFromDevframe(devframe, { base: DEVFRAME_BASE });
-        await plugin.devtools?.setup?.(ctx);
+        await ctx.install(devframe, { base: DEVFRAME_BASE });
         for (const entry of VIEW_DOCKS) {
-          ctx.docks?.register({
+          ctx.docks.register({
             id: viewDockId(entry.id),
             title: entry.title,
             description: entry.description,
