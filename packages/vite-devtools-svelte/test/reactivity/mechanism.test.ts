@@ -2,6 +2,7 @@ import { flushSync } from 'svelte';
 import { describe, it, expect, afterEach } from 'vitest';
 
 import Classes from './fixtures/Classes.svelte';
+import EachChurn from './fixtures/EachChurn.svelte';
 import EachConst from './fixtures/EachConst.svelte';
 import Effects from './fixtures/Effects.svelte';
 import Tree from './fixtures/Tree.svelte';
@@ -141,6 +142,25 @@ describe('node lifetime', () => {
     flushSync();
     poll(); // the poll tick's sweep, without a graph request
     expect(dt()._nodeCounts.get(c.id).derived).toBe(1);
+  });
+
+  it('nodes of removed {#each} items are swept without a poll (DevTools closed)', async () => {
+    const r = mountIt(EachChurn);
+    const c = instance('EachChurn');
+    for (let i = 0; i < 200; i++) {
+      (r.app as any).replace();
+      flushSync();
+      // the sweep runs in a later task
+      await new Promise(resolve => {
+        setTimeout(resolve, 0);
+      });
+    }
+    const live = 3; // one {@const} derived per item
+    // The sweep (2 nodes per track call) also visits live nodes, so about as
+    // many dead ones as live ones may remain, plus a few not yet reached.
+    // Without it, all 200 replaced items would pile up.
+    expect(dt()._nodeCounts.get(c.id).derived).toBeLessThanOrEqual(2 * live + 4);
+    expect(dt()._nodesByComponent.get(c.id).size).toBeLessThan(20);
   });
 
   it('an effect re-created by its parent effect does not pile up', () => {
