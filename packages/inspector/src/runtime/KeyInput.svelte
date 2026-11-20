@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { physicalKey } from './keys.js';
+
   interface Props {
     /** `combo` is modifiers and one key like `alt-x`, `key` is a single key */
     mode: 'combo' | 'key';
@@ -22,7 +24,7 @@
     ? { control: '⌃ Control', alt: '⌥ Option', shift: '⇧ Shift', meta: '⌘ Cmd' }
     : { control: 'Ctrl', alt: 'Alt', shift: 'Shift', meta: 'Win' };
 
-  const NAMES: Record<string, string> = {
+  const KEY_NAMES: Record<string, string> = {
     arrowup: '↑',
     arrowdown: '↓',
     arrowleft: '←',
@@ -33,21 +35,20 @@
     minus: '-',
   };
 
-  /** the key as the inspector compares it, letters and digits by physical key */
   function key_of(e: KeyboardEvent) {
-    if (e.code.startsWith('Key') && e.code.length === 4) return e.code.slice(3).toLowerCase();
-    if (e.code.startsWith('Digit') && e.code.length === 6) return e.code.slice(5);
+    const physical = physicalKey(e.code);
+    if (physical !== undefined) return physical;
     // modifiers lowercase, as in a combo
     return MODIFIERS.includes(e.key.toLowerCase()) ? e.key.toLowerCase() : e.key;
   }
 
-  function show(v: string) {
+  function format_keys(v: string) {
     if (v === ' ') return 'Space';
     return v
       .split('-')
       .map(part => {
         if (part in MODIFIER_NAMES) return MODIFIER_NAMES[part];
-        return NAMES[part.toLowerCase()] ?? (part.length === 1 ? part.toUpperCase() : part);
+        return KEY_NAMES[part.toLowerCase()] ?? (part.length === 1 ? part.toUpperCase() : part);
       })
       .join(' + ');
   }
@@ -96,14 +97,14 @@
 <button
   type="button"
   class={['sis-key', { recording }]}
-  aria-label={`${label}: ${show(value)}. Click to record a new ${mode === 'combo' ? 'shortcut' : 'key'}`}
+  aria-label={`${label}: ${format_keys(value)}. Click to record a new ${mode === 'combo' ? 'shortcut' : 'key'}`}
   onclick={record}
   onblur={() => recording && finish('')}
 >
   {#if recording}
     <span class="sis-key-hint">{mode === 'combo' ? 'Press a shortcut…' : 'Press a key…'}</span>
   {:else}
-    {#each show(value).split(' + ') as part, i (i)}
+    {#each format_keys(value).split(' + ') as part, i (i)}
       {#if i > 0}<span class="sis-key-plus">+</span>{/if}<kbd>{part}</kbd>
     {/each}
   {/if}

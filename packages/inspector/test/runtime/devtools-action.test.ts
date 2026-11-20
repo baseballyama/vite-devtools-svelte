@@ -457,3 +457,35 @@ describe('the menu, when an in-page tool names its rows', () => {
     expect(picks[0]!.detail.element).toBe(el);
   });
 });
+
+/** Opens the menu of an element no in-page tool names */
+async function openPlainMenu() {
+  const dock = start();
+  await dock.ctx.docks.setActionActive('svelte:inspector', true);
+  await settle();
+  const el = component();
+  el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+  el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+  flushSync();
+  expect(document.querySelector('#svelte-inspector-overlay')).not.toBeNull();
+}
+
+describe('the menu', () => {
+  it('closes on Escape from its focused button, which is outside <body>', async () => {
+    await openPlainMenu();
+    const focused = document.activeElement!;
+    expect(focused.getAttribute('aria-label')).toBe('close');
+    expect(document.body.contains(focused)).toBe(false);
+    focused.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    flushSync();
+    expect(document.querySelector('#svelte-inspector-overlay')).toBeNull();
+    expect(enabled()).toBe(false);
+  });
+
+  it('closes with its close button', async () => {
+    await openPlainMenu();
+    document.querySelector<HTMLButtonElement>('button[aria-label="close"]')!.click();
+    flushSync();
+    expect(document.querySelector('#svelte-inspector-overlay')).toBeNull();
+  });
+});

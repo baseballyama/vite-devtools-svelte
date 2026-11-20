@@ -51,12 +51,17 @@ async function start(
   return server.environments.client;
 }
 
-async function loadOptions(env: DevEnvironment): Promise<Record<string, unknown> | null> {
-  const resolved = await env.pluginContainer.resolveId(OPTIONS_ID);
+async function load(env: DevEnvironment, id: string): Promise<string | null> {
+  const resolved = await env.pluginContainer.resolveId(id);
   if (!resolved) return null;
   const loaded = await env.pluginContainer.load(resolved.id);
-  const code = typeof loaded === 'string' ? loaded : loaded?.code;
-  return JSON.parse(String(code).replace('export default ', ''));
+  return typeof loaded === 'string' ? loaded : (loaded?.code ?? null);
+}
+
+async function loadOptions(env: DevEnvironment): Promise<Record<string, unknown> | null> {
+  const code = await load(env, OPTIONS_ID);
+  if (code === null) return null;
+  return JSON.parse(code.replace('export default ', ''));
 }
 
 describe('svelteInspector', () => {
@@ -176,7 +181,9 @@ describe('svelteInspector', () => {
     const options = await loadOptions(await start());
     expect(options).toMatchObject({ holdMode: false });
     expect(options).not.toHaveProperty('nope');
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('ignoring unknown options'));
+    expect(warn).toHaveBeenCalledWith(
+      '[vite-devtools-svelte:inspector] ignoring unknown options in environment SVELTE_INSPECTOR_OPTIONS: nope',
+    );
   });
 
   it.each(['[1]', 'null', '{oops'])(
@@ -190,13 +197,32 @@ describe('svelteInspector', () => {
       };
       const options = await loadOptions(await start({ openKey: 'o' }, [], { customLogger }));
       expect(options).toMatchObject({ openKey: 'o' });
-      expect(errors).toEqual([expect.stringContaining('failed to parse inspector options')]);
+      expect(errors).toEqual([
+        expect.stringContaining(
+          '[vite-devtools-svelte:inspector] failed to parse inspector options',
+        ),
+      ]);
     },
   );
 
   it('ignores environment options that are neither an object nor a boolean', async () => {
     vi.stubEnv('SVELTE_INSPECTOR_OPTIONS', '42');
     expect(await loadOptions(await start({ openKey: 'o' }))).toMatchObject({ openKey: 'o' });
+  });
+
+  it('serves the action and settings modules through the load filter', async () => {
+    const env = await start();
+    for (const [name, file] of [
+      ['action', 'devtools-action.ts'],
+      ['settings', 'settings-view.ts'],
+    ]) {
+      expect(await load(env, `virtual:vite-devtools-svelte-inspector-${name}`)).toContain(
+        `virtual:vite-devtools-svelte-inspector-path:${file}`,
+      );
+    }
+    expect(
+      await env.pluginContainer.load('\0virtual:vite-devtools-svelte-inspector-unknown'),
+    ).toBeNull();
   });
 
   it('passes the directory Svelte makes `loc.file` relative to, not the Vite root', async () => {

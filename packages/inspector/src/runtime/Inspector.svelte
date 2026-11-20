@@ -3,6 +3,7 @@
   import options from 'virtual:vite-devtools-svelte-inspector-options';
 
   import { INSPECTOR_ICON_HOTSPOT, INSPECTOR_ICON_URL } from './icon.js';
+  import { physicalKey } from './keys.js';
 
   // Copied from Svelte's internal types
   interface DevStackEntry {
@@ -32,9 +33,7 @@
   type StackItem = Loc & { tag: string };
 
   interface Props {
-    /** open `loc` in the editor */
     openInEditor: (loc: Loc) => void;
-    /** the inspector was enabled or disabled */
     onenabledchange: (enabled: boolean) => void;
     /** whether `e` comes from the dock's own ui, which the inspector must not handle */
     ignore: (e: Event) => boolean;
@@ -48,14 +47,14 @@
     .split('-')
     .map(k => (k === 'minus' ? '-' : k));
   const escape_keys = options.escapeKeys.map(k => k.toLowerCase());
-  const nav_keys = Object.values(options.navKeys).map(k => k.toLowerCase());
+  // in this order: `find_selectable_for_nav` maps the index to a direction
+  const { parent, child, next, prev } = options.navKeys;
+  const nav_keys = [parent, child, next, prev].map(k => k.toLowerCase());
   const open_key = options.openKey.toLowerCase();
   const open_menu_key = options.openMenuKey.toLowerCase();
 
   let enabled = $state(false);
   let has_opened = $state(false);
-
-  const icon = INSPECTOR_ICON_URL;
 
   let x = $state(0),
     y = $state(0),
@@ -117,19 +116,14 @@
     return undefined;
   }
 
-  // matched like `is_nav`, so a key recorded by its code (e.g. `w`) also moves on other
-  // keyboard layouts, where `e.key` differs
   function find_selectable_for_nav(e: KeyboardEvent) {
     const el = active_el;
     if (!el) {
       return find_selectable_child(document.body);
     }
-    const { parent, child, next, prev } = options.navKeys;
-    const keys = [parent, child, next, prev].map(k => k.toLowerCase());
-    // by the physical key first: on AZERTY `e.key` of KeyZ is the `w` another direction uses
-    const physical = physical_key(e.code);
-    let i = keys.indexOf(physical);
-    if (i === -1) i = keys.indexOf(e.key.toLowerCase());
+    // physical key first, so a key recorded by code moves on any layout (AZERTY's KeyZ has e.key 'w')
+    let i = nav_keys.indexOf(code_key(e));
+    if (i === -1) i = nav_keys.indexOf(e.key.toLowerCase());
     if (i === 0) return find_selectable_parent(el);
     if (i === 1) return find_selectable_child(el);
     if (i === 2) return find_selectable_sibling(el) || find_selectable_parent(el);
@@ -142,11 +136,12 @@
     // Only elements rendered by a Svelte component in dev mode carry `__svelte_meta`.
     const file = (el as Element & { __svelte_meta?: Metadata }).__svelte_meta?.loc.file;
     if (!file || file.includes('node_modules/')) {
-      return false; // no file or 3rd party
+      return false;
     }
     const id = el.getAttribute('id');
+    // SvelteKit's announcer and the inspector's own elements are otherwise reachable by keyboard nav
     if (id === 'svelte-announcer' || id?.startsWith('svelte-inspector-')) {
-      return false; // ignore some elements by id that would be selectable from keyboard nav otherwise
+      return false;
     }
     return true;
   }
@@ -182,7 +177,7 @@
 
     if (active_el) {
       stop(e);
-      send(active_el.__svelte_meta.loc, active_el);
+      pick_and_open(active_el.__svelte_meta.loc, active_el);
     }
   }
 
@@ -208,8 +203,7 @@
   }
 
   // `entries` gets each row's `__svelte_meta.parent` entry (null for the element's row)
-  function get_stack(target: ElementWithMetadata, entries: Array<DevStackEntry | null> = []) {
-    const el = find_selectable_parent(target, true)!;
+  function get_stack(el: ElementWithMetadata, entries: Array<DevStackEntry | null> = []) {
     const meta = el.__svelte_meta;
 
     const stack: StackItem[] = [
@@ -273,7 +267,7 @@
   }
 
   /** `element`: the element opened, null for a component chosen from the menu */
-  function send(loc: Loc, element: Element | null = null) {
+  function pick_and_open(loc: Loc, element: Element | null = null) {
     // for other in-page tools, e.g. to reveal the component in a devtools panel
     const stack = active_el ? get_stack(active_el) : [];
     window.dispatchEvent(
@@ -290,14 +284,11 @@
     }
   }
 
-  // digits by code too, so `shift-1` matches though `e.key` is `!`
-  function physical_key(code: string) {
-    if (code.startsWith('Key')) return code.slice(3).toLowerCase();
-    if (code.startsWith('Digit')) return code.slice(5);
-    return code.toLowerCase();
+  function code_key(e: KeyboardEvent) {
+    return physicalKey(e.code) ?? e.code.toLowerCase();
   }
 
-  function is_active(key: string, e: KeyboardEvent) {
+  function is_pressed(key: string, e: KeyboardEvent) {
     switch (key) {
       case 'shift':
       case 'control':
@@ -305,32 +296,32 @@
       case 'meta':
         return e.getModifierState(key.charAt(0).toUpperCase() + key.slice(1));
       default:
-        return key === physical_key(e.code) || key === e.key.toLowerCase();
+        return key === code_key(e) || key === e.key.toLowerCase();
     }
   }
 
-  function is_combo(e: KeyboardEvent) {
-    return toggle_combo.every(k => is_active(k, e));
+  function is_toggle_combo(e: KeyboardEvent) {
+    return toggle_combo.every(k => is_pressed(k, e));
   }
 
   function is_escape(e: KeyboardEvent) {
-    return escape_keys.some(k => is_active(k, e));
+    return escape_keys.some(k => is_pressed(k, e));
   }
 
-  function is_toggle(e: KeyboardEvent) {
-    return toggle_combo.some(k => is_active(k, e));
+  function is_toggle_key(e: KeyboardEvent) {
+    return toggle_combo.some(k => is_pressed(k, e));
   }
 
   function is_nav(e: KeyboardEvent) {
-    return nav_keys.some(k => is_active(k, e));
+    return nav_keys.some(k => is_pressed(k, e));
   }
 
   function is_open(e: KeyboardEvent) {
-    return open_key && is_active(open_key, e);
+    return open_key && is_pressed(open_key, e);
   }
 
   function is_open_menu(e: KeyboardEvent) {
-    return open_menu_key && is_active(open_menu_key, e);
+    return open_menu_key && is_pressed(open_menu_key, e);
   }
 
   function is_holding() {
@@ -351,10 +342,10 @@
   function keydown(e: KeyboardEvent) {
     // typing in the dock's own ui (e.g. its command palette)
     if (ignore(e)) return;
-    if (e.repeat || !has_key(e) || (!enabled && !is_toggle(e))) {
+    if (e.repeat || !has_key(e) || (!enabled && !is_toggle_key(e))) {
       return;
     }
-    if (is_combo(e)) {
+    if (is_toggle_combo(e)) {
       toggle();
       if (options.holdMode && enabled) {
         hold_start_ts = Date.now();
@@ -371,10 +362,7 @@
       } else if (is_open_menu(e)) {
         on_contextmenu(e);
       } else if (is_holding() || is_escape(e)) {
-        // is_holding() checks for unhandled additional key pressed
-        // while holding the toggle keys, which is possibly another
-        // shortcut (e.g. 'meta-shift-x'), so disable again.
-
+        // another key while holding the toggle combo is likely a different shortcut (e.g. meta-shift-x)
         disable();
       }
     }
@@ -384,7 +372,7 @@
     if (e.repeat || !has_key(e) || !enabled) {
       return;
     }
-    if (is_toggle(e)) {
+    if (is_toggle_key(e)) {
       if (is_holding()) {
         disable();
       } else {
@@ -469,13 +457,13 @@
     if (was_enabled) onenabledchange(false);
   }
 
-  function visibilityChange() {
+  function on_visibility_change() {
     if (document.visibilityState === 'hidden') {
-      onLeave();
+      on_leave();
     }
   }
 
-  function onLeave() {
+  function on_leave() {
     if (enabled && (has_opened || hold_start_ts)) {
       disable();
     }
@@ -483,32 +471,31 @@
 
   onMount(() => {
     const s = document.createElement('style');
-    s.setAttribute('type', 'text/css');
     s.setAttribute('id', 'svelte-inspector-style');
-    s.textContent = `:root { --svelte-inspector-icon: url(${icon}); --svelte-inspector-cursor: url(${icon}) ${INSPECTOR_ICON_HOTSPOT}, crosshair; }`;
+    s.textContent = `:root { --svelte-inspector-icon: url(${INSPECTOR_ICON_URL}); --svelte-inspector-cursor: url(${INSPECTOR_ICON_URL}) ${INSPECTOR_ICON_HOTSPOT}, crosshair; }`;
     document.head.append(s);
     document.body.addEventListener('keydown', keydown);
     if (options.holdMode) {
       document.body.addEventListener('keyup', keyup);
     }
-    document.addEventListener('visibilitychange', visibilityChange);
-    document.documentElement.addEventListener('mouseleave', onLeave);
+    document.addEventListener('visibilitychange', on_visibility_change);
+    document.documentElement.addEventListener('mouseleave', on_leave);
     return () => {
       disable();
-      const s = document.head.querySelector('#svelte-inspector-style');
-      if (s) {
-        document.head.removeChild(s);
-      }
+      s.remove();
       document.body.removeEventListener('keydown', keydown);
       if (options.holdMode) {
         document.body.removeEventListener('keyup', keyup);
       }
-      document.removeEventListener('visibilitychange', visibilityChange);
-      document.documentElement.removeEventListener('mouseleave', onLeave);
+      document.removeEventListener('visibilitychange', on_visibility_change);
+      document.documentElement.removeEventListener('mouseleave', on_leave);
     };
   });
 </script>
 
+<!-- a click that reaches window (the menu's close button, or a click on no picked element) turns
+the inspector off; Escape is caught here because the focused menu is mounted on <html>, outside
+the body listeners -->
 <svelte:window
   onclick={disable}
   onkeydown={(e: KeyboardEvent) => {
@@ -576,7 +563,7 @@
                   class="svelte-inspector-action"
                   aria-label="Open {row.item.file}:{row.item.line} in editor"
                   onclick={() => {
-                    send(row.item);
+                    pick_and_open(row.item);
                     disable();
                   }}>Open ↗</button
                 >
@@ -588,7 +575,11 @@
         <ul class="svelte-inspector-grid">
           {#each menu.stack as item, i (`${item.file}:${item.line}:${i}`)}
             <li>
-              <button type="button" class="svelte-inspector-menu-row" onclick={() => send(item)}>
+              <button
+                type="button"
+                class="svelte-inspector-menu-row"
+                onclick={() => pick_and_open(item)}
+              >
                 <span class="svelte-inspector-tag">&lt;{item.tag}&gt;</span>
                 <span class="svelte-inspector-file">{item.file}:{item.line}</span>
               </button>

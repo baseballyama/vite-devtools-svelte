@@ -3,6 +3,7 @@
   "compilerOptions": {
     "noEmit": false,
     "declaration": true,
+    // `..` because src/inspector.ts imports the inspector's source from ../inspector/src
     "rootDir": "..",
     "outDir": "./dist"
   },

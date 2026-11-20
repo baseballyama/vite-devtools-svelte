@@ -11,5 +11,6 @@ export const INSPECTOR_ICON_HOTSPOT = '10 10';
 /** `svg` as a data url, for the dock (node) and the page (browser) */
 const svgDataUrl = (svg: string): string => `data:image/svg+xml;base64,${btoa(svg)}`;
 
-export const INSPECTOR_ICON_URL = svgDataUrl(INSPECTOR_ICON_SVG);
+// only the page uses it: pure, so the plugin's bundle drops the svg
+export const INSPECTOR_ICON_URL = /* @__PURE__ */ svgDataUrl(INSPECTOR_ICON_SVG);
 export const INSPECTOR_DOCK_ICON = `mask:${svgDataUrl(INSPECTOR_DOCK_ICON_SVG)}`;

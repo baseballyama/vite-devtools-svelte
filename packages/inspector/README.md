@@ -19,9 +19,9 @@ except for what running in the Vite DevTools dock needs:
 - there is no floating toggle button (`showToggleButton` and `toggleButtonPos` are gone): the dock has its own
 - when vite-plugin-svelte's built-in inspector is configured (`vitePlugin.inspector`) and both would run in the dock, the dev server fails to start with an error that says to turn that one off. When only `SVELTE_INSPECTOR_OPTIONS` / `SVELTE_INSPECTOR_TOGGLE` switch it on, it is turned off instead
 - the plugin name and virtual module ids use the `vite-devtools-svelte-inspector` prefix, so they do not clash with the built-in inspector
-- the source is TypeScript and built to `dist/` (`pnpm -C packages/inspector build`); the browser runtime in `src/runtime/` is copied as-is and compiled by the app's own Vite
+- the source is TypeScript and is bundled into `@sveltejs/vite-devtools-svelte` (see [Setup](#setup)); the browser runtime in `src/runtime/` is copied as-is and compiled by the app's own Vite
 - runtime files are read by Vite itself; upstream's own disk read for them never ran (its filter glob ended in `//**`) and is removed
-- `src/utils/log.ts` is a reduced copy of upstream's logger
+- `src/log.ts` replaces upstream's logger: warnings and `DEBUG=vite-devtools-svelte:inspector` output, without the `obug` dependency
 - `src/types.ts` holds only `InspectorOptions`
 - it dispatches `svelte-inspector:pick` and `svelte-inspector:describe` events, has Inspect and Open buttons in the context menu when a tool names its rows, and marks its components with `Symbol.for('svelte.devtools.ignore')` (see [below](#events)); this part is new, not copied from upstream
 

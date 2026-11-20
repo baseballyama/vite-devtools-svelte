@@ -1,5 +1,5 @@
 // What `virtual:vite-devtools-svelte-inspector-options` serves, for the runtime tests
-export default {
+const settings = {
   toggleKeyCombo: 'alt-x',
   navKeys: { parent: 'ArrowUp', child: 'ArrowDown', next: 'ArrowRight', prev: 'ArrowLeft' },
   escapeKeys: ['Backspace', 'Escape'],
@@ -7,5 +7,9 @@ export default {
   openMenuKey: ' ',
   holdMode: true,
   customStyles: true,
-  __internal: { base: '/app', cwd: '/project' },
+};
+
+export default {
+  ...settings,
+  __internal: { base: '/app', cwd: '/project', defaults: settings },
 };
