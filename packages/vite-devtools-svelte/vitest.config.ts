@@ -1,6 +1,7 @@
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { defineConfig } from 'vitest/config';
 
+import { minifyRuntime } from './build/minify-runtime.js';
 import { reactivityHarnessPlugin } from './test/reactivity/plugin.js';
 
 export default defineConfig({
@@ -39,6 +40,7 @@ export default defineConfig({
     },
     projects: [
       {
+        plugins: [minifyRuntime()],
         test: {
           name: 'unit',
           include: ['test/**/*.test.ts'],

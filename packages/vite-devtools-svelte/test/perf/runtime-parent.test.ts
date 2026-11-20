@@ -4,6 +4,7 @@
 // pop() creates deferred user effects under the component's context, and every
 // effect records `ctx` at creation and runs with active_effect = itself and
 // component_context = its ctx restored.
+import { parseSync } from 'vite';
 import { describe, expect, it } from 'vitest';
 
 import { wrapperCode } from '../../src/runtime/index.js';
@@ -89,11 +90,15 @@ function addedIn(msgs: any[]): any[] {
 }
 
 function loadWrapper(ns: any, window: Record<string, any>) {
-  const body = wrapperCode
-    .split('\n')
-    .filter(line => !line.startsWith('import ') && !line.startsWith('export *'))
-    .filter(line => !line.startsWith('export {'))
-    .map(line => (line.startsWith('export ') ? line.slice('export '.length) : line))
+  // `new Function` cannot parse module syntax.
+  const body = parseSync('wrapper.js', wrapperCode)
+    .program.body.map(node => {
+      if (node.type === 'ExportNamedDeclaration' && node.declaration) {
+        return wrapperCode.slice(node.declaration.start, node.end);
+      }
+      if (node.type.startsWith('Export') || node.type === 'ImportDeclaration') return '';
+      return wrapperCode.slice(node.start, node.end);
+    })
     .join('\n');
   // oxlint-disable-next-line typescript/no-implied-eval -- running the wrapper source under test is the point
   return new Function('__svelte_original', 'window', `${body}\nreturn { push, pop, each };`)(
