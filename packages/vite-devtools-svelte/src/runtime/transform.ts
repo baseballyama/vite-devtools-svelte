@@ -86,3 +86,10 @@ export function injectModuleTracking(code: string, id: string): string | null {
     `\n;if (${dt}) { window.__SVELTE_DEVTOOLS__._leaveModule(); }\n`
   );
 }
+
+// Without component tracking, components and Svelte modules still load the
+// runtime: it reports runtime errors and FPS, and nothing else loads it.
+export function injectRuntime(code: string): string | null {
+  if (code.includes('svelte/internal/server')) return null;
+  return `import '${RUNTIME_MODULE_ID}';` + code;
+}

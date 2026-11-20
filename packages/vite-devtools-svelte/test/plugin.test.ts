@@ -130,27 +130,12 @@ describe('build command: every hook is inert', () => {
   ])('%s → null', (_, run) => {
     expect(run()).toBeNull();
   });
-
-  it('transformIndexHtml injects nothing', () => {
-    expect((main.transformIndexHtml as { handler: () => unknown }).handler()).toEqual([]);
-  });
 });
 
-describe('mainPlugin transformIndexHtml', () => {
-  it('should inject runtime script in serve mode', () => {
-    const plugins = svelteDevtools();
-    const plugin = plugins.find(p => p.name === 'vite-devtools-svelte')!;
-    resolvePlugins([plugin]);
-    const hook = plugin.transformIndexHtml as { order: string; handler: () => any };
-    // before Vite's HTML processing, which rewrites the inline bare import
-    expect(hook.order).toBe('pre');
-    const result = hook.handler();
-    expect(Array.isArray(result)).toBe(true);
-    expect(result.length).toBe(1);
-    expect(result[0].tag).toBe('script');
-    expect(result[0].attrs.type).toBe('module');
-    expect(result[0].children).toContain(RUNTIME_MODULE_ID);
-    expect(result[0].injectTo).toBe('head-prepend');
+describe('mainPlugin', () => {
+  // SvelteKit warns about any plugin that defines it (transform_index_html_unsupported).
+  it('has no transformIndexHtml hook', () => {
+    for (const plugin of svelteDevtools()) expect(plugin.transformIndexHtml).toBeUndefined();
   });
 });
 
