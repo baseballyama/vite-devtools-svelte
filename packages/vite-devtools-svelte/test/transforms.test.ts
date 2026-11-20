@@ -12,6 +12,7 @@ import { RUNTIME_MODULE_ID } from '../src/runtime/ids.js';
 import {
   injectComponentTracking,
   injectModuleTracking,
+  injectRuntime,
   isSvelteModule,
 } from '../src/runtime/transform.js';
 import { HOT_EVENTS } from '../src/server/collector.js';
@@ -204,6 +205,12 @@ describe('injectModuleTracking', () => {
         '/m',
       ),
     ).toBeNull();
+  });
+});
+
+describe('injectRuntime', () => {
+  it('returns null for server-compiled code', () => {
+    expect(injectRuntime("import * as $ from 'svelte/internal/server';")).toBeNull();
   });
 });
 
