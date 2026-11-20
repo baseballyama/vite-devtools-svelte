@@ -3,7 +3,12 @@
 
   import CodeBlock from '#lib/CodeBlock.svelte';
   import { MCP_EXAMPLES, MCP_EXAMPLES_SOURCE, type McpExample } from '#lib/mcp-examples.ts';
-  import { MCP_TOOL_COUNT, MCP_TOOL_GROUPS } from '#lib/mcp-tools.ts';
+  import {
+    MCP_SERVER_INPUT,
+    MCP_STDIO_TOOL,
+    MCP_TOOL_COUNT,
+    MCP_TOOL_GROUPS,
+  } from '#lib/mcp-tools.ts';
   import { image } from '#lib/paths.ts';
 
   const addCode = `claude mcp add svelte-devtools -- npx @sveltejs/vite-devtools-svelte mcp`;
@@ -19,6 +24,15 @@
   }
 }`;
 
+  const remoteCode = `claude mcp add svelte-devtools \\
+  -e VITE_DEVTOOLS_SVELTE_URL=http://localhost:5173 \\
+  -e VITE_DEVTOOLS_SVELTE_TOKEN=<token> \\
+  -- npx @sveltejs/vite-devtools-svelte mcp`;
+
+  const middlewareCode = `const vite = await createServer({ server: { middlewareMode: true } });
+const devtools = vite.config.plugins.find(p => p.name === 'vite-devtools-svelte');
+const token = devtools?.api?.getDevtoolsToken?.();`;
+
   const curlCode = `curl -s http://localhost:5173/__svelte-devtools/mcp \\
   -H 'content-type: application/json' \\
   -H 'accept: application/json, text/event-stream' \\
@@ -26,7 +40,7 @@
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'`;
 
   const promptCode = `The cart total on /cart looks wrong after I change the tax rate.
-Use the svelte MCP server: find the busiest components, look at the
+Use the svelte-devtools MCP server: find the busiest components, look at the
 ReactivePriceChart instance, and tell me which state can affect grandTotal
 and what changed when I edited the tax rate.`;
 
@@ -67,7 +81,7 @@ and what changed when I edited the tax rate.`;
     {
       id: 'scope',
       title: 'Look at one instance',
-      text: 'Nodes of that instance and their direct neighbours. An edge means the source can affect the target (a current dependency), not that it caused a change. Note that the $effect has no edges although it reads grandTotal (see What the answers cover).',
+      text: 'Nodes of that instance and their direct neighbours. An edge means the source can affect the target (a current dependency), not that it caused a change. This answer was recorded with 0.4.0: since 0.5.0 the same call also returns the markup node and the dependencies of the $effect, which has no edges here.',
     },
     {
       id: 'timeline-first',
@@ -119,7 +133,7 @@ and what changed when I edited the tax rate.`;
   <title>MCP — vite-devtools-svelte</title>
   <meta
     name="description"
-    content="Connect Claude Code and other MCP clients to your Svelte dev server: setup, the 20 tools with real examples, limits, troubleshooting and security."
+    content="Connect Claude Code and other MCP clients to your Svelte dev server: setup, the {MCP_TOOL_COUNT} tools with real examples, limits, troubleshooting and security."
   />
 </svelte:head>
 
@@ -137,7 +151,7 @@ and what changed when I edited the tax rate.`;
       what it covers.
     </p>
     <p class="release-note">
-      This guide describes <strong>vite-devtools-svelte ≥ 0.4.0</strong>. Set it up first with
+      This guide describes <strong>vite-devtools-svelte ≥ 0.10.0</strong>. Set it up first with
       <a href={resolve('/getting-started')}>Getting Started</a>.
     </p>
   </div>
@@ -167,10 +181,11 @@ and what changed when I edited the tax rate.`;
         </header>
         <p>
           While <code>vite dev</code> runs, the plugin serves an MCP endpoint at
-          <code>/__svelte-devtools/mcp</code> (Streamable HTTP). Agents call tools on it to read what
-          the panels show: the busiest components, the reactive graph of one instance, sampled state changes,
-          render profiles, load functions and frame rate. They can also run measurement sessions to compare
-          before and after a change.
+          <code>/__svelte-devtools/mcp</code> (Streamable HTTP). Agents usually reach it through
+          <code>vite-devtools-svelte mcp</code>, a small stdio server that forwards each call, and
+          call tools to read what the panels show: the busiest components, the reactive graph of one
+          instance, sampled state changes, render profiles, load functions and frame rate. They can
+          also run measurement sessions to compare before and after a change.
         </p>
         <p>
           No tool changes your app's code or state. Two things do happen: a call keeps the runtime
@@ -197,6 +212,14 @@ and what changed when I edited the tax rate.`;
           token by itself, so restarts and port changes need nothing. Without a running dev server, the
           tools answer how to start one.
         </p>
+        <p>
+          Running dev servers announce themselves in
+          <code>~/.cache/vite-devtools-svelte/servers/</code>, one file each (<code
+            >$XDG_CACHE_HOME</code
+          >
+          when set, <code>%LOCALAPPDATA%</code> on Windows). Only dev servers on the same machine are
+          used.
+        </p>
         <h3 class="content-h2">Svelte documentation and code checks</h3>
         <p>
           The documentation and <code>svelte-autofixer</code> come from the official
@@ -213,9 +236,11 @@ and what changed when I edited the tax rate.`;
         <CodeBlock code={mcpJsonCode} lang="json" filename=".mcp.json" />
         <h3 class="content-h2">Several dev servers</h3>
         <p>
-          From a monorepo root, or with the same app started twice, more than one dev server can
-          match. The agent then calls <code>list_dev_servers</code> and passes <code>server</code>
-          with the one to use.
+          The stdio server uses the dev server whose root contains the current directory (the
+          innermost one), or else the only dev server inside it. From a monorepo root, or with the
+          same app started twice, more than one can match. The agent then calls
+          <code>list_dev_servers</code> and passes <code>server</code> with the one to use: its id, its
+          root or its package name.
         </p>
         <h3 class="content-h2">Ask</h3>
         <p>For example, with the cart page of your app open:</p>
@@ -239,19 +264,57 @@ and what changed when I edited the tax rate.`;
         </p>
         <ul>
           <li>URL: <code>http://localhost:&lt;port&gt;/__svelte-devtools/mcp</code></li>
+          <li>Header: <code>x-svelte-devtools-token: &lt;token&gt;</code></li>
+        </ul>
+        <p>
+          The token changes on every start of the dev server; see
+          <a href="#token">where to get the token</a>. The HTTP endpoint is stateless and answers
+          with JSON. To check it by hand:
+        </p>
+        <CodeBlock code={curlCode} lang="bash" />
+        <h3 class="content-h2" id="remote">Containers, other machines and middleware mode</h3>
+        <p>
+          The stdio server finds only dev servers on its own machine that announced themselves. A
+          dev server in a container or on another machine is not found, and in Vite middleware mode
+          the plugin has no server of its own to announce. Then give the stdio server the endpoint
+          yourself:
+        </p>
+        <ul>
           <li>
-            Header: <code>x-svelte-devtools-token: &lt;token&gt;</code> (the <code>token</code> in
-            the dev server's file under <code>~/.cache/vite-devtools-svelte/servers/</code>; it
-            changes on every start)
+            <code>VITE_DEVTOOLS_SVELTE_URL</code>: the dev server as the MCP client reaches it, such
+            as <code>http://localhost:5173</code>. Without a path,
+            <code>/__svelte-devtools/mcp</code>
+            is added.
+          </li>
+          <li>
+            <code>VITE_DEVTOOLS_SVELTE_TOKEN</code>: the token of that dev server. Required with the
+            URL.
           </li>
         </ul>
         <p>
-          When the dev server runs in a container or on another machine, give the stdio server these
-          two values as <code>VITE_DEVTOOLS_SVELTE_URL</code> and
-          <code>VITE_DEVTOOLS_SVELTE_TOKEN</code> instead (see the README). The HTTP endpoint is stateless
-          and answers with JSON. To check it by hand:
+          With these set, every call goes to that endpoint and <code>server</code> is ignored. For Claude
+          Code:
         </p>
-        <CodeBlock code={curlCode} lang="bash" />
+        <CodeBlock code={remoteCode} lang="bash" />
+        <p>
+          The token changes on every start, so update the registration after the dev server
+          restarts.
+        </p>
+        <h3 class="content-h2" id="token">Where to get the token</h3>
+        <ul>
+          <li>
+            From the dev server's file in <code>~/.cache/vite-devtools-svelte/servers/</code> on the
+            machine or in the container where it runs: the file is named
+            <code>&lt;pid&gt;-&lt;port&gt;.json</code> and holds <code>token</code> and
+            <code>url</code>.
+          </li>
+          <li>
+            In middleware mode no file is written. Read the token from the API of the plugin named
+            <code>vite-devtools-svelte</code> (as <code>examples/svelte-middleware/server.js</code> in
+            the repository does):
+          </li>
+        </ul>
+        <CodeBlock code={middlewareCode} lang="js" filename="server.js" />
       </section>
 
       <section id="tools" class="step">
@@ -261,9 +324,9 @@ and what changed when I edited the tax rate.`;
         </header>
         <p>All inputs are optional unless they have no <code>?</code>.</p>
         <p>
-          Through <code>vite-devtools-svelte mcp</code>, every tool also takes
-          <code>server?</code> (which dev server to ask), and <code>list_dev_servers</code> lists the
-          running dev servers and the default one.
+          The dev server endpoint has these {MCP_TOOL_COUNT} tools.
+          <code>vite-devtools-svelte mcp</code> adds <code>list_dev_servers</code> and a
+          <code>server?</code> input to each of them; see <a href="#tools-stdio">the last group</a>.
         </p>
         {#each MCP_TOOL_GROUPS as group (group.id)}
           <h3 class="group-title" id="tools-{group.id}">{group.title}</h3>
@@ -281,6 +344,22 @@ and what changed when I edited the tax rate.`;
             {/each}
           </dl>
         {/each}
+        <h3 class="group-title" id="tools-stdio">Dev servers (stdio only)</h3>
+        <p class="group-intro">
+          Added by <code>vite-devtools-svelte mcp</code>. Every tool above also takes
+          <code class="mono">{MCP_SERVER_INPUT}</code>, needed only when more than one dev server
+          matches.
+        </p>
+        <dl class="tools">
+          <div class="tool">
+            <dt><code>{MCP_STDIO_TOOL.name}</code></dt>
+            <dd>
+              <p class="tool-input mono">{MCP_STDIO_TOOL.input}</p>
+              <p>{MCP_STDIO_TOOL.summary}</p>
+              {#if MCP_STDIO_TOOL.note}<p class="tool-note">{MCP_STDIO_TOOL.note}</p>{/if}
+            </dd>
+          </div>
+        </dl>
       </section>
 
       <section id="walkthrough" class="step">
@@ -352,16 +431,18 @@ and what changed when I edited the tax rate.`;
             count once. Counts are not totals or rates.
           </li>
           <li>
-            <strong>Component state only.</strong> State created during a component's init is
-            tracked; module-level state in <code>.svelte.ts</code> files is not.
+            <strong>Component and module state.</strong> State created during a component's init and
+            shared state of <code>.svelte.js</code> / <code>.svelte.ts</code> modules is tracked. State
+            created elsewhere, such as in an event handler, is not.
           </li>
           <li>
             <strong>Can affect, not caused.</strong> Edges are current dependencies. Which write changed
             a value is not recorded.
           </li>
           <li>
-            <strong>Some dependencies are missing.</strong> An <code>$effect</code> may show no incoming
-            edges even when it reads state.
+            <strong>Some dependencies are not shown.</strong> Reads of state the DevTools don't
+            track (created in <code>node_modules</code>, such as SvelteKit's page state) have no
+            edge; the node counts them in <code>untrackedDeps</code>.
           </li>
           <li>
             <strong>Values are summaries in the graph.</strong> Objects and arrays appear as
@@ -427,8 +508,24 @@ and what changed when I edited the tax rate.`;
             <dt><code>No running dev server for …</code></dt>
             <dd>
               Start the dev server of the project Claude Code runs in, or pass <code>server</code>
-              with one of the dev servers the answer lists.
+              with one of the dev servers the answer lists. If the answer says the installed version does
+              not announce its dev server, upgrade it to 0.10.0 or later. For a container, another machine
+              or middleware mode, set the
+              <a href="#remote">environment variables</a>.
             </dd>
+          </div>
+          <div>
+            <dt><code>The dev server at … did not answer</code></dt>
+            <dd>
+              The dev server stopped, or with <code>VITE_DEVTOOLS_SVELTE_URL</code> the URL or the token
+              is wrong. The token changes on every start.
+            </dd>
+          </div>
+          <div>
+            <dt>
+              <code>VITE_DEVTOOLS_SVELTE_URL is set without VITE_DEVTOOLS_SVELTE_TOKEN</code>
+            </dt>
+            <dd>Set both, or neither.</dd>
           </div>
           <div>
             <dt>Empty answers with <code>staleReason: "no-runtime"</code></dt>
@@ -508,15 +605,18 @@ and what changed when I edited the tax rate.`;
         <dl class="faq">
           <div>
             <dt>vite-devtools-svelte</dt>
-            <dd>≥ 0.4.0 for this guide and the four reactivity tools</dd>
+            <dd>
+              ≥ 0.10.0 for <code>vite-devtools-svelte mcp</code> and this guide; the four reactivity tools
+              came in 0.4.0
+            </dd>
           </div>
           <div>
             <dt>Vite</dt>
-            <dd>≥ 8.3.2</dd>
+            <dd>≥ 8.3.5</dd>
           </div>
           <div>
             <dt>Svelte</dt>
-            <dd>5 (runes mode); plain Svelte and SvelteKit 3 are tested in CI</dd>
+            <dd>≥ 5.46.4 (runes mode); plain Svelte and SvelteKit 3 are tested in CI</dd>
           </div>
           <div>
             <dt>MCP</dt>
@@ -694,6 +794,7 @@ and what changed when I edited the tax rate.`;
   }
 
   .content-h2 {
+    scroll-margin-top: 88px;
     font-family: var(--font-mono);
     font-size: 0.72rem;
     font-weight: 500;

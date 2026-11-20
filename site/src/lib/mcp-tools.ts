@@ -1,6 +1,7 @@
 // The MCP tools served at /__svelte-devtools/mcp, as registered in
-// packages/vite-devtools-svelte/src/mcp/server.ts. Keep names, inputs and
-// limits in step with that file.
+// packages/vite-devtools-svelte/src/mcp/server.ts, and the one the stdio
+// server adds (src/mcp/relay.ts). Keep names, inputs and limits in step with
+// those files.
 
 export interface McpTool {
   name: string;
@@ -30,7 +31,7 @@ export const MCP_TOOL_GROUPS: McpToolGroup[] = [
         input: 'topK?: 1–200',
         summary:
           'The busiest live component instances from runtime counters over all instances, without capturing the graph: sampled state changes and renders since each instance mounted and when it was last active, `rows` + `other` adding up to the totals.',
-        note: 'Counts are totals (at most one change per state per 200 ms), not rates; a destroyed instance leaves with its counts. State changes are sampled only while a panel or an agent is watching. State created during component init and shared .svelte.js/.ts module state are tracked; module scopes are rows with kind "module". Answered from a cache for up to 1 s.',
+        note: 'Counts are totals (at most one change per state per 200 ms), not rates; a destroyed instance leaves with its counts. State changes are sampled only while a panel or an agent is watching. State created during component init and shared .svelte.js/.ts module state are tracked; module scopes are rows with kind "module", and their componentId works with get_reactive_scope. Answered from a cache for up to 1 s.',
       },
       {
         name: 'get_reactive_scope',
@@ -83,7 +84,7 @@ export const MCP_TOOL_GROUPS: McpToolGroup[] = [
         name: 'get_reactive_graph_problems',
         input: 'effectMaxDeps?: number',
         summary:
-          'Over-connected effects, orphan deriveds and isolated nodes, as categories instead of the full graph.',
+          'Over-connected effects, orphan deriveds (never evaluated so far) and isolated nodes (no tracked dependency or reader; reads from the markup count), as categories instead of the full graph.',
         note: 'Reads the whole-app reactive graph, capped at 5000 nodes / 20000 edges.',
       },
       {
@@ -168,4 +169,16 @@ export const MCP_TOOL_GROUPS: McpToolGroup[] = [
   },
 ];
 
+/** Tools of the dev server endpoint; the stdio server adds MCP_STDIO_TOOL. */
 export const MCP_TOOL_COUNT = MCP_TOOL_GROUPS.reduce((n, g) => n + g.tools.length, 0);
+
+/** Only through `vite-devtools-svelte mcp`, which also adds MCP_SERVER_INPUT to every tool. */
+export const MCP_STDIO_TOOL: McpTool = {
+  name: 'list_dev_servers',
+  input: '—',
+  summary:
+    'Dev servers running with the plugin on this machine (id, package name, root, URL, start time), and which one the other tools use when `server` is omitted.',
+  note: 'With VITE_DEVTOOLS_SVELTE_URL set, `override` shows that endpoint and no listed server is the default.',
+};
+
+export const MCP_SERVER_INPUT = 'server?: id from list_dev_servers, root or package name';

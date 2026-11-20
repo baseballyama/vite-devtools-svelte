@@ -47,7 +47,7 @@
 </script>
 
 <svelte:head>
-  <title>vite-devtools-svelte — DevTools for Svelte and SvelteKit</title>
+  <title>vite-devtools-svelte: DevTools for Svelte and SvelteKit</title>
 </svelte:head>
 
 <section class="band no-border hero">
@@ -56,7 +56,7 @@
       <p class="eyebrow">Svelte 5 · SvelteKit · Vite</p>
       <h1>See inside your Svelte app.</h1>
       <p class="lead">
-        Components, reactivity and routes in one DevTools UI, served by your Vite dev server.
+        Components, reactivity and routes in the Vite DevTools dock, served by your Vite dev server.
       </p>
       <div class="actions">
         <a class="btn btn-primary" href={resolve('/getting-started')}>Get started</a>
@@ -69,17 +69,16 @@
       <InstallTabs />
       <ol class="next-steps">
         <li>
-          Add <code>svelteDevtools()</code> before <code>sveltekit()</code> in
-          <code>vite.config.ts</code>.
+          In <code>vite.config.ts</code>, set <code>devtools: &#123; apply: 'serve' &#125;</code>
+          and add <code>svelteDevtools()</code> before <code>sveltekit()</code>.
         </li>
-        <li>Run your dev server.</li>
-        <li>Open <code>/.svelte-devtools/</code>.</li>
+        <li>Run your dev server and open your app.</li>
+        <li>Open the <strong>Svelte tools</strong> group in the Vite DevTools dock.</li>
       </ol>
     </div>
   </div>
   <p class="note release">
-    Requires <strong>vite-devtools-svelte ≥ 0.4.0</strong>. Versions up to 0.3.x are documented to
-    run inside <code>@vitejs/devtools</code>.
+    Needs Vite 8.3.5 or later and Svelte 5.46.4 or later. SvelteKit 3.3.0 or later is optional.
   </p>
 </section>
 
@@ -137,11 +136,12 @@
     <p class="eyebrow">Reactivity in large apps</p>
     <h2 id="large-title">Start from the busiest components, then zoom in.</h2>
     <p>
-      The overview counts sampled state changes and renders per component without building the whole
-      graph. Pick one instance to see its signals and what can affect what.
+      The overview counts sampled state changes and renders for each instance since it mounted,
+      without building the whole graph. Pick one instance to see its signals and what can affect
+      what.
     </p>
     <ul class="checks">
-      <li>Every view says what it covers: window, 200 ms sampling, caps.</li>
+      <li>Every view says what it covers: 200 ms sampling and caps.</li>
       <li>Edges mean “can affect”. Which write changed a value is not recorded.</li>
       <li>After a page reload, old component ids are refused instead of guessed.</li>
     </ul>
@@ -209,22 +209,24 @@
 <section class="band" aria-labelledby="modes-title">
   <div class="band-head">
     <p class="eyebrow">Two ways to open it</p>
-    <h2 id="modes-title">Standalone, or inside Vite DevTools.</h2>
+    <h2 id="modes-title">Inside Vite DevTools, or standalone.</h2>
   </div>
   <div class="modes">
     <div>
-      <h3>Standalone</h3>
+      <h3>Vite DevTools dock</h3>
       <p class="muted">
-        Add the plugin and open <code>/.svelte-devtools/</code>. The first visit asks for the
-        one-time code printed in your terminal; after that the browser is trusted.
+        Install <code>@vitejs/devtools</code> and set
+        <code>devtools: &#123; apply: 'serve' &#125;</code> in your Vite config. The panels open in
+        the dock's Svelte tools group, next to the Svelte Inspector and the Add panel for
+        <code>sv</code> add-ons.
       </p>
     </div>
     <div>
-      <h3>Vite DevTools dock</h3>
+      <h3>Standalone</h3>
       <p class="muted">
-        Install <code>@vitejs/devtools</code> ≥ 0.8.0 and set
-        <code>devtools: &#123; apply: 'serve' &#125;</code> in your Vite config: the same panels open
-        as an entry in the Vite DevTools dock.
+        Without Vite DevTools in your Vite config, open <code>/.svelte-devtools/</code>. The first
+        visit asks for the one-time code printed in your terminal; after that the browser is
+        trusted.
       </p>
     </div>
   </div>
