@@ -6,9 +6,9 @@ import path from 'node:path';
 import type { Plugin } from 'vite';
 import { afterAll, describe, it, expect, vi } from 'vitest';
 
-import * as mcpServerModule from '../src/mcp/server.js';
-import type { McpDeps } from '../src/mcp/server.js';
 import { SessionStore } from '../src/mcp/sessions.js';
+import * as mcpToolsModule from '../src/mcp/tools.js';
+import type { McpDeps } from '../src/mcp/tools.js';
 import { svelteDevtools } from '../src/plugin.js';
 import { callHook, kitSetup, resolvePlugins } from './helpers.js';
 
@@ -22,8 +22,8 @@ const kit = vi.hoisted(() => ({
 }));
 vi.mock('@vitejs/devtools-kit/node', () => kit);
 
-vi.mock('../src/mcp/server.js', async importOriginal => {
-  const real = await importOriginal<typeof mcpServerModule>();
+vi.mock('../src/mcp/tools.js', async importOriginal => {
+  const real = await importOriginal<typeof mcpToolsModule>();
   return { ...real, buildMcpServer: vi.fn(real.buildMcpServer) };
 });
 
@@ -200,7 +200,7 @@ describe('devframe host wiring', () => {
 
 /** The deps the endpoint builds its MCP server from (captured on one request). */
 async function mcpDeps(s: ReturnType<typeof setup>): Promise<McpDeps> {
-  const build = vi.mocked(mcpServerModule.buildMcpServer);
+  const build = vi.mocked(mcpToolsModule.buildMcpServer);
   build.mockClear();
   build.mockImplementationOnce(() => ({ handle: vi.fn() }));
   const res = { statusCode: 200, headersSent: false, setHeader: vi.fn(), end: vi.fn() };

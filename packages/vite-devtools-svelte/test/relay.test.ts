@@ -15,7 +15,7 @@ import { createMcpMiddleware, MCP_PATH } from '../src/mcp/http.js';
 import { MCP_INSTRUCTIONS, RELAY_INSTRUCTIONS } from '../src/mcp/instructions.js';
 import { registerServer, type RegistryEntry } from '../src/mcp/registry.js';
 import { createRelay } from '../src/mcp/relay.js';
-import { buildMcpServer, type McpDeps } from '../src/mcp/server.js';
+import { buildMcpServer, type McpDeps } from '../src/mcp/tools.js';
 import type { Collector } from '../src/server/collector.js';
 import { connectMcpClient } from './helpers.js';
 
@@ -62,7 +62,7 @@ async function connect(opts: {
   cwd: string;
   registry: string;
   env?: NodeJS.ProcessEnv;
-  outdatedLocal?: string;
+  outdatedLocalVersion?: string;
 }) {
   const client = await connectMcpClient(createRelay({ env: {}, version: '1.2.3', ...opts }));
   cleanups.push(() => client.close());
@@ -206,7 +206,7 @@ describe('relay', () => {
     const client = await connect({
       cwd: '/work/app',
       registry: registry(),
-      outdatedLocal: '0.8.0',
+      outdatedLocalVersion: '0.8.0',
     });
     expect(textOf(await call(client, 'get_project_info'))).toContain(
       '@sveltejs/vite-devtools-svelte 0.8.0, which does not announce its dev server',

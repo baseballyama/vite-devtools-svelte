@@ -1,5 +1,5 @@
 // The MCP tools served at /__svelte-devtools/mcp, as registered in
-// packages/vite-devtools-svelte/src/mcp/server.ts, and the one the stdio
+// packages/vite-devtools-svelte/src/mcp/tools.ts, and the one the stdio
 // server adds (src/mcp/relay.ts). Keep names, inputs and limits in step with
 // those files.
 

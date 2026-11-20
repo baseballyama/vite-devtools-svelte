@@ -14,7 +14,6 @@ export interface PerformanceIssue {
   severity: 'low' | 'medium' | 'high';
   summary: string;
   file?: string;
-  line?: number;
   metric: Record<string, number>;
   suggestedTool: string;
 }
@@ -140,7 +139,9 @@ export function listPerformanceIssues(
     });
   }
 
-  for (const effect of overconnectedEffects(inputs.reactiveGraph, t.effectMaxDeps)) {
+  const { nodes } = inputs.reactiveGraph;
+  const { inDegree } = degrees(inputs.reactiveGraph);
+  for (const effect of overconnectedEffects(nodes, inDegree, t.effectMaxDeps)) {
     out.push({
       id: `effect-overconnected:${effect.id}`,
       kind: 'effect-overconnected',
@@ -179,10 +180,13 @@ function degrees(graph: ReactiveGraph): {
   return { inDegree, outDegree };
 }
 
-function overconnectedEffects(graph: ReactiveGraph, maxDeps: number): ReactiveProblems['effects'] {
-  const { inDegree } = degrees(graph);
+function overconnectedEffects(
+  nodes: ReactiveGraph['nodes'],
+  inDegree: Map<string, number>,
+  maxDeps: number,
+): ReactiveProblems['effects'] {
   const effects: ReactiveProblems['effects'] = [];
-  for (const node of graph.nodes) {
+  for (const node of nodes) {
     const depCount = inDegree.get(node.id) ?? 0;
     if (node.type === 'effect' && depCount >= maxDeps) {
       effects.push({ id: node.id, name: node.name, file: node.componentFile, depCount });
@@ -219,6 +223,6 @@ export function summarizeReactiveProblems(
       });
     }
   }
-  const effects = overconnectedEffects(graph, withDefaults(t).effectMaxDeps);
+  const effects = overconnectedEffects(graph.nodes, inDegree, withDefaults(t).effectMaxDeps);
   return { effects, orphanDeriveds, isolatedNodes };
 }

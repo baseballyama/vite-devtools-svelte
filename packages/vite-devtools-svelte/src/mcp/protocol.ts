@@ -240,7 +240,7 @@ export function text(value: unknown): ToolResult {
   };
 }
 
-export const error = (message: string): ToolResult => ({ ...text(message), isError: true });
+export const toolError = (message: string): ToolResult => ({ ...text(message), isError: true });
 
 interface ToolConfig<Shape extends v.Shape> {
   title: string;
@@ -289,20 +289,20 @@ export class ToolRegistry implements ToolHandlers {
 
   async callTool(name: string, args: Record<string, unknown> | undefined): Promise<ToolResult> {
     const tool = this.#tools.get(name);
-    if (!tool) return error(`MCP error -32602: Tool ${name} not found`);
+    if (!tool) return toolError(`MCP error -32602: Tool ${name} not found`);
     const parsed = tool.schema['~standard'].validate(args ?? {});
     if (parsed.issues) {
       const issues = parsed.issues.map(i =>
         i.path?.length ? `${i.message} at ${i.path.join('.')}` : i.message,
       );
-      return error(
+      return toolError(
         `MCP error -32602: Input validation error: Invalid arguments for tool ${name}: ${issues.join('\n')}`,
       );
     }
     try {
       return await tool.handler(parsed.value);
     } catch (e) {
-      return error(e instanceof Error ? e.message : String(e));
+      return toolError(e instanceof Error ? e.message : String(e));
     }
   }
 }

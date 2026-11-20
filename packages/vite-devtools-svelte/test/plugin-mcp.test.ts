@@ -10,12 +10,12 @@ import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 
 import { isValidMcpToken } from '../src/mcp/http.js';
 import { listServers } from '../src/mcp/registry.js';
-import * as mcpServerModule from '../src/mcp/server.js';
+import * as mcpToolsModule from '../src/mcp/tools.js';
 import { svelteDevtools } from '../src/plugin.js';
 import { callHook, resolvePlugins } from './helpers.js';
 
-vi.mock('../src/mcp/server.js', async importOriginal => {
-  const real = await importOriginal<typeof mcpServerModule>();
+vi.mock('../src/mcp/tools.js', async importOriginal => {
+  const real = await importOriginal<typeof mcpToolsModule>();
   return { ...real, buildMcpServer: vi.fn(real.buildMcpServer) };
 });
 
@@ -127,13 +127,13 @@ describe('MCP endpoint token gate', () => {
     expect(res.end).toHaveBeenCalledWith('Forbidden');
     // no consumer lease: the runtime is not woken up for an unauthenticated caller
     expect(s.subscriptions()).toEqual([]);
-    expect(vi.mocked(mcpServerModule.buildMcpServer)).not.toHaveBeenCalled();
+    expect(vi.mocked(mcpToolsModule.buildMcpServer)).not.toHaveBeenCalled();
   });
 });
 
 /** The next MCP server built fails to answer with `reason`. */
 function failingServer(reason: unknown = new Error('boom')) {
-  vi.mocked(mcpServerModule.buildMcpServer).mockImplementationOnce(() => ({
+  vi.mocked(mcpToolsModule.buildMcpServer).mockImplementationOnce(() => ({
     // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- a non-Error rejection is a case under test
     handle: () => Promise.reject(reason),
   }));
@@ -141,7 +141,7 @@ function failingServer(reason: unknown = new Error('boom')) {
 
 describe('MCP endpoint errors', () => {
   afterEach(() => {
-    vi.mocked(mcpServerModule.buildMcpServer).mockClear();
+    vi.mocked(mcpToolsModule.buildMcpServer).mockClear();
   });
 
   it.each([
@@ -163,7 +163,7 @@ describe('MCP endpoint errors', () => {
   });
 
   it('answers 500 (never hangs) when building the MCP server throws', async () => {
-    vi.mocked(mcpServerModule.buildMcpServer).mockImplementationOnce(() => {
+    vi.mocked(mcpToolsModule.buildMcpServer).mockImplementationOnce(() => {
       throw new Error('factory failed');
     });
     const s = setup();
