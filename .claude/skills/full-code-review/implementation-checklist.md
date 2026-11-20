@@ -6,7 +6,7 @@ Priority: security > effect on production > correctness > performance > readabil
 
 ## Security
 
-- Outbound requests from user input (API playground, OG preview) go through `validateExternalUrl` or its DNS-resolving variant in `src/server/security.ts`. Look for redirects or a second fetch that skips the check.
+- Outbound requests from user input (API playground, OG preview) go through `validateExternalUrl` or its DNS-resolving variant in `src/security.ts`. Look for redirects or a second fetch that skips the check.
 - Files served or read from request input go through `resolveWithinRoot` (symlinks resolved with `realpathSync`, then a root-prefix check). `path.resolve` alone does not follow symlinks.
 - Child processes: `execFile`/`spawn` with an argument array, never a shell string.
 - A RegExp built from input drops `g`/`y` (stateful `test()`) and cannot backtrack catastrophically.

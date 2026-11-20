@@ -3,15 +3,10 @@ import assert from 'node:assert/strict';
 import * as fc from 'fast-check';
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 
-import {
-  Collector,
-  HOT_EVENTS,
-  LEASE_TTL,
-  LIMITS,
-  MAX_EPOCHS,
-  STATE_TIMELINE_BYTES,
-} from '../src/server/collector.js';
+import { HOT_EVENTS } from '../src/runtime/ids.js';
+import { Collector, LEASE_TTL, LIMITS, MAX_EPOCHS } from '../src/server/collector.js';
 import type { HotChannel } from '../src/server/collector.js';
+import { STATE_TIMELINE_BYTES } from '../src/server/state-timeline.js';
 import type { StateChange, StateTimelineEntry } from '../src/types.js';
 
 function attached() {

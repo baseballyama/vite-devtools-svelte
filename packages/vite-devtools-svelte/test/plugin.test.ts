@@ -219,7 +219,7 @@ describe('mainPlugin devtools hook (Vite DevTools)', () => {
     expect((await handlers.get('svelte-devtools:get-project')!()).name).toBeTruthy();
   });
 
-  it('adds workflow docks beside the Overview devframe', async () => {
+  it('adds view docks beside the Overview devframe', async () => {
     const plugins = svelteDevtools();
     resolve(plugins, { plugins: [kitSetup('/test/src/routes')] });
     const main = plugins.find(p => p.name === 'vite-devtools-svelte')!;
@@ -285,6 +285,27 @@ describe('mainPlugin devtools hook (Vite DevTools)', () => {
         defaultOrder: 70,
       },
     ]);
+  });
+
+  it('a pick activates one of the docks it registered', async () => {
+    const plugins = svelteDevtools();
+    resolve(plugins, { plugins: [{ name: 'vite:devtools' }] });
+    const main = plugins.find(p => p.name === 'vite-devtools-svelte')!;
+    const m = mockServer();
+    callHook(main.configureServer, m.server);
+    const register = vi.fn();
+    const activate = vi.fn();
+    await (main.devtools as any).setup({
+      scope: () => ({ rpc: { register: vi.fn(), broadcast: async () => {} } }),
+      docks: { register, activate },
+    });
+    const onPick = m.server.hot.on.mock.calls.find(
+      ([event]: [string]) => event === 'svelte-devtools:element-picked',
+    )![1];
+    onPick({ epoch: 'e1', componentId: 1 });
+    expect(activate).toHaveBeenCalledOnce();
+    const registered = register.mock.calls.map(([entry]) => entry.id);
+    expect(registered).toContain(activate.mock.calls[0]![0]);
   });
 });
 
@@ -481,7 +502,13 @@ describe('loadProfilePlugin recorder', () => {
     resolve(plugins);
     const serverPlugin = plugins.find(p => p.name === 'vite-devtools-svelte:load-profile')!;
     callHook(serverPlugin.configureServer, { hot: { on: () => {} } });
-    (globalThis as any).__svelte_devtools_record_load('/', '/r/+page.ts', 'universal', 1.234, 10);
+    (globalThis as any).__svelte_devtools_record_load({
+      route: '/',
+      file: '/r/+page.ts',
+      type: 'universal',
+      duration: 1.234,
+      dataSize: 10,
+    });
     const loads = await (await hubHandlers(plugins)).get('svelte-devtools:get-load-profiles')!();
     expect(loads[0]).toMatchObject({ route: '/', duration: 1.23, dataSize: 10, type: 'universal' });
     // Outside the root (e.g. a symlinked root): kept absolute, not `../..`.

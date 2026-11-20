@@ -1,8 +1,8 @@
-import { outboundLookup } from '../server/security.js';
-import type { OutboundUrlOptions } from '../server/security.js';
+import { outboundLookup } from '../security.js';
+import type { OutboundUrlOptions } from '../security.js';
 import type { OGPreview, OGTag } from '../types.js';
 import { HTML_WHITESPACE, collapseWhitespace, decodeEntities, htmlTags } from './html.js';
-import { fetchWithTimeout, readCapped } from './http.js';
+import { fetchWithTimeout, readCapped } from './outbound-http.js';
 
 /**
  * How much of a page is read for its tags: 1 MB, the cutoff Meta documents
@@ -139,21 +139,20 @@ export async function getOGPreview(
       { lookup, headers: REQUEST_HEADERS },
       async res => {
         // A redirect's body is left unread; the request is aborted after this.
-        const redirect = res.status >= 300 && res.status < 400;
-        const { bytes, truncated } = redirect
-          ? { bytes: new Uint8Array(), truncated: false }
-          : await readCapped(res.body, MAX_PAGE_BYTES);
+        if (res.status >= 300 && res.status < 400) {
+          return { redirect: res.headers.location ?? '(no location)' };
+        }
+        const { bytes, truncated } = await readCapped(res.body, MAX_PAGE_BYTES);
         return {
           status: res.status,
-          location: res.headers.location,
           html: decodeBody(bytes, res.headers['content-type'] ?? null),
           truncated,
         };
       },
       timeoutMs,
     );
-    if (page.status >= 300 && page.status < 400) {
-      preview.issues.push(`Redirects to ${page.location ?? '(no location)'} (not followed)`);
+    if ('redirect' in page) {
+      preview.issues.push(`Redirects to ${page.redirect} (not followed)`);
       return preview;
     }
     if (page.status >= 400) preview.issues.push(`Responded with HTTP ${page.status}`);
@@ -162,14 +161,13 @@ export async function getOGPreview(
         `Page is larger than ${MAX_PAGE_BYTES / 1024 / 1024} MB; read its start only (crawlers ignore tags past it)`,
       );
     }
-    const html = page.html;
-    preview.tags = parseMetaTags(html);
+    preview.tags = parseMetaTags(page.html);
     const first = (property: string) => preview.tags.find(t => t.property === property)?.content;
     preview.title = first('og:title') ?? '';
     preview.description = first('og:description') ?? '';
     const image = first('og:image');
     preview.image = image ? resolveUrl(image, url) : '';
-    if (!preview.title) preview.title = documentTitle(html) ?? '';
+    if (!preview.title) preview.title = documentTitle(page.html) ?? '';
     if (!preview.description) preview.description = first('description') ?? '';
     if (!preview.title) preview.issues.push('Missing og:title or <title>');
     if (!preview.description) preview.issues.push('Missing og:description or meta description');

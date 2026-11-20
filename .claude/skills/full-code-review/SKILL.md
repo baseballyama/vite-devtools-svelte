@@ -27,10 +27,10 @@ These are what most reviews hinge on. Confirm each against the code before relyi
 
 - **Dev only.** Every hook bails out unless `serving()` / `command === 'serve'` (`packages/vite-devtools-svelte/src/plugin.ts`). `pnpm perf:noop` proves production output carries no devtools code.
 - **Browser runtime** (`src/runtime/wrapper.js`, `client.js`) runs inside the user's page: one store under `window.__SVELTE_DEVTOOLS__`, no other globals, no prototype changes, no `eval`. `wrapper.js` replaces `svelte/internal/client` for app code; `src/runtime/transform.ts` adds the tracking to components and `.svelte.js/ts` modules.
-- **Runtime ↔ server** over Vite's HMR channel: event names live in `HOT_EVENTS` (`src/server/collector.ts`); every `send` needs a matching `on` on the other side, and request/reply pairs need a timeout that removes the pending request.
+- **Runtime ↔ server** over Vite's HMR channel: event names live in `HOT_EVENTS` (`src/runtime/ids.ts`); every `send` needs a matching `on` on the other side, and request/reply pairs need a timeout that removes the pending request.
 - **Server → UI** over devframe RPC: `defineRpcFunction` in `src/server/devframe.ts`, typed in `src/types.ts`, called from `packages/client/src/lib/rpc.ts`. Arguments are validated with zod.
 - **Bounded memory.** Long-lived datasets use `Ring` (`src/server/ring.ts`) or another explicit cap.
-- **Security** helpers in `src/server/security.ts`: outbound URLs go through `validateExternalUrl` / its DNS-resolving variant; served files through `resolveWithinRoot`. The standalone UI is gated by a one-time code (`clientAuth`, `src/server/mount.ts`).
+- **Security** helpers in `src/security.ts`: outbound URLs go through `validateExternalUrl` / its DNS-resolving variant; served files through `resolveWithinRoot`. The standalone UI is gated by a one-time code (`clientAuth`, `src/server/mount.ts`).
 - **MCP** endpoint (`src/mcp/http.ts`) is gated by a token; its tools never modify the user's project.
 - **UI** (`packages/client`, shipped in the plugin's `dist/client`): panels register in `src/lib/panels.ts`; reuse `src/components/`; colors and sizes come from `src/lib/design-system.css` tokens.
 - **Shipped skills** (`packages/vite-devtools-svelte/skills/`): `name` equals the directory name, lowercase with hyphens (enforced by `test/skills.test.ts`).

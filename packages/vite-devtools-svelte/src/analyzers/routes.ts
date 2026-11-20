@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import type { RouteInfo, ParamInfo, RouteFile } from '../types.js';
-import { HEX_DIGITS, WORD_CHARS, consistsOf } from './text.js';
+import { HEX_DIGITS, WORD_CHARS, consistsOf } from './chars.js';
 
 export function analyzeRoutes(routesDir: string | undefined): RouteInfo[] {
   if (!routesDir || !fs.existsSync(routesDir)) return [];

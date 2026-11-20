@@ -60,7 +60,7 @@ export function analyzeBuild(root: string): BuildAnalysis {
     try {
       entries = fs.readdirSync(d, { withFileTypes: true });
     } catch {
-      return; // directory doesn't exist or is not readable
+      return;
     }
     for (const entry of entries) {
       const full = path.join(d, entry.name);

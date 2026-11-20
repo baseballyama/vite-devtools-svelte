@@ -4,10 +4,10 @@ import { Readable } from 'node:stream';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
 import { decodeEntities } from '../src/analyzers/html.js';
-import { transport } from '../src/analyzers/http.js';
 import { decodeBody, getOGPreview, MAX_PAGE_BYTES, parseMetaTags } from '../src/analyzers/og.js';
-import { publicOnlyLookup } from '../src/server/security.js';
-import { createTestHost, rpcHandlers } from './helpers.js';
+import { transport } from '../src/analyzers/outbound-http.js';
+import { publicOnlyLookup } from '../src/security.js';
+import { createTestDeps, rpcHandlers } from './helpers.js';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -365,7 +365,7 @@ describe('get-og-preview RPC', () => {
   it('passes the dev server origins as the allow list', async () => {
     serve('<title>own</title>');
     const rpc = rpcHandlers(
-      createTestHost(path.resolve(import.meta.dirname, 'fixtures'), {
+      createTestDeps(path.resolve(import.meta.dirname, 'fixtures'), {
         serverOrigins: () => ['http://localhost:5173'],
       }),
     );

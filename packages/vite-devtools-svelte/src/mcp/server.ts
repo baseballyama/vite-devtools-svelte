@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import pkg from '../../package.json' with { type: 'json' };
+import { GRAPH_LIMITS, MAX_EPOCH_LENGTH, SUMMARY_TOP_K } from '../limits.js';
 import type {
   RenderProfile,
   ReactiveGraph,
@@ -281,7 +282,7 @@ export function devServerTools(deps: McpDeps): ToolRegistry {
       description:
         'Busiest live component instances from runtime counters over all instances, without capturing the graph. Counts are totals since each instance was registered: sampled state changes (at most one per state per 200 ms, observed only while a DevTools client or MCP lease is active) and renders, not rates; `lastActiveAt` is when the instance last changed or rendered. A destroyed instance leaves with its counters. Rows rank by changes, then renders, then render time, then most recently active. Tracked: state created during component init and shared state of .svelte.js/.ts modules (rows with kind "module"; their componentId is a module scope id, usable with get_reactive_scope). `rows` + `other` add up to the totals; null means unknown. Use get_reactive_scope with a componentId to look at one instance. The same request is answered from a cache for up to 1 s; `computedAt` says when the answer was computed.',
       inputSchema: {
-        topK: z.number().int().min(1).max(200).optional(),
+        topK: z.number().int().min(1).max(SUMMARY_TOP_K.max).optional(),
       },
     },
     async ({ topK }) => text(await deps.getReactiveSummary({ topK })),
@@ -295,9 +296,9 @@ export function devServerTools(deps: McpDeps): ToolRegistry {
         "$state/$derived/$effect nodes of one component instance and their direct neighbours, built in the app within the caps. Edges mean 'can affect' (current dependencies), not a recorded cause. `componentId` requires the `epoch` it came from (get_live_components with includeMeta): after a reload the answer is empty with staleReason 'epoch-changed' instead of another instance. Omit componentId only for the whole-app graph (capped; see total/truncated). The same request may be answered from a cache for up to 1 s; `computedAt` says when the app built the graph (null when unknown or for an empty fallback). `stale: true` only marks a fallback after the app did not answer (an earlier answer with its own computedAt, or empty).",
       inputSchema: {
         componentId: z.number().int().nonnegative().optional(),
-        epoch: z.string().max(200).optional(),
-        maxNodes: z.number().int().min(1).max(5000).optional(),
-        maxEdges: z.number().int().min(1).max(20000).optional(),
+        epoch: z.string().max(MAX_EPOCH_LENGTH).optional(),
+        maxNodes: z.number().int().min(1).max(GRAPH_LIMITS.nodes).optional(),
+        maxEdges: z.number().int().min(1).max(GRAPH_LIMITS.edges).optional(),
       },
     },
     async ({ componentId, epoch, maxNodes, maxEdges }) => {

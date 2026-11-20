@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { isSvelteModule } from '../runtime/transform.js';
-import { isInside } from '../server/security.js';
+import { isInside } from '../security.js';
 import type { ModuleGraphData, ModuleNode } from '../types.js';
 
 /** Minimal shape of a Vite module-graph node that we read. */
@@ -35,11 +35,10 @@ function classify(file: string): ModuleNode['type'] {
  */
 export function buildModuleGraph(root: string, allModules: GraphModuleLike[]): ModuleGraphData {
   const modules: ModuleNode[] = [];
-  const idMap = new Map<string, ModuleNode>();
+  const byFile = new Map<string, ModuleNode>();
 
   for (const mod of allModules) {
-    // one node per file across environments and query variants
-    if (!mod.file || idMap.has(mod.file) || !isInside(root, mod.file)) continue;
+    if (!mod.file || byFile.has(mod.file) || !isInside(root, mod.file)) continue;
     const id = path.relative(root, mod.file);
     const segments = id.split(path.sep);
     // a node_modules path segment (not `src/node_modules_utils.ts`)
@@ -48,7 +47,7 @@ export function buildModuleGraph(root: string, allModules: GraphModuleLike[]): M
     try {
       size = fs.statSync(mod.file).size;
     } catch {
-      /* ignore */
+      // Gone since Vite saw it: listed without a size.
     }
     const node: ModuleNode = {
       id,
@@ -59,19 +58,18 @@ export function buildModuleGraph(root: string, allModules: GraphModuleLike[]): M
       size,
     };
     if (segments[0] === '.svelte-kit') node.generated = true;
-    idMap.set(mod.file, node);
+    byFile.set(mod.file, node);
     modules.push(node);
   }
 
-  // Edges, each once (a module's variants share one node)
   const edges = new Map<ModuleNode, Set<ModuleNode>>();
   for (const mod of allModules) {
-    const node = mod.file ? idMap.get(mod.file) : undefined;
+    const node = mod.file ? byFile.get(mod.file) : undefined;
     if (!node) continue;
     let targets = edges.get(node);
     if (!targets) edges.set(node, (targets = new Set()));
     for (const imp of mod.importedModules) {
-      const target = imp.file ? idMap.get(imp.file) : undefined;
+      const target = imp.file ? byFile.get(imp.file) : undefined;
       if (!target || target === node || targets.has(target)) continue;
       targets.add(target);
       node.imports.push(target.id);
@@ -80,10 +78,10 @@ export function buildModuleGraph(root: string, allModules: GraphModuleLike[]): M
   }
 
   const byId = new Map(modules.map(m => [m.id, m]));
-  const component = stronglyConnectedComponents(modules, byId);
-  const componentSize = new Map<number, number>();
-  for (const c of component.values()) componentSize.set(c, (componentSize.get(c) ?? 0) + 1);
-  const cyclic = (id: string) => componentSize.get(component.get(id)!)! > 1;
+  const sccOf = stronglyConnectedComponents(modules, byId);
+  const sccSize = new Map<number, number>();
+  for (const scc of sccOf.values()) sccSize.set(scc, (sccSize.get(scc) ?? 0) + 1);
+  const cyclic = (id: string) => sccSize.get(sccOf.get(id)!)! > 1;
 
   const cycles: string[][] = [];
   const covered = new Set<string>();
@@ -91,7 +89,7 @@ export function buildModuleGraph(root: string, allModules: GraphModuleLike[]): M
     if (!cyclic(m.id)) continue;
     m.isCyclic = true;
     if (covered.has(m.id)) continue;
-    const cycle = shortestCycleThrough(m.id, byId, component);
+    const cycle = shortestCycleThrough(m.id, byId, sccOf);
     for (const id of cycle) covered.add(id);
     cycles.push(cycle);
   }
@@ -108,7 +106,7 @@ function stronglyConnectedComponents(
   const low = new Map<string, number>();
   const stack: string[] = [];
   const onStack = new Set<string>();
-  const component = new Map<string, number>();
+  const sccOf = new Map<string, number>();
   let next = 0;
   let count = 0;
   const visit = (id: string) => {
@@ -143,22 +141,22 @@ function stronglyConnectedComponents(
         do {
           w = stack.pop()!;
           onStack.delete(w);
-          component.set(w, count);
+          sccOf.set(w, count);
         } while (w !== frame.id);
         count++;
       }
     }
   }
-  return component;
+  return sccOf;
 }
 
 /** `[start, …, start]`: a shortest import cycle through `start` (which must be on one). */
 function shortestCycleThrough(
   start: string,
   byId: Map<string, ModuleNode>,
-  component: Map<string, number>,
+  sccOf: Map<string, number>,
 ): string[] {
-  const own = component.get(start);
+  const own = sccOf.get(start);
   const parent = new Map<string, string>();
   const queue = [start];
   for (let head = 0; head < queue.length; head++) {
@@ -170,11 +168,11 @@ function shortestCycleThrough(
         cycle.push(start);
         return cycle;
       }
-      if (component.get(next) !== own || parent.has(next)) continue;
+      if (sccOf.get(next) !== own || parent.has(next)) continue;
       parent.set(next, id);
       queue.push(next);
     }
   }
-  /* v8 ignore next -- unreachable: every module of a non-trivial component is on a cycle */
+  /* v8 ignore next -- unreachable: every module of a non-trivial SCC is on a cycle */
   return [start, start];
 }

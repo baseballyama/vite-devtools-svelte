@@ -7,7 +7,7 @@ import { describe, it, expect, afterAll, afterEach, vi } from 'vitest';
 import { analyzeAssets } from '../src/analyzers/assets.js';
 import { analyzeComponents } from '../src/analyzers/components.js';
 import { analyzeProject } from '../src/analyzers/project.js';
-import { findReactiveLine } from '../src/analyzers/source.js';
+import { findReactiveLine } from '../src/analyzers/reactive-line.js';
 
 const tmpRoots: string[] = [];
 afterAll(() => {

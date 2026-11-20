@@ -1,3 +1,5 @@
+import { GRAPH_LIMITS, MAX_EPOCH_LENGTH, SUMMARY_TOP_K } from '../limits.js';
+import { HOT_EVENTS } from '../runtime/ids.js';
 import type {
   CaptureInfoMap,
   CompilerWarning,
@@ -18,19 +20,10 @@ import type {
 } from '../types.js';
 import { arrayOf, asPayload, clampInt, finiteOrNull } from './payload.js';
 import type { Payload } from './payload.js';
-import {
-  emptyGraph,
-  emptySummary,
-  GRAPH_LIMITS,
-  normalizeGraph,
-  normalizeSummary,
-  SUMMARY_DEFAULTS,
-} from './reactive.js';
+import { emptyGraph, emptySummary, normalizeGraph, normalizeSummary } from './reactive.js';
 import { Ring } from './ring.js';
 import { LEGACY_EPOCH, nextSeq, STATE_TIMELINE_LIMIT, StateTimeline } from './state-timeline.js';
 import type { TimelinePush } from './state-timeline.js';
-
-export { STATE_TIMELINE_BYTES } from './state-timeline.js';
 
 // Defensive caps on runtime-supplied data: even though the runtime already
 // trims its own buffers, an out-of-spec or compromised runtime could hand us
@@ -62,39 +55,14 @@ const MAX_CACHED_PULLS = 32;
 
 type DatasetKey = keyof DatasetVersions;
 
-/** Stable contract with the browser runtime. */
-export const HOT_EVENTS = {
-  components: 'svelte-devtools:components',
-  profiles: 'svelte-devtools:profiles',
-  stateTimeline: 'svelte-devtools:state-timeline',
-  fps: 'svelte-devtools:fps',
-  runtimeError: 'svelte-devtools:runtime-error',
-  reactiveGraph: 'svelte-devtools:reactive-graph',
-  requestReactiveGraph: 'svelte-devtools:request-reactive-graph',
-  /** server → runtime `{ requestId, epoch?, topK }`; reply `reactiveSummary`. */
-  requestReactiveSummary: 'svelte-devtools:request-reactive-summary',
-  reactiveSummary: 'svelte-devtools:reactive-summary',
-  requestStateTimeline: 'svelte-devtools:request-state-timeline',
-  clearStateTimeline: 'svelte-devtools:clear-state-timeline',
-  /** runtime → server, once per page load: "send me the current subscription state". */
-  runtimeReady: 'svelte-devtools:runtime-ready',
-  /** server → runtime(s): `{ active: boolean }`, whether any consumer is watching. */
-  subscription: 'svelte-devtools:subscription',
-  /** runtime → server: `{ epoch, componentId }`, a component chosen with Inspect in the inspector. */
-  elementPicked: 'svelte-devtools:element-picked',
-  /** browser → server: a `load` run in the browser, which has no recorder (see load-profile.ts). */
-  loadProfile: 'svelte-devtools:load-profile',
-} as const;
-
 // A DevTools UI that connects this soon after a pick (the dock opening the
 // Svelte panel for it) still gets it.
 export const RECENT_PICK_MS = 10_000;
 
-const MAX_EPOCH = 200;
-
 function parseElementPick(value: unknown): ElementPick | null {
   const { epoch, componentId } = asPayload(value) ?? {};
-  if (typeof epoch !== 'string' || epoch.length === 0 || epoch.length > MAX_EPOCH) return null;
+  if (typeof epoch !== 'string' || epoch.length === 0 || epoch.length > MAX_EPOCH_LENGTH)
+    return null;
   if (typeof componentId !== 'number' || !Number.isSafeInteger(componentId) || componentId < 0) {
     return null;
   }
@@ -690,7 +658,7 @@ export class Collector {
 
   /** Never captures the graph. */
   requestReactiveSummary(req: ReactiveSummaryRequest = {}): Promise<ReactiveSummary> {
-    const topK = clampInt(req.topK, 1, SUMMARY_DEFAULTS.maxTopK, SUMMARY_DEFAULTS.topK);
+    const topK = clampInt(req.topK, 1, SUMMARY_TOP_K.max, SUMMARY_TOP_K.default);
     const epoch = this.servedEpoch ?? null;
     return this.keyedPull<ReactiveSummary>({
       kind: 'summary',

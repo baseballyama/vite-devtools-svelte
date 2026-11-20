@@ -23,12 +23,14 @@ export const LEGACY_EPOCH = '(legacy)';
 let lastSeq = Date.now() * 1000;
 export const nextSeq = (): number => ++lastSeq;
 
-const DROP_REASONS: readonly DropReason[] = [
-  'runtime-count',
-  'runtime-bytes',
-  'server-count',
-  'server-bytes',
-];
+const noDrops = (): Record<DropReason, number> => ({
+  'runtime-count': 0,
+  'runtime-bytes': 0,
+  'server-count': 0,
+  'server-bytes': 0,
+});
+// Derived this way round so the compiler checks the record covers every reason.
+const DROP_REASONS = Object.keys(noDrops()) as DropReason[];
 
 export function isBaseline(b: unknown): b is TimelineBaseline {
   const v = b as Partial<TimelineBaseline> | undefined;
@@ -92,7 +94,7 @@ export class StateTimeline {
     }
     const epoch = data.epoch;
     this.countRuntimeLosses(epoch, data.dropped, data.valueTooLarge);
-    if (data.reset === true) this.dropEpoch(epoch);
+    if (data.reset === true) this.removeEntries(epoch);
     this.append(incoming, epoch);
     if (isBaseline(data.baseline)) {
       const { complete, pendingNodes } = data.baseline;
@@ -105,7 +107,7 @@ export class StateTimeline {
     const seen = last
       ? incoming.findLastIndex(c => c.timestamp === last.timestamp && c.id === last.id)
       : -1;
-    if (seen === -1) this.dropEpoch(LEGACY_EPOCH);
+    if (seen === -1) this.removeEntries(LEGACY_EPOCH);
     this.append(incoming.slice(seen + 1), LEGACY_EPOCH);
   }
 
@@ -121,7 +123,7 @@ export class StateTimeline {
   }
 
   /** Remove `epoch`'s entries, invalidating every cursor issued so far. */
-  dropEpoch(epoch: string): void {
+  private removeEntries(epoch: string): void {
     if (!this.stored.some(s => s.epoch === epoch)) return;
     this.stored = this.stored.filter(s => s.epoch !== epoch);
     this.bytes = this.stored.reduce((sum, s) => sum + s.size, 0);
@@ -129,7 +131,7 @@ export class StateTimeline {
   }
 
   forget(epoch: string): void {
-    this.dropEpoch(epoch);
+    this.removeEntries(epoch);
     this.drops.delete(epoch);
     this.tooLarge.delete(epoch);
     this.baselines.delete(epoch);
@@ -145,7 +147,7 @@ export class StateTimeline {
 
   /** The baseline is the served `epoch`'s. */
   captureInfo(epoch: string | undefined): CaptureInfo {
-    const sums = { 'runtime-count': 0, 'runtime-bytes': 0, 'server-count': 0, 'server-bytes': 0 };
+    const sums = noDrops();
     for (const counts of this.drops.values()) {
       for (const reason of DROP_REASONS) sums[reason] += counts[reason];
     }
@@ -189,7 +191,7 @@ export class StateTimeline {
   private addDrop(epoch: string, reason: DropReason, count: number): void {
     let counts = this.drops.get(epoch);
     if (!counts) {
-      counts = { 'runtime-count': 0, 'runtime-bytes': 0, 'server-count': 0, 'server-bytes': 0 };
+      counts = noDrops();
       this.drops.set(epoch, counts);
     }
     counts[reason] += count;

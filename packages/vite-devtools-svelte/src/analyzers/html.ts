@@ -1,4 +1,4 @@
-import { DIGITS, HEX_DIGITS, consistsOf } from './text.js';
+import { DIGITS, HEX_DIGITS, consistsOf } from './chars.js';
 
 export interface HtmlTag {
   /** Lowercase tag name. */
@@ -88,7 +88,7 @@ export function* htmlTags(html: string): Generator<HtmlTag> {
   }
 }
 
-/** Read the attributes of the tag whose name ends at `at`; the offset past its `>`, or -1. */
+/** Read the attributes of the tag whose name ends at `from`; the offset past its `>`, or -1. */
 function readAttributes(html: string, from: number, tag: HtmlTag): number {
   let at = from;
   for (;;) {

@@ -102,8 +102,6 @@ describe('devframe host wiring', () => {
       environments: {
         client: { moduleGraph: { idToModuleMap: new Map([['a', graphModule(PAGE, [COUNTER])]]) } },
         ssr: { moduleGraph: { idToModuleMap: new Map([['b', graphModule(COUNTER)]]) } },
-        // an environment without a module graph is skipped
-        other: {},
       },
     });
     const call = await hub(s.plugins);
@@ -115,15 +113,6 @@ describe('devframe host wiring', () => {
     );
     s.httpServer.emit('close');
     expect((await call('get-module-graph')).modules).toEqual([]);
-  });
-
-  it('module graph: falls back to the legacy single graph', async () => {
-    const s = setup({
-      moduleGraph: { idToModuleMap: new Map([['a', graphModule(PAGE)]]) },
-    });
-    s.configure();
-    const graph = await (await hub(s.plugins))('get-module-graph');
-    expect(graph.modules.map((m: { file: string }) => m.file)).toEqual([PAGE]);
   });
 
   it("API endpoints follow re-exports through the dev server's SSR resolver", async () => {
@@ -237,7 +226,13 @@ describe('MCP server wiring', () => {
       ],
     });
     callHook(s.plugins.find(p => p.name.endsWith(':load-profile'))!.configureServer, s.server);
-    (globalThis as any).__svelte_devtools_record_load('/', PAGE, 'server', 1, 2);
+    (globalThis as any).__svelte_devtools_record_load({
+      route: '/',
+      file: PAGE,
+      type: 'server',
+      duration: 1,
+      dataSize: 2,
+    });
 
     expect(deps.getLiveSnapshot().components).toEqual([component]);
     expect(deps.getLiveSnapshot()).toMatchObject({ epoch: 'e1', total: 1 });
@@ -293,7 +288,13 @@ describe('MCP server wiring', () => {
     s.emit('profiles', { epoch: 'e1', profiles: [profile] });
     sessions.start('run', false);
     s.emit('fps', { timestamp: 1, fps: 20 });
-    (globalThis as any).__svelte_devtools_record_load('/', PAGE, 'server', 5, 2);
+    (globalThis as any).__svelte_devtools_record_load({
+      route: '/',
+      file: PAGE,
+      type: 'server',
+      duration: 5,
+      dataSize: 2,
+    });
     s.emit('profiles', {
       epoch: 'e1',
       profiles: [{ ...profile, renderCount: 2, totalRenderTime: 4 }],

@@ -7,8 +7,8 @@ import { getRpcHandler } from 'devframe/rpc';
 import { describe, it, expect, vi } from 'vitest';
 
 import type { ResolveFile } from '../src/analyzers/api.js';
-import { transport } from '../src/analyzers/http.js';
-import { HOT_EVENTS } from '../src/server/collector.js';
+import { transport } from '../src/analyzers/outbound-http.js';
+import { HOT_EVENTS } from '../src/runtime/ids.js';
 import type { HotChannel, HotClient } from '../src/server/collector.js';
 import {
   createRpcFunctions,
@@ -17,7 +17,7 @@ import {
   DEVFRAME_ID,
   PICK_BROADCAST,
 } from '../src/server/devframe.js';
-import { createTestHost, rpcHandlers } from './helpers.js';
+import { createTestDeps, rpcHandlers } from './helpers.js';
 
 vi.mock('node:dns/promises', () => ({
   default: { lookup: () => Promise.resolve([{ address: '93.184.215.14', family: 4 }]) },
@@ -34,7 +34,7 @@ function expectedRpcType(name: string): 'query' | 'action' {
 
 describe('devframe definition', () => {
   it('is a dev-only, host-agnostic tool mounted at /.svelte-devtools/', () => {
-    const def = createSvelteDevframe(createTestHost(FIXTURES_DIR));
+    const def = createSvelteDevframe(createTestDeps(FIXTURES_DIR));
     expect(def.id).toBe(DEVFRAME_ID);
     expect(def.basePath).toBe(DEVFRAME_BASE);
     expect(def.capabilities).toEqual({ dev: true, build: false });
@@ -51,7 +51,7 @@ describe('devframe definition', () => {
 
   it('registers every RPC under the svelte-devtools scope with bare names', async () => {
     const registered: string[] = [];
-    const def = createSvelteDevframe(createTestHost(FIXTURES_DIR));
+    const def = createSvelteDevframe(createTestDeps(FIXTURES_DIR));
     await def.setup({
       scope: (id: string) => ({
         rpc: { register: (fn: { name: string }) => registered.push(`${id}:${fn.name}`) },
@@ -63,7 +63,7 @@ describe('devframe definition', () => {
   });
 
   it('marks reads as query, mutations as action, all JSON-serializable', () => {
-    const fns = createRpcFunctions(createTestHost(FIXTURES_DIR));
+    const fns = createRpcFunctions(createTestDeps(FIXTURES_DIR));
     const shape = (fn: (typeof fns)[number]) => ({
       name: fn.name,
       jsonSerializable: fn.jsonSerializable,
@@ -80,7 +80,7 @@ describe('devframe definition', () => {
 });
 
 describe('project analysis RPCs', () => {
-  const rpc = rpcHandlers(createTestHost(FIXTURES_DIR, { publicBase: () => '/base/' }));
+  const rpc = rpcHandlers(createTestDeps(FIXTURES_DIR, { publicBase: () => '/base/' }));
 
   it('get-project / get-routes / get-component-relations', async () => {
     expect((await rpc.get('svelte-devtools:get-project')!()).name).toBeTruthy();
@@ -115,7 +115,7 @@ describe('project analysis RPCs', () => {
     const items = path.join(FIXTURES_DIR, 'src/lib/server/items.ts');
     // the fixture's only `export *` is the one under test
     const resolveFile = vi.fn<ResolveFile>().mockResolvedValue(items);
-    const endpoints = await rpcHandlers(createTestHost(FIXTURES_DIR, { resolveFile })).get(
+    const endpoints = await rpcHandlers(createTestDeps(FIXTURES_DIR, { resolveFile })).get(
       'svelte-devtools:get-api-endpoints',
     )!();
     expect(endpoints.find((e: any) => e.path === '/api/items')).toMatchObject({
@@ -130,7 +130,7 @@ describe('project analysis RPCs', () => {
 
   it('get-build-analysis is empty without build output', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sdt-empty-'));
-    const result = await rpcHandlers(createTestHost(root)).get(
+    const result = await rpcHandlers(createTestDeps(root)).get(
       'svelte-devtools:get-build-analysis',
     )!();
     expect(result.chunks).toEqual([]);
@@ -139,11 +139,11 @@ describe('project analysis RPCs', () => {
 
 describe('collector-backed RPCs', () => {
   it('live components meta reports truncation', async () => {
-    const host = createTestHost(FIXTURES_DIR);
-    host.collector.ingestComponents({
+    const deps = createTestDeps(FIXTURES_DIR);
+    deps.collector.ingestComponents({
       components: Array.from({ length: 60_000 }, (_, i) => ({ id: i })),
     });
-    const meta = await rpcHandlers(host).get('svelte-devtools:get-live-components-meta')!();
+    const meta = await rpcHandlers(deps).get('svelte-devtools:get-live-components-meta')!();
     expect(meta).toEqual({
       total: 60_000,
       kept: 50_000,
@@ -155,18 +155,18 @@ describe('collector-backed RPCs', () => {
   });
 
   it('set-active leases and releases per client', () => {
-    const host = createTestHost(FIXTURES_DIR);
-    const rpc = rpcHandlers(host);
+    const deps = createTestDeps(FIXTURES_DIR);
+    const rpc = rpcHandlers(deps);
     rpc.get('svelte-devtools:set-active')!({ client: 'tab1', active: true });
-    expect(host.collector.subscription).toEqual({ active: true, componentDeltas: true });
+    expect(deps.collector.subscription).toEqual({ active: true, componentDeltas: true });
     rpc.get('svelte-devtools:set-active')!({ client: 'tab1', active: false });
-    expect(host.collector.subscription).toEqual({ active: false, componentDeltas: true });
+    expect(deps.collector.subscription).toEqual({ active: false, componentDeltas: true });
   });
 
   it('timeline delta and versions', async () => {
-    const host = createTestHost(FIXTURES_DIR);
-    const rpc = rpcHandlers(host);
-    host.collector.ingestStateTimeline({
+    const deps = createTestDeps(FIXTURES_DIR);
+    const rpc = rpcHandlers(deps);
+    deps.collector.ingestStateTimeline({
       changes: [{ id: 'a', name: 'a', componentFile: '', oldValue: 0, newValue: 1, timestamp: 1 }],
     });
     const d = await rpc.get('svelte-devtools:get-state-timeline-delta')!({});
@@ -180,11 +180,11 @@ describe('collector-backed RPCs', () => {
   });
 
   it('clear RPCs empty their buffers', async () => {
-    const host = createTestHost(FIXTURES_DIR);
-    const rpc = rpcHandlers(host);
-    host.collector.recordLoadProfile({ route: '/' } as any);
-    host.collector.ingestRuntimeError({ message: 'x' } as any);
-    host.collector.ingestFps({ fps: 1 } as any);
+    const deps = createTestDeps(FIXTURES_DIR);
+    const rpc = rpcHandlers(deps);
+    deps.collector.recordLoadProfile({ route: '/' } as any);
+    deps.collector.ingestRuntimeError({ message: 'x' } as any);
+    deps.collector.ingestFps({ fps: 1 } as any);
     await rpc.get('svelte-devtools:clear-load-profiles')!();
     await rpc.get('svelte-devtools:clear-errors')!();
     await rpc.get('svelte-devtools:clear-fps')!();
@@ -195,8 +195,8 @@ describe('collector-backed RPCs', () => {
 });
 
 describe('file access sandbox', () => {
-  const host = createTestHost(FIXTURES_DIR);
-  const rpc = rpcHandlers(host);
+  const deps = createTestDeps(FIXTURES_DIR);
+  const rpc = rpcHandlers(deps);
 
   it('open-in-editor refuses traversal and symlinks escaping the root', () => {
     const traversal = path.relative(FIXTURES_DIR, '/etc/hosts');
@@ -205,7 +205,7 @@ describe('file access sandbox', () => {
     );
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sdt-link-'));
     fs.symlinkSync('/etc', path.join(root, 'escape'));
-    const r = rpcHandlers(createTestHost(root));
+    const r = rpcHandlers(createTestDeps(root));
     expect(() => r.get('svelte-devtools:open-in-editor')!({ file: 'escape/hosts' })).toThrow(
       /outside/,
     );
@@ -214,7 +214,7 @@ describe('file access sandbox', () => {
 
   it('open-in-editor resolves inside the root and passes file:line to the editor', async () => {
     await rpc.get('svelte-devtools:open-in-editor')!({ file: COUNTER, line: 3 });
-    expect(host.opened.at(-1)).toBe(`${fs.realpathSync(COUNTER)}:3`);
+    expect(deps.opened.at(-1)).toBe(`${fs.realpathSync(COUNTER)}:3`);
     expect(() => rpc.get('svelte-devtools:open-in-editor')!({ file: '/etc/passwd' })).toThrow(
       /outside/,
     );
@@ -234,7 +234,7 @@ describe('file access sandbox', () => {
         .readFileSync(COUNTER, 'utf-8')
         .split('\n')
         .findIndex(l => /let\s+count\b/.test(l)) + 1;
-    expect(host.opened.at(-1)).toBe(`${fs.realpathSync(COUNTER)}:${line}`);
+    expect(deps.opened.at(-1)).toBe(`${fs.realpathSync(COUNTER)}:${line}`);
     expect(() =>
       rpc.get('svelte-devtools:open-reactive-in-editor')!({
         file: '/etc/hosts',
@@ -263,7 +263,7 @@ describe('module graph RPC', () => {
     c.importedModules = new Set([a]);
     // duplicate across environments (client + ssr) must be deduplicated
     const modules = [a, b, c, css, dep, { ...a }];
-    const r = rpcHandlers(createTestHost(FIXTURES_DIR, { modules: () => modules }));
+    const r = rpcHandlers(createTestDeps(FIXTURES_DIR, { modules: () => modules }));
     const graph = await r.get('svelte-devtools:get-module-graph')!();
     const ids = graph.modules.map((m: any) => m.id).toSorted();
     expect(ids).toEqual(['src/a.ts', 'src/b.svelte', 'src/c.js', 'src/s.css']);
@@ -279,7 +279,7 @@ describe('module graph RPC', () => {
   });
 
   it('is empty without a dev server', async () => {
-    const graph = await rpcHandlers(createTestHost(FIXTURES_DIR)).get(
+    const graph = await rpcHandlers(createTestDeps(FIXTURES_DIR)).get(
       'svelte-devtools:get-module-graph',
     )!();
     expect(graph).toEqual({ modules: [], cycles: [] });
@@ -303,9 +303,9 @@ function projectRoot(): string {
   return root;
 }
 
-async function validated(host: ReturnType<typeof createTestHost>) {
+async function validated(deps: ReturnType<typeof createTestDeps>) {
   const map = new Map<string, (...args: any[]) => Promise<any>>();
-  for (const fn of createRpcFunctions(host)) map.set(fn.name, await getRpcHandler(fn as any, {}));
+  for (const fn of createRpcFunctions(deps)) map.set(fn.name, await getRpcHandler(fn as any, {}));
   return map;
 }
 
@@ -319,8 +319,8 @@ describe('every RPC with valid input', () => {
         body: Readable.from([Buffer.from('<title>t</title>')]),
       }),
     );
-    const host = createTestHost(root, { serverOrigins: () => ['http://localhost:5173'] });
-    const rpc = await validated(host);
+    const deps = createTestDeps(root, { serverOrigins: () => ['http://localhost:5173'] });
+    const rpc = await validated(deps);
     const calls: Record<string, [args: unknown[], check: (r: any) => void]> = {
       'get-project': [[], r => expect(r).toMatchObject({ name: 'rpc-app', version: '2.0.0' })],
       'get-routes': [[], r => expect(r.map((x: any) => x.id).toSorted()).toEqual(['/', 'api'])],
@@ -334,12 +334,12 @@ describe('every RPC with valid input', () => {
       'set-active': [[{ client: 'c', active: false }], r => expect(r).toBeUndefined()],
       'open-in-editor': [
         [{ file: 'src/lib/C.svelte', line: 2 }],
-        () => expect(host.opened.at(-1)).toMatch(/C\.svelte:2$/),
+        () => expect(deps.opened.at(-1)).toMatch(/C\.svelte:2$/),
       ],
       'get-recent-element-pick': [[], r => expect(r).toBeNull()],
       'open-reactive-in-editor': [
         [{ file: 'src/routes/+page.svelte', name: 'n', type: 'state' }],
-        () => expect(host.opened.at(-1)).toMatch(/\+page\.svelte:3$/),
+        () => expect(deps.opened.at(-1)).toMatch(/\+page\.svelte:3$/),
       ],
       'get-render-profiles': [[], r => expect(r).toEqual([])],
       'get-reactive-graph': [[], r => expect(r).toMatchObject({ nodes: [], edges: [] })],
@@ -384,7 +384,7 @@ const jsonRoundTrip = (v: unknown): unknown =>
   v === undefined ? v : JSON.parse(JSON.stringify(v));
 
 describe('RPC input validation', () => {
-  const host = createTestHost(FIXTURES_DIR);
+  const deps = createTestDeps(FIXTURES_DIR);
   it.each<[name: string, args: unknown[]]>([
     ['set-active', [{ client: '', active: true }]],
     ['set-active', [{ client: long(65), active: true }]],
@@ -412,10 +412,10 @@ describe('RPC input validation', () => {
     ['get-og-preview', [{ url: 5 }]],
   ])('%s rejects %j before the handler runs', async (name, args) => {
     const fetchMock = vi.spyOn(transport, 'get');
-    const rpc = await validated(host);
-    const opened = host.opened.length;
+    const rpc = await validated(deps);
+    const opened = deps.opened.length;
     await expect(rpc.get(name)!(...args)).rejects.toThrow(/invalid argument/);
-    expect(host.opened.length).toBe(opened);
+    expect(deps.opened.length).toBe(opened);
     expect(fetchMock).not.toHaveBeenCalled();
     fetchMock.mockRestore();
   });
@@ -428,18 +428,18 @@ describe('RPC input validation', () => {
     ['get-reactive-summary', [undefined]],
     ['get-state-timeline-delta', [{ since: 0 }]],
   ])('%s accepts the boundary %j', async (name, args) => {
-    const rpc = await validated(host);
+    const rpc = await validated(deps);
     await expect(rpc.get(name)!(...args)).resolves.not.toThrow();
   });
 });
 
 describe('RPC behaviour details', () => {
   it('open-in-editor without a line (or line 0) opens just the file', () => {
-    const host = createTestHost(FIXTURES_DIR);
-    const rpc = rpcHandlers(host);
+    const deps = createTestDeps(FIXTURES_DIR);
+    const rpc = rpcHandlers(deps);
     rpc.get('svelte-devtools:open-in-editor')!({ file: COUNTER, line: 0 });
     rpc.get('svelte-devtools:open-in-editor')!({ file: COUNTER });
-    expect(host.opened).toEqual([fs.realpathSync(COUNTER), fs.realpathSync(COUNTER)]);
+    expect(deps.opened).toEqual([fs.realpathSync(COUNTER), fs.realpathSync(COUNTER)]);
   });
 
   it.each([
@@ -447,20 +447,20 @@ describe('RPC behaviour details', () => {
     ['an empty name', COUNTER, ''],
     ['a directory (unreadable as a file)', path.join(FIXTURES_DIR, 'src/lib'), 'count'],
   ])('open-reactive-in-editor with %s opens the file without a line', (_label, file, name) => {
-    const host = createTestHost(FIXTURES_DIR);
-    rpcHandlers(host).get('svelte-devtools:open-reactive-in-editor')!({
+    const deps = createTestDeps(FIXTURES_DIR);
+    rpcHandlers(deps).get('svelte-devtools:open-reactive-in-editor')!({
       file,
       name,
       type: 'state',
     });
-    expect(host.opened).toEqual([fs.realpathSync(file)]);
+    expect(deps.opened).toEqual([fs.realpathSync(file)]);
   });
 
   it('get-reactive-graph / get-reactive-summary forward the request (empty when omitted)', async () => {
-    const host = createTestHost(FIXTURES_DIR);
-    const graph = vi.spyOn(host.collector, 'requestReactiveGraph');
-    const summary = vi.spyOn(host.collector, 'requestReactiveSummary');
-    const rpc = rpcHandlers(host);
+    const deps = createTestDeps(FIXTURES_DIR);
+    const graph = vi.spyOn(deps.collector, 'requestReactiveGraph');
+    const summary = vi.spyOn(deps.collector, 'requestReactiveSummary');
+    const rpc = rpcHandlers(deps);
     await rpc.get('svelte-devtools:get-reactive-graph')!();
     await rpc.get('svelte-devtools:get-reactive-graph')!({ componentId: 2, epoch: 'e' });
     await rpc.get('svelte-devtools:get-reactive-summary')!();
@@ -482,9 +482,9 @@ function hotChannel() {
 }
 
 /** A devframe set up over a fake scoped context that records broadcasts. */
-async function setUp(host = createTestHost(FIXTURES_DIR)) {
+async function setUp(deps = createTestDeps(FIXTURES_DIR)) {
   const broadcasts: unknown[] = [];
-  const def = createSvelteDevframe(host);
+  const def = createSvelteDevframe(deps);
   const ctx = {
     scope: () => ({
       rpc: {
@@ -498,8 +498,8 @@ async function setUp(host = createTestHost(FIXTURES_DIR)) {
   };
   await def.setup(ctx as any);
   const channel = hotChannel();
-  host.collector.attach(channel.hot);
-  return { host, def, ctx, broadcasts, ...channel };
+  deps.collector.attach(channel.hot);
+  return { deps, def, ctx, broadcasts, ...channel };
 }
 
 describe('element picker', () => {
@@ -527,17 +527,17 @@ describe('element picker', () => {
   });
 
   it('a UI connecting right after a pick can still read it', async () => {
-    const { host, emit } = await setUp();
-    const recent = rpcHandlers(host).get('svelte-devtools:get-recent-element-pick')!;
+    const { deps, emit } = await setUp();
+    const recent = rpcHandlers(deps).get('svelte-devtools:get-recent-element-pick')!;
     expect(await recent()).toBeNull();
     emit(HOT_EVENTS.elementPicked, pick);
     expect(await recent()).toEqual(pick);
   });
 
   it('inside the Vite DevTools dock, a pick switches the dock to this tool', async () => {
-    const host = createTestHost(FIXTURES_DIR);
+    const deps = createTestDeps(FIXTURES_DIR);
     const activated: string[] = [];
-    const def = createSvelteDevframe(host);
+    const def = createSvelteDevframe(deps);
     const ctx = {
       scope: () => ({
         rpc: { register: () => {}, broadcast: () => Promise.reject(new Error('x')) },
@@ -546,7 +546,7 @@ describe('element picker', () => {
     };
     await def.setup(ctx as any);
     const channel = hotChannel();
-    host.collector.attach(channel.hot);
+    deps.collector.attach(channel.hot);
     // a failed broadcast (no UI connected) is not an error
     channel.emit(HOT_EVENTS.elementPicked, pick);
     await Promise.resolve();
