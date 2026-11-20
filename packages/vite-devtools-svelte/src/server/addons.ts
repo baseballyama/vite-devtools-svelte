@@ -2,147 +2,62 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { defineRpcFunction } from 'devframe';
+import type { Agent, AgentName } from 'package-manager-detector';
+import { resolveCommand } from 'package-manager-detector/commands';
+import { detect, getUserAgent } from 'package-manager-detector/detect';
 import { z } from 'zod';
 
-import type {
-  AddonInfo,
-  AddonsResult,
-  CommunityAddon,
-  CommunityAddonsResult,
-  PackageManager,
-} from '../types.js';
+import type { AddonInfo, AddonsResult, CommunityAddon, CommunityAddonsResult } from '../types.js';
+import { svAddons } from './sv-addons.js';
 
 // npm's rules for a (scoped) package name, minus a leading `-` that `sv` would read as a flag.
 const REGEX_NPM_NAME = /^(?:@[a-z0-9~][a-z0-9-._~]*\/)?[a-z0-9~][a-z0-9-._~]*$/;
 const REGEX_GITHUB_OWNER = /github\.com[/:]([^/]+)\//;
 // Some packages publish their README's HTML as the description.
 const REGEX_HTML_TAG = /<[^<>]*>/g;
-const REGEX_YARN_BERRY_LOCK = /^__metadata:/m;
-const REGEX_PACKAGE_MANAGER = /^(pnpm|yarn|bun|npm)@(\d+)/;
 
-interface AddonDef {
-  id: string;
+interface AddonExtra {
   name: string;
-  description: string;
   kit?: boolean;
   /** Any of these in package.json means it is (probably) installed already. */
   deps?: string[];
 }
 
-// sv's own order (perceived popularity).
-const SV_ADDONS: readonly AddonDef[] = [
-  { id: 'prettier', name: 'Prettier', description: 'Formatter', deps: ['prettier'] },
-  { id: 'eslint', name: 'ESLint', description: 'Linter', deps: ['eslint'] },
-  { id: 'vitest', name: 'Vitest', description: 'Unit testing', deps: ['vitest'] },
-  {
-    id: 'playwright',
-    name: 'Playwright',
-    description: 'Browser testing',
-    deps: ['@playwright/test'],
-  },
-  {
-    id: 'tailwindcss',
-    name: 'Tailwind CSS',
-    description: 'CSS framework',
-    deps: ['tailwindcss'],
-  },
-  {
-    id: 'enhanced-img',
-    name: 'Enhanced images',
-    description: 'Image optimization',
-    kit: true,
-    deps: ['@sveltejs/enhanced-img'],
-  },
-  {
-    id: 'sveltekit-adapter',
-    name: 'SvelteKit adapter',
-    description: 'Deployment',
-    kit: true,
-  },
-  { id: 'drizzle', name: 'Drizzle', description: 'Database ORM', kit: true, deps: ['drizzle-orm'] },
-  {
-    id: 'better-auth',
-    name: 'Better Auth',
-    description: 'Auth library',
-    kit: true,
-    deps: ['better-auth'],
-  },
-  { id: 'mdsvex', name: 'mdsvex', description: 'Svelte + Markdown', deps: ['mdsvex'] },
-  {
-    id: 'paraglide',
-    name: 'Paraglide',
-    description: 'i18n',
-    kit: true,
-    deps: ['@inlang/paraglide-js'],
-  },
-  { id: 'storybook', name: 'Storybook', description: 'Frontend workshop', deps: ['storybook'] },
-  { id: 'ai-tools', name: 'AI tools', description: 'Svelte AI tools' },
-  {
-    id: 'experimental',
-    name: 'Experimental',
-    description: 'Svelte & Kit experimental features',
-  },
-];
-
-// Yarn 2+ only; classic has no `dlx`.
-type Agent = PackageManager | 'yarn@berry';
-
-const LOCKFILES: [string, PackageManager][] = [
-  ['pnpm-lock.yaml', 'pnpm'],
-  ['bun.lock', 'bun'],
-  ['bun.lockb', 'bun'],
-  ['yarn.lock', 'yarn'],
-  ['package-lock.json', 'npm'],
-];
-
-function yarnAgent(major: number): Agent {
-  return major >= 2 ? 'yarn@berry' : 'yarn';
-}
-
-function agentAt(dir: string): Agent | undefined {
-  for (const [file, pm] of LOCKFILES) {
-    const lockfile = path.join(dir, file);
-    if (!fs.existsSync(lockfile)) continue;
-    if (pm !== 'yarn') return pm;
-    return yarnAgent(REGEX_YARN_BERRY_LOCK.test(fs.readFileSync(lockfile, 'utf-8')) ? 2 : 1);
-  }
-  try {
-    const { packageManager } = JSON.parse(
-      fs.readFileSync(path.join(dir, 'package.json'), 'utf-8'),
-    ) as { packageManager?: string };
-    const [, pm, major] = REGEX_PACKAGE_MANAGER.exec(packageManager ?? '') ?? [];
-    if (pm === 'yarn') return yarnAgent(Number(major));
-    return pm as PackageManager | undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-/** Nearest lockfile or `packageManager` field wins, so a workspace package resolves to its monorepo's pm. */
-export function detectPackageManager(root: string): Agent {
-  let dir = path.resolve(root);
-  for (;;) {
-    const agent = agentAt(dir);
-    if (agent) return agent;
-    const parent = path.dirname(dir);
-    if (parent === dir) return 'npm';
-    dir = parent;
-  }
-}
-
-const RUNNERS: Record<Agent, [string, ...string[]]> = {
-  pnpm: ['pnpm', 'dlx'],
-  'yarn@berry': ['yarn', 'dlx'],
-  yarn: ['npx'],
-  bun: ['bunx'],
-  npm: ['npx'],
+// What sv does not expose; the ids, order and descriptions come from sv (./sv-addons.ts).
+const EXTRAS: Record<string, AddonExtra> = {
+  prettier: { name: 'Prettier', deps: ['prettier'] },
+  eslint: { name: 'ESLint', deps: ['eslint'] },
+  vitest: { name: 'Vitest', deps: ['vitest'] },
+  playwright: { name: 'Playwright', deps: ['@playwright/test'] },
+  tailwindcss: { name: 'Tailwind CSS', deps: ['tailwindcss'] },
+  'enhanced-img': { name: 'Enhanced images', kit: true, deps: ['@sveltejs/enhanced-img'] },
+  'sveltekit-adapter': { name: 'SvelteKit adapter', kit: true },
+  drizzle: { name: 'Drizzle', kit: true, deps: ['drizzle-orm'] },
+  'better-auth': { name: 'Better Auth', kit: true, deps: ['better-auth'] },
+  mdsvex: { name: 'mdsvex', deps: ['mdsvex'] },
+  paraglide: { name: 'Paraglide', kit: true, deps: ['@inlang/paraglide-js'] },
+  storybook: { name: 'Storybook', deps: ['storybook'] },
+  'ai-tools': { name: 'AI tools' },
+  experimental: { name: 'Experimental' },
 };
 
-// The hub's PTY resolves Windows `.cmd` shims itself.
-export function svAddCommand(agent: Agent, id: string): { command: string; args: string[] } {
-  const [command, ...rest] = RUNNERS[agent];
-  const pm = agent === 'yarn@berry' ? 'yarn' : agent;
-  return { command, args: [...rest, 'sv', 'add', id, '--install', pm] };
+/** The same pick as `sv add`, so the `--install` it is given matches what sv would detect. */
+export async function detectPackageManager(
+  root: string,
+): Promise<{ agent: Agent; name: AgentName }> {
+  const detected = await detect({ cwd: root });
+  if (detected) return detected;
+  const name = getUserAgent() ?? 'npm';
+  return { agent: name, name };
+}
+
+export function svAddCommand(
+  { agent, name }: { agent: Agent; name: AgentName },
+  id: string,
+): { command: string; args: string[] } {
+  const command = resolveCommand(agent, 'execute', ['sv', 'add', id, '--install', name]);
+  if (!command) throw new Error(`${agent} cannot run sv`);
+  return command;
 }
 
 function readDeps(root: string): Set<string> {
@@ -162,14 +77,20 @@ function readDeps(root: string): Set<string> {
 
 export function listAddons(root: string): AddonInfo[] {
   const deps = readDeps(root);
-  return SV_ADDONS.map(({ deps: addonDeps, ...addon }) => ({
-    ...addon,
-    installed: addonDeps?.some(d => deps.has(d)) ?? false,
-  }));
+  return svAddons.map(({ id, description }) => {
+    const extra = EXTRAS[id];
+    return {
+      id,
+      name: extra?.name ?? id,
+      description,
+      kit: extra?.kit,
+      installed: extra?.deps?.some(d => deps.has(d)) ?? false,
+    };
+  });
 }
 
 function isSvAddon(id: string): boolean {
-  return SV_ADDONS.some(a => a.id === id);
+  return svAddons.some(a => a.id === id);
 }
 
 // sv's docs point to this keyword for community add-ons.
@@ -277,7 +198,7 @@ export function createAddonRpcFunctions(
         const { terminals } = hub();
         if (!terminals) throw new Error('Installing add-ons needs the Vite DevTools dock');
         const cwd = root();
-        const exec = { ...svAddCommand(detectPackageManager(cwd), id), cwd };
+        const exec = { ...svAddCommand(await detectPackageManager(cwd), id), cwd };
         const session = await terminals.startPtySession(exec, {
           id: `svelte-devtools:sv-add:${id}:${Date.now()}`,
           title: `sv add ${id}`,

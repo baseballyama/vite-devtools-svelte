@@ -642,6 +642,9 @@ importers:
       devframe:
         specifier: ^1.3.6
         version: 1.3.6(@devframes/agentic@1.3.6)(cac@7.1.0)(srvx@1.0.8)
+      package-manager-detector:
+        specifier: ^1.9.0
+        version: 1.9.0
       zod:
         specifier: ^4.6.7
         version: 4.6.7
@@ -661,6 +664,9 @@ importers:
       happy-dom:
         specifier: ^21.0.4
         version: 21.0.4
+      sv:
+        specifier: ^1.6.0
+        version: 1.6.0
       svelte:
         specifier: ^5.58.0
         version: 5.58.0(@typescript-eslint/types@8.73.0)
@@ -1783,6 +1789,9 @@ packages:
   '@sveltejs/load-config@0.2.3':
     resolution: {integrity: sha512-VT3qmUb8pRV2QrZjd8iAmtg8lf4W0TIjZbvXtz5MKei/q96teWZgGJyyidJzOjzZzvdq616eSRVeMYIQChUTAQ==}
     engines: {node: '>= 18.0.0'}
+
+  '@sveltejs/sv-utils@1.1.3':
+    resolution: {integrity: sha512-zfkSO4zTP6kfx4KfhnZCY6Sv2Hqh1Iv80e3InOjFPkz6I0Dqu1/Vod8tq7grYbMshaoSNvrQtzLQVcSpcyefwg==}
 
   '@sveltejs/vite-plugin-svelte@7.3.1':
     resolution: {integrity: sha512-ZPsLN8B1e/En+Ak5s4V7srFDT532oS0qieLsQwu63NGKsS+iAjoO2Js1BochlHlglcU+Pt7WAO3C5Ee+4f6gVA==}
@@ -3421,6 +3430,10 @@ packages:
     resolution: {integrity: sha512-zFObLMyZeEwzAoKCyu1B91U79K2t7ApXuQfo8OuxwXLDgcKxuwM+YvcbIhm6QWqz7mHUH1TVytR1PwVVjEuMig==}
     engines: {node: '>=14.18'}
 
+  sv@1.6.0:
+    resolution: {integrity: sha512-y5bGGiX36TNmItqz0SMRuAm8EChq0bmwR83FsxH4CQ1wKNcSnq3QpT6STsn1VchJUc71vF1TqMA5dGhMpl3WyQ==}
+    hasBin: true
+
   svelte-check@4.7.8:
     resolution: {integrity: sha512-laZ49GFHZ3b0z2PWinJWL0syehc/PTR8aHaUaTiBkWJ+4Y38nhxjmXsSz7CbGa3VdKopViVbrBH3bGNqIAI0bQ==}
     engines: {node: '>= 18.0.0'}
@@ -4614,6 +4627,8 @@ snapshots:
       typescript: 6.0.3
 
   '@sveltejs/load-config@0.2.3': {}
+
+  '@sveltejs/sv-utils@1.1.3': {}
 
   '@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.3(@typescript-eslint/types@8.73.0))(vite@8.3.8)':
     dependencies:
@@ -6290,6 +6305,10 @@ snapshots:
     dependencies:
       has-flag: 4.0.0
       supports-color: 7.2.0
+
+  sv@1.6.0:
+    dependencies:
+      '@sveltejs/sv-utils': 1.1.3
 
   svelte-check@4.7.8(picomatch@4.0.7)(svelte@5.58.0(@typescript-eslint/types@8.73.0))(typescript@6.0.3):
     dependencies:

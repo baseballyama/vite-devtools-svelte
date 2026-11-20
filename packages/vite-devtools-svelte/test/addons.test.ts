@@ -50,45 +50,65 @@ function handlers(hub: AddonHub, search = () => Promise.resolve([KYSELY])) {
 }
 
 describe('detectPackageManager', () => {
-  it('reads the nearest lockfile, walking up from a workspace package', () => {
+  it('reads the nearest lockfile, walking up from a workspace package', async () => {
     write('pnpm-lock.yaml');
     write('apps/web/package.json', '{}');
-    expect(detectPackageManager(path.join(dir, 'apps/web'))).toBe('pnpm');
+    expect(await detectPackageManager(path.join(dir, 'apps/web'))).toEqual({
+      name: 'pnpm',
+      agent: 'pnpm',
+    });
   });
 
   it.each([
     ['yarn.lock', 'yarn'],
     ['bun.lock', 'bun'],
     ['package-lock.json', 'npm'],
-  ])('%s -> %s', (lock, pm) => {
+  ])('%s -> %s', async (lock, pm) => {
     write(lock);
-    expect(detectPackageManager(dir)).toBe(pm);
+    expect((await detectPackageManager(dir)).agent).toBe(pm);
   });
 
-  it('tells yarn berry from classic by the lockfile', () => {
+  it('takes yarn.lock without packageManager as classic, like sv', async () => {
     write('yarn.lock', '__metadata:\n  version: 8\n');
-    expect(detectPackageManager(dir)).toBe('yarn@berry');
+    expect((await detectPackageManager(dir)).agent).toBe('yarn');
   });
 
   it.each([
     ['pnpm@10.0.0', 'pnpm'],
     ['yarn@1.22.0', 'yarn'],
     ['yarn@4.1.0', 'yarn@berry'],
-  ])('falls back to packageManager %s', (packageManager, agent) => {
+  ])('reads packageManager %s', async (packageManager, agent) => {
     write('package.json', JSON.stringify({ packageManager }));
-    expect(detectPackageManager(dir)).toBe(agent);
+    expect((await detectPackageManager(dir)).agent).toBe(agent);
+  });
+
+  it.each([
+    ['bun/1.2.0 npm/? node/v22.0.0', 'bun'],
+    ['foo/1.0.0 node/v22.0.0', 'npm'],
+    [undefined, 'npm'],
+  ])('falls back to the user agent %s', async (userAgent, pm) => {
+    vi.stubEnv('npm_config_user_agent', userAgent);
+    try {
+      expect(await detectPackageManager(dir)).toEqual({ name: pm, agent: pm });
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
 
 describe('svAddCommand', () => {
   it.each([
-    ['pnpm', 'pnpm', ['dlx', 'sv', 'add', 'vitest', '--install', 'pnpm']],
-    ['yarn@berry', 'yarn', ['dlx', 'sv', 'add', 'vitest', '--install', 'yarn']],
-    ['yarn', 'npx', ['sv', 'add', 'vitest', '--install', 'yarn']],
-    ['bun', 'bunx', ['sv', 'add', 'vitest', '--install', 'bun']],
-    ['npm', 'npx', ['sv', 'add', 'vitest', '--install', 'npm']],
-  ] as const)('%s', (agent, command, args) => {
-    expect(svAddCommand(agent, 'vitest')).toEqual({ command, args });
+    [{ agent: 'pnpm', name: 'pnpm' }, 'pnpm', ['dlx', 'sv', 'add', 'vitest', '--install', 'pnpm']],
+    [
+      { agent: 'yarn@berry', name: 'yarn' },
+      'yarn',
+      ['dlx', 'sv', 'add', 'vitest', '--install', 'yarn'],
+    ],
+    [{ agent: 'yarn', name: 'yarn' }, 'npx', ['sv', 'add', 'vitest', '--install', 'yarn']],
+    [{ agent: 'bun', name: 'bun' }, 'bun', ['x', 'sv', 'add', 'vitest', '--install', 'bun']],
+    [{ agent: 'npm', name: 'npm' }, 'npx', ['sv', 'add', 'vitest', '--install', 'npm']],
+  ] as const)('%o', (pm, command, args) => {
+    expect(svAddCommand(pm, 'vitest')).toEqual({ command, args });
   });
 });
 
@@ -99,6 +119,30 @@ describe('listAddons', () => {
       .filter(a => a.installed)
       .map(a => a.id);
     expect(installed).toEqual(['prettier', 'vitest']);
+  });
+
+  it("takes sv's ids, order and descriptions", () => {
+    expect(listAddons(dir).slice(0, 2)).toEqual([
+      { id: 'prettier', name: 'Prettier', description: 'formatter', installed: false },
+      { id: 'eslint', name: 'ESLint', description: 'linter', installed: false },
+    ]);
+    expect(listAddons(dir).find(a => a.id === 'drizzle')).toMatchObject({ kit: true });
+  });
+
+  it('names an add-on sv added after this release by its id', async () => {
+    vi.resetModules();
+    vi.doMock('../src/server/sv-addons.js', () => ({
+      svAddons: [{ id: 'new-addon', description: 'something new' }],
+    }));
+    try {
+      const fresh = await import('../src/server/addons.js');
+      expect(fresh.listAddons(dir)).toEqual([
+        { id: 'new-addon', name: 'new-addon', description: 'something new', installed: false },
+      ]);
+    } finally {
+      vi.doUnmock('../src/server/sv-addons.js');
+      vi.resetModules();
+    }
   });
 
   it('works without a package.json', () => {
@@ -130,7 +174,7 @@ describe('add-on RPCs', () => {
     const { install } = handlers({ terminals: { startPtySession } });
     const { sessionId } = await install({ id: 'vitest' });
     const [exec, terminal] = startPtySession.mock.calls[0]!;
-    expect(exec).toEqual({ ...svAddCommand('pnpm', 'vitest'), cwd: dir });
+    expect(exec).toEqual({ ...svAddCommand({ agent: 'pnpm', name: 'pnpm' }, 'vitest'), cwd: dir });
     expect(terminal).toMatchObject({ id: sessionId, title: 'sv add vitest', restartable: false });
   });
 });
