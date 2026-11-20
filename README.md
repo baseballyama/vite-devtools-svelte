@@ -11,15 +11,15 @@ Svelte DevTools for Vite. Inspect components, reactivity, renders, routes, `load
 - Vite >= 8.3.5
 - Svelte >= 5.46.4 (runes mode)
 - SvelteKit >= 3.3.0 (optional; without it the Routes, Load functions, API and Build panels are hidden)
-- [`@vitejs/devtools`](https://devtools.vite.dev/) >= 0.8.0 (optional; for the dock)
+- [`@vitejs/devtools`](https://devtools.vite.dev/) >= 0.8.0 (optional, but recommended)
 
 ## Setup
 
 ```bash
-npm install -D @sveltejs/vite-devtools-svelte
+npm install -D @sveltejs/vite-devtools-svelte @vitejs/devtools
 ```
 
-Add the plugin before `sveltekit()`:
+Turn on Vite DevTools and add the plugin before `sveltekit()`:
 
 ```ts
 // vite.config.ts
@@ -28,13 +28,14 @@ import { svelteDevtools } from '@sveltejs/vite-devtools-svelte';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+  devtools: { apply: 'serve' },
   plugins: [svelteDevtools(), sveltekit()],
 });
 ```
 
-Run `npm run dev` and open the `Svelte DevTools` URL it prints. The first time, the browser asks for a one-time code that the dev server prints in the terminal.
+Run `npm run dev`, open your app, click the floating Vite DevTools handle and open **Svelte tools**. The first time, the browser asks for a one-time code that the dev server prints in the terminal.
 
-To use the Vite DevTools dock instead, install `@vitejs/devtools` and add `devtools: { apply: 'serve' }` to the Vite config, then open the Svelte tab in the dock. The plugin is development-only and adds nothing to `vite build`.
+Without `@vitejs/devtools`, the same panels run standalone at the `/.svelte-devtools/` URL the dev server prints. The plugin is development-only and adds nothing to `vite build`.
 
 ## AI agents (MCP)
 
