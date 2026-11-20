@@ -1,7 +1,7 @@
 import type { Component } from 'svelte';
 
+import { inDevtoolsDock } from './devtools-dock.js';
 import type { IconName } from './icons.js';
-import { inDevtoolsDock } from './inspector-dock.js';
 
 export type PanelGroup = 'start' | 'inspect' | 'profile' | 'project';
 export type PanelView = 'overview' | 'problems' | 'inspect' | 'profile' | 'project' | 'add';
@@ -212,6 +212,6 @@ export function panelsForView(
     .filter(panel => panel !== undefined);
 }
 
-export function panelById(id: string): PanelDef {
-  return panels.find(p => p.id === id) ?? panels[0];
+export function panelById(id: PanelId): PanelDef {
+  return panels.find(p => p.id === id)!;
 }

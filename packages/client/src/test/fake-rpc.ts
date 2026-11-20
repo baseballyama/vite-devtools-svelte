@@ -122,7 +122,6 @@ const defaults: { [K in FnKey]: RealRpc[K] } = {
   getRenderProfiles: () => Promise.resolve([]),
   getLoadProfiles: () => Promise.resolve([]),
   clearLoadProfiles: () => Promise.resolve(),
-  getStateTimeline: () => Promise.resolve([]),
   getStateTimelineDelta: () => Promise.resolve({ cursor: 0, reset: true, changes: [] }),
   getVersions: () => Promise.resolve(versions),
   clearStateTimeline: () => Promise.resolve(),
@@ -163,7 +162,6 @@ export const getCaptureInfo = fake('getCaptureInfo');
 export const getRenderProfiles = fake('getRenderProfiles');
 export const getLoadProfiles = fake('getLoadProfiles');
 export const clearLoadProfiles = fake('clearLoadProfiles');
-export const getStateTimeline = fake('getStateTimeline');
 export const getStateTimelineDelta = fake('getStateTimelineDelta');
 export const getVersions = fake('getVersions');
 export const clearStateTimeline = fake('clearStateTimeline');
@@ -200,7 +198,6 @@ const all: { [K in FnKey]: Mock<RealRpc[K]> } = {
   getRenderProfiles,
   getLoadProfiles,
   clearLoadProfiles,
-  getStateTimeline,
   getStateTimelineDelta,
   getVersions,
   clearStateTimeline,

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { track } from '../test/runes.svelte.js';
 import { persisted } from './persisted.svelte.js';
-import { track } from './testing.svelte.js';
 
 /** In-memory Storage; `fail` makes a method throw (private mode, quota, sandbox). */
 function memoryStorage(fail: { get?: boolean; set?: boolean } = {}) {

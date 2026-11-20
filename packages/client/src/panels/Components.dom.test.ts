@@ -3,7 +3,7 @@ import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { elementPick } from '../lib/element-pick.svelte.js';
-import { reactiveScope } from '../lib/reactive-selection.svelte.js';
+import { reactiveScope } from '../lib/reactive-scope.svelte.js';
 import { router } from '../lib/router.svelte.js';
 import * as rpc from '../lib/rpc.js';
 import type { ComponentInstance, ComponentRelation, LiveComponentsMeta } from '../lib/types.js';

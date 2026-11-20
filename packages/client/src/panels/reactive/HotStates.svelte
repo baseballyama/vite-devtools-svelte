@@ -3,7 +3,7 @@
   import EmptyState from '../../components/EmptyState.svelte';
   import type { Column, SortState, TableRowState } from '../../components/types.js';
   import { componentName, formatClock, formatValue } from '../../lib/format.js';
-  import { reactiveScope } from '../../lib/reactive-selection.svelte.js';
+  import { reactiveScope } from '../../lib/reactive-scope.svelte.js';
   import type { HotState } from '../../lib/reactive.js';
   import type { Resource } from '../../lib/resource.svelte.js';
   import { getLiveComponentsMeta } from '../../lib/rpc.js';

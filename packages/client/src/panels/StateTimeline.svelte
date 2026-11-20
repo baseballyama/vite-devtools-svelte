@@ -9,14 +9,14 @@
   import SearchField from '../components/SearchField.svelte';
   import SplitView from '../components/SplitView.svelte';
   import VirtualList from '../components/VirtualList.svelte';
-  import { captureInfo } from '../lib/capture.svelte.js';
+  import { captureInfo } from '../lib/capture-info.js';
+  import { datasetVersion } from '../lib/dataset-versions.js';
   import { componentName, formatClock, formatValue, prettyValue } from '../lib/format.js';
   import { haystack, haystackMatcher } from '../lib/match.js';
   import { baselineNotice } from '../lib/reactive.js';
   import { resource } from '../lib/resource.svelte.js';
   import { getStateTimelineDelta, clearStateTimeline, openReactiveInEditor } from '../lib/rpc.js';
   import type { StateChange, StateTimelineEntry } from '../lib/types.js';
-  import { datasetVersion } from '../lib/versions.js';
 
   /** Mirrors the server buffer. */
   const MAX_ENTRIES = 500;

@@ -10,14 +10,14 @@
   import Segmented from '../components/Segmented.svelte';
   import StatList from '../components/StatList.svelte';
   import type { Column, SortState, Stat, TableRowState } from '../components/types.js';
-  import { captureInfo } from '../lib/capture.svelte.js';
+  import { captureInfo } from '../lib/capture-info.js';
   import { uniqueKeys } from '../lib/collections.js';
+  import { datasetVersion } from '../lib/dataset-versions.js';
   import { basename, formatBytes, formatClock, formatMs } from '../lib/format.js';
   import { matcher } from '../lib/match.js';
   import { resource } from '../lib/resource.svelte.js';
   import { getLoadProfiles, clearLoadProfiles, openInEditor } from '../lib/rpc.js';
   import type { LoadProfile } from '../lib/types.js';
-  import { datasetVersion } from '../lib/versions.js';
 
   const SLOW_MS = 100;
 

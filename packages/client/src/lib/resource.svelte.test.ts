@@ -1,8 +1,8 @@
 import type * as Svelte from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { withRoot } from '../test/runes.svelte.js';
 import type { ResourceOptions } from './resource.svelte.js';
-import { withRoot } from './testing.svelte.js';
 
 // `resource()` reads the owning panel's visibility from context; tests run
 // outside a component, so `getContext` is replaced by this lookup. (`doMock`

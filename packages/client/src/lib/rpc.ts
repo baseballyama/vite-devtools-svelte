@@ -16,7 +16,6 @@ import type {
   ReactiveSummary,
   ReactiveSummaryRequest,
   CaptureInfoMap,
-  StateChange,
   ApiEndpoint,
   CompilerWarning,
   RuntimeError,
@@ -207,7 +206,10 @@ export function onConnectionState(cb: (s: ConnectionState) => void): () => void 
   };
 }
 
-/** devframe prints each code at most once; pass `reissue: true` to rotate it and print again. */
+/**
+ * devframe prints each code at most once; pass `reissue: true` to rotate it and print again.
+ * Reissue only on an explicit user request.
+ */
 export async function requestAuthCode(options: { reissue?: boolean } = {}): Promise<void> {
   const c = await getClient();
   await c.requestAuthCode(options.reissue ? { reissue: true } : {});
@@ -274,13 +276,13 @@ export function onElementPicked(cb: (pick: ElementPick) => void): () => void {
 }
 
 /** `total`/`truncated`/`stale` say what the answer covers. */
-export function getReactiveGraph(req?: ReactiveGraphRequest): Promise<ReactiveGraphResult> {
-  return req ? call('get-reactive-graph', req) : call('get-reactive-graph');
+export function getReactiveGraph(req: ReactiveGraphRequest): Promise<ReactiveGraphResult> {
+  return call('get-reactive-graph', req);
 }
 
 /** Built from runtime counters; never captures the graph. */
-export function getReactiveSummary(req?: ReactiveSummaryRequest): Promise<ReactiveSummary> {
-  return req ? call('get-reactive-summary', req) : call('get-reactive-summary');
+export function getReactiveSummary(req: ReactiveSummaryRequest): Promise<ReactiveSummary> {
+  return call('get-reactive-summary', req);
 }
 
 export function getCaptureInfo(): Promise<CaptureInfoMap> {
@@ -297,10 +299,6 @@ export function getLoadProfiles(): Promise<LoadProfile[]> {
 
 export async function clearLoadProfiles(): Promise<void> {
   await call('clear-load-profiles');
-}
-
-export function getStateTimeline(): Promise<StateChange[]> {
-  return call('get-state-timeline');
 }
 
 /**

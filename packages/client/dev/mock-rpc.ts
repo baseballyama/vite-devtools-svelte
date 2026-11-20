@@ -573,7 +573,6 @@ export function createMockBackend(scale = 5000) {
     },
     'svelte-devtools:get-load-profiles': () => capped(loads, CAP ? 200 : 0),
     'svelte-devtools:clear-load-profiles': () => ((loads.length = 0), versions.loadProfiles++),
-    'svelte-devtools:get-state-timeline': () => (tick(), timeline),
     'svelte-devtools:clear-state-timeline': () => ((timeline = []), versions.stateTimeline++),
     'svelte-devtools:get-api-endpoints': () => endpoints,
     'svelte-devtools:get-compiler-warnings': () => warnings,

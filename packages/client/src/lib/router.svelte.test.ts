@@ -89,7 +89,7 @@ describe('router: navigation', () => {
 
   it('is reactive', async () => {
     const { router } = await load('');
-    const { track } = await import('./testing.svelte.js');
+    const { track } = await import('../test/runes.svelte.js');
     const t = track(() => router.current);
     router.go('api');
     t.flush();

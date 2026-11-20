@@ -115,7 +115,7 @@ function sized(id: string, size: number, pad = 'x'): StateChange {
 
 const serverBytesDrops = (c: Collector) =>
   c.getCaptureInfo().stateTimeline?.dropped?.find(d => d.reason === 'server-bytes')?.count ?? 0;
-const ids = (c: Collector) => c.stateTimeline.map(e => e.id);
+const ids = (c: Collector) => c.getStateTimelineDelta().changes.map(e => e.id);
 
 describe('Collector state timeline byte budget', () => {
   const half = STATE_TIMELINE_BYTES / 2;
@@ -256,7 +256,7 @@ function checkTimelineModel(ops: Op[]): { pulls: number; resets: number } {
   const legacyIds = new Set<string>();
   /** What the server appends for a legacy full snapshot: after the newest entry it holds. */
   const legacyAppends = (buffer: StateChange[]) => {
-    const last = c.stateTimeline.findLast(e => legacyIds.has(e.id));
+    const last = c.getStateTimelineDelta().changes.findLast(e => legacyIds.has(e.id));
     const at = last ? buffer.findIndex(e => e.id === last.id) : -1;
     for (const e of buffer) legacyIds.add(e.id);
     return (at === -1 ? buffer : buffer.slice(at + 1)).map(e => e.id);
@@ -292,7 +292,7 @@ function checkTimelineModel(ops: Op[]): { pulls: number; resets: number } {
     // is exactly the newest part of the client's. Entries the caps trimmed
     // after the client received them may stay ahead of it (the client caps
     // its own copy); after a reset both are equal.
-    const server = c.stateTimeline.map(e => e.seq);
+    const server = c.getStateTimelineDelta().changes.map(e => e.seq);
     const held = client.view.map(e => e.seq);
     assert.deepEqual(d.reset ? held : held.slice(held.length - server.length), server);
     client.cursor = d.cursor;
@@ -301,7 +301,7 @@ function checkTimelineModel(ops: Op[]): { pulls: number; resets: number } {
   };
 
   for (const op of ops) {
-    const before = new Set(c.stateTimeline.map(e => e.seq));
+    const before = new Set(c.getStateTimelineDelta().changes.map(e => e.seq));
     const dropsBefore = serverDrops(c);
     let appended: string[] = [];
     switch (op.kind) {
@@ -331,7 +331,7 @@ function checkTimelineModel(ops: Op[]): { pulls: number; resets: number } {
         pull(clients[op.client]!);
         break;
     }
-    const seqs = c.stateTimeline.map(e => e.seq);
+    const seqs = c.getStateTimelineDelta().changes.map(e => e.seq);
     // strictly increasing: no duplicates, server order = seq order
     for (let i = 1; i < seqs.length; i++) assert.ok(seqs[i]! > seqs[i - 1]!, 'seq order');
     assert.ok(seqs.length <= LIMITS.stateTimeline, 'count cap');

@@ -71,7 +71,7 @@ export function formatValue(v: unknown, max = 80): string {
   if (typeof v === 'number' && !Number.isFinite(v)) return String(v);
   let s: string;
   try {
-    s = typeof v === 'string' ? JSON.stringify(v) : (JSON.stringify(v) ?? toText(v));
+    s = JSON.stringify(v) ?? toText(v);
   } catch {
     s = toText(v);
   }

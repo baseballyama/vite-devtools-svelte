@@ -18,7 +18,6 @@ export const HOT_EVENTS = {
   /** server → runtime `{ requestId, epoch?, topK }`; reply `reactiveSummary`. */
   requestReactiveSummary: 'svelte-devtools:request-reactive-summary',
   reactiveSummary: 'svelte-devtools:reactive-summary',
-  requestStateTimeline: 'svelte-devtools:request-state-timeline',
   clearStateTimeline: 'svelte-devtools:clear-state-timeline',
   /** runtime → server, once per page load: "send me the current subscription state". */
   runtimeReady: 'svelte-devtools:runtime-ready',

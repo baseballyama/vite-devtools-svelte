@@ -228,7 +228,6 @@ export function createRpcFunctions(deps: DevframeDeps) {
     query('get-capture-info', (): CaptureInfoMap => collector.getCaptureInfo()),
     query('get-load-profiles', () => collector.loadProfiles),
     action('clear-load-profiles', () => collector.clearLoadProfiles()),
-    query('get-state-timeline', () => collector.requestStateTimeline()),
     defineRpcFunction({
       name: 'get-state-timeline-delta',
       type: 'query',

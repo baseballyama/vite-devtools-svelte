@@ -37,7 +37,6 @@ export default defineConfig({
       include: ['src/**/*.ts', 'src/**/*.svelte'],
       exclude: [
         'src/**/*.test.ts',
-        'src/lib/testing.svelte.ts',
         'src/test/**',
         // Entry point (mounts the app) and type-only modules.
         'src/main.ts',
@@ -51,15 +50,12 @@ export default defineConfig({
         statements: 99,
         functions: 98,
         branches: 91,
-        // Every module, not just the total: the weakest file reaches 97.3 %
-        // branches (graph-layout) and 98.1 % functions (rpc, an unreachable
-        // guard); all lines are covered.
+        // Every module, not just the total; functions stays below 100 for an
+        // unreachable guard in rpc.
         'src/**/*.ts': { perFile: true, lines: 100, statements: 99, functions: 98, branches: 97 },
-        // Every component: the weakest reach 97.0 % statements (Segmented),
-        // 97.9 % lines (GraphView) and 96.6 % functions (StateTimeline). Branch
-        // counts include compiler-generated template branches (a one-element
-        // Badge reports 2), so the per-file floor is low; the total above
-        // holds the real bar.
+        // Branch counts include compiler-generated template branches (a
+        // one-element Badge reports 2), so the per-file floor is low; the
+        // total above holds the real bar.
         'src/**/*.svelte': {
           perFile: true,
           lines: 97,

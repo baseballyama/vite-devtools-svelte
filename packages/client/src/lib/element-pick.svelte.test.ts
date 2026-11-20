@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { track } from '../test/runes.svelte.js';
 import { elementPick } from './element-pick.svelte.js';
-import { track } from './testing.svelte.js';
 
 const pick = (componentId: number) => ({
   epoch: 'e1',

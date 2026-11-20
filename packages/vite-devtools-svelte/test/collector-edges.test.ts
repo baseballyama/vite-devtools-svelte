@@ -61,7 +61,7 @@ describe('malformed runtime payloads are ignored', () => {
     emit(HOT_EVENTS.stateTimeline, payload);
     expect(c.liveComponents).toEqual([]);
     expect(c.renderProfiles).toEqual([]);
-    expect(c.stateTimeline).toEqual([]);
+    expect(c.getStateTimelineDelta().changes).toEqual([]);
   });
 });
 
@@ -209,48 +209,5 @@ describe('pull result cache', () => {
     vi.advanceTimersByTime(RUNTIME_REQUEST_TIMEOUT);
     expect(await evicted).toMatchObject({ nodes: [], stale: true, staleReason: 'timeout' });
     expect(await kept).toMatchObject({ nodes: [{ id: '33:a' }], stale: true });
-  });
-});
-
-const change = (i: number) => ({
-  id: `n${i}`,
-  name: 'n',
-  componentFile: '/A.svelte',
-  oldValue: i - 1,
-  newValue: i,
-  timestamp: i,
-});
-
-describe('state timeline pull (requestStateTimeline)', () => {
-  it('without a runtime, answers the server buffer at once', async () => {
-    const c = new Collector();
-    c.ingestStateTimeline({ epoch: 'a', changes: [change(1)] });
-    expect((await c.requestStateTimeline()).map(e => e.id)).toEqual(['n1']);
-  });
-
-  it('asks the runtime once for concurrent callers and resolves all with its push', async () => {
-    const { c, emit, requests } = attached();
-    vi.advanceTimersByTime(PULL_FRESHNESS);
-    const p1 = c.requestStateTimeline();
-    const p2 = c.requestStateTimeline();
-    expect(requests(HOT_EVENTS.requestStateTimeline)).toHaveLength(1);
-    emit(HOT_EVENTS.stateTimeline, { epoch: 'a', changes: [change(1)] });
-    const [r1, r2] = await Promise.all([p1, p2]);
-    expect(r1.map(e => e.id)).toEqual(['n1']);
-    expect(r2).toBe(r1);
-    // fresh: answered from the buffer without asking again
-    await c.requestStateTimeline();
-    expect(requests(HOT_EVENTS.requestStateTimeline)).toHaveLength(1);
-  });
-
-  it('times out to the buffer, and detach answers pending callers', async () => {
-    const { c } = attached();
-    vi.advanceTimersByTime(PULL_FRESHNESS);
-    const timedOut = c.requestStateTimeline();
-    vi.advanceTimersByTime(RUNTIME_REQUEST_TIMEOUT);
-    expect(await timedOut).toEqual([]);
-    const pending = c.requestStateTimeline();
-    c.detach();
-    expect(await pending).toEqual([]);
   });
 });

@@ -77,7 +77,7 @@ describe('ConnectionGate — authorization', () => {
     expect(dialog.getAttribute('aria-describedby')).toBe('auth-desc');
     expect(document.activeElement).toBe(codeInput());
     expect(rpc.requestAuthCode).toHaveBeenCalledOnce();
-    expect(rpc.requestAuthCode).toHaveBeenCalledWith(undefined);
+    expect(rpc.requestAuthCode).toHaveBeenCalledWith();
     // No banner while the dialog is up.
     expect(screen.queryByRole('status')).toBeNull();
 

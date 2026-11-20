@@ -15,15 +15,15 @@
   import SplitView from '../components/SplitView.svelte';
   import TreeView from '../components/TreeView.svelte';
   import type { Column, SortState, TableRowState, TreeViewApi } from '../components/types.js';
-  import type { CaptureInfo } from '../lib/capture.svelte.js';
   import { countBy, groupBy } from '../lib/collections.js';
+  import { datasetVersion } from '../lib/dataset-versions.js';
+  import { inspectorPicker } from '../lib/devtools-dock.js';
   import { elementPick } from '../lib/element-pick.svelte.js';
   import { componentName, errorMessage, shortPath } from '../lib/format.js';
-  import { inspectorPicker } from '../lib/inspector-dock.js';
   import { buildLiveTree, type LiveNode } from '../lib/live-tree.js';
   import { matcher } from '../lib/match.js';
   import { persisted } from '../lib/persisted.svelte.js';
-  import { reactiveScope } from '../lib/reactive-selection.svelte.js';
+  import { reactiveScope } from '../lib/reactive-scope.svelte.js';
   import { resource } from '../lib/resource.svelte.js';
   import { router } from '../lib/router.svelte.js';
   import {
@@ -34,12 +34,12 @@
   } from '../lib/rpc.js';
   import { branchKeys, defaultExpansion, remapAcross, type TreeRow } from '../lib/tree.js';
   import type {
+    CaptureInfo,
     ComponentInstance,
     ComponentRelation,
     ElementPick,
     LiveComponentsMeta,
   } from '../lib/types.js';
-  import { datasetVersion } from '../lib/versions.js';
 
   type Mode = 'tree' | 'files';
   const mode = persisted<Mode>('components:mode', 'tree');

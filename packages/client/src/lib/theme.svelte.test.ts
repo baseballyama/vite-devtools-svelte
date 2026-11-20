@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { track } from './testing.svelte.js';
-import { createThemeStore } from './theme.svelte.js';
+import { track } from '../test/runes.svelte.js';
+import { createTheme } from './theme.svelte.js';
 
 const KEY = 'svelte-devtools-theme';
 
@@ -12,7 +12,7 @@ let store: Map<string, string>;
 let storageFails = false;
 const html = { dataset: {} as Record<string, string> };
 
-/** Queries the store asked `matchMedia` about. */
+/** Queries the theme asked `matchMedia` about. */
 const queries: string[] = [];
 
 /** Store a theme choice (`undefined`: none stored). */
@@ -56,86 +56,88 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('createThemeStore: initial state', () => {
+describe('createTheme: initial state', () => {
   it.each([
-    [undefined, false, 'system', 'light'],
-    [undefined, true, 'system', 'dark'],
-    ['dark', false, 'dark', 'dark'],
-    ['light', true, 'light', 'light'],
+    [undefined, false, 'system'],
+    [undefined, true, 'system'],
+    ['dark', false, 'dark'],
+    ['light', true, 'light'],
     // Anything else stored is ignored.
-    ['blue', true, 'system', 'dark'],
-    ['', false, 'system', 'light'],
-  ] as const)('stored %j, OS dark %s → mode %s, resolved %s', (stored, dark, mode, resolved) => {
+    ['blue', true, 'system'],
+    ['', false, 'system'],
+  ] as const)('stored %j, OS dark %s → mode %s', (stored, dark, mode) => {
     seed(stored);
     osDark = dark;
-    const t = createThemeStore();
-    expect([t.mode, t.resolved]).toEqual([mode, resolved]);
+    const t = createTheme();
+    expect(t.mode).toBe(mode);
+    // The bootstrap script in index.html sets the first theme.
+    expect(html.dataset['theme']).toBeUndefined();
   });
 
-  it('with a stored theme it needs no window (no OS listener)', () => {
-    store.set(KEY, 'dark');
+  it.each([
+    ['dark', 'dark'],
+    [undefined, 'system'],
+  ] as const)('needs no window to construct or set a theme (stored %j)', (stored, mode) => {
+    seed(stored);
     Reflect.deleteProperty(globalThis, 'window');
-    const t = createThemeStore();
-    expect([t.mode, t.resolved]).toEqual(['dark', 'dark']);
+    const t = createTheme();
+    expect(t.mode).toBe(mode);
     t.set('light');
     expect(html.dataset['theme']).toBe('light');
   });
 
   it('asks only about the dark-mode preference', () => {
-    createThemeStore().set('system');
+    createTheme().set('system');
     expect(new Set(queries)).toEqual(new Set(['(prefers-color-scheme: dark)']));
   });
 
-  it('falls back to the OS preference when storage throws', () => {
+  it('falls back to system mode when storage throws', () => {
     storageFails = true;
-    osDark = true;
-    const t = createThemeStore();
-    expect([t.mode, t.resolved]).toEqual(['system', 'dark']);
+    const t = createTheme();
+    expect(t.mode).toBe('system');
   });
 });
 
-describe('createThemeStore: set', () => {
+describe('createTheme: set', () => {
   it('an explicit theme is stored, applied, and ignores OS changes', () => {
-    const t = createThemeStore();
+    const t = createTheme();
     t.set('dark');
     expect(store.get(KEY)).toBe('dark');
-    expect(html.dataset['theme']).toBe('dark');
-    expect([t.mode, t.resolved]).toEqual(['dark', 'dark']);
+    expect([t.mode, html.dataset['theme']]).toEqual(['dark', 'dark']);
     osChanges(false);
-    expect(t.resolved).toBe('dark');
     expect(html.dataset['theme']).toBe('dark');
   });
 
   it("'system' forgets the stored choice, applies the OS theme and follows it live", () => {
     store.set(KEY, 'light');
     osDark = true;
-    const t = createThemeStore();
+    const t = createTheme();
     t.set('system');
     expect(store.has(KEY)).toBe(false);
-    expect([t.mode, t.resolved, html.dataset['theme']]).toEqual(['system', 'dark', 'dark']);
+    expect([t.mode, html.dataset['theme']]).toEqual(['system', 'dark']);
     osChanges(false);
-    expect([t.resolved, html.dataset['theme']]).toEqual(['light', 'light']);
+    expect(html.dataset['theme']).toBe('light');
+    osChanges(true);
+    expect(html.dataset['theme']).toBe('dark');
   });
 
   it('works (in memory) when storage throws', () => {
-    const t = createThemeStore();
+    const t = createTheme();
     storageFails = true;
     expect(() => t.set('dark')).not.toThrow();
-    expect(t.resolved).toBe('dark');
+    expect(html.dataset['theme']).toBe('dark');
     expect(() => t.set('system')).not.toThrow();
     expect(t.mode).toBe('system');
   });
 
-  it('mode and resolved are reactive', () => {
-    const t = createThemeStore();
-    const tr = track(() => `${t.mode}/${t.resolved}`);
+  it('mode is reactive', () => {
+    const t = createTheme();
+    const tr = track(() => t.mode);
     t.set('dark');
     tr.flush();
     t.set('system');
     tr.flush();
-    osChanges(true);
-    tr.flush();
     tr.stop();
-    expect(tr.seen).toEqual(['system/light', 'dark/dark', 'system/light', 'system/dark']);
+    expect(tr.seen).toEqual(['system', 'dark', 'system']);
   });
 });

@@ -218,6 +218,7 @@ describe('formatValue', () => {
     [10n, '10'],
     [Symbol('k'), 'Symbol(k)'],
     [cyclic, '[object Object]'],
+    [Object.assign(() => {}, { toString: () => 'custom' }), 'custom'],
   ])('formatValue(%s) → %j', (v, expected) => {
     expect(formatValue(v)).toBe(expected);
   });

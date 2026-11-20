@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { CaptureInfo } from '../lib/capture.svelte.js';
+  import type { CaptureInfo } from '../lib/types.js';
   import Icon from './Icon.svelte';
 
   /**

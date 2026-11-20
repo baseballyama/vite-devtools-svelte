@@ -4,6 +4,7 @@
   import { digitsOf } from '../lib/chars.js';
   import { connection } from '../lib/connection.svelte.js';
   import { hashOtp, router } from '../lib/router.svelte.js';
+  import { requestAuthCode, submitAuthCode } from '../lib/rpc.js';
   import Button from './Button.svelte';
   import Icon from './Icon.svelte';
 
@@ -32,7 +33,7 @@
       void tick().then(() => input?.focus());
       if (!requested) {
         requested = true;
-        connection.requestCode().catch(() => {});
+        requestAuthCode().catch(() => {});
       }
     }
   });
@@ -42,7 +43,7 @@
   // eslint-disable-next-line svelte/prefer-svelte-reactivity -- consumed-code bookkeeping, read only in the hash handler and never rendered: intentionally non-reactive
   const linkCodes = new Set<string>();
   $effect(() => {
-    if (status !== 'unauthorized' || !connection.canAuth) return;
+    if (status !== 'unauthorized') return;
     const onHash = () => {
       const c = hashOtp(location.hash);
       if (c === null) return;
@@ -70,7 +71,7 @@
     busy = true;
     failed = false;
     try {
-      failed = !(await connection.submitCode(c));
+      failed = !(await submitAuthCode(c));
     } catch {
       failed = true;
     } finally {
@@ -83,7 +84,7 @@
   }
 </script>
 
-{#if status === 'unauthorized' && connection.canAuth}
+{#if status === 'unauthorized'}
   <div class="scrim">
     <div role="dialog" aria-modal="true" aria-labelledby="auth-title" aria-describedby="auth-desc">
       <form class="card" onsubmit={submit}>
@@ -113,13 +114,13 @@
         <button
           type="button"
           class="link"
-          onclick={() => connection.requestCode({ reissue: true }).catch(() => {})}
+          onclick={() => requestAuthCode({ reissue: true }).catch(() => {})}
           >Print a new code</button
         >
       </form>
     </div>
   </div>
-{:else if showDown && status !== 'connected' && status !== 'unauthorized'}
+{:else if showDown && status !== 'connected'}
   <div class="banner" class:error={status !== 'connecting'} role="status" aria-live="polite">
     <span class="spinner" aria-hidden="true"></span>
     {#if status === 'connecting'}

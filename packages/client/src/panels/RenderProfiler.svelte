@@ -12,14 +12,14 @@
   import SplitView from '../components/SplitView.svelte';
   import StatList from '../components/StatList.svelte';
   import type { Column, SortState, TableRowState } from '../components/types.js';
-  import { captureInfo } from '../lib/capture.svelte.js';
+  import { captureInfo } from '../lib/capture-info.js';
   import { groupBy } from '../lib/collections.js';
+  import { datasetVersion } from '../lib/dataset-versions.js';
   import { formatMs, formatClock, shortPath } from '../lib/format.js';
   import { matcher } from '../lib/match.js';
   import { resource } from '../lib/resource.svelte.js';
   import { getRenderProfiles, openInEditor } from '../lib/rpc.js';
   import type { RenderProfile } from '../lib/types.js';
-  import { datasetVersion } from '../lib/versions.js';
 
   const profiles = resource<RenderProfile[]>(getRenderProfiles, {
     initial: [],
