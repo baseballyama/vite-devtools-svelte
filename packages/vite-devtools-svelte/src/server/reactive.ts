@@ -43,7 +43,7 @@ export function emptySummary(
   return {
     epoch,
     computedAt: null,
-    policy: 'sampled-200ms',
+    policy: 'per-flush',
     coverage: 'component-init',
     components: { total: null, withActivity: 0 },
     rows: [],
@@ -154,7 +154,7 @@ export function normalizeSummary(data: Payload | undefined, epoch: string | null
   return {
     epoch: typeof data?.epoch === 'string' ? data.epoch : epoch,
     computedAt: finiteOrNull(data?.computedAt),
-    policy: 'sampled-200ms',
+    policy: 'per-flush',
     coverage: 'component-init',
     components: {
       total: typeof components?.total === 'number' ? components.total : null,

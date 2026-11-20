@@ -30,8 +30,8 @@ export const MCP_TOOL_GROUPS: McpToolGroup[] = [
         name: 'get_reactive_summary',
         input: 'topK?: 1–200',
         summary:
-          'The busiest live component instances from runtime counters over all instances, without capturing the graph: sampled state changes and renders since each instance mounted and when it was last active, `rows` + `other` adding up to the totals.',
-        note: 'Counts are totals (at most one change per state per 200 ms), not rates; a destroyed instance leaves with its counts. State changes are sampled only while a panel or an agent is watching. State created during component init and shared .svelte.js/.ts module state are tracked; module scopes are rows with kind "module", and their componentId works with get_reactive_scope. Answered from a cache for up to 1 s.',
+          'The busiest live component instances from runtime counters over all instances, without capturing the graph: state changes and renders since each instance mounted and when it was last active, `rows` + `other` adding up to the totals.',
+        note: 'Counts are totals (at most one change per state per Svelte flush), not rates; a destroyed instance leaves with its counts. State changes are observed only while a panel or an agent is watching. State created during component init and shared .svelte.js/.ts module state are tracked; module scopes are rows with kind "module", and their componentId works with get_reactive_scope. Answered from a cache for up to 1 s.',
       },
       {
         name: 'get_reactive_scope',

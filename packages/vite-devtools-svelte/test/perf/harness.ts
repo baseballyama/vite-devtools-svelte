@@ -1,7 +1,44 @@
-import { runtimeCode } from '../../src/runtime/index.js';
 import { countVisits } from './visits.js';
 
 export { countVisits };
+
+interface RuntimeModule {
+  createStore: (env: Record<string, unknown>) => any;
+  connectHot: (store: any, hot: unknown) => void;
+}
+// A specifier in a variable: the runtime is untyped browser JavaScript.
+const RUNTIME_URL = new URL('../../src/runtime/runtime.js', import.meta.url).href;
+const { createStore, connectHot } = (await import(RUNTIME_URL)) as RuntimeModule;
+
+/**
+ * The readers hooks.js gives the runtime (svelte/internal/devtools), over the
+ * plain objects these tests use as signals and effects: `v` value (a symbol
+ * = uninitialized), `deps` / `reactions` arrays, `fn` (an effect), `ctx`,
+ * `first` / `next` children. A derived is an object with a
+ * `deps` array and no `fn`.
+ */
+export const fieldApi = {
+  signalValue: (s: any) => (typeof s.v === 'symbol' ? undefined : s.v),
+  isUninitialized: (s: any) => typeof s.v === 'symbol',
+  deps: (r: any): unknown[] => r.deps ?? [],
+  reactions: (s: any): unknown[] => s.reactions ?? [],
+  kind: (x: any) => ('fn' in x ? 'effect' : Array.isArray(x.deps) ? 'derived' : 'state'),
+  componentOf: (e: any) => e.ctx ?? null,
+  children: (e: any) => {
+    const out: unknown[] = [];
+    for (let c = e.first; c; c = c.next) out.push(c);
+    return out;
+  },
+  snapshot: <T>(value: T): T => value,
+  sourceNode: (): string | null => null,
+};
+
+/** A write to a tracked signal, as Svelte reports it (hooks.js → markWritten). */
+export function write(h: Harness, signal: { v: unknown }, value: unknown) {
+  signal.v = value;
+  const id = h.dt._idBySignal.get(signal);
+  if (id !== undefined) h.dt.markWritten(id);
+}
 
 export interface Sent {
   event: string;
@@ -27,7 +64,9 @@ export interface Harness {
 }
 
 // Timers are captured, not scheduled, so tests control when debounced/periodic work runs.
-// `active` (default true) delivers the subscription message, as when a DevTools client is attached.
+// `clock` replaces performance.now() inside the runtime. `active` (default true)
+// delivers the subscription message, as when a DevTools client is attached;
+// `deltas` (default true) sets its componentDeltas feature gate.
 export function createRuntime(
   opts: {
     clock?: () => number;
@@ -69,29 +108,13 @@ export function createRuntime(
       for (const cb of visibilityListeners) cb();
     },
   };
-  const code = runtimeCode.replaceAll('import.meta.hot', '__hot');
-  // oxlint-disable-next-line typescript/no-implied-eval -- running the runtime source under test is the point
-  const fn = new Function(
-    'window',
-    'document',
-    '__hot',
-    'setTimeout',
-    'clearTimeout',
-    'setInterval',
-    'clearInterval',
-    'requestAnimationFrame',
-    'performance',
-    'WeakRef',
-    code,
-  );
   const timerIds = new Map<number, () => void>();
   const timerDelays = new Map<number, number>();
   let nextId = 1;
-  fn(
+  const dt = createStore({
     window,
     document,
-    hot,
-    (cb: () => void, ms = 0) => {
+    setTimeout: (cb: () => void, ms = 0) => {
       const id = nextId++;
       timerIds.set(id, cb);
       timerDelays.set(id, ms);
@@ -104,26 +127,27 @@ export function createRuntime(
       });
       return id;
     },
-    (id: number) => {
+    clearTimeout: (id: number) => {
       timerIds.delete(id);
       timerDelays.delete(id);
     },
-    (cb: () => void, ms: number) => {
+    setInterval: (cb: () => void, ms: number) => {
       const id = nextId++;
       intervals.push({ fn: cb, ms, id });
       return id;
     },
-    (id: number) => {
+    clearInterval: (id: number) => {
       const i = intervals.findIndex(x => x.id === id);
       if (i !== -1) intervals.splice(i, 1);
     },
-    () => {
+    requestAnimationFrame: () => {
       rafCallbacks++;
       return 0;
     },
-    opts.clock ? { now: opts.clock } : performance,
-    WeakRef,
-  );
+    performance: opts.clock ? { now: opts.clock } : performance,
+  });
+  connectHot(dt, hot);
+  dt._api = fieldApi;
   const emit = (event: string, data?: unknown) => {
     for (const cb of handlers.get(event) ?? []) cb(data);
   };
@@ -135,7 +159,7 @@ export function createRuntime(
   };
   return {
     dispatchWindow,
-    dt: window.__SVELTE_DEVTOOLS__,
+    dt,
     window,
     sent,
     intervals,
@@ -170,7 +194,7 @@ export function mountList(h: Harness, n: number, statesPer = 2) {
     const derived = { v: i * 2, deps: [signals.at(-1)] };
     signals.push(derived);
     dt.trackDerived(derived, 'd', id);
-    dt.bindEffect(dt.trackUserEffect('effect', id, null), { deps: [derived], fn() {} });
+    dt.bindEffect(dt.trackUserEffect('effect', id), { deps: [derived], fn() {} });
     dt.endInit(id);
     dt.registered(id);
     ids.push(id);
@@ -179,27 +203,30 @@ export function mountList(h: Harness, n: number, statesPer = 2) {
   return { root, ids, signals };
 }
 
-// Svelte tears effects down child-first, so the wrapper calls unmount(id) for
+// Svelte tears effects down child-first, so the hooks call unmount(id) for
 // every row and finally for the root.
 export function unmountList(h: Harness, list: { root: number; ids: number[] }) {
   for (const id of list.ids) h.dt.unmount(id);
   h.dt.unmount(list.root);
 }
 
+// The observation the runtime schedules after Svelte's flush (a task later),
+// run synchronously.
 export function pollFn(h: Harness): () => void {
-  const poll = h.intervals.find(i => i.ms === 200);
-  if (!poll) throw new Error('state poll interval not registered');
-  return poll.fn;
+  return () => {
+    if (h.dt._observeTimer !== null) {
+      clearTimeout(h.dt._observeTimer);
+      h.dt._observeTimer = null;
+    }
+    h.dt._observeStates();
+  };
 }
 
-// Poll until a full tick records nothing new (initial snapshots done).
+// Observe until nothing is pending (initial snapshots done).
 export function settlePolling(h: Harness, poll: () => void) {
   for (let t = 0; t < 2000; t++) {
-    const before = h.dt._stateTimeline.length;
-    const metaBefore = h.dt._pollMeta.size;
     poll();
-    if (t > 0 && h.dt._stateTimeline.length === before && h.dt._pollMeta.size === metaBefore)
-      return;
+    if (h.dt._unseeded.size === 0 && h.dt._written.size === 0) return;
   }
   throw new Error('polling never settled');
 }

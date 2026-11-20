@@ -65,7 +65,6 @@ const REQUIRED_TOOLS = [
 ];
 // Same markers as perf/check-prod-noop.mjs (kept in sync by hand).
 const PROD_MARKERS = [
-  '__SVELTE_DEVTOOLS__',
   'svelte-devtools:',
   'virtual:svelte-devtools',
   '__svelte_devtools_record_load',
@@ -1051,7 +1050,8 @@ async function main() {
   });
 }
 
-const hasRuntime = () => Object.keys(window).some(k => /^__SVELTE_.*DEVTOOLS__$/.test(k));
+// Page-side probe (serialized by waitForFunction): the DevTools store exists.
+const hasRuntime = () => Symbol.for('vite-devtools-svelte') in window;
 
 // Runs before any authorized MCP call: those take the collector's 60 s lease
 // and activate the runtime, so "inactive before any consumer" could not be
@@ -1089,9 +1089,7 @@ async function openApp(getSrv) {
     if (f === page.mainFrame()) navigations++;
   });
   const runtimeActive = () =>
-    page.evaluate(
-      () => window[Object.keys(window).find(k => /^__SVELTE_.*DEVTOOLS__$/.test(k))]?._active,
-    );
+    page.evaluate(() => window[Symbol.for('vite-devtools-svelte')]?._active);
   const app = {
     browser,
     ctx,
@@ -1139,7 +1137,7 @@ async function tier2(p, getSrv, restart, app) {
       x => x && x.stale !== true && Array.isArray(x.rows),
       20_000,
     );
-    if (s.policy !== 'sampled-200ms' || s.coverage !== 'component-init')
+    if (s.policy !== 'per-flush' || s.coverage !== 'component-init')
       throw new Error(`policy ${s.policy} / coverage ${s.coverage}`);
     if ((s.components?.total ?? null) === null || (s.other ?? null) === null)
       throw new Error('total or other unknown (null)');

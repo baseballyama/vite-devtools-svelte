@@ -94,7 +94,7 @@ jobs:
           NODE_ENV: production
         run: |
           pnpm exec vite build
-          if grep -RIn --include='*.js' --include='*.html' 'svelte-devtools-runtime\|svelte-devtools:wrapped-client' .svelte-kit/output build 2>/dev/null; then
+          if grep -RIn --include='*.js' --include='*.html' 'svelte-devtools-hooks' .svelte-kit/output build 2>/dev/null; then
             echo "::error::Devtools virtual modules leaked into production build"
             exit 1
           fi

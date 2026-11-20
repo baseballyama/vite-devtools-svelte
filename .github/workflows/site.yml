@@ -8,6 +8,7 @@ on:
       - 'docs/images/**'
       - 'pnpm-workspace.yaml'
       - '.github/actions/setup/**'
+      - '.github/actions/svelte-branch/**'
       - '.github/workflows/site.yml'
   workflow_dispatch:
 

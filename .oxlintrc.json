@@ -88,7 +88,7 @@
       "env": { "browser": true, "builtin": true, "es2024": true }
     },
     {
-      // Tests drive the untyped browser runtime (window.__SVELTE_DEVTOOLS__)
+      // Tests drive the untyped browser runtime (src/runtime/runtime.js)
       // and fake hosts; the dev-only mock backend is never shipped.
       "files": ["**/test/**", "**/*.test.ts", "packages/client/dev/**"],
       "rules": {

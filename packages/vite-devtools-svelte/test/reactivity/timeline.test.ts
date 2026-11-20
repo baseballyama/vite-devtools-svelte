@@ -1,8 +1,19 @@
 import { flushSync } from 'svelte';
 import { describe, it, expect, beforeAll, afterEach } from 'vitest';
 
+import Selected from './fixtures/Selected.svelte';
 import StateKinds from './fixtures/StateKinds.svelte';
-import { render, instance, instances, dt, poll, timeline } from './harness.js';
+import {
+  render,
+  instance,
+  instances,
+  dt,
+  graph,
+  incoming,
+  node,
+  poll,
+  timeline,
+} from './harness.js';
 
 beforeAll(() => {
   // what the server's subscription message does when a client watches
@@ -60,6 +71,24 @@ describe('state timeline', () => {
     const entries = timeline().slice(n);
     expect(entries.map(e => e.name)).toEqual(['Counter.count']);
     expect(entries[0]!.id).toMatch(/#2$/);
+  });
+});
+
+describe('which $state a deep change belongs to', () => {
+  it('an object also held by another $state stays part of the $state it came from', () => {
+    r = render(Selected);
+    const api = (r.app as any).api;
+    poll();
+    step(api.select);
+    const n = timeline().length;
+    step(api.edit);
+    // Svelte relabels the property 'selected.text'; the owner is still todos
+    expect(since(n)).toEqual([
+      { name: 'todos', oldValue: [{ text: 'milk' }], newValue: [{ text: 'oat milk' }] },
+    ]);
+    const id = instance('Selected').id;
+    const g = graph(id);
+    expect(incoming(g, `${id}:(template)`)).toEqual([node(g, id, 'todos').id]);
   });
 });
 

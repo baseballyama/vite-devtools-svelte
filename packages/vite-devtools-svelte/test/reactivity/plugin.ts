@@ -1,50 +1,23 @@
-// Loaded by vitest.config.ts, whose bundler has no `?raw` support: the
-// browser sources are read from disk here (the same text `?raw` inlines).
-import fs from 'node:fs';
+// The module wiring the dev server gets from svelteDevtools() (the hooks file
+// and its alias, the Svelte module transform), without a dev server, devframe
+// or MCP. Components import the hooks through the compiler option the plugin
+// adds (see vitest.config.ts: `experimental.devtools`).
+import { fileURLToPath } from 'node:url';
 
 import type { Plugin } from 'vite';
 
-import {
-  RUNTIME_MODULE_ID,
-  RESOLVED_RUNTIME_ID,
-  WRAPPER_MODULE_ID,
-} from '../../src/runtime/ids.js';
-import {
-  injectComponentTracking,
-  injectModuleTracking,
-  isSvelteModule,
-} from '../../src/runtime/transform.js';
+import { HOOKS_MODULE_ID } from '../../src/runtime/ids.js';
+import { injectModuleTracking, isSvelteModule } from '../../src/runtime/transform.js';
 
-const runtimeCode = fs.readFileSync(
-  new URL('../../src/runtime/client.js', import.meta.url),
-  'utf8',
-);
-const wrapperCode = fs.readFileSync(
-  new URL('../../src/runtime/wrapper.js', import.meta.url),
-  'utf8',
-);
+export const HOOKS_FILE = fileURLToPath(new URL('../../src/runtime/hooks.js', import.meta.url));
 
 export function reactivityHarnessPlugin(): Plugin[] {
   return [
     {
       name: 'reactivity-harness:modules',
       enforce: 'pre',
-      resolveId(id, importer) {
-        if (id === RUNTIME_MODULE_ID) return RESOLVED_RUNTIME_ID;
-        if (
-          id === 'svelte/internal/client' &&
-          importer &&
-          !importer.includes('node_modules') &&
-          !importer.startsWith('\0')
-        ) {
-          return WRAPPER_MODULE_ID;
-        }
-        return null;
-      },
-      load(id) {
-        if (id === RESOLVED_RUNTIME_ID) return runtimeCode;
-        if (id === WRAPPER_MODULE_ID) return wrapperCode;
-        return null;
+      resolveId(id) {
+        return id === HOOKS_MODULE_ID ? HOOKS_FILE : null;
       },
     },
     {
@@ -53,11 +26,7 @@ export function reactivityHarnessPlugin(): Plugin[] {
       transform(code, id, options) {
         if (id.includes('node_modules') || options?.ssr) return null;
         const file = id.split('?')[0]!;
-        const modified = file.endsWith('.svelte')
-          ? injectComponentTracking(code, file)
-          : isSvelteModule(file)
-            ? injectModuleTracking(code, file)
-            : null;
+        const modified = isSvelteModule(file) ? injectModuleTracking(code) : null;
         return modified === null ? null : { code: modified, map: null };
       },
     },

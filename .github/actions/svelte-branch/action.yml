@@ -1,0 +1,23 @@
+name: Svelte with the devtools channel
+description: >
+  Builds sveltejs/svelte (branch emit-dev-events, not released yet) into
+  ../svelte-emit-dev-events, where the pnpm override in pnpm-workspace.yaml
+  links `svelte` from. Run it before `pnpm install`.
+runs:
+  using: composite
+  steps:
+    - name: Build Svelte (emit-dev-events)
+      shell: bash
+      env:
+        # emit-dev-events; bump together with the local checkout
+        SVELTE_SHA: 577c8973239b38ed8a33397970ec10220a5a7ec1
+        # the svelte repo's packageManager
+        SVELTE_PNPM: pnpm@10.33.4
+      run: |
+        dir="$GITHUB_WORKSPACE/../svelte-emit-dev-events"
+        git init -q "$dir"
+        git -C "$dir" fetch -q --depth 1 https://github.com/sveltejs/svelte.git "$SVELTE_SHA"
+        git -C "$dir" checkout -q FETCH_HEAD
+        cd "$dir"
+        npx --yes "$SVELTE_PNPM" install --frozen-lockfile --filter svelte...
+        npx --yes "$SVELTE_PNPM" -C packages/svelte build

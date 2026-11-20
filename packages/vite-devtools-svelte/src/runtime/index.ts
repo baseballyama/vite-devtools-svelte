@@ -1,13 +1,14 @@
-// Kept as plain .js files so they are linted and formatted like any other source.
-// oxlint-disable-next-line import/default -- `?raw` modules are resolved by Vite
-import runtimeSource from './client.js?raw';
-// oxlint-disable-next-line import/default -- `?raw` modules are resolved by Vite
-import wrapperSource from './wrapper.js?raw';
+// The Svelte compiler imports the hooks by path (`experimental.devtools`), and
+// the hooks import runtime.js next to them. The build copies both next to the
+// bundle, so the same relative URLs work from `src` and `dist`.
+import { fileURLToPath } from 'node:url';
 
-export { RESOLVED_RUNTIME_ID, RUNTIME_MODULE_ID, WRAPPER_MODULE_ID } from './ids.js';
+export { HOOKS_MODULE_ID } from './ids.js';
 
-// Wrapping svelte/internal/client instead of regex-transforming compiled
-// output keeps tracking independent of the compiler's output shape.
-export const wrapperCode: string = wrapperSource;
+// A variable, not a literal: Vite's lib build would turn
+// `new URL('./hooks.js', import.meta.url)` into an inlined asset.
+const HOOKS_FILE_NAME = './hooks.js';
 
-export const runtimeCode: string = runtimeSource;
+// Creates the devtools store (runtime.js) and subscribes it to Svelte's
+// devtools events (`svelte/internal/devtools`).
+export const HOOKS_FILE: string = fileURLToPath(new URL(HOOKS_FILE_NAME, import.meta.url));

@@ -2,7 +2,7 @@
   "name": "compat-kit3",
   "version": "0.0.1",
   "private": true,
-  "description": "SvelteKit 3 compatibility fixture. Outside the pnpm workspace on purpose: it pins exact versions and installs the plugin from a packed tarball (see e2e/compat/README.md).",
+  "description": "SvelteKit 3 compatibility fixture. Outside the pnpm workspace on purpose: it pins exact versions, links Svelte from the unreleased emit-dev-events branch next to the repo (built by .github/actions/svelte-branch in CI), and installs the plugin from a packed tarball (see e2e/compat/README.md).",
   "type": "module",
   "imports": {
     "#lib/*": "./src/lib/*"
@@ -17,7 +17,7 @@
     "@sveltejs/vite-devtools-svelte": "file:../.pack/vite-devtools-svelte.tgz",
     "@sveltejs/vite-plugin-svelte": "7.3.1",
     "@vitejs/devtools": "0.8.3",
-    "svelte": "5.57.3",
+    "svelte": "link:../../../../svelte-emit-dev-events/packages/svelte",
     "typescript": "6.0.3",
     "vite": "8.3.8"
   },

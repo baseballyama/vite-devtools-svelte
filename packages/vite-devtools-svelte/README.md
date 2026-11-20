@@ -9,7 +9,7 @@ Svelte DevTools for Vite. Inspect components, reactivity, renders, routes, `load
 ## Requirements
 
 - Vite >= 8.3.5
-- Svelte >= 5.46.4 (runes mode)
+- Svelte 5 (runes mode) with the dev-only devtools channel `svelte/internal/devtools` (not released yet: build Svelte from the [`emit-dev-events`](https://github.com/sveltejs/svelte/tree/emit-dev-events) branch). With an older Svelte, the plugin prints a warning and the app runs without component and state tracking.
 - SvelteKit >= 3.3.0 (optional; without it the Routes, Load functions, API and Build panels are hidden)
 - [`@vitejs/devtools`](https://devtools.vite.dev/) >= 0.8.0 (optional, but recommended)
 

@@ -34,8 +34,8 @@ const GROUPS_JA: Record<string, { title: string; intro: string }> = {
 const TOOLS_JA: Record<string, JaText> = {
   get_reactive_summary: {
     summary:
-      '全インスタンスの実行時カウンタから、最も活発な表示中のコンポーネントインスタンスを返します（グラフは取得しません）。各インスタンスがマウントされてからサンプリングされた state の変化とレンダーの回数、最後に動いた時刻を返し、`rows` と `other` の合計が総数になります。',
-    note: '回数は累計のサンプリング値（1 つの state につき 200 ms ごとに最大 1 回）で、発生率ではありません。破棄されたインスタンスは回数ごと消えます。state の変化はパネルかエージェントが見ている間だけサンプリングします。追跡するのは、コンポーネントの初期化中に作られた state と、.svelte.js/.ts モジュールの共有 state です。モジュールは kind "module" の行になり、その componentId は get_reactive_scope にも使えます。最大 1 秒間はキャッシュから回答します。',
+      '全インスタンスの実行時カウンタから、最も活発な表示中のコンポーネントインスタンスを返します（グラフは取得しません）。各インスタンスがマウントされてからの state の変化とレンダーの回数、最後に動いた時刻を返し、`rows` と `other` の合計が総数になります。',
+    note: '回数は累計（1 つの state につき Svelte の 1 回の反映で最大 1 回）で、発生率ではありません。破棄されたインスタンスは回数ごと消えます。state の変化はパネルかエージェントが見ている間だけ記録します。追跡するのは、コンポーネントの初期化中に作られた state と、.svelte.js/.ts モジュールの共有 state です。モジュールは kind "module" の行になり、その componentId は get_reactive_scope にも使えます。最大 1 秒間はキャッシュから回答します。',
   },
   get_reactive_scope: {
     summary:

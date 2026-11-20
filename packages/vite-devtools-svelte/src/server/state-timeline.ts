@@ -160,7 +160,7 @@ export class StateTimeline {
       captured: this.stored.length,
       total: null,
       truncated: dropped.length > 0,
-      policy: 'sampled-200ms',
+      policy: 'per-flush',
       ...(dropped.length > 0 && { dropped }),
       ...(tooLarge > 0 && { valueTooLarge: tooLarge }),
       ...(baseline && { baseline }),
