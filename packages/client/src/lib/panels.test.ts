@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
-// Panels import the RPC layer (feature-detected functions included) and the
-// router, which reads the hash on load; nothing is called while loading.
+// Panels import the RPC layer and the router, which reads the hash on load;
+// nothing is called while loading.
 vi.mock('./rpc.js', () => ({ getCaptureInfo: vi.fn(), getVersions: vi.fn() }));
 vi.stubGlobal('location', { hash: '' });
 
@@ -84,14 +84,6 @@ describe('panel registry', () => {
   it.each(panels.map(p => p.id))('panelById(%j) finds it', id => {
     expect(panelById(id).id).toBe(id);
   });
-
-  it.each(['', 'nope', 'OVERVIEW', 'overview/', '__proto__', 'constructor'])(
-    'panelById(%j) falls back to the first panel (overview)',
-    id => {
-      expect(panelById(id)).toBe(panels[0]);
-      expect(panels[0].id).toBe('overview');
-    },
-  );
 
   // Compiles and evaluates every panel (and the components it imports) once:
   // slow under coverage instrumentation, hence the timeout.

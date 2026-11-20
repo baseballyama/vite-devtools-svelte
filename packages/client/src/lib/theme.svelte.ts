@@ -5,7 +5,6 @@ const STORAGE_KEY = 'svelte-devtools-theme';
 const MQ = '(prefers-color-scheme: dark)';
 
 export type ThemeMode = 'system' | 'light' | 'dark';
-export type ResolvedTheme = 'light' | 'dark';
 
 function readStored(): 'light' | 'dark' | null {
   try {
@@ -16,19 +15,17 @@ function readStored(): 'light' | 'dark' | null {
   }
 }
 
-function systemTheme(): ResolvedTheme {
+function systemTheme(): 'light' | 'dark' {
   return window.matchMedia(MQ).matches ? 'dark' : 'light';
 }
 
-export function createThemeStore() {
+function apply(next: 'light' | 'dark') {
+  document.documentElement.dataset.theme = next;
+}
+
+export function createTheme() {
   const stored = readStored();
   let mode = $state<ThemeMode>(stored ?? 'system');
-  let resolved = $state<ResolvedTheme>(stored ?? systemTheme());
-
-  function apply(next: ResolvedTheme) {
-    document.documentElement.dataset.theme = next;
-    resolved = next;
-  }
 
   // Listen for OS preference changes — only relevant in 'system' mode, but
   // attach unconditionally so toggling back to 'system' takes immediate effect.
@@ -56,9 +53,6 @@ export function createThemeStore() {
   return {
     get mode() {
       return mode;
-    },
-    get resolved() {
-      return resolved;
     },
     set,
   };

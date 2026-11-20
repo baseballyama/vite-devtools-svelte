@@ -1,20 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type {
-  ReactiveGraph,
   ReactiveGraphResult,
   ReactiveNode,
   ReactiveSummaryRow,
   StateTimelineEntry,
 } from './types.js';
 
-// The RPC layer is mocked: fetchGraph / fetchSummary are checked for the request they send.
-const rpc = vi.hoisted(() => ({ getReactiveGraph: vi.fn(), getReactiveSummary: vi.fn() }));
+// The RPC layer is mocked: fetchGraph is checked for the request it sends.
+const rpc = vi.hoisted(() => ({ getReactiveGraph: vi.fn() }));
 vi.mock('./rpc.js', () => rpc);
 const {
   baselineNotice,
   fetchGraph,
-  fetchSummary,
   fileNeighbourhood,
   isEpochChanged,
   nodeCount,
@@ -24,7 +22,6 @@ const {
   isValueSummary,
   kindLabel,
   nodeValueText,
-  normalizeGraph,
   sameGraph,
   sameValue,
   staleLabel,
@@ -40,58 +37,23 @@ const node = (id: string, componentId: number, value?: unknown): ReactiveNode =>
   value,
 });
 
-const legacy: ReactiveGraph = {
+const graph: ReactiveGraphResult = {
   nodes: [node('1:a', 1, 1), node('1:b', 1, 2), node('2:c', 2, 3)],
   edges: [
     { from: '1:a', to: '1:b' },
     { from: '1:b', to: '2:c' },
   ],
+  scope: null,
+  epoch: null,
+  total: null,
+  truncated: false,
+  edgesOmitted: 0,
+  policy: 'global-head',
+  computedAt: null,
 };
 
-describe('normalizeGraph', () => {
-  it('keeps the scoped-graph fields from a current server', () => {
-    const g: ReactiveGraphResult = {
-      ...legacy,
-      scope: 1,
-      epoch: 'e1',
-      total: { nodes: 10, nodesKind: 'registered', edges: null },
-      truncated: true,
-      edgesOmitted: 4,
-      policy: 'scoped',
-      computedAt: 1700000000000,
-      stale: true,
-      staleReason: 'timeout',
-    };
-    expect(normalizeGraph(g, 1)).toEqual(g);
-  });
-
-  it('never invents totals for a reply without them (whole app)', () => {
-    const g = normalizeGraph(legacy, null);
-    expect(g).toMatchObject({
-      scope: null,
-      epoch: null,
-      total: null,
-      truncated: false,
-      policy: 'global-head',
-      edgesOmitted: 0,
-      computedAt: null,
-    });
-    expect(g.nodes).toHaveLength(3);
-  });
-
-  it('narrows a whole-app reply to the requested component and counts omitted edges', () => {
-    const g = normalizeGraph(legacy, 1);
-    expect(g.policy).toBe('server-filter');
-    expect(g.scope).toBe(1);
-    expect(g.nodes.map(n => n.id)).toEqual(['1:a', '1:b']);
-    expect(g.edges).toEqual([{ from: '1:a', to: '1:b' }]);
-    expect(g.edgesOmitted).toBe(1);
-    expect(g.total).toBeNull();
-  });
-});
-
 describe('sameGraph / sameValue', () => {
-  const base = normalizeGraph(legacy, null);
+  const base = graph;
 
   it('is true for an equal copy', () => {
     expect(sameGraph(base, structuredClone(base))).toBe(true);
@@ -186,71 +148,41 @@ describe('baselineNotice', () => {
   });
 });
 
-describe('normalizeGraph (current server, partial reply)', () => {
-  it('fills missing optional fields without inventing data and drops a false stale flag', () => {
-    const g = normalizeGraph({ policy: 'scoped' } as unknown as ReactiveGraphResult, 3);
-    expect(g).toEqual({
-      nodes: [],
-      edges: [],
-      scope: null,
-      epoch: null,
-      total: null,
-      truncated: false,
-      edgesOmitted: 0,
-      policy: 'scoped',
-      computedAt: null,
-    });
-    const notStale = normalizeGraph(
-      { ...legacy, policy: 'global-head', stale: false } as unknown as ReactiveGraphResult,
-      null,
-    );
-    expect('stale' in notStale).toBe(false);
-  });
-
-  it('narrowing to a component with no nodes leaves nothing and counts every edge as omitted', () => {
-    const g = normalizeGraph(legacy, 42);
-    expect(g.nodes).toEqual([]);
-    expect(g.edges).toEqual([]);
-    expect(g.edgesOmitted).toBe(2);
-  });
-});
-
-describe('fetchGraph / fetchSummary', () => {
-  it('asks for the whole app within the caps', async () => {
-    rpc.getReactiveGraph.mockResolvedValueOnce(legacy);
-    const g = await fetchGraph(null);
+describe('fetchGraph', () => {
+  it('asks for the whole app within the caps and returns the reply as is', async () => {
+    rpc.getReactiveGraph.mockResolvedValueOnce(graph);
+    await expect(fetchGraph(null)).resolves.toBe(graph);
     expect(rpc.getReactiveGraph).toHaveBeenLastCalledWith({ maxNodes: 5000, maxEdges: 20000 });
-    expect(g.policy).toBe('global-head');
   });
 
-  it('sends the component and its page load (epoch) for a scoped request and narrows an old reply', async () => {
-    rpc.getReactiveGraph.mockResolvedValueOnce(legacy);
-    const g = await fetchGraph({ componentId: 2, epoch: 'e7' });
+  it('sends the component and its page load (epoch) for a scoped request', async () => {
+    const reply: ReactiveGraphResult = {
+      ...graph,
+      nodes: [node('2:c', 2, 3)],
+      edges: [],
+      scope: 2,
+      epoch: 'e7',
+      edgesOmitted: 1,
+      policy: 'scoped',
+    };
+    rpc.getReactiveGraph.mockResolvedValueOnce(reply);
+    await expect(fetchGraph({ componentId: 2, epoch: 'e7' })).resolves.toBe(reply);
     expect(rpc.getReactiveGraph).toHaveBeenLastCalledWith({
       componentId: 2,
       epoch: 'e7',
       maxNodes: 5000,
       maxEdges: 20000,
     });
-    expect(g.nodes.map(n => n.id)).toEqual(['2:c']);
-    expect(g.policy).toBe('server-filter');
   });
 
   it('propagates RPC failures', async () => {
     rpc.getReactiveGraph.mockRejectedValueOnce(new Error('down'));
     await expect(fetchGraph(null)).rejects.toThrow('down');
   });
-
-  it('fetchSummary forwards the request and the reply', async () => {
-    const reply = { rows: [] };
-    rpc.getReactiveSummary.mockResolvedValueOnce(reply);
-    await expect(fetchSummary({ topK: 5 })).resolves.toBe(reply);
-    expect(rpc.getReactiveSummary).toHaveBeenLastCalledWith({ topK: 5 });
-  });
 });
 
 describe('sameGraph field by field', () => {
-  const base = normalizeGraph(legacy, null);
+  const base = graph;
   const total = { nodes: 3, nodesKind: 'registered' as const, edges: 2 };
   it.each<[string, Partial<ReactiveGraphResult>]>([
     ['epoch', { epoch: 'x' }],

@@ -12,8 +12,8 @@ vi.doMock('svelte', async (importOriginal: () => Promise<typeof Svelte>) => ({
 async function load(rpc: Record<string, unknown>) {
   vi.resetModules();
   vi.doMock('./rpc.js', () => rpc);
-  const { captureInfo } = await import('./capture.svelte.js');
-  const { withRoot } = await import('./testing.svelte.js');
+  const { captureInfo } = await import('./capture-info.js');
+  const { withRoot } = await import('../test/runes.svelte.js');
   return { captureInfo, withRoot };
 }
 

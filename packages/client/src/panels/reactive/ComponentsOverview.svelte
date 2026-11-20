@@ -6,7 +6,7 @@
   import SplitView from '../../components/SplitView.svelte';
   import type { Column, SortState, TableRowState } from '../../components/types.js';
   import { componentName, formatAgo, formatMs, shortPath } from '../../lib/format.js';
-  import { reactiveScope } from '../../lib/reactive-selection.svelte.js';
+  import { reactiveScope } from '../../lib/reactive-scope.svelte.js';
   import {
     baselineNotice,
     groupByFile,

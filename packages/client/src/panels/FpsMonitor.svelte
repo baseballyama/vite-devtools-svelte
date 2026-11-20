@@ -6,10 +6,10 @@
   import Segmented from '../components/Segmented.svelte';
   import StatList from '../components/StatList.svelte';
   import type { Stat } from '../components/types.js';
+  import { datasetVersion } from '../lib/dataset-versions.js';
   import { resource } from '../lib/resource.svelte.js';
   import { getFps, clearFps } from '../lib/rpc.js';
   import type { FpsSample } from '../lib/types.js';
-  import { datasetVersion } from '../lib/versions.js';
 
   const fps = resource<FpsSample[]>(getFps, {
     initial: [],

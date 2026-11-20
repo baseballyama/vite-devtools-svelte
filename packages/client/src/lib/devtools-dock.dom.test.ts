@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { inspectorPicker, showTerminals } from './inspector-dock.js';
+import { inspectorPicker, showTerminals } from './devtools-dock.js';
 
 const KEY = '__DEVFRAME_HUB_CLIENT_CONTEXT__';
 

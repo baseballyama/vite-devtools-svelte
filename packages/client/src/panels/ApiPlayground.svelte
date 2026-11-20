@@ -10,6 +10,7 @@
   import SplitView from '../components/SplitView.svelte';
   import type { Tone } from '../components/types.js';
   import VirtualList from '../components/VirtualList.svelte';
+  import { datasetVersion } from '../lib/dataset-versions.js';
   import { errorMessage, formatBytes, formatMs } from '../lib/format.js';
   import { MAX_BODY_BYTES, sendRequest } from '../lib/http.js';
   import type { ApiResponse, Truncation } from '../lib/http.js';
@@ -17,7 +18,6 @@
   import { resource } from '../lib/resource.svelte.js';
   import { getApiEndpoints, openInEditor } from '../lib/rpc.js';
   import type { ApiEndpoint } from '../lib/types.js';
-  import { datasetVersion } from '../lib/versions.js';
 
   // Rescans after the dev server sees a file added, changed or deleted.
   const endpoints = resource<ApiEndpoint[]>(getApiEndpoints, {

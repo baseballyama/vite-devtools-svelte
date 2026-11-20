@@ -1,5 +1,5 @@
 /**
- * Test helpers for rune modules (not shipped: only tests import this).
+ * Test helpers for rune modules.
  *
  * Tests that re-import a module after `vi.resetModules()` get a fresh Svelte
  * runtime with it; signals of one runtime are invisible to effects of

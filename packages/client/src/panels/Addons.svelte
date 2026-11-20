@@ -6,8 +6,8 @@
   import Panel from '../components/Panel.svelte';
   import SearchField from '../components/SearchField.svelte';
   import { addonLogo } from '../lib/addon-logos.js';
+  import { showTerminals } from '../lib/devtools-dock.js';
   import { errorMessage } from '../lib/format.js';
-  import { showTerminals } from '../lib/inspector-dock.js';
   import { matcher } from '../lib/match.js';
   import { resource } from '../lib/resource.svelte.js';
   import { getAddons, getCommunityAddons, getProject, installAddon } from '../lib/rpc.js';

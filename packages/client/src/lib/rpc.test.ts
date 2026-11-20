@@ -278,13 +278,11 @@ describe('calls', () => {
       r => r.openReactiveInEditor('a.svelte', 'n', 'state'),
       ['open-reactive-in-editor', { file: 'a.svelte', name: 'n', type: 'state' }],
     ],
-    ['getReactiveGraph()', r => r.getReactiveGraph(), ['get-reactive-graph']],
     [
       'getReactiveGraph(req)',
       r => r.getReactiveGraph({ componentId: 1 }),
       ['get-reactive-graph', { componentId: 1 }],
     ],
-    ['getReactiveSummary()', r => r.getReactiveSummary(), ['get-reactive-summary']],
     [
       'getReactiveSummary(req)',
       r => r.getReactiveSummary({ topK: 3 }),
@@ -320,7 +318,6 @@ describe('calls', () => {
       [rpc.getRenderProfiles, 'get-render-profiles'],
       [rpc.getLoadProfiles, 'get-load-profiles'],
       [rpc.clearLoadProfiles, 'clear-load-profiles'],
-      [rpc.getStateTimeline, 'get-state-timeline'],
       [rpc.getVersions, 'get-versions'],
       [rpc.clearStateTimeline, 'clear-state-timeline'],
       [rpc.getApiEndpoints, 'get-api-endpoints'],

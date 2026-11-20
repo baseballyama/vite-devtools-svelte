@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/svelte';
 import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { reactiveScope } from '../lib/reactive-selection.svelte.js';
+import { reactiveScope } from '../lib/reactive-scope.svelte.js';
 import { router } from '../lib/router.svelte.js';
 import * as rpc from '../lib/rpc.js';
 import type {

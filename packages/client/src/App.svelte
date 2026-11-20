@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Component } from 'svelte';
 
-  import './lib/design-system.css';
+  import './design-system.css';
   import Button from './components/Button.svelte';
   import CommandPalette from './components/CommandPalette.svelte';
   import ConnectionGate from './components/ConnectionGate.svelte';
@@ -9,7 +9,7 @@
   import Icon from './components/Icon.svelte';
   import PanelHost from './components/PanelHost.svelte';
   import type { Command } from './components/types.js';
-  import { connection, connectionSupported } from './lib/connection.svelte.js';
+  import { connection } from './lib/connection.svelte.js';
   import { elementPick } from './lib/element-pick.svelte.js';
   import { errorMessage } from './lib/format.js';
   import {
@@ -24,9 +24,9 @@
   import { resource } from './lib/resource.svelte.js';
   import { router } from './lib/router.svelte.js';
   import { getProject, onElementPicked } from './lib/rpc.js';
-  import { createThemeStore, type ThemeMode } from './lib/theme.svelte.js';
+  import { createTheme, type ThemeMode } from './lib/theme.svelte.js';
 
-  const theme = createThemeStore();
+  const theme = createTheme();
   const navPref = persisted<'expanded' | 'collapsed' | null>('nav', null);
   const requestedView = requestedPanelView();
 
@@ -45,7 +45,7 @@
   // restarted dev server may have added or dropped SvelteKit.
   const project = resource(getProject, {
     initial: null,
-    when: () => !connectionSupported || connection.state.status === 'connected',
+    when: () => connection.state.status === 'connected',
   });
   // A failed lookup shows every panel rather than hiding any for good.
   const panels = $derived(panelsForView(project.error ? true : project.data?.kit, requestedView));
@@ -235,18 +235,16 @@
       </div>
 
       <div class="foot">
-        {#if connectionSupported}
-          <span
-            class="conn {connection.state.status}"
-            role="status"
-            title="Dev server: {connection.state.status}{connection.state.host !== 'unknown'
-              ? ` (${connection.state.host === 'vite-devtools' ? 'Vite DevTools' : 'standalone'})`
-              : ''}"
-          >
-            <span class="conn-dot" aria-hidden="true"></span>
-            <span class="nav-text">{connection.state.status}</span>
-          </span>
-        {/if}
+        <span
+          class="conn {connection.state.status}"
+          role="status"
+          title="Dev server: {connection.state.status}{connection.state.host !== 'unknown'
+            ? ` (${connection.state.host === 'vite-devtools' ? 'Vite DevTools' : 'standalone'})`
+            : ''}"
+        >
+          <span class="conn-dot" aria-hidden="true"></span>
+          <span class="nav-text">{connection.state.status}</span>
+        </span>
         <Button
           icon={themeIcon}
           variant="ghost"
@@ -547,11 +545,11 @@
     min-width: 0;
     min-height: 0;
   }
-  .stage-content :global(.host) {
+  .host {
     height: 100%;
     min-height: 0;
   }
-  .stage-content :global(.host[hidden]) {
+  .host[hidden] {
     display: none;
   }
   /* transform-only animation: runs on the compositor, not on the main

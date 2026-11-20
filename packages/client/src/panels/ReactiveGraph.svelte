@@ -12,17 +12,17 @@
   import Segmented from '../components/Segmented.svelte';
   import SplitView from '../components/SplitView.svelte';
   import type { Column, SortState, TableRowState } from '../components/types.js';
-  import { captureInfo } from '../lib/capture.svelte.js';
+  import { captureInfo } from '../lib/capture-info.js';
   import { groupBy } from '../lib/collections.js';
+  import { datasetVersion } from '../lib/dataset-versions.js';
   import { componentName, formatClock } from '../lib/format.js';
   import { haystack, haystackMatcher } from '../lib/match.js';
   import { persisted } from '../lib/persisted.svelte.js';
-  import { reactiveScope } from '../lib/reactive-selection.svelte.js';
+  import { reactiveScope } from '../lib/reactive-scope.svelte.js';
   import {
     EMPTY_GRAPH,
     baselineNotice,
     fetchGraph,
-    fetchSummary,
     fileNeighbourhood,
     hotStates,
     isEpochChanged,
@@ -33,14 +33,13 @@
   } from '../lib/reactive.js';
   import { resource } from '../lib/resource.svelte.js';
   import { router } from '../lib/router.svelte.js';
-  import { getStateTimelineDelta, openReactiveInEditor } from '../lib/rpc.js';
+  import { getReactiveSummary, getStateTimelineDelta, openReactiveInEditor } from '../lib/rpc.js';
   import type {
     ReactiveGraphResult,
     ReactiveNode,
     ReactiveSummary,
     StateTimelineEntry,
   } from '../lib/types.js';
-  import { datasetVersion } from '../lib/versions.js';
   import ComponentsOverview from './reactive/ComponentsOverview.svelte';
   import HotStates from './reactive/HotStates.svelte';
   import KindBadge from './reactive/KindBadge.svelte';
@@ -70,7 +69,7 @@
   // A $derived, so switching Components / Instances does not re-run the poll.
   const summaryOn = $derived(tab === 'overview' && overviewOf !== 'states');
 
-  const summary = resource<ReactiveSummary | null>(() => fetchSummary(SUMMARY), {
+  const summary = resource<ReactiveSummary | null>(() => getReactiveSummary(SUMMARY), {
     initial: null,
     interval: SUMMARY_POLL_MS,
     when: () => summaryOn,

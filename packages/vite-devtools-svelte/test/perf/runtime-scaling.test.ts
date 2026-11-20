@@ -564,12 +564,7 @@ describe('activity subscription', () => {
     const h = createRuntime({ active: false });
     mountList(h, 3);
     h.emit('svelte-devtools:request-reactive-graph', {});
-    h.emit('svelte-devtools:request-state-timeline', {});
-    expect(events(h)).toEqual([
-      'svelte-devtools:runtime-ready',
-      'svelte-devtools:reactive-graph',
-      'svelte-devtools:state-timeline',
-    ]);
+    expect(events(h)).toEqual(['svelte-devtools:runtime-ready', 'svelte-devtools:reactive-graph']);
   });
 });
 
@@ -637,7 +632,7 @@ describe('state timeline transfer', () => {
     expect(last.changes).toEqual([]);
   });
 
-  it('replies to request-state-timeline with the full buffer and reset: true, within 4 MB', () => {
+  it('sends the full buffer with reset: true on resync, within 4 MB', () => {
     const { h, add, poll } = setup();
     const sigs = add(300, 1500); // 300 objects of ≈ 7 kB
     for (let t = 0; t < 400; t++) poll(); // seeds
@@ -648,8 +643,8 @@ describe('state timeline transfer', () => {
     for (let t = 0; t < 400; t++) poll(); // 300 changes of ≈ 14 kB (old + new): over 4 MB
     expect(h.dt._stateTimeline.length).toBeGreaterThan(0);
     h.sent.length = 0;
-    h.emit('svelte-devtools:request-state-timeline', {});
-    const reply = h.sent.at(-1)!;
+    h.emit('svelte-devtools:subscription', { active: true, componentDeltas: true, resync: true });
+    const reply = h.sent.findLast(m => m.event === 'svelte-devtools:state-timeline')!;
     const data = reply.data as any;
     expect(data.reset).toBe(true);
     expect(data.changes.length).toBe(h.dt._stateTimeline.length);

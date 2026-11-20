@@ -118,7 +118,7 @@ describe('Collector ingestion caps', () => {
     c.ingestReactiveGraph({ nodes: null, edges: {} });
     expect(c.liveComponents).toEqual([]);
     expect(c.renderProfiles).toEqual([]);
-    expect(c.stateTimeline).toEqual([]);
+    expect(c.getStateTimelineDelta().changes).toEqual([]);
     expect(c.getCaptureInfo().reactiveNodes?.captured).toBe(0);
   });
 
@@ -234,7 +234,7 @@ describe('Collector component deltas + per-epoch state', () => {
       c.ingestStateTimeline({ epoch: `e${i}`, changes: [change(i)] });
     }
     expect(c.epochInfo.epochs).toBe(MAX_EPOCHS);
-    expect(c.stateTimeline.map(e => e.id)).toEqual(['n2', 'n3', 'n4', 'n5']);
+    expect(c.getStateTimelineDelta().changes.map(e => e.id)).toEqual(['n2', 'n3', 'n4', 'n5']);
   });
 
   it('treats epoch-less payloads (older runtimes) as one legacy epoch, full form', () => {
@@ -347,7 +347,7 @@ describe('Collector hot channel', () => {
     c.attach(h.hot);
     c.ingestStateTimeline({ changes: [change(1)] });
     c.clearStateTimeline();
-    expect(c.stateTimeline).toEqual([]);
+    expect(c.getStateTimelineDelta().changes).toEqual([]);
     expect(h.sent.at(-1)?.event).toBe(HOT_EVENTS.clearStateTimeline);
   });
 });
@@ -396,16 +396,6 @@ describe('Collector pulls', () => {
     });
   });
 
-  it('falls back to cache after the timeout and removes the resolver', async () => {
-    const c = new Collector();
-    const h = fakeHot();
-    c.attach(h.hot);
-    const p = c.requestStateTimeline();
-    vi.advanceTimersByTime(RUNTIME_REQUEST_TIMEOUT + 1);
-    await expect(p).resolves.toEqual([]);
-    expect((c as any).timelineResolvers).toHaveLength(0);
-  });
-
   it('shares one in-flight pull between concurrent callers and reuses fresh results', async () => {
     const c = new Collector();
     const h = fakeHot();
@@ -451,7 +441,7 @@ describe('Collector state timeline deltas', () => {
     const next = c.getStateTimelineDelta(first.cursor);
     expect(next.reset).toBe(false);
     expect(next.changes.map(e => e.id)).toEqual(['n3']);
-    expect(c.stateTimeline).toHaveLength(3);
+    expect(c.getStateTimelineDelta().changes).toHaveLength(3);
 
     expect(c.getStateTimelineDelta(next.cursor).changes).toEqual([]);
   });
@@ -470,7 +460,7 @@ describe('Collector state timeline deltas', () => {
     expect(after.changes.map(e => e.id)).toEqual(['n3']);
 
     c.ingestStateTimeline({ epoch: 'a', changes: [change(9)], reset: true });
-    expect(c.stateTimeline.map(e => e.id)).toEqual(['n3', 'n9']);
+    expect(c.getStateTimelineDelta().changes.map(e => e.id)).toEqual(['n3', 'n9']);
   });
 
   it('D1: a caught-up cursor gets reset after a server-side reset (no stale/duplicate rows)', () => {
@@ -507,7 +497,7 @@ describe('Collector state timeline deltas', () => {
       expect(d.reset).toBe(false);
       cursor = d.cursor;
     }
-    expect(c.stateTimeline).toHaveLength(6);
+    expect(c.getStateTimelineDelta().changes).toHaveLength(6);
   });
 
   it('a cursor that fell out of the buffer gets a reset', () => {
@@ -517,7 +507,7 @@ describe('Collector state timeline deltas', () => {
     for (let i = 2; i < 2 + LIMITS.stateTimeline + 5; i++) {
       c.ingestStateTimeline({ epoch: 'a', changes: [change(i)] });
     }
-    expect(c.stateTimeline).toHaveLength(LIMITS.stateTimeline);
+    expect(c.getStateTimelineDelta().changes).toHaveLength(LIMITS.stateTimeline);
     expect(c.getStateTimelineDelta(old).reset).toBe(true);
   });
 
@@ -526,10 +516,12 @@ describe('Collector state timeline deltas', () => {
     const big = 'x'.repeat(64 * 1024);
     const changes = Array.from({ length: 200 }, (_, i) => change(i, { newValue: big }));
     c.ingestStateTimeline({ epoch: 'a', changes });
-    const bytes = c.stateTimeline.reduce((s, e) => s + JSON.stringify(e).length, 0);
+    const bytes = c
+      .getStateTimelineDelta()
+      .changes.reduce((s, e) => s + JSON.stringify(e).length, 0);
     expect(bytes).toBeLessThanOrEqual(STATE_TIMELINE_BYTES + 64 * 1024);
-    expect(c.stateTimeline.length).toBeLessThan(200);
-    expect(c.stateTimeline.at(-1)!.id).toBe('n199');
+    expect(c.getStateTimelineDelta().changes.length).toBeLessThan(200);
+    expect(c.getStateTimelineDelta().changes.at(-1)!.id).toBe('n199');
   });
 });
 
@@ -571,7 +563,7 @@ describe('Collector activity leases (runtime subscription)', () => {
     await waiting;
     expect(resolved).toBe(true);
     expect(c.liveComponents).toHaveLength(1);
-    expect(c.stateTimeline).toHaveLength(1);
+    expect(c.getStateTimelineDelta().changes).toHaveLength(1);
     const timedOut = c.waitForSnapshot(1000);
     vi.advanceTimersByTime(1001);
     await expect(timedOut).resolves.toBeUndefined();

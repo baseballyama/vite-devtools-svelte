@@ -1783,9 +1783,6 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     import.meta.hot.on('svelte-devtools:request-reactive-summary', data => {
       __SVELTE_DT.sendReactiveSummary(data);
     });
-    import.meta.hot.on('svelte-devtools:request-state-timeline', () => {
-      import.meta.hot.send('svelte-devtools:state-timeline', __SVELTE_DT._timelineFull());
-    });
     import.meta.hot.on('svelte-devtools:clear-state-timeline', () => {
       __SVELTE_DT.clearStateTimeline();
     });

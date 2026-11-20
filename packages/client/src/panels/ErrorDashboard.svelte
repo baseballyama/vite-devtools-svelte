@@ -11,14 +11,14 @@
   import Segmented from '../components/Segmented.svelte';
   import SplitView from '../components/SplitView.svelte';
   import VirtualList from '../components/VirtualList.svelte';
-  import { captureInfo } from '../lib/capture.svelte.js';
+  import { captureInfo } from '../lib/capture-info.js';
   import { countBy, uniqueKeys } from '../lib/collections.js';
+  import { datasetVersion } from '../lib/dataset-versions.js';
   import { formatClock, shortPath } from '../lib/format.js';
   import { matcher } from '../lib/match.js';
   import { resource } from '../lib/resource.svelte.js';
   import { getCompilerWarnings, getRuntimeErrors, clearErrors, openInEditor } from '../lib/rpc.js';
   import type { CompilerWarning, RuntimeError } from '../lib/types.js';
-  import { datasetVersion } from '../lib/versions.js';
 
   interface Problem {
     key: string;

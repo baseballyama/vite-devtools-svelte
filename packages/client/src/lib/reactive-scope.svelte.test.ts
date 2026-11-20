@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { reactiveScope } from './reactive-selection.svelte.js';
-import { track } from './testing.svelte.js';
+import { track } from '../test/runes.svelte.js';
+import { reactiveScope } from './reactive-scope.svelte.js';
 
 describe('reactiveScope', () => {
   it('starts unscoped, is settable and clearable, and is reactive', () => {

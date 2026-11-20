@@ -7,6 +7,7 @@
   import Panel from '../components/Panel.svelte';
   import SearchField from '../components/SearchField.svelte';
   import Segmented from '../components/Segmented.svelte';
+  import { datasetVersion } from '../lib/dataset-versions.js';
   import { formatBytes } from '../lib/format.js';
   import type { IconName } from '../lib/icons.js';
   import { matcher } from '../lib/match.js';
@@ -23,7 +24,6 @@
     getRuntimeErrors,
   } from '../lib/rpc.js';
   import type { ProjectInfo } from '../lib/types.js';
-  import { datasetVersion } from '../lib/versions.js';
 
   const project = resource<ProjectInfo | null>(getProject, { initial: null });
   const embedded = requestedPanelView() !== null;

@@ -7,6 +7,8 @@ describe('addonLogo', () => {
     const svelte = addonLogo('svelte');
     expect(svelte).toBeTruthy();
     expect(addonLogo('vitest')).not.toBe(svelte);
+    expect(addonLogo('mdsvex')).not.toBe(svelte);
+    expect(addonLogo('mdsvex')).toContain('mdsvex');
     expect(addonLogo('ai-tools')).toBe(svelte);
   });
 });

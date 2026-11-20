@@ -1,19 +1,11 @@
-/**
- * Replies are normalised so the UI never shows a guessed number: anything
- * the server did not report is `null` / `false`.
- */
 import { isDigits } from './chars.js';
 import { groupBy } from './collections.js';
 import { formatValue } from './format.js';
-import { getReactiveGraph, getReactiveSummary } from './rpc.js';
+import { getReactiveGraph } from './rpc.js';
 import type {
   ReactiveEdge,
-  ReactiveGraph,
-  ReactiveGraphRequest,
   ReactiveGraphResult,
   ReactiveNode,
-  ReactiveSummary,
-  ReactiveSummaryRequest,
   ReactiveSummaryRow,
   StateTimelineEntry,
 } from './types.js';
@@ -34,63 +26,18 @@ export const EMPTY_GRAPH: ReactiveGraphResult = {
 };
 
 /**
- * Fill the total / truncation fields a reply without them (an older server) lacks,
- * without inventing totals. Such a server always sends the whole app; when
- * one component was asked for, it is narrowed here (`policy: 'server-filter'`).
- */
-export function normalizeGraph(
-  g: ReactiveGraph | ReactiveGraphResult,
-  requested: number | null,
-): ReactiveGraphResult {
-  const r = g as Partial<ReactiveGraphResult> & ReactiveGraph;
-  if (r.policy !== undefined) {
-    return {
-      nodes: r.nodes ?? [],
-      edges: r.edges ?? [],
-      scope: r.scope ?? null,
-      epoch: r.epoch ?? null,
-      total: r.total ?? null,
-      truncated: !!r.truncated,
-      edgesOmitted: r.edgesOmitted ?? 0,
-      policy: r.policy,
-      computedAt: r.computedAt ?? null,
-      ...(r.stale ? { stale: true, staleReason: r.staleReason } : {}),
-    };
-  }
-  const nodes = requested === null ? r.nodes : r.nodes.filter(n => n.componentId === requested);
-  const ids = new Set(nodes.map(n => n.id));
-  const edges =
-    requested === null ? r.edges : r.edges.filter(e => ids.has(e.from) && ids.has(e.to));
-  return {
-    nodes,
-    edges,
-    scope: requested,
-    epoch: null,
-    total: null,
-    truncated: false,
-    edgesOmitted: r.edges.length - edges.length,
-    policy: requested === null ? 'global-head' : 'server-filter',
-    computedAt: null,
-  };
-}
-
-/**
  * A scoped request carries `epoch` so the server answers
  * `staleReason: 'epoch-changed'` instead of scoping a different instance that
  * reuses the id.
  */
-export async function fetchGraph(
+export function fetchGraph(
   scope: { componentId: number; epoch: string } | null,
 ): Promise<ReactiveGraphResult> {
-  const componentId = scope?.componentId ?? null;
-  const req: ReactiveGraphRequest = scope
-    ? { componentId: scope.componentId, epoch: scope.epoch, ...GRAPH_CAPS }
-    : { ...GRAPH_CAPS };
-  return normalizeGraph(await getReactiveGraph(req), componentId);
-}
-
-export function fetchSummary(req: ReactiveSummaryRequest): Promise<ReactiveSummary> {
-  return getReactiveSummary(req);
+  return getReactiveGraph(
+    scope
+      ? { componentId: scope.componentId, epoch: scope.epoch, ...GRAPH_CAPS }
+      : { ...GRAPH_CAPS },
+  );
 }
 
 /**

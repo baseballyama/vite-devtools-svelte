@@ -12,9 +12,7 @@ import type {
   ReactiveSummaryRequest,
   RenderProfile,
   RuntimeError,
-  StateChange,
   StateTimelineDelta,
-  StateTimelineEntry,
   DatasetVersions,
   ElementPick,
 } from '../types.js';
@@ -150,10 +148,6 @@ export class Collector {
   private requestSeq = 0;
   private lastGraph: ReactiveGraphResult | undefined;
 
-  private lastTimelinePull = 0;
-  private timelineInflight: Promise<StateChange[]> | undefined;
-  private timelineResolvers: Array<(changes: StateChange[]) => void> = [];
-
   private hot: HotChannel | undefined;
   private detachHot: (() => void) | undefined;
   private leases = new Map<string, number>();
@@ -228,7 +222,6 @@ export class Collector {
     this.hot = undefined;
     // Answer pending pulls from cache instead of leaving them to time out.
     for (const id of this.pulls.keys()) this.settle(id, 'no-runtime');
-    this.flushStateTimeline();
   }
 
   /** What the runtime is told: collect/poll only while somebody is watching. */
@@ -252,10 +245,6 @@ export class Collector {
 
   get compilerWarnings(): CompilerWarning[] {
     return this.warnings.items;
-  }
-
-  get stateTimeline(): StateTimelineEntry[] {
-    return this.timeline.entries;
   }
 
   get liveComponents(): ComponentInstance[] {
@@ -463,8 +452,6 @@ export class Collector {
   ingestStateTimeline(data: TimelinePush | undefined): void {
     if (typeof data?.epoch === 'string') this.touchEpoch(data.epoch);
     this.timeline.ingest(data);
-    this.lastTimelinePull = Date.now();
-    this.flushStateTimeline();
     // The runtime's activation snapshot ends with a `reset: true` timeline
     // (after components and profiles), so that completes a snapshot.
     if (data?.reset === true) {
@@ -727,41 +714,5 @@ export class Collector {
     }
     if (pull.kind === 'graph') this.lastGraph = outcome as ReactiveGraphResult;
     pull.resolve(outcome);
-  }
-
-  // Concurrent callers share one in-flight pull and fresh results are reused,
-  // so several polling clients never make the app rebuild the same data more
-  // than once a second.
-  requestStateTimeline(): Promise<StateChange[]> {
-    const hot = this.hot;
-    if (!hot || Date.now() - this.lastTimelinePull < PULL_FRESHNESS) {
-      return Promise.resolve(this.stateTimeline);
-    }
-    if (this.timelineInflight) return this.timelineInflight;
-    const promise = new Promise<StateChange[]>(resolve => {
-      const resolver = (value: StateChange[]) => {
-        clearTimeout(timeout);
-        resolve(value);
-      };
-      const timeout = setTimeout(() => {
-        // Remove this resolver to prevent a leak, then answer from cache.
-        this.timelineResolvers = this.timelineResolvers.filter(r => r !== resolver);
-        resolve(this.stateTimeline);
-      }, RUNTIME_REQUEST_TIMEOUT);
-      this.timelineResolvers.push(resolver);
-      hot.send(HOT_EVENTS.requestStateTimeline, {});
-    }).finally(() => {
-      if (this.timelineInflight === promise) this.timelineInflight = undefined;
-    });
-    this.timelineInflight = promise;
-    return promise;
-  }
-
-  // Snapshot then reset before resolving so concurrent requests that push
-  // during the resolve loop are not silently dropped.
-  private flushStateTimeline(): void {
-    const pending = this.timelineResolvers;
-    this.timelineResolvers = [];
-    for (const resolve of pending) resolve(this.stateTimeline);
   }
 }

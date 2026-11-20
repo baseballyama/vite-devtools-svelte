@@ -347,7 +347,6 @@ describe('every RPC with valid input', () => {
       'get-capture-info': [[], r => expect(r).toBeTypeOf('object')],
       'get-load-profiles': [[], r => expect(r).toEqual([])],
       'clear-load-profiles': [[], () => {}],
-      'get-state-timeline': [[], r => expect(r).toEqual([])],
       'get-state-timeline-delta': [[{}], r => expect(r).toMatchObject({ changes: [] })],
       'get-versions': [[], r => expect(r).toBeTypeOf('object')],
       'clear-state-timeline': [[], () => {}],
