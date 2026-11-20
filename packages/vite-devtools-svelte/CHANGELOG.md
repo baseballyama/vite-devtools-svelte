@@ -1,5 +1,31 @@
 # vite-devtools-svelte
 
+## 0.11.1
+
+### Patch Changes
+
+- [#250](https://github.com/sveltejs/vite-devtools-svelte/pull/250) [`0d8c5b2`](https://github.com/sveltejs/vite-devtools-svelte/commit/0d8c5b2f627ab688c181b5fa568e8f79e69b8ce2) Thanks [@baseballyama](https://github.com/baseballyama)! - The Build panel's entry badge now comes from Vite's build manifest instead of guessing from file names, and the OG preview no longer stalls the dev server on titles or meta tags with long runs of `&`.
+
+- [#254](https://github.com/sveltejs/vite-devtools-svelte/pull/254) [`856d5c9`](https://github.com/sveltejs/vite-devtools-svelte/commit/856d5c92435aa31a04e7f54a0417cf7a4b8d000a) Thanks [@baseballyama](https://github.com/baseballyama)! - The DevTools UI no longer runs a frame loop while the Reactivity graph is hidden, fetches each Reactivity scope once, and stops re-analyzing components on every tree row change (the tree inspector now has a Re-analyze button). A theme picked in the UI now stays when the OS theme changes.
+
+- [#252](https://github.com/sveltejs/vite-devtools-svelte/pull/252) [`6a2bf02`](https://github.com/sveltejs/vite-devtools-svelte/commit/6a2bf02ca6a02322c71e1844a828ae786f0c28e2) Thanks [@baseballyama](https://github.com/baseballyama)! - The plugin no longer installs `@vitejs/devtools-kit`. The Vite DevTools dock still needs `@vitejs/devtools` >= 0.8.0.
+
+- [#245](https://github.com/sveltejs/vite-devtools-svelte/pull/245) [`2b21198`](https://github.com/sveltejs/vite-devtools-svelte/commit/2b211985e535102a3cfe726911c12a03555772dd) Thanks [@baseballyama](https://github.com/baseballyama)! - The plugin no longer depends on `zod`; it checks RPC and MCP tool arguments with a small built-in validator. Nothing needs to change.
+
+- [#257](https://github.com/sveltejs/vite-devtools-svelte/pull/257) [`1b01ec6`](https://github.com/sveltejs/vite-devtools-svelte/commit/1b01ec697841c2538d1d541a8de40b2577df078e) Thanks [@baseballyama](https://github.com/baseballyama)! - The inspector settings say "Couldn't reset" instead of "Couldn't save" when resetting fails, and inspector warnings and debug output use the `[vite-devtools-svelte:inspector]` prefix. The package no longer bundles `obug`; `DEBUG=vite-devtools-svelte:inspector` still turns on debug output.
+
+- [#244](https://github.com/sveltejs/vite-devtools-svelte/pull/244) [`15f6ae3`](https://github.com/sveltejs/vite-devtools-svelte/commit/15f6ae35c72c678ee96540f346535e1827363373) Thanks [@baseballyama](https://github.com/baseballyama)! - The MCP server no longer depends on `@modelcontextprotocol/sdk`, so installing the plugin pulls in about 90 fewer packages. MCP clients get the same tools and answers, so nothing needs to change.
+
+- [#243](https://github.com/sveltejs/vite-devtools-svelte/pull/243) [`13d034d`](https://github.com/sveltejs/vite-devtools-svelte/commit/13d034d004d68178083d3efebeb9581cce2b8ba5) Thanks [@baseballyama](https://github.com/baseballyama)! - MCP tools now answer compact JSON, `list_performance_issues` ids start with their `kind`, `get_render_profile` uses the same rounded `*Ms` fields as `get_component_hotspots` (`initTime` is now `initTimeMs`), the endpoint answers only POST (405 otherwise), and it reports the package version. The perf skills now ask whether to save a session to disk before ending it, because an ended session cannot be saved later.
+
+- [#253](https://github.com/sveltejs/vite-devtools-svelte/pull/253) [`f89e50b`](https://github.com/sveltejs/vite-devtools-svelte/commit/f89e50bc84eeb2800b77f3104e7e92ca439ca782) Thanks [@baseballyama](https://github.com/baseballyama)! - The Overview panel now asks the dev server for counts instead of the full module graph and live component list, so opening it and mounting components cost less on large apps. `LiveComponentsMeta` gained a `files` count.
+
+- [#240](https://github.com/sveltejs/vite-devtools-svelte/pull/240) [`34e51ce`](https://github.com/sveltejs/vite-devtools-svelte/commit/34e51cea22a412e3775f069cc25456b6a36570ef) Thanks [@baseballyama](https://github.com/baseballyama)! - The plugin no longer uses the `transformIndexHtml` hook, so SvelteKit stops warning about it (`transform_index_html_unsupported`). Nothing to change on your side.
+
+- [#247](https://github.com/sveltejs/vite-devtools-svelte/pull/247) [`3239f69`](https://github.com/sveltejs/vite-devtools-svelte/commit/3239f695b37330c9e241b155d4cf27854395f175) Thanks [@baseballyama](https://github.com/baseballyama)! - The in-page runtime now cleans up bookkeeping for destroyed reactive nodes while DevTools is closed, and spends at most about 1/20 of the main thread serializing a large state that keeps changing.
+
+- [#248](https://github.com/sveltejs/vite-devtools-svelte/pull/248) [`1661a85`](https://github.com/sveltejs/vite-devtools-svelte/commit/1661a851732edcc3d88ef2cddcbce5bea65ec8de) Thanks [@baseballyama](https://github.com/baseballyama)! - The package is about a third smaller: it no longer ships source maps or internal type files, and the browser runtime it injects in dev is minified. The plugin's own code is no longer minified, so its stack traces stay readable.
+
 ## 0.11.0
 
 ### Minor Changes
