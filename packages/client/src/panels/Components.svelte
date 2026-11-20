@@ -203,9 +203,12 @@
     start().catch((e: unknown) => (pickError = errorMessage(e)));
   }
 
+  // A $derived, so moving the selection between rows does not re-run the analysis;
+  // the tree inspector shows Re-analyze instead.
+  const hasTreeSelection = $derived(treeSelected != null);
   const relations = resource<ComponentRelation[]>(getComponentRelations, {
     initial: [],
-    when: () => mode.value === 'files' || treeSelected != null,
+    when: () => mode.value === 'files' || hasTreeSelection,
   });
 
   /** Relations importing each file, in relation order. */
@@ -337,7 +340,7 @@
         onclick={() => pickElement(startPicker)}>Pick element</Button
       >
     {/if}
-    {#if mode.value !== 'tree'}
+    {#if mode.value !== 'tree' || hasTreeSelection}
       <RefreshButton res={relations} label="Re-analyze" />
     {/if}
   {/snippet}

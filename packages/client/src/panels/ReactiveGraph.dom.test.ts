@@ -175,6 +175,8 @@ async function scoped(componentId = 1, epoch = 'e1') {
 const signals = () => options('Reactive signals');
 const names = () => signals().map(r => r.querySelector('.name')?.textContent);
 
+const graphCalls = () => vi.mocked(rpc.getReactiveGraph).mock.calls.length;
+
 async function full() {
   render(ReactiveGraph);
   await settle();
@@ -655,8 +657,56 @@ describe('ReactiveGraph: full graph', () => {
     expect(notice.some(t => /Showing\s+global-head\s+2,001\s+of\s+9,000.*stale/s.test(t))).toBe(
       true,
     );
-    const calls = vi.mocked(rpc.getReactiveGraph).mock.calls.length;
+    const calls = graphCalls();
     await nextPoll(5000);
-    expect(vi.mocked(rpc.getReactiveGraph).mock.calls.length).toBeGreaterThan(calls);
+    expect(graphCalls()).toBeGreaterThan(calls);
+  });
+});
+
+describe('ReactiveGraph: one fetch per switch', () => {
+  it('asks for each new scope once', async () => {
+    await scoped(1);
+    expect(graphCalls()).toBe(1);
+
+    reactiveScope.set({ componentId: 2, epoch: 'e1', label: '<Counter>', file: COUNTER });
+    await settle();
+    expect(graphCalls()).toBe(2);
+
+    await userEvent.click(radio('Reactivity view', 'Full graph'));
+    await settle();
+    expect(graphCalls()).toBe(3);
+
+    await userEvent.click(radio('Reactivity view', 'Overview'));
+    await settle();
+    expect(graphCalls()).toBe(3);
+
+    await userEvent.click(radio('Reactivity view', 'Full graph'));
+    await settle();
+    expect(graphCalls()).toBe(4);
+  });
+
+  it('a scope picked while an older graph is loading is fetched right after it', async () => {
+    reactiveScope.set({ componentId: 1, epoch: 'e1', label: '<Counter>', file: COUNTER });
+    render(ReactiveGraph);
+    await settle();
+    let release!: () => void;
+    vi.mocked(rpc.getReactiveGraph).mockImplementationOnce(
+      req =>
+        new Promise(resolve => {
+          release = () => resolve(graph(req));
+        }),
+    );
+    await userEvent.click(radio('Reactivity view', 'Full graph'));
+    await settle();
+    await userEvent.click(radio('Reactivity view', 'Overview'));
+    await settle();
+    const before = graphCalls();
+    await userEvent.click(radio('Reactivity view', '<Counter>'));
+    await settle();
+    release();
+    await settle();
+    const after = vi.mocked(rpc.getReactiveGraph).mock.calls.slice(before);
+    expect(after).toEqual([[{ componentId: 1, epoch: 'e1', maxNodes: 5000, maxEdges: 20000 }]]);
+    expect(document.querySelectorAll('svg g.node').length).toBeGreaterThan(0);
   });
 });

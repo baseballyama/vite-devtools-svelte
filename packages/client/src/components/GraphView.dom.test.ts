@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { userEvent } from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { layoutGraph } from '../lib/graph-layout.js';
 import type { ReactiveEdge, ReactiveNode } from '../lib/types.js';
@@ -40,8 +40,30 @@ function wheel(deltaY: number, clientX: number, clientY: number): WheelEvent {
   return e;
 }
 const zoomLabel = () => screen.getByRole('button', { name: /^Fit to view/ });
+/** happy-dom's ResizeObserver never fires; the returned function fires every observer. */
+function stubResizeObserver(): () => void {
+  const observers: Array<() => void> = [];
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(fn: () => void) {
+        observers.push(fn);
+      }
+      observe() {}
+      disconnect() {}
+    },
+  );
+  return () => {
+    for (const fn of observers) fn();
+  };
+}
 
 describe('GraphView', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
   it('says so when there is nothing to draw', () => {
     render(GraphView, { nodes: [], edges: [] });
     expect(screen.getByText('No reactive signals tracked yet.')).toBeTruthy();
@@ -216,59 +238,71 @@ describe('GraphView', () => {
   it('waits for the container to have a size before fitting', async () => {
     let size = 0;
     layout(() => ({ width: size, height: size / 2 }));
-    const raf = vi.spyOn(window, 'requestAnimationFrame');
+    const resize = stubResizeObserver();
     const { container } = render(GraphView, { nodes, edges });
     await settle();
     expect(viewBox(container)).toBe('0 0 800 400');
-    const retries = raf.mock.calls.length;
-    expect(retries).toBeGreaterThan(0);
     size = 800;
+    resize();
+    await settle();
+    expect(viewBox(container)).not.toBe('0 0 800 400');
+  });
+
+  it('does not poll for a size while hidden', async () => {
+    let size = { width: 800, height: 400 };
+    layout(() => size);
+    const resize = stubResizeObserver();
+    const { container } = render(GraphView, { nodes, edges });
+    await settle();
+    const fitted = viewBox(container);
+
+    const raf = vi.spyOn(window, 'requestAnimationFrame');
+    size = { width: 0, height: 0 };
+    resize();
+    await settle();
     await new Promise(resolve => {
       setTimeout(resolve, 50);
     });
+    expect(raf).not.toHaveBeenCalled();
+    expect(viewBox(container)).toBe(fitted);
+
+    size = { width: 800, height: 1600 };
+    resize();
     await settle();
-    expect(viewBox(container)).not.toBe('0 0 800 400');
+    const [, , w, h] = viewBox(container).split(' ').map(Number) as [
+      number,
+      number,
+      number,
+      number,
+    ];
+    expect(w / h).toBeCloseTo(0.5);
   });
 
   it('refits when the panel resizes it, unless the user zoomed', async () => {
     let size = { width: 800, height: 400 };
     layout(() => size);
-    const resized: Array<() => void> = [];
-    vi.stubGlobal(
-      'ResizeObserver',
-      class {
-        constructor(fn: () => void) {
-          resized.push(fn);
-        }
-        observe() {}
-        disconnect() {}
-      },
-    );
-    try {
-      const { container } = render(GraphView, { nodes, edges });
-      await settle();
-      const wide = viewBox(container);
-      size = { width: 800, height: 1600 };
-      for (const fn of resized) fn();
-      await settle();
-      const [, , w, h] = viewBox(container).split(' ').map(Number) as [
-        number,
-        number,
-        number,
-        number,
-      ];
-      expect(w / h).toBeCloseTo(0.5);
+    const resize = stubResizeObserver();
+    const { container } = render(GraphView, { nodes, edges });
+    await settle();
+    const wide = viewBox(container);
+    size = { width: 800, height: 1600 };
+    resize();
+    await settle();
+    const [, , w, h] = viewBox(container).split(' ').map(Number) as [
+      number,
+      number,
+      number,
+      number,
+    ];
+    expect(w / h).toBeCloseTo(0.5);
 
-      await userEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
-      const zoomed = viewBox(container);
-      size = { width: 800, height: 400 };
-      for (const fn of resized) fn();
-      await settle();
-      expect(viewBox(container)).toBe(zoomed);
-      expect(zoomed).not.toBe(wide);
-    } finally {
-      vi.unstubAllGlobals();
-    }
+    await userEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+    const zoomed = viewBox(container);
+    size = { width: 800, height: 400 };
+    resize();
+    await settle();
+    expect(viewBox(container)).toBe(zoomed);
+    expect(zoomed).not.toBe(wide);
   });
 
   it('caps the zoom-out so a huge graph stays legible', async () => {

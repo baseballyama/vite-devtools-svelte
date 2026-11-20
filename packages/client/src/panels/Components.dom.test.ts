@@ -62,6 +62,8 @@ beforeEach(() => {
   reactiveScope.set(null);
 });
 
+const relationCalls = () => vi.mocked(rpc.getComponentRelations).mock.calls.length;
+
 describe('Components: live tree', () => {
   it('renders the mounted tree with the first levels open and ARIA tree attributes', async () => {
     render(Components);
@@ -98,6 +100,29 @@ describe('Components: live tree', () => {
     expect(labels()).toEqual(['<App>']);
     await userEvent.keyboard('{ArrowRight}');
     expect(labels()).toContain('<Layout>');
+  });
+
+  it('analyzes components once a row is selected, not again per row', async () => {
+    render(Components);
+    await settle();
+    expect(relationCalls()).toBe(0);
+    tree().focus();
+    await userEvent.keyboard('{ArrowDown}');
+    await settle();
+    expect(relationCalls()).toBe(1);
+    await userEvent.keyboard('{ArrowDown}{ArrowDown}');
+    await settle();
+    await userEvent.click(row('Page'));
+    await settle();
+    expect(relationCalls()).toBe(1);
+    // HMR edits do not re-run the analysis, so the tree inspector offers Re-analyze.
+    await userEvent.click(screen.getByRole('button', { name: 'Re-analyze' }));
+    await settle();
+    expect(relationCalls()).toBe(2);
+    // Entering Files still loads fresh relations.
+    await userEvent.click(screen.getByRole('radio', { name: 'Files' }));
+    await settle();
+    expect(relationCalls()).toBe(3);
   });
 
   it('filters instances by name or file', async () => {
@@ -365,10 +390,10 @@ describe('Components: files', () => {
 
   it('re-analyzes on demand', async () => {
     await files();
-    const before = vi.mocked(rpc.getComponentRelations).mock.calls.length;
+    const before = relationCalls();
     await userEvent.click(screen.getByRole('button', { name: 'Re-analyze' }));
     await settle();
-    expect(vi.mocked(rpc.getComponentRelations).mock.calls.length).toBe(before + 1);
+    expect(relationCalls()).toBe(before + 1);
   });
 
   it('shows analysis errors and the no-files state', async () => {

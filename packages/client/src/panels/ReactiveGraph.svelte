@@ -105,6 +105,25 @@
     tab === 'full' ? null : tab === 'local' && scope ? scope.componentId : undefined,
   );
 
+  // A different scope is a different dataset: drop flashes and the selection.
+  // Created before `graph` so this refresh starts the fetch and the resource's own load joins it.
+  let lastRequest: number | null | undefined;
+  $effect(() => {
+    const r = request;
+    untrack(() => {
+      if (r === lastRequest) return;
+      lastRequest = r;
+      lastValues = new Map();
+      changed = new Set();
+      selected = null;
+      builtAt = null;
+      if (r !== undefined) void graph.refresh();
+    });
+  });
+
+  // A $derived, so a scope-to-scope switch does not restart the poll.
+  const graphOn = $derived(request !== undefined);
+
   const graph = resource<ReactiveGraphResult>(
     async () => {
       // A component request implies a scope (see `request`).
@@ -128,24 +147,9 @@
       initial: EMPTY_GRAPH,
       interval: POLL_MS,
       equals: sameGraph,
-      when: () => request !== undefined,
+      when: () => graphOn,
     },
   );
-
-  // A different scope is a different dataset: drop flashes and the selection.
-  let lastRequest: number | null | undefined;
-  $effect(() => {
-    const r = request;
-    untrack(() => {
-      if (r === lastRequest) return;
-      lastRequest = r;
-      lastValues = new Map();
-      changed = new Set();
-      selected = null;
-      builtAt = null;
-      if (r !== undefined) void graph.refresh();
-    });
-  });
 
   /** Ids restart per page load: a scope from another epoch would point at a different instance. */
   const epochMismatch = $derived(
