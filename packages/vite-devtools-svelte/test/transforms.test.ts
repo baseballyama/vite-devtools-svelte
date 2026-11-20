@@ -254,6 +254,21 @@ describe('trackingPlugin transform', () => {
     });
   });
 
+  it.each([
+    ['component', COUNTER, '/app/src/A.svelte'],
+    ['Svelte module', MODULE_CODE, '/app/src/a.svelte.ts'],
+  ])('componentTracking: false still loads the runtime in a %s', (_, code, id) => {
+    expect(callHook(tracking({ componentTracking: false }).transform, code, id)).toEqual({
+      code: `import '${RUNTIME_MODULE_ID}';` + code,
+      map: null,
+    });
+  });
+
+  it('componentTracking: false leaves a component sub-request (its CSS) alone', () => {
+    const id = '/app/src/A.svelte?svelte&type=style&lang.css';
+    expect(callHook(tracking({ componentTracking: false }).transform, 'h1{}', id)).toBeNull();
+  });
+
   it('names a component by its file, without the query string', () => {
     const out = codeOf(
       callHook(tracking().transform, COUNTER, '/app/src/lib/Counter.svelte?direct'),
@@ -274,7 +289,6 @@ describe('trackingPlugin transform', () => {
       {},
       {},
     ],
-    ['componentTracking: false', [COUNTER, '/app/src/A.svelte'], { componentTracking: false }, {}],
     ['vite build', [COUNTER, '/app/src/A.svelte'], {}, { command: 'build' }],
     ['a plain module', ['export const x = 1', '/app/src/a.ts'], {}, {}],
     ['a component without a context push', ['export {}', '/app/src/A.svelte'], {}, {}],

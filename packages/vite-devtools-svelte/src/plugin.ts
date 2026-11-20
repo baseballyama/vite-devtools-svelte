@@ -27,6 +27,7 @@ import {
 import {
   injectComponentTracking,
   injectModuleTracking,
+  injectRuntime,
   isSvelteModule,
 } from './runtime/transform.js';
 import { Collector, HOT_EVENTS } from './server/collector.js';
@@ -300,23 +301,6 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       return null;
     },
 
-    // 'pre' so Vite's own HTML processing rewrites the bare `virtual:` import to
-    // a URL; otherwise the browser requests it itself and fails with a CORS error.
-    transformIndexHtml: {
-      order: 'pre',
-      handler() {
-        if (!serving()) return [];
-        return [
-          {
-            tag: 'script',
-            attrs: { type: 'module' },
-            children: `import '${RUNTIME_MODULE_ID}'`,
-            injectTo: 'head-prepend',
-          },
-        ];
-      },
-    },
-
     // Imported lazily so apps without Vite DevTools never load the kit.
     devtools: {
       capabilities: { dev: true, build: false },
@@ -388,25 +372,32 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     },
   };
 
-  // Only injects the file path before $.push(); all reactive tracking is done
-  // by the svelte/internal/client wrapper.
+  // The only way the runtime reaches the page: client components and Svelte
+  // modules import it first. Reactive tracking itself is done by the
+  // svelte/internal/client wrapper.
   const trackingPlugin: Plugin = {
     name: 'vite-devtools-svelte:tracking',
     enforce: 'post',
     apply: 'serve',
 
     transform(code, id, transformOptions) {
-      if (!componentTracking || !serving()) return null;
+      if (!serving()) return null;
       if (id.includes('node_modules') || isInspectorRuntime(id)) return null;
       // Client modules only: the runtime is browser code, and a server
       // render has no devtools to report to.
       if (transformOptions?.ssr) return null;
       const [file = id] = id.split('?');
-      const modified = file.endsWith('.svelte')
-        ? injectComponentTracking(code, file)
-        : isSvelteModule(file)
-          ? injectModuleTracking(code, file)
-          : null;
+      const component = file.endsWith('.svelte');
+      if (!component && !isSvelteModule(file)) return null;
+      let modified: string | null;
+      if (componentTracking) {
+        modified = component
+          ? injectComponentTracking(code, file)
+          : injectModuleTracking(code, file);
+      } else {
+        // A query marks a sub-request (the component's CSS, ?raw, ?url), not its JS.
+        modified = file === id ? injectRuntime(code) : null;
+      }
       return modified === null ? null : { code: modified, map: null };
     },
   };
