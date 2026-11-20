@@ -2,9 +2,9 @@
   import Badge from '../components/Badge.svelte';
   import Button from '../components/Button.svelte';
   import DataTable from '../components/DataTable.svelte';
+  import DetailsPane from '../components/DetailsPane.svelte';
   import Highlight from '../components/Highlight.svelte';
   import Icon from '../components/Icon.svelte';
-  import Inspector from '../components/Inspector.svelte';
   import Panel from '../components/Panel.svelte';
   import RefreshButton from '../components/RefreshButton.svelte';
   import ResourceEmpty from '../components/ResourceEmpty.svelte';
@@ -25,11 +25,11 @@
 
   const CATEGORIES = ['image', 'font', 'video', 'audio', 'text', 'other'] as const;
   type Category = (typeof CATEGORIES)[number];
-  function category(mime: string): Category {
+  function categoryOf(mime: string): Category {
     const head = mime.split('/')[0];
     return CATEGORIES.find(c => c === head) ?? 'other';
   }
-  const catIcon: Record<Category, IconName> = {
+  const categoryIcon: Record<Category, IconName> = {
     image: 'assets',
     font: 'file',
     video: 'play',
@@ -39,15 +39,15 @@
   };
 
   let query = $state('');
-  let cat = $state<'all' | Category>('all');
+  let category = $state<'all' | Category>('all');
   let sort = $state<SortState | null>({ id: 'size', desc: true });
   let selected = $state<string | null>(null);
 
-  const catOptions = $derived(
+  const categoryOptions = $derived(
     kindOptions(
       CATEGORIES,
-      countBy(assets.data, a => category(a.type)),
-      cat,
+      countBy(assets.data, a => categoryOf(a.type)),
+      category,
       c => c.charAt(0).toUpperCase() + c.slice(1),
     ),
   );
@@ -55,7 +55,9 @@
   const rows = $derived.by(() => {
     const m = matcher(query);
     return assets.data.filter(
-      a => (cat === 'all' || category(a.type) === cat) && (!m || m(a.relativePath, a.type)),
+      a =>
+        (category === 'all' || categoryOf(a.type) === category) &&
+        (!m || m(a.relativePath, a.type)),
     );
   });
 
@@ -104,7 +106,7 @@
 
 <Panel title="Assets">
   {#snippet toolbar()}
-    <Segmented label="Asset type" bind:value={cat} options={catOptions} />
+    <Segmented label="Asset type" bind:value={category} options={categoryOptions} />
     <SearchField bind:value={query} placeholder="Filter assets…" count={rows.length} />
   {/snippet}
   {#snippet actions()}
@@ -124,7 +126,7 @@
     >
       {#snippet row(a: AssetInfo, { visible }: TableRowState)}
         <span class="file">
-          <Icon name={catIcon[category(a.type)]} size={14} />
+          <Icon name={categoryIcon[categoryOf(a.type)]} size={14} />
           <span class="truncate"><Highlight text={a.relativePath} {query} /></span>
         </span>
         {#if visible.has('type')}<span class="muted truncate mono small">{a.type}</span>{/if}
@@ -150,7 +152,7 @@
     </DataTable>
     {#snippet aside()}
       {#if current}
-        <Inspector
+        <DetailsPane
           title={current.name}
           subtitle={current.relativePath}
           onclose={() => (selected = null)}
@@ -189,7 +191,7 @@
             <dt>Disk path</dt>
             <dd class="mono faint">{current.path}</dd>
           </dl>
-        </Inspector>
+        </DetailsPane>
       {/if}
     {/snippet}
   </SplitView>

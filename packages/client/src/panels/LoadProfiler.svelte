@@ -30,7 +30,7 @@
   const capture = captureInfo(2000);
   let query = $state('');
   let type = $state<'all' | LoadProfile['type']>('all');
-  let sort = $state<SortState | null>({ id: 'time', desc: true });
+  let sort = $state<SortState | null>({ id: 'timestamp', desc: true });
   let selected = $state<string | null>(null);
 
   const keyed = $derived.by(() => {
@@ -92,7 +92,7 @@
       sort: (a, b) => a.dataSize - b.dataSize,
     },
     {
-      id: 'time',
+      id: 'timestamp',
       label: 'At',
       width: '76px',
       align: 'end',
@@ -131,6 +131,8 @@
   <div class="layout">
     {#if stats}<StatList items={stats} variant="strip" />{/if}
     <div class="table">
+      <!-- Enter only, not onactivate: a row double-click must not open the editor.
+           The file chip is the mouse target. -->
       <DataTable
         items={rows}
         {columns}
@@ -143,8 +145,7 @@
         {#snippet row(p: Row, { visible }: TableRowState)}
           <span class="truncate mono route"><Highlight text={p.route} {query} /></span>
           <span class="cell">
-            <!-- The list is one tab stop (Enter on a row opens its file), so the
-                 chip is a mouse target only and never takes focus from it. -->
+            <!-- Mouse target only: it takes no focus, so the list stays one tab stop. -->
             <button
               type="button"
               class="file"
@@ -168,7 +169,7 @@
             <span class="num" class:slow={p.duration > SLOW_MS}>{formatMs(p.duration)}</span>
           </span>
           {#if visible.has('size')}<span class="end num muted">{formatBytes(p.dataSize)}</span>{/if}
-          {#if visible.has('time')}<span class="end num faint">{formatClock(p.timestamp)}</span
+          {#if visible.has('timestamp')}<span class="end num faint">{formatClock(p.timestamp)}</span
             >{/if}
         {/snippet}
         {#snippet empty()}

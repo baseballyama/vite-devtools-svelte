@@ -1,8 +1,8 @@
 <script lang="ts">
   import Button from '../../components/Button.svelte';
   import DataTable from '../../components/DataTable.svelte';
+  import DetailsPane from '../../components/DetailsPane.svelte';
   import EmptyState from '../../components/EmptyState.svelte';
-  import Inspector from '../../components/Inspector.svelte';
   import SplitView from '../../components/SplitView.svelte';
   import type { Column, SortState, TableRowState } from '../../components/types.js';
   import { componentName, formatAgo, formatMs, shortPath } from '../../lib/format.js';
@@ -42,9 +42,9 @@
   }
 
   const rows = $derived.by<OverviewRow[]>(() => {
-    const rows = summary.data?.rows ?? [];
-    if (group === 'file') return groupByFile(rows).map(g => ({ key: g.file, ...g }));
-    return rows.map(r => ({
+    const summaryRows = summary.data?.rows ?? [];
+    if (group === 'file') return groupByFile(summaryRows).map(g => ({ key: g.file, ...g }));
+    return summaryRows.map(r => ({
       key: `#${r.componentId}`,
       file: r.file,
       instances: [r],
@@ -119,7 +119,7 @@
   ];
 
   /** Scoped selections need the page load the id belongs to; without one there is nothing to validate. */
-  function select(r: ReactiveSummaryRow, epoch: string | null) {
+  function scopeTo(r: ReactiveSummaryRow, epoch: string | null) {
     if (epoch) reactiveScope.scopeTo(r.componentId, r.file, epoch);
   }
 </script>
@@ -155,7 +155,7 @@
           bind:selected
           label="Most active components"
           onactivate={(r: OverviewRow) =>
-            r.instances.length === 1 && select(r.instances[0]!, s.epoch)}
+            r.instances.length === 1 && scopeTo(r.instances[0]!, s.epoch)}
         >
           {#snippet row(r: OverviewRow, { visible }: TableRowState)}
             <span class="truncate">
@@ -191,7 +191,7 @@
         </DataTable>
         {#snippet aside()}
           {#if current}
-            <Inspector
+            <DetailsPane
               title="<{componentName(current.file)}>"
               subtitle={shortPath(current.file, 3)}
               onclose={() => (selected = null)}
@@ -202,7 +202,7 @@
               <ul class="link-list">
                 {#each current.instances as r (r.componentId)}
                   <li>
-                    <button type="button" disabled={!s.epoch} onclick={() => select(r, s.epoch)}>
+                    <button type="button" disabled={!s.epoch} onclick={() => scopeTo(r, s.epoch)}>
                       <span class="mono">#{r.componentId}</span>
                       <span class="sub"
                         >≥ {r.changes.toLocaleString()} changes · {r.renders.toLocaleString()} renders</span
@@ -216,7 +216,7 @@
                   ? 'Select an instance to load its signals and the signals they are directly linked to.'
                   : 'The dev server reported no page-load id, so instances cannot be selected here; use Show reactivity in Components.'}
               </p>
-            </Inspector>
+            </DetailsPane>
           {/if}
         {/snippet}
       </SplitView>

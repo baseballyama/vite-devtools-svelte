@@ -100,6 +100,9 @@ describe('LoadProfiler', () => {
       'Data',
       'At',
     ]);
+    expect(screen.getByRole('columnheader', { name: 'At' }).getAttribute('aria-sort')).toBe(
+      'descending',
+    );
     expect(screen.getByText('2.0 KB')).toBeTruthy();
   });
 

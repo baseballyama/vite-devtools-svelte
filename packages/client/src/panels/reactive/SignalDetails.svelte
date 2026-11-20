@@ -1,11 +1,11 @@
 <script lang="ts">
   import Badge from '../../components/Badge.svelte';
   import Button from '../../components/Button.svelte';
-  import Inspector from '../../components/Inspector.svelte';
+  import DetailsPane from '../../components/DetailsPane.svelte';
   import { componentName, prettyValue, shortPath } from '../../lib/format.js';
-  import { isValueSummary, kindLabel } from '../../lib/reactive.js';
+  import { isValueSummary, kindLabel, STATE_TIMELINE_LIMIT } from '../../lib/reactive.js';
   import { router } from '../../lib/router.svelte.js';
-  import type { ReactiveNode, ReactiveSummary } from '../../lib/types.js';
+  import type { ReactiveNode } from '../../lib/types.js';
   import KindBadge from './KindBadge.svelte';
 
   let {
@@ -14,7 +14,6 @@
     deps,
     dependents,
     flash,
-    capabilities,
     scopedTo,
     canScope,
     onselect,
@@ -30,7 +29,6 @@
     dependents: string[];
     /** Its value changed in the latest reply. */
     flash: boolean;
-    capabilities: ReactiveSummary['capabilities'];
     /** The component the graph is scoped to, if any: links elsewhere are marked. */
     scopedTo: number | null;
     /** A page-load id is known, so another component can be scoped to. */
@@ -42,7 +40,7 @@
   } = $props();
 </script>
 
-<Inspector title={node.name} subtitle={shortPath(node.componentFile, 3)} {onclose}>
+<DetailsPane title={node.name} subtitle={shortPath(node.componentFile, 3)} {onclose}>
   {#snippet badges()}
     <KindBadge type={node.type} rune />
     <Badge>component #{node.componentId}</Badge>
@@ -72,7 +70,7 @@
     {@const summary = isValueSummary(node.value)}
     <h3 class="section-title">Current value</h3>
     <pre class="code-block" class:flash>{summary ? node.value : prettyValue(node.value)}</pre>
-    {#if summary && !capabilities.valueInspection}
+    {#if summary}
       <p class="section-note">
         Full value: not available yet. This dev server reports only a summary for objects and
         arrays.
@@ -81,17 +79,16 @@
   {/if}
   <h3 class="section-title">Cause</h3>
   <p class="section-note">
-    {capabilities.writeCause
-      ? 'Recorded writes appear here.'
-      : 'Not recorded. This dev server does not capture which write changed a signal; the links below are dependencies, not causes.'}
+    Not recorded. This dev server does not capture which write changed a signal; the links below are
+    dependencies, not causes.
   </p>
   {@render rel('Reads (can affect this)', deps)}
   {@render rel('Can affect', dependents)}
   <h3 class="section-title">History</h3>
   <p class="section-note">
     {#if node.type === 'state'}
-      {#if !capabilities.signalHistory}Per-signal history: not available yet.{/if}
-      Sampled changes of all signals (latest 500) are in the
+      Per-signal history: not available yet. Sampled changes of all signals (latest {STATE_TIMELINE_LIMIT})
+      are in the
       <button type="button" class="link" onclick={() => router.go('timeline')}
         >State timeline</button
       >.
@@ -99,7 +96,7 @@
       Not recorded for {kindLabel(node.type)}.
     {/if}
   </p>
-</Inspector>
+</DetailsPane>
 
 {#snippet rel(title: string, ids: string[])}
   <h3 class="section-title">{title} <span class="num">{ids.length}</span></h3>

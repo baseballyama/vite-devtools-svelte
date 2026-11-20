@@ -1,12 +1,11 @@
 <script lang="ts">
-  import { formatValue } from '../lib/format.js';
-  import { layoutGraph, NODE_H, NODE_W, propagate, shortFile } from '../lib/graph-layout.js';
-  import type { ReactiveNode, ReactiveEdge } from '../lib/types.js';
+  import { componentName, formatValue } from '../../lib/format.js';
+  import { layoutGraph, NODE_H, NODE_W, propagate } from '../../lib/graph-layout.js';
+  import type { ReactiveNode, ReactiveEdge } from '../../lib/types.js';
 
   interface Props {
     nodes: ReactiveNode[];
     edges: ReactiveEdge[];
-    onSelectNode?: (node: ReactiveNode | null) => void;
     changedNodeIds?: Set<string>;
     /** Selected node id, bindable so lists and the graph stay in sync. */
     selectedNodeId?: string | null;
@@ -15,7 +14,6 @@
   let {
     nodes,
     edges,
-    onSelectNode,
     changedNodeIds = new Set(),
     selectedNodeId = $bindable(null),
   }: Props = $props();
@@ -72,7 +70,6 @@
     // Hidden or not laid out yet: the ResizeObserver refits once it has a size.
     if (rect.width === 0 || rect.height === 0) return;
     const aspect = rect.width / rect.height;
-    // Add breathing room around the graph so nodes don't kiss the edges.
     const PAD = NODE_W * 0.5;
     const graphW = Math.max(layout.width, 200) + PAD * 2;
     const graphH = Math.max(layout.height, 100) + PAD * 2;
@@ -194,7 +191,6 @@
 
   function handleNodeClick(node: ReactiveNode) {
     selectedNodeId = selectedNodeId === node.id ? null : node.id;
-    onSelectNode?.(selectedNodeId ? node : null);
   }
 
   const nodeMap = $derived(new Map(nodes.map(n => [n.id, n])));
@@ -264,7 +260,9 @@
           ry="10"
           class="component-box"
         />
-        <text x={box.x + 6} y={box.y + 11} class="component-label">{box.file}</text>
+        <text x={box.x + 6} y={box.y + 11} class="component-label"
+          >{componentName(box.componentFile, '')}</text
+        >
       {/each}
 
       <!-- The runtime deduplicates edges, so `from→to` is unique. -->
@@ -374,7 +372,7 @@
               {node.type}
             </text>
             <text x="12" y="36" class="node-meta" font-size="9" font-family="DM Mono, monospace">
-              {shortFile(node.componentFile)}
+              {componentName(node.componentFile, '')}
             </text>
             {#if node.value !== undefined && node.type !== 'effect'}
               <text

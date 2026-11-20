@@ -15,7 +15,7 @@ import type {
 } from '../lib/types.js';
 import { fakePollClock, layout, nextPoll, settle } from '../test/dom.js';
 import { emptyGraph, emptySummary } from '../test/fake-rpc.js';
-import ReactiveGraph from './ReactiveGraph.svelte';
+import Reactivity from './Reactivity.svelte';
 
 const COUNTER = 'src/lib/Counter.svelte';
 const APP = 'src/App.svelte';
@@ -159,7 +159,7 @@ const entry = (
 });
 
 async function states() {
-  render(ReactiveGraph);
+  render(Reactivity);
   await settle();
   await userEvent.click(radio('List', 'States'));
   await settle();
@@ -167,7 +167,7 @@ async function states() {
 
 async function scoped(componentId = 1, epoch = 'e1') {
   reactiveScope.set({ componentId, epoch, label: '<Counter>', file: COUNTER });
-  const r = render(ReactiveGraph);
+  const r = render(Reactivity);
   await settle();
   return r;
 }
@@ -178,15 +178,15 @@ const names = () => signals().map(r => r.querySelector('.name')?.textContent);
 const graphCalls = () => vi.mocked(rpc.getReactiveGraph).mock.calls.length;
 
 async function full() {
-  render(ReactiveGraph);
+  render(Reactivity);
   await settle();
   await userEvent.click(radio('Reactivity view', 'Full graph'));
   await settle();
 }
 
-describe('ReactiveGraph: components overview', () => {
+describe('Reactivity: components overview', () => {
   it('summarises activity per file without fetching a graph', async () => {
-    render(ReactiveGraph);
+    render(Reactivity);
     await settle();
     expect(rpc.getReactiveSummary).toHaveBeenCalledWith({ topK: 50 });
     expect(rpc.getReactiveGraph).not.toHaveBeenCalled();
@@ -205,7 +205,7 @@ describe('ReactiveGraph: components overview', () => {
   });
 
   it('groups by instance without asking the app again, and sorts by a column', async () => {
-    render(ReactiveGraph);
+    render(Reactivity);
     await settle();
     const calls = vi.mocked(rpc.getReactiveSummary).mock.calls.length;
     await userEvent.click(radio('List', 'Instances'));
@@ -221,7 +221,7 @@ describe('ReactiveGraph: components overview', () => {
   });
 
   it('selecting an instance from a file row loads its graph', async () => {
-    render(ReactiveGraph);
+    render(Reactivity);
     await settle();
     await userEvent.click(options('Most active components')[0]!);
     const aside = screen.getByRole('complementary', { name: '<Counter> details' });
@@ -244,7 +244,7 @@ describe('ReactiveGraph: components overview', () => {
   });
 
   it('Enter on a single-instance row selects it', async () => {
-    render(ReactiveGraph);
+    render(Reactivity);
     await settle();
     screen.getByRole('listbox', { name: 'Most active components' }).focus();
     await userEvent.keyboard('{End}{Enter}');
@@ -253,7 +253,7 @@ describe('ReactiveGraph: components overview', () => {
 
   it('without a page-load id instances cannot be selected', async () => {
     vi.mocked(rpc.getReactiveSummary).mockResolvedValue(summary({ epoch: null }));
-    render(ReactiveGraph);
+    render(Reactivity);
     await settle();
     await userEvent.click(options('Most active components')[0]!);
     const aside = screen.getByRole('complementary', { name: '<Counter> details' });
@@ -271,10 +271,9 @@ describe('ReactiveGraph: components overview', () => {
         stale: true,
         staleReason: 'no-runtime',
         baseline: { complete: false, pendingNodes: 1 },
-        capabilities: { valueInspection: true, signalHistory: true, writeCause: true },
       }),
     );
-    render(ReactiveGraph);
+    render(Reactivity);
     await settle();
     const body = text();
     expect(body).toContain('top 3 of 9 active');
@@ -286,7 +285,7 @@ describe('ReactiveGraph: components overview', () => {
 
   it('shows an unavailable overview with a way to the full graph', async () => {
     vi.mocked(rpc.getReactiveSummary).mockRejectedValue(new Error('no summary'));
-    render(ReactiveGraph);
+    render(Reactivity);
     await settle();
     expect(screen.getByText('Overview not available')).toBeTruthy();
     expect(text()).toContain('no summary');
@@ -296,8 +295,8 @@ describe('ReactiveGraph: components overview', () => {
     expect(rpc.getReactiveGraph).toHaveBeenCalledWith({ maxNodes: 5000, maxEdges: 20000 });
   });
 
-  it('sorts by every column, and the inspector closes', async () => {
-    render(ReactiveGraph);
+  it('sorts by every column, and the details pane closes', async () => {
+    render(Reactivity);
     await settle();
     await sortByEach('Most active components', [
       'Inst.',
@@ -315,14 +314,14 @@ describe('ReactiveGraph: components overview', () => {
 
   it('shows an empty overview', async () => {
     vi.mocked(rpc.getReactiveSummary).mockResolvedValue(summary({ rows: [] }));
-    render(ReactiveGraph);
+    render(Reactivity);
     await settle();
     expect(screen.getByText('No live component has changed or rendered yet')).toBeTruthy();
     expect(screen.getByText(/Listed: 0\s+components/)).toBeTruthy();
   });
 });
 
-describe('ReactiveGraph: states overview', () => {
+describe('Reactivity: states overview', () => {
   it('lists the most changed states of the timeline buffer', async () => {
     vi.mocked(rpc.getStateTimelineDelta).mockResolvedValue({
       cursor: 3,
@@ -404,6 +403,26 @@ describe('ReactiveGraph: states overview', () => {
     expect(reactiveScope.current).toBeNull();
   });
 
+  it('polls the timeline only while the States view is shown', async () => {
+    fakePollClock();
+    render(Reactivity);
+    await settle();
+    expect(rpc.getStateTimelineDelta).not.toHaveBeenCalled();
+    expect(rpc.getCaptureInfo).not.toHaveBeenCalled();
+    await userEvent.click(radio('List', 'States'));
+    await settle();
+    expect(rpc.getStateTimelineDelta).toHaveBeenCalled();
+    expect(rpc.getCaptureInfo).toHaveBeenCalled();
+    await userEvent.click(radio('List', 'Components'));
+    await settle();
+    const timelineCalls = vi.mocked(rpc.getStateTimelineDelta).mock.calls.length;
+    const captureCalls = vi.mocked(rpc.getCaptureInfo).mock.calls.length;
+    await nextPoll(2000);
+    await nextPoll(2000);
+    expect(rpc.getStateTimelineDelta).toHaveBeenCalledTimes(timelineCalls);
+    expect(rpc.getCaptureInfo).toHaveBeenCalledTimes(captureCalls);
+  });
+
   it('shows an empty buffer and a failing timeline', async () => {
     fakePollClock();
     await states();
@@ -417,13 +436,13 @@ describe('ReactiveGraph: states overview', () => {
   });
 });
 
-describe('ReactiveGraph: component scope', () => {
+describe('Reactivity: component scope', () => {
   beforeEach(() => {
     localStorage.setItem('svelte-devtools:reactive:view', '"list"');
   });
 
   it('asks for a component before loading anything', async () => {
-    render(ReactiveGraph);
+    render(Reactivity);
     await settle();
     await userEvent.click(radio('Reactivity view', 'Component'));
     expect(screen.getByText('Pick a component')).toBeTruthy();
@@ -536,8 +555,26 @@ describe('ReactiveGraph: component scope', () => {
     const aside = screen.getByRole('complementary', { name: 'items details' });
     expect(within(aside).getByText('(object)', { selector: 'pre' })).toBeTruthy();
     expect(aside.textContent).toContain('Full value: not available yet.');
+    expect(aside.textContent).toContain('Sampled changes of all signals (latest 500)');
     await userEvent.click(within(aside).getByRole('button', { name: 'State timeline' }));
     expect(router.current).toBe('timeline');
+  });
+
+  it('explains summarised values the same way after the Overview was visited', async () => {
+    vi.mocked(rpc.getReactiveSummary).mockResolvedValue(
+      summary({ capabilities: { valueInspection: true, signalHistory: true, writeCause: true } }),
+    );
+    render(Reactivity);
+    await settle();
+    reactiveScope.set({ componentId: 1, epoch: 'e1', label: '<Counter>', file: COUNTER });
+    await settle();
+    await userEvent.click(signals().find(r => r.textContent?.includes('items'))!);
+    const aside = screen.getByRole('complementary', { name: 'items details' });
+    expect(aside.textContent).toContain('Full value: not available yet.');
+    expect(aside.textContent).toContain(
+      'Not recorded. This dev server does not capture which write',
+    );
+    expect(aside.textContent).toContain('Per-signal history: not available yet.');
   });
 
   it('explains an unevaluated $derived', async () => {
@@ -584,7 +621,7 @@ describe('ReactiveGraph: component scope', () => {
   });
 });
 
-describe('ReactiveGraph: full graph', () => {
+describe('Reactivity: full graph', () => {
   it('renders the whole graph as a node-link diagram when small', async () => {
     await full();
     expect(rpc.getReactiveGraph).toHaveBeenCalledWith({ maxNodes: 5000, maxEdges: 20000 });
@@ -663,7 +700,7 @@ describe('ReactiveGraph: full graph', () => {
   });
 });
 
-describe('ReactiveGraph: one fetch per switch', () => {
+describe('Reactivity: one fetch per switch', () => {
   it('asks for each new scope once', async () => {
     await scoped(1);
     expect(graphCalls()).toBe(1);
@@ -687,7 +724,7 @@ describe('ReactiveGraph: one fetch per switch', () => {
 
   it('a scope picked while an older graph is loading is fetched right after it', async () => {
     reactiveScope.set({ componentId: 1, epoch: 'e1', label: '<Counter>', file: COUNTER });
-    render(ReactiveGraph);
+    render(Reactivity);
     await settle();
     let release!: () => void;
     vi.mocked(rpc.getReactiveGraph).mockImplementationOnce(

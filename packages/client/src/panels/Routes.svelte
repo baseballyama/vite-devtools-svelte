@@ -1,8 +1,8 @@
 <script lang="ts">
   import Badge from '../components/Badge.svelte';
   import Button from '../components/Button.svelte';
+  import DetailsPane from '../components/DetailsPane.svelte';
   import Highlight from '../components/Highlight.svelte';
-  import Inspector from '../components/Inspector.svelte';
   import Panel from '../components/Panel.svelte';
   import RefreshButton from '../components/RefreshButton.svelte';
   import ResourceEmpty from '../components/ResourceEmpty.svelte';
@@ -83,10 +83,10 @@
     return 'accent';
   }
 
-  function segTone(seg: string) {
-    if (seg.startsWith('[...')) return 'rest';
-    if (seg.startsWith('[')) return 'param';
-    if (seg.startsWith('(')) return 'group';
+  function segmentKind(segment: string) {
+    if (segment.startsWith('[...')) return 'rest';
+    if (segment.startsWith('[')) return 'param';
+    if (segment.startsWith('(')) return 'group';
     return '';
   }
 
@@ -153,7 +153,7 @@
       onactivate={(n: RouteNode) => n.route && open(primaryFile(n.route))}
     >
       {#snippet row(n: RouteNode)}
-        <span class="seg {segTone(n.segment)}" class:dir={!n.route}
+        <span class="seg {segmentKind(n.segment)}" class:dir={!n.route}
           ><Highlight text={n.segment} {query} /></span
         >
         {#if n.route}
@@ -190,7 +190,7 @@
     {#snippet aside()}
       {#if selectedRoute}
         {@const r = selectedRoute}
-        <Inspector title={r.path} onclose={() => (selected = null)}>
+        <DetailsPane title={r.path} onclose={() => (selected = null)}>
           {#snippet badges()}
             {#if r.hasPage}<Badge tone="accent">page</Badge>{/if}
             {#if r.hasLayout}<Badge tone="purple">layout</Badge>{/if}
@@ -231,7 +231,7 @@
               </li>
             {/each}
           </ul>
-        </Inspector>
+        </DetailsPane>
       {/if}
     {/snippet}
   </SplitView>

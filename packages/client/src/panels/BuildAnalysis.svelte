@@ -2,9 +2,9 @@
   import Badge from '../components/Badge.svelte';
   import Button from '../components/Button.svelte';
   import DataTable from '../components/DataTable.svelte';
+  import DetailsPane from '../components/DetailsPane.svelte';
   import EmptyState from '../components/EmptyState.svelte';
   import Highlight from '../components/Highlight.svelte';
-  import Inspector from '../components/Inspector.svelte';
   import Panel from '../components/Panel.svelte';
   import RefreshButton from '../components/RefreshButton.svelte';
   import ResourceEmpty from '../components/ResourceEmpty.svelte';
@@ -22,14 +22,17 @@
   const build = resource<BuildAnalysis | null>(getBuildAnalysis, { initial: null });
 
   let query = $state('');
-  let kind = $state<'all' | 'js' | 'css' | 'other'>('all');
+  type ChunkKind = 'js' | 'css' | 'other';
+  let kind = $state<'all' | ChunkKind>('all');
   let sort = $state<SortState | null>({ id: 'size', desc: true });
   let selected = $state<string | null>(null);
 
   const ext = (c: BuildChunk) => c.file.split('.').pop() ?? '';
-  const kindOf = (c: BuildChunk) =>
-    ext(c) === 'js' || ext(c) === 'mjs' ? 'js' : ext(c) === 'css' ? 'css' : 'other';
-  const tones: Record<string, Tone> = { js: 'yellow', css: 'purple', other: 'neutral' };
+  const kindOf = (c: BuildChunk): ChunkKind => {
+    const e = ext(c);
+    return e === 'js' || e === 'mjs' ? 'js' : e === 'css' ? 'css' : 'other';
+  };
+  const tones: Record<ChunkKind, Tone> = { js: 'yellow', css: 'purple', other: 'neutral' };
 
   const chunks = $derived(build.data?.chunks ?? []);
   const rows = $derived.by(() => {
@@ -42,16 +45,17 @@
   const current = $derived(selected ? (chunks.find(c => c.file === selected) ?? null) : null);
 
   const byKind = $derived.by(() => {
-    const k = {
+    const totals = {
       js: { count: 0, size: 0 },
       css: { count: 0, size: 0 },
       other: { count: 0, size: 0 },
     };
     for (const c of chunks) {
-      k[kindOf(c)].count++;
-      k[kindOf(c)].size += c.size;
+      const k = kindOf(c);
+      totals[k].count++;
+      totals[k].size += c.size;
     }
-    return k;
+    return totals;
   });
 
   const columns: Column<BuildChunk>[] = [
@@ -175,7 +179,7 @@
           </DataTable>
           {#snippet aside()}
             {#if current}
-              <Inspector
+              <DetailsPane
                 title={basename(current.file)}
                 subtitle={current.file}
                 onclose={() => (selected = null)}
@@ -192,7 +196,7 @@
                     { label: 'Share of total', value: `${share(current)}%` },
                   ]}
                 />
-              </Inspector>
+              </DetailsPane>
             {/if}
           {/snippet}
         </SplitView>

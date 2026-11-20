@@ -83,8 +83,8 @@
     }
   });
 
-  // Keep the selection in view when the selected *key* changes (inspector
-  // links, reveal). Live updates that only shift its index must not yank
+  // Keep the selection in view when the selected *key* changes (details
+  // pane links, reveal). Live updates that only shift its index must not yank
   // a user who scrolled away back to the selection.
   $effect(() => {
     const key = selected;

@@ -2,10 +2,10 @@ import { fireEvent, render, screen } from '@testing-library/svelte';
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { layoutGraph } from '../lib/graph-layout.js';
-import type { ReactiveEdge, ReactiveNode } from '../lib/types.js';
-import { layout, settle } from '../test/dom.js';
-import GraphView from './GraphView.svelte';
+import { layoutGraph } from '../../lib/graph-layout.js';
+import type { ReactiveEdge, ReactiveNode } from '../../lib/types.js';
+import { layout, settle } from '../../test/dom.js';
+import SignalGraph from './SignalGraph.svelte';
 
 function node(
   id: string,
@@ -58,19 +58,19 @@ function stubResizeObserver(): () => void {
   };
 }
 
-describe('GraphView', () => {
+describe('SignalGraph', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
   it('says so when there is nothing to draw', () => {
-    render(GraphView, { nodes: [], edges: [] });
+    render(SignalGraph, { nodes: [], edges: [] });
     expect(screen.getByText('No reactive signals tracked yet.')).toBeTruthy();
   });
 
   it('draws one labelled node per signal and one edge per known pair', () => {
-    const { container } = render(GraphView, { nodes, edges });
+    const { container } = render(SignalGraph, { nodes, edges });
     expect(container.querySelectorAll('.node')).toHaveLength(4);
     expect(container.querySelectorAll('path.edge')).toHaveLength(3);
     expect(container.querySelectorAll('polygon.arrow')).toHaveLength(3);
@@ -87,7 +87,7 @@ describe('GraphView', () => {
 
   it('shortens long names and values', () => {
     const long = node('2:x', 'state', 'aVeryLongSignalName', 'A.svelte', 'a long string value');
-    render(GraphView, { nodes: [long], edges: [] });
+    render(SignalGraph, { nodes: [long], edges: [] });
     const text = nodeButton('aVeryLongSignalName').textContent;
     expect(text).toContain('aVeryLongSign…');
     expect(text).toContain('= a long string…');
@@ -97,7 +97,7 @@ describe('GraphView', () => {
     const a = node('1:a', 'state', 'a', 'src/routes/Row.svelte');
     const b = node('2:b', 'state', 'b', 'src/lib/Row.svelte');
     const c = node('3:c', 'state', 'c', 'src/lib/Row.svelte');
-    const { container } = render(GraphView, { nodes: [a, b, c], edges: [] });
+    const { container } = render(SignalGraph, { nodes: [a, b, c], edges: [] });
     const boxes = container.querySelectorAll('rect.component-box');
     expect(boxes).toHaveLength(2);
     const labels = [...container.querySelectorAll('text.component-label')].map(t => t.textContent);
@@ -108,46 +108,45 @@ describe('GraphView', () => {
   });
 
   it('selects a node by click or keyboard, highlights its edges and toggles off', async () => {
-    const onSelectNode = vi.fn();
-    const { container } = render(GraphView, { nodes, edges, onSelectNode });
+    const { container } = render(SignalGraph, { nodes, edges });
     const button = nodeButton('doubled');
     expect(button.getAttribute('aria-pressed')).toBe('false');
     await userEvent.click(button);
-    expect(onSelectNode).toHaveBeenLastCalledWith(doubled);
     expect(button.getAttribute('aria-pressed')).toBe('true');
     // Edges in and out of the selection are highlighted (count→doubled, doubled→log, doubled→template).
     expect(container.querySelectorAll('path.edge.highlighted')).toHaveLength(3);
 
     await userEvent.click(button);
-    expect(onSelectNode).toHaveBeenLastCalledWith(null);
+    expect(button.getAttribute('aria-pressed')).toBe('false');
     expect(container.querySelectorAll('path.edge.highlighted')).toHaveLength(0);
 
-    nodeButton('count').focus();
+    const countButton = nodeButton('count');
+    countButton.focus();
     await userEvent.keyboard('{Enter}');
-    expect(onSelectNode).toHaveBeenLastCalledWith(count);
+    expect(countButton.getAttribute('aria-pressed')).toBe('true');
     await userEvent.keyboard(' ');
-    expect(onSelectNode).toHaveBeenLastCalledWith(null);
+    expect(countButton.getAttribute('aria-pressed')).toBe('false');
     await userEvent.keyboard('a');
-    expect(onSelectNode).toHaveBeenCalledTimes(4);
+    expect(countButton.getAttribute('aria-pressed')).toBe('false');
   });
 
   it('shows non-string values as JSON, not `[object Object]`', () => {
     const obj = node('3:o', 'state', 'o', 'A.svelte', { a: 1 });
     const list = node('3:l', 'state', 'l', 'A.svelte', [[1], 2]);
-    render(GraphView, { nodes: [obj, list], edges: [] });
+    render(SignalGraph, { nodes: [obj, list], edges: [] });
     expect(nodeButton('o').textContent).toContain('= {"a":1}');
     expect(nodeButton('l').textContent).toContain('= [[1],2]');
   });
 
   it('follows a selection set from outside', async () => {
-    const view = render(GraphView, { nodes, edges, selectedNodeId: log.id });
+    const view = render(SignalGraph, { nodes, edges, selectedNodeId: log.id });
     expect(nodeButton('log').getAttribute('aria-pressed')).toBe('true');
     await view.rerender({ selectedNodeId: null });
     expect(nodeButton('log').getAttribute('aria-pressed')).toBe('false');
   });
 
   it('pulses changed nodes and the edges downstream of them', async () => {
-    const { container } = render(GraphView, {
+    const { container } = render(SignalGraph, {
       nodes,
       edges,
       changedNodeIds: new Set([count.id]),
@@ -175,7 +174,7 @@ describe('GraphView', () => {
 
   it('zooms with the buttons and resets to fit', async () => {
     layout(() => ({ width: 800, height: 400 }));
-    const { container } = render(GraphView, { nodes, edges });
+    const { container } = render(SignalGraph, { nodes, edges });
     await settle();
     expect(zoomLabel().textContent).toBe('100%');
     const fitted = viewBox(container);
@@ -193,7 +192,7 @@ describe('GraphView', () => {
 
   it('zooms around the cursor with the wheel and pans by dragging the background', async () => {
     layout(() => ({ width: 800, height: 400 }));
-    const { container } = render(GraphView, { nodes, edges });
+    const { container } = render(SignalGraph, { nodes, edges });
     await settle();
     const surface = container.querySelector<HTMLElement>('.graph-container')!;
 
@@ -222,7 +221,7 @@ describe('GraphView', () => {
 
   it('fits the graph centred in the view', async () => {
     layout(() => ({ width: 800, height: 400 }));
-    const { container } = render(GraphView, { nodes, edges });
+    const { container } = render(SignalGraph, { nodes, edges });
     await settle();
     const { width, height } = layoutGraph(nodes, edges);
     const [x, y, w, h] = viewBox(container).split(' ').map(Number) as [
@@ -239,7 +238,7 @@ describe('GraphView', () => {
     let size = 0;
     layout(() => ({ width: size, height: size / 2 }));
     const resize = stubResizeObserver();
-    const { container } = render(GraphView, { nodes, edges });
+    const { container } = render(SignalGraph, { nodes, edges });
     await settle();
     expect(viewBox(container)).toBe('0 0 800 400');
     size = 800;
@@ -252,7 +251,7 @@ describe('GraphView', () => {
     let size = { width: 800, height: 400 };
     layout(() => size);
     const resize = stubResizeObserver();
-    const { container } = render(GraphView, { nodes, edges });
+    const { container } = render(SignalGraph, { nodes, edges });
     await settle();
     const fitted = viewBox(container);
 
@@ -282,7 +281,7 @@ describe('GraphView', () => {
     let size = { width: 800, height: 400 };
     layout(() => size);
     const resize = stubResizeObserver();
-    const { container } = render(GraphView, { nodes, edges });
+    const { container } = render(SignalGraph, { nodes, edges });
     await settle();
     const wide = viewBox(container);
     size = { width: 800, height: 1600 };
@@ -311,7 +310,7 @@ describe('GraphView', () => {
       node(`n${i}`, 'state', `s${i}`, `F${i}.svelte`),
     );
     const chain = many.slice(1).map((n, i) => ({ from: many[i]!.id, to: n.id }));
-    const { container } = render(GraphView, { nodes: many, edges: chain });
+    const { container } = render(SignalGraph, { nodes: many, edges: chain });
     await settle();
     const [, , w] = viewBox(container).split(' ').map(Number) as [number, number, number];
     // ≤ 200 px / 110 px per node × 160 units per node.

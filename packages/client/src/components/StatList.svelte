@@ -3,7 +3,7 @@
 
   /**
    * Labelled figures as a `<dl>`: a framed row (`box`), a full-width row
-   * under a header (`strip`) or tiles that wrap (`grid`, for inspectors).
+   * under a header (`strip`) or tiles that wrap (`grid`, for details panes).
    */
   let { items, variant }: { items: Stat[]; variant: 'box' | 'strip' | 'grid' } = $props();
 </script>

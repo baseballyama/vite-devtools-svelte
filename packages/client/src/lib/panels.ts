@@ -44,7 +44,7 @@ export const panels = [
     group: 'start',
     description: 'Compiler warnings and runtime errors',
     keywords: 'warnings errors diagnostics',
-    load: () => import('../panels/ErrorDashboard.svelte'),
+    load: () => import('../panels/Problems.svelte'),
   },
   {
     id: 'components',
@@ -62,7 +62,7 @@ export const panels = [
     group: 'inspect',
     description: '$state / $derived / $effect dependency graph',
     keywords: 'signals runes effect derived state',
-    load: () => import('../panels/ReactiveGraph.svelte'),
+    load: () => import('../panels/Reactivity.svelte'),
   },
   {
     id: 'timeline',

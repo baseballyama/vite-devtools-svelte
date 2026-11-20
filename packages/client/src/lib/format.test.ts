@@ -90,6 +90,8 @@ describe('componentName', () => {
     // Nothing left after stripping → fallback, not an empty label.
     ['src/.svelte', undefined, 'Unknown'],
     ['src/lib/', '?', '?'],
+    ['', '', ''],
+    ['src/lib/a.svelte.svelte', undefined, 'a.svelte'],
   ])('componentName(%j, %j) → %j', (file, fallback, expected) => {
     expect(componentName(file, fallback)).toBe(expected);
   });

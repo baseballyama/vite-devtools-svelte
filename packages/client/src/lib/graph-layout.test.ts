@@ -1,14 +1,7 @@
 import * as fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 
-import {
-  layoutGraph,
-  NODE_H,
-  NODE_W,
-  propagate,
-  shortFile,
-  type GraphLayout,
-} from './graph-layout.js';
+import { layoutGraph, NODE_H, NODE_W, propagate, type GraphLayout } from './graph-layout.js';
 import type { ReactiveEdge, ReactiveNode } from './types.js';
 
 const TYPES = ['state', 'derived', 'effect', 'template'] as const;
@@ -83,20 +76,6 @@ function edgesWithin(edges: ReactiveEdge[], reached: Map<string, number>): Set<s
   );
 }
 
-describe('shortFile', () => {
-  it.each([
-    ['src/lib/Counter.svelte', 'Counter'],
-    ['Counter.svelte', 'Counter'],
-    ['C:\\app\\src\\Row.svelte', 'Row'],
-    // Module state: only a trailing `.svelte` is the component extension.
-    ['src/lib/store.svelte.ts', 'store.svelte.ts'],
-    ['src/lib/a.svelte.svelte', 'a.svelte'],
-    ['', ''],
-  ])('shortFile(%j) → %j', (file, expected) => {
-    expect(shortFile(file)).toBe(expected);
-  });
-});
-
 describe('layoutGraph', () => {
   it('is empty for no nodes', () => {
     expect(layoutGraph([], [])).toEqual({
@@ -134,12 +113,14 @@ describe('layoutGraph', () => {
         node('x', 'f', 'future' as ReactiveNode['type']),
         node('e', 'f', 'effect'),
         node('s', 'f', 'state'),
+        node('t', 'f', 'template'),
       ],
       [],
     );
     const y = (id: string) => l.positions.get(id)!.y;
     expect(y('s')).toBeLessThan(y('e'));
-    expect(y('e')).toBeLessThan(y('x'));
+    expect(y('e')).toBeLessThan(y('t'));
+    expect(y('t')).toBeLessThan(y('x'));
   });
 
   it('puts cycle members (and what they feed) in a trailing layer instead of dropping them', () => {
@@ -167,10 +148,10 @@ describe('layoutGraph', () => {
       node('b1', 'src/b/Row.svelte'),
     ];
     const l = layoutGraph(nodes, []);
-    expect(l.componentBoxes.map(b => [b.file, b.componentFile])).toEqual([
-      ['Row', 'src/a/Row.svelte'],
-      ['Z', 'src/a/Z.svelte'],
-      ['Row', 'src/b/Row.svelte'],
+    expect(l.componentBoxes.map(b => b.componentFile)).toEqual([
+      'src/a/Row.svelte',
+      'src/a/Z.svelte',
+      'src/b/Row.svelte',
     ]);
   });
 
@@ -225,7 +206,6 @@ describe('layoutGraph', () => {
             expect(box).toBeDefined();
             expect(box!.y).toBeLessThan(p.y);
             expect(p.y + NODE_H).toBeLessThan(box!.y + box!.h);
-            expect(box!.file).toBe(shortFile(n.componentFile));
           }
           expect(overlappingBoxes(l.componentBoxes)).toEqual([]);
         }),
