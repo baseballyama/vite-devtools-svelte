@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { isInside } from '../server/security.js';
+import { isInside } from '../security.js';
 
 /**
  * Running dev servers announce their MCP endpoint here, one file each, so the

@@ -184,8 +184,8 @@ export const transport = {
 
 /**
  * GET that never follows redirects and gives up after `timeoutMs`, body
- * read (`read`) included. Without it a target that never answers left the
- * RPC pending forever. The request is aborted once `read` settles or the
+ * read (`read`) included, so a target that never answers cannot leave the
+ * RPC pending. The request is aborted once `read` settles or the
  * time is up, so the rest of a body `read` left (a redirect's, say) is not
  * downloaded and its socket closes; the result rejects on time even if the
  * transfer ignores the abort.

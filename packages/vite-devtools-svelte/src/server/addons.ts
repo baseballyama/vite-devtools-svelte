@@ -14,10 +14,10 @@ import type {
 
 // npm's rules for a (scoped) package name, minus a leading `-` that `sv` would read as a flag.
 const REGEX_NPM_NAME = /^(?:@[a-z0-9~][a-z0-9-._~]*\/)?[a-z0-9~][a-z0-9-._~]*$/;
-const REGEX_GITHUB_OWNER = /github\.com[/:]([^/]+)\//;
 // Some packages publish their README's HTML as the description.
 const REGEX_HTML_TAG = /<[^<>]*>/g;
-const REGEX_YARN_BERRY_LOCK = /^__metadata:/m;
+// Corepack's `name@x.y.z[+hash]`; any other value falls through to the parent directory.
+// A regex because the major must start right after `@`; parseInt also accepts ` 9` and `+9`.
 const REGEX_PACKAGE_MANAGER = /^(pnpm|yarn|bun|npm)@(\d+)/;
 
 interface AddonDef {
@@ -95,23 +95,20 @@ const LOCKFILES: [string, PackageManager][] = [
   ['package-lock.json', 'npm'],
 ];
 
-function yarnAgent(major: number): Agent {
-  return major >= 2 ? 'yarn@berry' : 'yarn';
-}
-
 function agentAt(dir: string): Agent | undefined {
   for (const [file, pm] of LOCKFILES) {
     const lockfile = path.join(dir, file);
     if (!fs.existsSync(lockfile)) continue;
     if (pm !== 'yarn') return pm;
-    return yarnAgent(REGEX_YARN_BERRY_LOCK.test(fs.readFileSync(lockfile, 'utf-8')) ? 2 : 1);
+    const lock = fs.readFileSync(lockfile, 'utf-8');
+    return lock.startsWith('__metadata:') || lock.includes('\n__metadata:') ? 'yarn@berry' : 'yarn';
   }
   try {
     const { packageManager } = JSON.parse(
       fs.readFileSync(path.join(dir, 'package.json'), 'utf-8'),
     ) as { packageManager?: string };
     const [, pm, major] = REGEX_PACKAGE_MANAGER.exec(packageManager ?? '') ?? [];
-    if (pm === 'yarn') return yarnAgent(Number(major));
+    if (pm === 'yarn') return Number(major) >= 2 ? 'yarn@berry' : 'yarn';
     return pm as PackageManager | undefined;
   } catch {
     return undefined;
@@ -188,6 +185,13 @@ interface NpmSearchObject {
   downloads?: { monthly?: number };
 }
 
+function githubOwner(repository: string | undefined): string | undefined {
+  if (!repository || !URL.canParse(repository)) return undefined;
+  const { hostname, pathname } = new URL(repository);
+  const [, owner] = pathname.split('/');
+  return (hostname === 'github.com' || hostname === 'www.github.com') && owner ? owner : undefined;
+}
+
 /** Sorted by downloads; drops names that are not plain npm names (they reach a command line). */
 export async function searchCommunityAddons(
   fetchFn: typeof fetch = fetch,
@@ -198,7 +202,7 @@ export async function searchCommunityAddons(
   return (body.objects ?? [])
     .filter(o => REGEX_NPM_NAME.test(o.package.name))
     .map(({ package: p, downloads }) => {
-      const owner = p.links?.repository?.match(REGEX_GITHUB_OWNER)?.[1];
+      const owner = githubOwner(p.links?.repository);
       return {
         name: p.name,
         description: (p.description ?? '').replaceAll(REGEX_HTML_TAG, '').trim(),

@@ -6,9 +6,9 @@ import type { Plugin } from 'vite';
 
 import { Collector } from '../src/server/collector.js';
 import { createRpcFunctions, DEVFRAME_ID } from '../src/server/devframe.js';
-import type { SvelteDevtoolsHost } from '../src/server/devframe.js';
+import type { DevframeDeps } from '../src/server/devframe.js';
 
-export interface TestHost extends SvelteDevtoolsHost {
+export interface TestDeps extends DevframeDeps {
   opened: string[];
 }
 
@@ -18,10 +18,7 @@ export const kitSetup = (routes: string) => ({
   api: { options: { files: { routes } } },
 });
 
-export function createTestHost(
-  root: string,
-  overrides: Partial<SvelteDevtoolsHost> = {},
-): TestHost {
+export function createTestDeps(root: string, overrides: Partial<DevframeDeps> = {}): TestDeps {
   const opened: string[] = [];
   return {
     collector: new Collector(),
@@ -38,9 +35,9 @@ export function createTestHost(
   };
 }
 
-export function rpcHandlers(host: SvelteDevtoolsHost): Map<string, (...args: any[]) => any> {
+export function rpcHandlers(deps: DevframeDeps): Map<string, (...args: any[]) => any> {
   const map = new Map<string, (...args: any[]) => any>();
-  for (const fn of createRpcFunctions(host)) {
+  for (const fn of createRpcFunctions(deps)) {
     map.set(`${DEVFRAME_ID}:${fn.name}`, (fn as { handler: (...args: any[]) => any }).handler);
   }
   return map;

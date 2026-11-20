@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 
+import { HOT_EVENTS } from '../src/runtime/ids.js';
 import {
   Collector,
-  HOT_EVENTS,
   MAX_EPOCHS,
   PULL_FRESHNESS,
   RUNTIME_REQUEST_TIMEOUT,

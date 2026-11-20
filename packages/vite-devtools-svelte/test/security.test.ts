@@ -10,7 +10,7 @@ import {
   publicOnlyLookup,
   resolveWithinRoot,
   validateExternalUrl,
-} from '../src/server/security.js';
+} from '../src/security.js';
 
 // Addresses no outbound request may reach, by range. Boundaries of each
 // range are included so an off-by-one in a prefix length shows up.

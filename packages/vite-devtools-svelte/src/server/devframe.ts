@@ -15,8 +15,10 @@ import { buildModuleGraph } from '../analyzers/module-graph.js';
 import type { GraphModuleLike } from '../analyzers/module-graph.js';
 import { getOGPreview } from '../analyzers/og.js';
 import { analyzeProject } from '../analyzers/project.js';
+import { findReactiveLine } from '../analyzers/reactive-line.js';
 import { analyzeRoutes } from '../analyzers/routes.js';
-import { findReactiveLine } from '../analyzers/source.js';
+import { MAX_EPOCH_LENGTH } from '../limits.js';
+import { resolveWithinRoot } from '../security.js';
 import type {
   CaptureInfoMap,
   ElementPick,
@@ -29,13 +31,59 @@ import type {
 import { createAddonRpcFunctions } from './addons.js';
 import type { AddonHub } from './addons.js';
 import type { Collector } from './collector.js';
-import { resolveWithinRoot } from './security.js';
 
 export const DEVFRAME_ID = 'svelte-devtools';
-export const workflowDockId = (view: string): string => `${DEVFRAME_ID}:${view}`;
+// Must match the group the bundled inspector registers (packages/inspector/src/plugin.ts).
+export const SVELTE_DOCK_GROUP = 'svelte';
 /** Same base for both hosts (standalone and Vite DevTools), so the SPA URL never changes. */
 export const DEVFRAME_BASE = '/.svelte-devtools/';
 export const PICK_BROADCAST = 'element-picked';
+
+export const VIEW_DOCKS = [
+  {
+    id: 'problems',
+    title: 'Problems',
+    description: 'Compiler warnings and runtime errors',
+    icon: 'ph:warning-duotone',
+    panel: 'errors',
+    defaultOrder: 10,
+  },
+  {
+    id: 'inspect',
+    title: 'Inspect',
+    description: 'Components, reactivity and state over time',
+    icon: 'ph:binoculars-duotone',
+    panel: 'components',
+    defaultOrder: 20,
+  },
+  {
+    id: 'profile',
+    title: 'Profile',
+    description: 'Render, load, frame rate and build performance',
+    icon: 'ph:gauge-duotone',
+    panel: 'render',
+    defaultOrder: 30,
+  },
+  {
+    id: 'project',
+    title: 'Project',
+    description: 'Routes, API, modules, assets and social previews',
+    icon: 'ph:folder-open-duotone',
+    panel: 'routes',
+    defaultOrder: 40,
+  },
+  {
+    id: 'add',
+    title: 'Add',
+    description: 'Install sv add-ons in one click',
+    icon: 'ph:plus-circle-duotone',
+    panel: 'addons',
+    // Last, after the inspector's Settings (50) and Pick element (60).
+    defaultOrder: 70,
+  },
+] as const;
+type ViewDockId = (typeof VIEW_DOCKS)[number]['id'];
+export const viewDockId = (id: ViewDockId): string => `${DEVFRAME_ID}:${id}`;
 
 // Self-reference by name: resolves to this package's root both from the
 // bundle (dist/index.mjs) and from the sources (tests run src/ directly).
@@ -49,8 +97,8 @@ const pkg = require(pkgJsonPath) as {
 };
 const clientAssets = path.join(path.dirname(pkgJsonPath), 'dist/client');
 
-// Getters are lazy because the host resolves config after construction.
-export interface SvelteDevtoolsHost {
+// Getters are lazy: the plugin resolves config after construction.
+export interface DevframeDeps {
   collector: Collector;
   root: () => string;
   routesDir: () => string | undefined;
@@ -64,22 +112,21 @@ export interface SvelteDevtoolsHost {
 
 const filePath = z.string().min(1).max(4096);
 
-function plain<N extends string, R>(type: 'query' | 'action', name: N, handler: () => R) {
-  return defineRpcFunction({ name, type, jsonSerializable: true, handler });
-}
-const query = <N extends string, R>(name: N, handler: () => R) => plain('query', name, handler);
-const action = <N extends string, R>(name: N, handler: () => R) => plain('action', name, handler);
+const query = <N extends string, R>(name: N, handler: () => R) =>
+  defineRpcFunction({ name, type: 'query', jsonSerializable: true, handler });
+const action = <N extends string, R>(name: N, handler: () => R) =>
+  defineRpcFunction({ name, type: 'action', jsonSerializable: true, handler });
 
-export function createRpcFunctions(host: SvelteDevtoolsHost) {
-  const { collector } = host;
-  const project = () => analyzeProject(host.root(), host.routesDir() !== undefined);
-  const routes = () => analyzeRoutes(host.routesDir());
+export function createRpcFunctions(deps: DevframeDeps) {
+  const { collector } = deps;
+  const project = () => analyzeProject(deps.root(), deps.routesDir() !== undefined);
+  const routes = () => analyzeRoutes(deps.routesDir());
   // Spelled like the Vite module ids the runtime reports as live `file`s:
   // Vite resolves them with the native realpath (real casing, symlinks
   // resolved) and `/` separators.
   let idRootCache: { root: string; id: string } | undefined;
   const idRoot = () => {
-    const root = host.root();
+    const root = deps.root();
     if (idRootCache?.root !== root) {
       let real = root;
       try {
@@ -95,8 +142,8 @@ export function createRpcFunctions(host: SvelteDevtoolsHost) {
   return [
     query('get-project', project),
     query('get-routes', routes),
-    query('get-assets', () => analyzeAssets(project().staticDir, host.publicBase())),
-    query('get-component-relations', () => analyzeComponents(host.root())),
+    query('get-assets', () => analyzeAssets(project().staticDir, deps.publicBase())),
+    query('get-component-relations', () => analyzeComponents(deps.root())),
     query('get-live-components', () => collector.liveComponents),
     query('get-live-components-meta', (): LiveComponentsMeta => ({
       total: collector.liveComponentsTotal,
@@ -123,8 +170,8 @@ export function createRpcFunctions(host: SvelteDevtoolsHost) {
       args: [z.object({ file: filePath, line: z.number().int().nonnegative().optional() })],
       returns: z.void(),
       handler: ({ file, line }) => {
-        const resolved = resolveWithinRoot(host.root(), file);
-        host.openInEditor(line ? `${resolved}:${line}` : resolved);
+        const resolved = resolveWithinRoot(deps.root(), file);
+        deps.openInEditor(line ? `${resolved}:${line}` : resolved);
       },
     }),
     // A pick made just before a UI connected (the dock opening the Svelte panel for it).
@@ -136,14 +183,14 @@ export function createRpcFunctions(host: SvelteDevtoolsHost) {
       args: [z.object({ file: filePath, name: z.string().max(256), type: z.string().max(32) })],
       returns: z.void(),
       handler: ({ file, name, type }) => {
-        const resolved = resolveWithinRoot(host.root(), file);
+        const resolved = resolveWithinRoot(deps.root(), file);
         let line = 0;
         try {
           line = findReactiveLine(fs.readFileSync(resolved, 'utf-8'), name, type);
         } catch {
-          /* file not readable */
+          // Unreadable: open the file without a line.
         }
-        host.openInEditor(line > 0 ? `${resolved}:${line}` : resolved);
+        deps.openInEditor(line > 0 ? `${resolved}:${line}` : resolved);
       },
     }),
     query('get-render-profiles', () => collector.renderProfiles),
@@ -151,12 +198,11 @@ export function createRpcFunctions(host: SvelteDevtoolsHost) {
       name: 'get-reactive-graph',
       type: 'query',
       jsonSerializable: true,
-      // Omitted by older clients: whole app.
       args: [
         z
           .object({
             componentId: z.number().int().nonnegative().optional(),
-            epoch: z.string().max(200).optional(),
+            epoch: z.string().max(MAX_EPOCH_LENGTH).optional(),
             maxNodes: z.number().int().positive().optional(),
             maxEdges: z.number().int().positive().optional(),
           })
@@ -169,7 +215,6 @@ export function createRpcFunctions(host: SvelteDevtoolsHost) {
       name: 'get-reactive-summary',
       type: 'query',
       jsonSerializable: true,
-      // Aggregated from runtime counters; never captures the graph.
       args: [
         z
           .object({
@@ -196,27 +241,27 @@ export function createRpcFunctions(host: SvelteDevtoolsHost) {
     query('get-versions', () => ({ ...collector.versions })),
     action('clear-state-timeline', () => collector.clearStateTimeline()),
     query('get-api-endpoints', () =>
-      analyzeApiEndpoints(routes(), host.publicBase(), host.resolveFile),
+      analyzeApiEndpoints(routes(), deps.publicBase(), deps.resolveFile),
     ),
     query('get-compiler-warnings', () => collector.compilerWarnings),
     query('get-runtime-errors', () => collector.runtimeErrors),
     action('clear-errors', () => collector.clearErrors()),
-    query('get-module-graph', () => buildModuleGraph(host.root(), host.modules())),
+    query('get-module-graph', () => buildModuleGraph(deps.root(), deps.modules())),
     defineRpcFunction({
       name: 'get-og-preview',
       type: 'action',
       jsonSerializable: true,
       args: [z.object({ url: z.string().max(8192) })],
       returns: z.custom<OGPreview>(),
-      handler: ({ url }) => getOGPreview(url, { allowedOrigins: host.serverOrigins() }),
+      handler: ({ url }) => getOGPreview(url, { allowedOrigins: deps.serverOrigins() }),
     }),
-    query('get-build-analysis', () => analyzeBuild(host.root())),
+    query('get-build-analysis', () => analyzeBuild(deps.root())),
     query('get-fps', () => collector.fpsSamples),
     action('clear-fps', () => collector.clearFps()),
   ] as const;
 }
 
-export function createSvelteDevframe(host: SvelteDevtoolsHost): DevframeDefinition {
+export function createSvelteDevframe(deps: DevframeDeps): DevframeDefinition {
   // A host may run setup again (dev-server restart): one picker subscription at a time.
   let detachPicker: (() => void) | undefined;
   return defineDevframe({
@@ -235,24 +280,24 @@ export function createSvelteDevframe(host: SvelteDevtoolsHost): DevframeDefiniti
       title: 'Overview',
       category: 'default',
       defaultOrder: 0,
-      groupId: 'svelte',
+      groupId: SVELTE_DOCK_GROUP,
       icon: 'ph:squares-four-duotone',
     },
     clientAssets,
     setup(ctx) {
       const scoped = ctx.scope(DEVFRAME_ID);
-      for (const fn of createRpcFunctions(host)) scoped.rpc.register(fn);
-      for (const fn of createAddonRpcFunctions(host.root, () => ctx as AddonHub)) {
+      for (const fn of createRpcFunctions(deps)) scoped.rpc.register(fn);
+      for (const fn of createAddonRpcFunctions(deps.root, () => ctx as AddonHub)) {
         scoped.rpc.register(fn);
       }
       const docks = (ctx as { docks?: { activate?: (dockId: string) => void } }).docks;
       detachPicker?.();
-      detachPicker = host.collector.onElementPicked(pick => {
+      detachPicker = deps.collector.onElementPicked(pick => {
         // To every DevTools UI, hidden tabs included (they apply it once visible).
         void scoped.rpc
           .broadcast({ method: PICK_BROADCAST, args: [pick], event: true, optional: true })
           .catch(() => {});
-        docks?.activate?.(workflowDockId('inspect'));
+        docks?.activate?.(viewDockId('inspect'));
       });
     },
   });

@@ -1,18 +1,18 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+import { HOT_EVENTS } from '../src/runtime/ids.js';
 import {
   Collector,
-  HOT_EVENTS,
   LEASE_TTL,
   LIMITS,
   RUNTIME_REQUEST_TIMEOUT,
   MAX_EPOCHS,
   PULL_FRESHNESS,
   RECENT_PICK_MS,
-  STATE_TIMELINE_BYTES,
 } from '../src/server/collector.js';
 import type { HotChannel, HotClient } from '../src/server/collector.js';
 import { normalizeSummary } from '../src/server/reactive.js';
+import { STATE_TIMELINE_BYTES } from '../src/server/state-timeline.js';
 
 function fakeHot() {
   const listeners = new Map<string, (payload: unknown, client: HotClient) => void>();

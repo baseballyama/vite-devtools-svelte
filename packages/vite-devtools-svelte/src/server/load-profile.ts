@@ -1,7 +1,8 @@
 import { parseSync } from 'vite';
 
+import { HOT_EVENTS } from '../runtime/ids.js';
 import type { LoadProfile } from '../types.js';
-import { HOT_EVENTS } from './collector.js';
+import { asPayload } from './payload.js';
 
 /** Server-side hook the profiled `load` wrappers report to (set by the plugin on the dev server). */
 export const LOAD_RECORDER = '__svelte_devtools_record_load';
@@ -26,7 +27,7 @@ function routeOf(file: string, routesDir: string): string | null {
 // Only the `export` keyword is removed, so the module's own references keep
 // the original `load` and line numbers are unchanged. `routesDir` is absolute
 // and `/`-separated.
-export function profileLoad(code: string, id: string, routesDir: string): string | null {
+export function injectLoadProfiling(code: string, id: string, routesDir: string): string | null {
   // Cheap checks first: this runs for every module the dev server serves.
   const type = LOAD_FILES[id.slice(id.lastIndexOf('/') + 1)];
   if (!type || id.includes('node_modules') || !code.includes('load')) return null;
@@ -58,8 +59,7 @@ function profiledExport(
   file: string,
   type: LoadProfile['type'],
 ): string {
-  const args = [route, file, type].map(v => JSON.stringify(v)).join(', ');
-  const report = `route: ${JSON.stringify(route)}, file: ${JSON.stringify(file)}, type: ${JSON.stringify(type)}`;
+  const fields = JSON.stringify({ route, file, type });
   return `${others.length > 0 ? `\nexport { ${others.join(', ')} };` : ''}
 const __profiled_load = async (event) => {
   const __start = performance.now();
@@ -68,10 +68,11 @@ const __profiled_load = async (event) => {
     const __duration = performance.now() - __start;
     let __dataSize = 0;
     try { __dataSize = JSON.stringify(__result || {}).length; } catch {}
+    const __report = { ...${fields}, duration: __duration, dataSize: __dataSize };
     if (typeof globalThis.${LOAD_RECORDER} === 'function') {
-      globalThis.${LOAD_RECORDER}(${args}, __duration, __dataSize);
+      globalThis.${LOAD_RECORDER}(__report);
     } else {
-      import.meta.hot?.send(${JSON.stringify(HOT_EVENTS.loadProfile)}, { ${report}, duration: __duration, dataSize: __dataSize });
+      import.meta.hot?.send(${JSON.stringify(HOT_EVENTS.loadProfile)}, __report);
     }
   } catch {}
   return __result;
@@ -92,8 +93,7 @@ const MAX_STRING = 4096;
 // The payload comes from the user's app: anything not shaped like a report is dropped. Only
 // universal loads run in the browser; server loads always use the recorder.
 export function parseLoadReport(payload: unknown): LoadReport | null {
-  if (typeof payload !== 'object' || payload === null) return null;
-  const { route, file, type, duration, dataSize } = payload as Record<string, unknown>;
+  const { route, file, type, duration, dataSize } = asPayload(payload) ?? {};
   if (typeof route !== 'string' || route.length > MAX_STRING) return null;
   if (typeof file !== 'string' || file.length > MAX_STRING) return null;
   if (type !== 'universal') return null;

@@ -7,15 +7,15 @@ import zlib from 'node:zlib';
 
 import { afterAll, afterEach, beforeAll, describe, expect, it, onTestFinished, vi } from 'vitest';
 
+import { getOGPreview } from '../src/analyzers/og.js';
 import {
   fetchWithTimeout,
   OUTBOUND_TIMEOUT_MS,
   readCapped,
   transport,
-} from '../src/analyzers/http.js';
-import type { OutboundResponse } from '../src/analyzers/http.js';
-import { getOGPreview } from '../src/analyzers/og.js';
-import { publicOnlyLookup } from '../src/server/security.js';
+} from '../src/analyzers/outbound-http.js';
+import type { OutboundResponse } from '../src/analyzers/outbound-http.js';
+import { publicOnlyLookup } from '../src/security.js';
 
 type Address = { address: string; family: number };
 /** What each name resolves to for the guard (`node:dns`); unknown names use the real resolver. */

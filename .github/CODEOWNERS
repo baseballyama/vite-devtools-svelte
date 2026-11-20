@@ -4,5 +4,5 @@
 # Security-sensitive areas — keep ownership strict
 /packages/vite-devtools-svelte/src/plugin.ts           @baseballyama
 /packages/vite-devtools-svelte/src/runtime/            @baseballyama
-/packages/vite-devtools-svelte/src/server/security.ts  @baseballyama
+/packages/vite-devtools-svelte/src/security.ts         @baseballyama
 /.github/                                              @baseballyama

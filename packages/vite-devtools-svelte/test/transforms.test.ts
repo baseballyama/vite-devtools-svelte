@@ -8,15 +8,15 @@ import type { Plugin } from 'vite';
 import { afterAll, afterEach, describe, it, expect, vi } from 'vitest';
 
 import { svelteDevtools } from '../src/plugin.js';
-import { RUNTIME_MODULE_ID } from '../src/runtime/ids.js';
+import { HOT_EVENTS, RUNTIME_MODULE_ID } from '../src/runtime/ids.js';
 import {
   injectComponentTracking,
   injectModuleTracking,
   injectRuntime,
   isSvelteModule,
 } from '../src/runtime/transform.js';
-import { HOT_EVENTS } from '../src/server/collector.js';
 import { loadProfileOf, parseLoadReport } from '../src/server/load-profile.js';
+import type { LoadReport } from '../src/server/load-profile.js';
 import { callHook, codeOf, kitSetup, resolvePlugins } from './helpers.js';
 
 const RUNTIME_IMPORT = `import '${RUNTIME_MODULE_ID}';`;
@@ -330,7 +330,7 @@ async function loadModule(code: string, id: string, config = {}): Promise<LoadMo
   return import(/* @vite-ignore */ pathToFileURL(file).href);
 }
 
-type Recorder = (route: string, file: string, type: string, ms: number, size: number) => void;
+type Recorder = (report: LoadReport) => void;
 const g = globalThis as { __svelte_devtools_record_load?: Recorder };
 function installRecorder(impl?: Recorder) {
   const rec = vi.fn<Recorder>(impl);
@@ -359,7 +359,7 @@ describe('loadProfilePlugin: profiled load functions', () => {
     const value = await mod.load({ params: { slug: 'x' } });
     expect(value).toBe(mod.result);
     expect(rec).toHaveBeenCalledOnce();
-    const [route, file, type, duration, dataSize] = rec.mock.calls[0]!;
+    const { route, file, type, duration, dataSize } = rec.mock.calls[0]![0];
     expect({ route, file, type, dataSize }).toEqual({
       route: '/blog/[slug]',
       file: PAGE,
@@ -394,14 +394,14 @@ describe('loadProfilePlugin: profiled load functions', () => {
     const rec = installRecorder();
     const mod = await loadModule(decl, PAGE);
     await expect(mod.load()).resolves.toBeDefined();
-    expect(rec.mock.calls[0]![4]).toBe(0);
+    expect(rec.mock.calls[0]![0].dataSize).toBe(0);
   });
 
   it('an empty result is recorded as {}', async () => {
     const rec = installRecorder();
     const mod = await loadModule('export function load() {}', PAGE);
     expect(await mod.load()).toBeUndefined();
-    expect(rec.mock.calls[0]![4]).toBe(2);
+    expect(rec.mock.calls[0]![0].dataSize).toBe(2);
   });
 
   it('a failing recorder never fails the load', async () => {
@@ -450,6 +450,7 @@ describe('loadProfilePlugin: profiled load functions', () => {
   it.each([
     ['not an object', 'x'],
     ['null', null],
+    ['an array', []],
     ['an unknown type', { route: '/', file: 'f', type: 'other', duration: 1, dataSize: 1 }],
     [
       'a negative duration',
@@ -533,7 +534,7 @@ describe('loadProfilePlugin: profiled load functions', () => {
       },
     );
     await mod.load();
-    expect(rec.mock.calls[0]![0]).toBe('/blog');
+    expect(rec.mock.calls[0]![0].route).toBe('/blog');
   });
 
   it('profiles nothing without SvelteKit', () => {
@@ -552,7 +553,7 @@ describe('loadProfilePlugin: profiled load functions', () => {
     const rec = installRecorder();
     const mod = await loadModule('export const load = () => ({})', id);
     await mod.load();
-    expect(rec.mock.calls[0]!.slice(0, 3)).toEqual([route, id, type]);
+    expect(rec.mock.calls[0]![0]).toMatchObject({ route, file: id, type });
   });
 
   it.each([

@@ -1,3 +1,4 @@
+import { GRAPH_LIMITS, SUMMARY_TOP_K } from '../limits.js';
 import type {
   ReactiveEdge,
   ReactiveGraphResult,
@@ -9,10 +10,6 @@ import type {
 import { arrayOf, asPayload, finiteOrNull, nonNegInt } from './payload.js';
 import type { Payload } from './payload.js';
 import { isBaseline } from './state-timeline.js';
-
-export const GRAPH_LIMITS = { nodes: 5000, edges: 20000 } as const;
-
-export const SUMMARY_DEFAULTS = { topK: 50, maxTopK: 200 } as const;
 
 export type StaleReason = NonNullable<ReactiveGraphResult['staleReason']>;
 
@@ -128,7 +125,7 @@ export function normalizeGraph(
 // Untrusted reply: every field is validated, nothing assumed.
 export function normalizeSummary(data: Payload | undefined, epoch: string | null): ReactiveSummary {
   const rows = arrayOf<unknown>(data?.rows)
-    .slice(0, SUMMARY_DEFAULTS.maxTopK)
+    .slice(0, SUMMARY_TOP_K.max)
     .map(raw => {
       const r = asPayload(raw);
       const nodes = asPayload(r?.nodes);

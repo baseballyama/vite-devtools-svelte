@@ -17,6 +17,7 @@ import { createMcpMiddleware, MCP_PATH } from './mcp/http.js';
 import { registerServer, registryDir } from './mcp/registry.js';
 import { buildMcpServer } from './mcp/server.js';
 import { SessionStore } from './mcp/sessions.js';
+import { HOT_EVENTS } from './runtime/ids.js';
 import {
   RUNTIME_MODULE_ID,
   RESOLVED_RUNTIME_ID,
@@ -30,19 +31,24 @@ import {
   injectRuntime,
   isSvelteModule,
 } from './runtime/transform.js';
-import { Collector, HOT_EVENTS } from './server/collector.js';
+import { Collector } from './server/collector.js';
 import { captureCompilerWarnings } from './server/compiler-warnings.js';
-import { createSvelteDevframe, DEVFRAME_BASE, workflowDockId } from './server/devframe.js';
-import type { SvelteDevtoolsHost } from './server/devframe.js';
 import {
+  createSvelteDevframe,
+  DEVFRAME_BASE,
+  SVELTE_DOCK_GROUP,
+  VIEW_DOCKS,
+  viewDockId,
+} from './server/devframe.js';
+import type { DevframeDeps } from './server/devframe.js';
+import {
+  injectLoadProfiling,
   LOAD_RECORDER,
   loadProfileOf,
   parseLoadReport,
-  profileLoad,
 } from './server/load-profile.js';
 import type { LoadReport } from './server/load-profile.js';
 import { mountStandalone, urlHost } from './server/mount.js';
-import type { LoadProfile } from './types.js';
 
 export interface SvelteDevtoolsOptions {
   /**
@@ -93,17 +99,9 @@ function displayPath(root: string, file: string): string {
 }
 
 function collectModules(server: ViteDevServer): GraphModuleLike[] {
-  type WithGraph = { moduleGraph?: { idToModuleMap?: Map<string, GraphModuleLike> } };
-  const modules: GraphModuleLike[] = [];
-  for (const env of Object.values(server.environments ?? {})) {
-    const graph = (env as WithGraph).moduleGraph;
-    if (graph?.idToModuleMap) modules.push(...graph.idToModuleMap.values());
-  }
-  if (modules.length === 0) {
-    const legacy = (server as WithGraph).moduleGraph;
-    if (legacy?.idToModuleMap) modules.push(...legacy.idToModuleMap.values());
-  }
-  return modules;
+  return Object.values(server.environments).flatMap(env =>
+    Array.from(env.moduleGraph.idToModuleMap.values()),
+  );
 }
 
 export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
@@ -144,7 +142,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     onLoadProfile: profile => getSessions().recordLoadProfile(profile),
   });
 
-  const host: SvelteDevtoolsHost = {
+  const deps: DevframeDeps = {
     collector,
     root: () => root,
     routesDir: () => routesDir,
@@ -158,7 +156,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     },
     openInEditor: target => launchEditor(target),
   };
-  const devframe = createSvelteDevframe(host);
+  const devframe = createSvelteDevframe(deps);
   const middlewareModeMounts: Array<{ generation: number; dispose: () => Promise<void> }> = [];
 
   const mainPlugin: Plugin = {
@@ -166,7 +164,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     enforce: 'pre',
     apply: 'serve',
 
-    // Lets tests read the MCP token without a production-only flag.
+    // Documented for setups that print the MCP registration themselves (middleware mode, containers).
     api: {
       getDevtoolsToken: () => mcpToken,
     },
@@ -209,7 +207,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
       devServer.httpServer?.once('listening', () => {
         const addr = devServer.httpServer?.address();
         if (!addr || typeof addr === 'string') return;
-        const proto = devServer.config.server?.https ? 'https' : 'http';
+        const proto = devServer.config.server.https ? 'https' : 'http';
         const url = `${proto}://${urlHost(addr.address)}:${addr.port}${MCP_PATH}`;
         const { logger } = devServer.config;
         // Lets `vite-devtools-svelte mcp` find this server without a port or token.
@@ -308,62 +306,15 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
         const { createPluginFromDevframe } = await import('@vitejs/devtools-kit/node');
         const plugin = createPluginFromDevframe(devframe, { base: DEVFRAME_BASE });
         await plugin.devtools?.setup?.(ctx);
-        for (const entry of [
-          {
-            id: 'problems',
-            title: 'Problems',
-            description: 'Compiler warnings and runtime errors',
-            icon: 'ph:warning-duotone',
-            view: 'problems',
-            panel: 'errors',
-            defaultOrder: 10,
-          },
-          {
-            id: 'inspect',
-            title: 'Inspect',
-            description: 'Components, reactivity and state over time',
-            icon: 'ph:binoculars-duotone',
-            view: 'inspect',
-            panel: 'components',
-            defaultOrder: 20,
-          },
-          {
-            id: 'profile',
-            title: 'Profile',
-            description: 'Render, load, frame rate and build performance',
-            icon: 'ph:gauge-duotone',
-            view: 'profile',
-            panel: 'render',
-            defaultOrder: 30,
-          },
-          {
-            id: 'project',
-            title: 'Project',
-            description: 'Routes, API, modules, assets and social previews',
-            icon: 'ph:folder-open-duotone',
-            view: 'project',
-            panel: 'routes',
-            defaultOrder: 40,
-          },
-          {
-            id: 'add',
-            title: 'Add',
-            description: 'Install sv add-ons in one click',
-            icon: 'ph:plus-circle-duotone',
-            view: 'add',
-            panel: 'addons',
-            // Last, after the inspector's Settings (50) and Pick element (60).
-            defaultOrder: 70,
-          },
-        ] as const) {
+        for (const entry of VIEW_DOCKS) {
           ctx.docks?.register({
-            id: workflowDockId(entry.id),
+            id: viewDockId(entry.id),
             title: entry.title,
             description: entry.description,
             icon: entry.icon,
             type: 'iframe',
-            url: `${DEVFRAME_BASE}?view=${entry.view}#/${entry.panel}`,
-            groupId: 'svelte',
+            url: `${DEVFRAME_BASE}?view=${entry.id}#/${entry.panel}`,
+            groupId: SVELTE_DOCK_GROUP,
             category: 'default',
             defaultOrder: entry.defaultOrder,
           });
@@ -413,13 +364,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
     apply: 'serve',
 
     configureServer(devServer) {
-      (globalThis as Record<string, unknown>)[LOAD_RECORDER] = (
-        route: string,
-        file: string,
-        type: LoadProfile['type'],
-        duration: number,
-        dataSize: number,
-      ) => recordLoad({ route, file, type, duration, dataSize });
+      (globalThis as Record<string, unknown>)[LOAD_RECORDER] = recordLoad;
       // The hot channel closes with its server, so this listener needs no cleanup.
       devServer.hot.on(HOT_EVENTS.loadProfile, payload => {
         const report = parseLoadReport(payload);
@@ -429,7 +374,7 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
 
     transform(code, id) {
       if (!serving() || !routesDir) return null;
-      const profiled = profileLoad(code, id, routesDir);
+      const profiled = injectLoadProfiling(code, id, routesDir);
       return profiled === null ? null : { code: profiled, map: null };
     },
   };

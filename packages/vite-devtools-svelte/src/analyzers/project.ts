@@ -63,7 +63,6 @@ function analyzeProjectUncached(root: string, kit: boolean): ProjectInfo {
   const pkg = readPackageJson(path.join(root, 'package.json'));
   const deps = pkg.dependencies;
   const devDeps = pkg.devDependencies;
-  // installed, else declared
   const versionOf = (name: string) =>
     getInstalledVersion(root, name) ?? nonEmpty(deps[name]) ?? nonEmpty(devDeps[name]) ?? 'unknown';
 
