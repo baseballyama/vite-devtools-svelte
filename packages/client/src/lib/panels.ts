@@ -74,13 +74,13 @@ export const panels = [
     load: () => import('../panels/StateTimeline.svelte'),
   },
   {
-    id: 'render',
-    label: 'Render',
+    id: 'performance',
+    label: 'Performance',
     icon: 'render',
     group: 'profile',
-    description: 'Per-component init and render cost',
-    keywords: 'profiler performance slow',
-    load: () => import('../panels/RenderProfiler.svelte'),
+    description: 'Record updates: what triggered each one and where the time went',
+    keywords: 'profiler render record slow updates flush derived effect',
+    load: () => import('../panels/Performance.svelte'),
   },
   {
     id: 'loads',
@@ -184,7 +184,7 @@ const viewPanels: Record<PanelView, readonly PanelId[]> = {
   overview: ['overview'],
   problems: ['errors'],
   inspect: ['components', 'reactive', 'timeline'],
-  profile: ['render', 'loads', 'fps', 'build'],
+  profile: ['performance', 'loads', 'fps', 'build'],
   project: ['routes', 'api', 'modules', 'assets', 'og'],
   add: ['addons'],
 };

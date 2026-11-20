@@ -184,6 +184,7 @@ describe('FpsMonitor', () => {
         errors: 0,
         fps: ++version,
         apiEndpoints: 0,
+        performance: 0,
       }),
     );
     vi.mocked(rpc.getFps).mockResolvedValue(samples([60]));

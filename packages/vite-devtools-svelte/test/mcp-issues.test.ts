@@ -6,6 +6,7 @@ import type { IssueThresholds, PerformanceIssue } from '../src/mcp/issues.js';
 import type {
   FpsSample,
   LoadProfile,
+  PerfUpdate,
   ReactiveEdge,
   ReactiveGraph,
   ReactiveNode,
@@ -369,5 +370,142 @@ describe('summarizeReactiveProblems', () => {
       orphanDeriveds: [],
       isolatedNodes: [],
     });
+  });
+});
+
+const perfUpdate = (id: number, duration: number, extra: Partial<PerfUpdate> = {}): PerfUpdate => ({
+  id,
+  start: 1500,
+  duration,
+  event: null,
+  triggers: [],
+  triggersOmitted: 0,
+  components: 2,
+  renders: 2,
+  effects: 0,
+  deriveds: 0,
+  wastedDeriveds: 0,
+  unchangedDeriveds: [],
+  costs: [],
+  costsOmitted: 0,
+  droppedFrames: null,
+  ...extra,
+});
+const perfTrigger = (name: string, during: boolean, loc = true) => ({
+  nodeId: `1:${name}`,
+  name,
+  scopeId: 1,
+  scope: 'App',
+  file: 'src/App.svelte',
+  loc: loc ? { file: 'src/App.svelte', line: 4, column: 2 } : null,
+  during,
+});
+
+describe('slow updates (performance recording)', () => {
+  it('reports updates at or above slowUpdateMs, the 10 slowest, with the cause written before', () => {
+    const updates = [
+      perfUpdate(1, 49.9),
+      perfUpdate(2, 50, {
+        triggers: [perfTrigger('derivedOnly', true), perfTrigger('count', false, false)],
+      }),
+      perfUpdate(3, 120, {
+        triggers: [perfTrigger('during', true)],
+        event: { type: 'input', target: '' },
+      }),
+      ...Array.from({ length: 12 }, (_, i) => perfUpdate(10 + i, 60)),
+    ];
+    const issues = listPerformanceIssues({ ...EMPTY, updates });
+    expect(issues).toHaveLength(10);
+    expect(issues[0]).toMatchObject({
+      id: 'slow-update:3',
+      severity: 'medium',
+      file: 'src/App.svelte',
+      line: 4,
+      summary:
+        'update at +1.50 s took 120.0ms (after a write to App.during, input, 2 components re-rendered)',
+    });
+    const two = listPerformanceIssues({ ...EMPTY, updates: [updates[1]!] })[0]!;
+    expect(two.summary).toContain('after a write to App.count');
+    expect(two).not.toHaveProperty('line');
+    expect(listPerformanceIssues({ ...EMPTY, updates }, { slowUpdateMs: 200 })).toEqual([]);
+    expect(listPerformanceIssues({ ...EMPTY, updates: [perfUpdate(5, 70)] })[0]!.summary).toBe(
+      'update at +1.50 s took 70.0ms (2 components re-rendered)',
+    );
+  });
+});
+
+describe('performance summaries', () => {
+  it('describes events with and without a target or key', async () => {
+    const { describeEvent, recordingSummary } = await import('../src/mcp/performance.js');
+    expect(describeEvent(null)).toBeNull();
+    expect(describeEvent({ type: 'keydown', target: 'input#q', key: 'Enter' })).toBe(
+      'keydown Enter on input#q',
+    );
+    expect(describeEvent({ type: 'submit', target: '' })).toBe('submit');
+    // never started: no duration
+    const empty = recordingSummary(
+      {
+        state: 'idle',
+        recordingId: null,
+        startedAt: null,
+        stoppedAt: null,
+        epoch: null,
+        updates: [],
+        droppedUpdates: 0,
+        components: [
+          {
+            file: 'a.svelte',
+            name: 'A',
+            kind: 'component',
+            componentId: 1,
+            instances: 2,
+            updates: 3,
+            renders: 4,
+            effects: 0,
+            deriveds: 1,
+            renderMs: 1.004,
+            effectMs: 0,
+            derivedMs: 0.5,
+          },
+        ],
+        componentsOmitted: false,
+      },
+      { topN: 5, minDurationMs: 0 },
+    );
+    expect(empty.durationMs).toBeNull();
+    expect(empty.components).toEqual([
+      {
+        name: 'A',
+        file: 'a.svelte',
+        kind: 'component',
+        instances: 2,
+        updates: 3,
+        runs: { render: 4, effect: 0, derived: 1 },
+        selfMs: 1.5,
+        renderMs: 1,
+        effectMs: 0,
+        derivedMs: 0.5,
+      },
+    ]);
+  });
+
+  it('a running recording lasts until now', async () => {
+    const { recordingSummary } = await import('../src/mcp/performance.js');
+    const now = Date.now();
+    const s = recordingSummary(
+      {
+        state: 'recording',
+        recordingId: 'p',
+        startedAt: now - 1000,
+        stoppedAt: null,
+        epoch: 'e',
+        updates: [],
+        droppedUpdates: 0,
+        components: [],
+        componentsOmitted: false,
+      },
+      { topN: 5, minDurationMs: 0 },
+    );
+    expect(s.durationMs).toBeGreaterThanOrEqual(1000);
   });
 });

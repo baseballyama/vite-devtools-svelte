@@ -12,6 +12,8 @@ import { SessionStore } from '../src/mcp/sessions.js';
 import type {
   FpsSample,
   LoadProfile,
+  PerfUpdate,
+  PerformanceRecording,
   ReactiveGraph,
   RenderProfile,
   StateTimelineEntry,
@@ -34,6 +36,11 @@ const BASE_TOOLS = [
   'list_sessions',
   'load_session',
   'delete_session',
+];
+const PERFORMANCE_TOOLS = [
+  'start_performance_recording',
+  'stop_performance_recording',
+  'get_performance_recording',
 ];
 const REACTIVITY_TOOLS = [
   'get_reactive_summary',
@@ -68,6 +75,7 @@ const lp = (route: string, duration: number, dataSize = 10): LoadProfile => ({
 });
 
 interface Data {
+  recording: PerformanceRecording;
   render: RenderProfile[];
   load: LoadProfile[];
   fps: FpsSample[];
@@ -75,7 +83,14 @@ interface Data {
 }
 
 function makeDeps(data: Partial<Data> = {}, persistDir?: string): McpDeps & { data: Data } {
-  const d: Data = { render: [], load: [], fps: [], graph: { nodes: [], edges: [] }, ...data };
+  const d: Data = {
+    recording: emptyRecording(),
+    render: [],
+    load: [],
+    fps: [],
+    graph: { nodes: [], edges: [] },
+    ...data,
+  };
   const dir = persistDir ?? fs.mkdtempSync(path.join(os.tmpdir(), 'sdt-mcp-'));
   dirs.push(dir);
   const getters = {
@@ -98,6 +113,31 @@ function makeDeps(data: Partial<Data> = {}, persistDir?: string): McpDeps & { da
     getReactiveScope: req => Promise.resolve({ req } as any),
     getStateTimelineDelta: () => ({ cursor: 1, reset: true, changes: [] }),
     getCaptureInfo: () => ({ components: { captured: 1 } }) as any,
+    performance: {
+      start: () => {
+        d.recording = { ...emptyRecording(), state: 'recording', recordingId: 'p1', startedAt: 1 };
+        return { recordingId: 'p1', startedAt: 1 };
+      },
+      stop: () => {
+        d.recording = { ...d.recording, state: 'idle', stoppedAt: 2 };
+        return Promise.resolve(d.recording);
+      },
+      get: () => d.recording,
+    },
+  };
+}
+
+function emptyRecording(): PerformanceRecording {
+  return {
+    state: 'idle',
+    recordingId: null,
+    startedAt: null,
+    stoppedAt: null,
+    epoch: null,
+    updates: [],
+    droppedUpdates: 0,
+    components: [],
+    componentsOmitted: false,
   };
 }
 
@@ -136,7 +176,7 @@ describe('tool registration', () => {
   it('registers exactly the documented tools', async () => {
     const { tools } = await (await connect(makeDeps())).listTools();
     expect(tools.map(t => t.name).toSorted()).toEqual(
-      [...BASE_TOOLS, ...REACTIVITY_TOOLS].toSorted(),
+      [...BASE_TOOLS, ...PERFORMANCE_TOOLS, ...REACTIVITY_TOOLS].toSorted(),
     );
   });
 
@@ -199,6 +239,20 @@ describe('every tool answers valid input', () => {
         r => expect(r).toMatchObject({ cursor: 1, omitted: 0, changes: [] }),
       ],
       get_capture_info: [{}, r => expect(r).toEqual({ components: { captured: 1 } })],
+      start_performance_recording: [
+        {},
+        r =>
+          expect(r).toEqual({
+            recordingId: 'p1',
+            startedAt: 1,
+            next: 'stop_performance_recording',
+          }),
+      ],
+      get_performance_recording: [{}, r => expect(r.state).toBe('recording')],
+      stop_performance_recording: [
+        { topN: 5 },
+        r => expect(r).toMatchObject({ state: 'idle', durationMs: 1, slowest: [] }),
+      ],
       end_session: [
         {},
         r => expect(r).toMatchObject({ id, keep: 'memory', delta: { durationMs: 0 } }),
@@ -246,6 +300,10 @@ describe('input validation', () => {
     ['get_fps_drops', { threshold: 121 }],
     ['get_fps_drops', { sinceMs: -1 }],
     ['get_render_profile', {}],
+    ['get_performance_recording', { topN: 0 }],
+    ['get_performance_recording', { topN: 201 }],
+    ['stop_performance_recording', { minDurationMs: -1 }],
+    ['list_performance_issues', { slowUpdateMs: 0 }],
     ['get_render_profile', { file: 1 }],
     ['get_live_components', { limit: 0 }],
     ['get_live_components', { limit: 50_001 }],
@@ -425,6 +483,96 @@ describe('session tools', () => {
     expect(parse(await call(client, 'list_sessions'))).toEqual([
       expect.objectContaining({ id, persisted: true }),
     ]);
+  });
+});
+
+const perfUpdate = (id: number, duration: number): PerfUpdate => ({
+  id,
+  start: id * 1000,
+  duration,
+  event: { type: 'click', target: 'button#send' },
+  triggers: [
+    {
+      nodeId: '3:messages',
+      name: 'messages',
+      scopeId: 3,
+      scope: '+page',
+      file: 'src/routes/+page.svelte',
+      loc: { file: 'src/routes/+page.svelte', line: 88, column: 6 },
+      during: false,
+    },
+  ],
+  triggersOmitted: 0,
+  components: 212,
+  renders: 220,
+  effects: 18,
+  deriveds: 640,
+  wastedDeriveds: 412,
+  unchangedDeriveds: [
+    {
+      name: 'isRead',
+      scope: 'MessageRow',
+      file: 'src/MessageRow.svelte',
+      runs: 400,
+      unchanged: 398,
+    },
+  ],
+  costs: [
+    {
+      file: 'src/MessageRow.svelte',
+      name: 'MessageRow',
+      kind: 'component',
+      componentId: 9,
+      instances: 200,
+      rendered: 200,
+      renderMs: 50.123,
+      effectMs: 0,
+      derivedMs: 11,
+      renders: 200,
+      effects: 0,
+      deriveds: 400,
+    },
+  ],
+  costsOmitted: 0,
+  droppedFrames: 5,
+});
+
+describe('performance recording tools', () => {
+  it('summarize the slowest updates and list slow ones as issues', async () => {
+    const recording: PerformanceRecording = {
+      state: 'idle',
+      recordingId: 'p1',
+      startedAt: 1000,
+      stoppedAt: 13_000,
+      epoch: 'e1',
+      updates: [perfUpdate(1, 10), perfUpdate(2, 84.2), perfUpdate(3, 30), perfUpdate(4, 300)],
+      droppedUpdates: 0,
+      components: [],
+      componentsOmitted: false,
+    };
+    const client = await connect(makeDeps({ recording }));
+    const summary = parse(await call(client, 'get_performance_recording', { minDurationMs: 20 }));
+    expect(summary).toMatchObject({
+      durationMs: 12_000,
+      updates: { recorded: 4, overFrameBudget: 3, slow: 2, totalMs: 424.2 },
+    });
+    expect(summary.slowest.map((u: any) => u.id)).toEqual([4, 2, 3]);
+    expect(summary.slowest[1]).toMatchObject({
+      atMs: 2000,
+      event: 'click on button#send',
+      triggers: [{ state: '+page.messages', file: 'src/routes/+page.svelte', line: 88 }],
+      unchangedDerivedReruns: 412,
+      selfTime: [{ name: 'MessageRow', instances: 200, renderMs: 50.12 }],
+      droppedFrames: 5,
+    });
+    const { issues } = parse(await call(client, 'list_performance_issues', {}));
+    expect(issues.map((i: any) => [i.kind, i.severity, i.line])).toEqual([
+      ['slow-update', 'high', 88],
+      ['slow-update', 'low', 88],
+    ]);
+    expect(issues[1].summary).toBe(
+      'update at +2.00 s took 84.2ms (after a write to +page.messages, click on button#send, 212 components re-rendered)',
+    );
   });
 });
 

@@ -27,4 +27,17 @@ describe('reactiveScope', () => {
     });
     reactiveScope.set(null);
   });
+
+  it('scopeTo can focus one node until it was selected', () => {
+    reactiveScope.scopeTo(7, 'src/lib/Row.svelte', 'e2', '7:count');
+    expect(reactiveScope.current?.focus).toBe('7:count');
+    reactiveScope.focused();
+    expect(reactiveScope.current).toMatchObject({ componentId: 7, focus: undefined });
+    const same = reactiveScope.current;
+    reactiveScope.focused();
+    expect(reactiveScope.current).toBe(same);
+    reactiveScope.set(null);
+    reactiveScope.focused();
+    expect(reactiveScope.current).toBeNull();
+  });
 });

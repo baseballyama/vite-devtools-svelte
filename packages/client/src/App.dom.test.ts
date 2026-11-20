@@ -298,7 +298,7 @@ describe('workflow views', () => {
       within(tabs)
         .getAllByRole('link')
         .map(link => link.textContent?.trim()),
-    ).toEqual(['Render', 'Load functions', 'Frame rate', 'Build']);
+    ).toEqual(['Performance', 'Load functions', 'Frame rate', 'Build']);
     expect(
       within(tabs).getByRole('link', { name: 'Load functions' }).getAttribute('aria-current'),
     ).toBe('page');

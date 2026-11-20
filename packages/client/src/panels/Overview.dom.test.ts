@@ -139,6 +139,7 @@ describe('Overview panel', () => {
         errors: 0,
         fps: 0,
         apiEndpoints: 0,
+        performance: 0,
       }),
     );
     render(Overview);

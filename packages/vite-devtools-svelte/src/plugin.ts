@@ -296,6 +296,11 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
               getReactiveScope: req => collector.requestReactiveGraph(req),
               getStateTimelineDelta: since => collector.getStateTimelineDelta(since),
               getCaptureInfo: () => collector.getCaptureInfo(),
+              performance: {
+                start: () => collector.startPerformanceRecording(),
+                stop: () => collector.stopPerformanceRecording(),
+                get: () => collector.performanceRecording,
+              },
             }),
         }),
       );
@@ -354,10 +359,10 @@ export function svelteDevtools(options: SvelteDevtoolsOptions = {}): Plugin[] {
           {
             id: 'profile',
             title: 'Profile',
-            description: 'Render, load, frame rate and build performance',
+            description: 'Updates, load, frame rate and build performance',
             icon: 'ph:gauge-duotone',
             view: 'profile',
-            panel: 'render',
+            panel: 'performance',
             defaultOrder: 30,
           },
           {

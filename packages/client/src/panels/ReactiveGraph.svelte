@@ -217,6 +217,16 @@
   );
   const current = $derived(selected ? (byId.get(selected) ?? null) : null);
 
+  // Opened on one node (Performance → "Show in Reactivity graph"): select it once loaded.
+  $effect(() => {
+    const focus = scope?.focus;
+    if (focus === undefined || !byId.has(focus)) return;
+    untrack(() => {
+      selected = focus;
+      reactiveScope.focused();
+    });
+  });
+
   const counts = $derived.by(() => {
     const c = { state: 0, derived: 0, effect: 0, template: 0 };
     for (const n of data.nodes) c[n.type]++;

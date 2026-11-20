@@ -17,7 +17,7 @@
   import type { Column, SortState, TableRowState, TreeViewApi } from '../components/types.js';
   import type { CaptureInfo } from '../lib/capture.svelte.js';
   import { countBy, groupBy } from '../lib/collections.js';
-  import { elementPick } from '../lib/element-pick.svelte.js';
+  import { elementPick, type InstanceRef } from '../lib/element-pick.svelte.js';
   import { componentName, errorMessage, shortPath } from '../lib/format.js';
   import { inspectorPicker } from '../lib/inspector-dock.js';
   import { buildLiveTree, type LiveNode } from '../lib/live-tree.js';
@@ -33,12 +33,7 @@
     openInEditor,
   } from '../lib/rpc.js';
   import { branchKeys, defaultExpansion, remapAcross, type TreeRow } from '../lib/tree.js';
-  import type {
-    ComponentInstance,
-    ComponentRelation,
-    ElementPick,
-    LiveComponentsMeta,
-  } from '../lib/types.js';
+  import type { ComponentInstance, ComponentRelation, LiveComponentsMeta } from '../lib/types.js';
   import { datasetVersion } from '../lib/versions.js';
 
   type Mode = 'tree' | 'files';
@@ -176,7 +171,7 @@
     return () => document.removeEventListener('visibilitychange', sync);
   });
 
-  let refetchedFor: ElementPick | null = null;
+  let refetchedFor: InstanceRef | null = null;
   $effect(() => {
     const pick = elementPick.pending;
     if (!pick || !pageVisible) return;

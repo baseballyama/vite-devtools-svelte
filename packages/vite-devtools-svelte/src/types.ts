@@ -74,6 +74,13 @@ export interface ComponentInstance {
   mounted: boolean;
 }
 
+/** A place in a source file (1-based line, 0-based column, as Svelte reports them). */
+export interface SourceLocation {
+  file: string;
+  line: number;
+  column: number;
+}
+
 /** A component instance chosen with Inspect in the app page's inspector. */
 export interface ElementPick {
   /** App page load the id belongs to. */
@@ -82,6 +89,115 @@ export interface ElementPick {
   componentId: number;
 }
 
+/** A tracked state written in the batch an update applied: why the update ran. */
+export interface PerfTrigger {
+  /** Reactive graph node id (`<scopeId>:<name>`), valid in the recording's page load. */
+  nodeId: string;
+  name: string;
+  /** Component instance (or module scope) the state belongs to. */
+  scopeId: number;
+  /** Its component name (or module file name). */
+  scope: string;
+  /** Its component (or module) file. */
+  file: string;
+  /** Where the state is declared, when Svelte reported it. */
+  loc: SourceLocation | null;
+  /** Written while the update was already running (by an `$effect`), not before it. */
+  during: boolean;
+}
+
+/** Self time of the reactions of one component file (or module / library file) in an update. */
+export interface PerfCost {
+  file: string;
+  name: string;
+  kind: 'component' | 'module' | 'library' | 'other';
+  /** One instance of it (to reveal), `null` for modules, libraries and other code. */
+  componentId: number | null;
+  /** Instances (scopes) with work in this update. */
+  instances: number;
+  /** Instances among them whose render effects re-ran. */
+  rendered: number;
+  /** Self time (ms) and runs of render effects (DOM updates, blocks), `$effect`s and `$derived`s. */
+  renderMs: number;
+  effectMs: number;
+  derivedMs: number;
+  renders: number;
+  effects: number;
+  deriveds: number;
+}
+
+/** A named `$derived` that re-ran in an update; `unchanged` of its runs returned the value it had. */
+export interface PerfDerivedReruns {
+  name: string;
+  /** Component name (or module file name) of one instance. */
+  scope: string;
+  file: string;
+  runs: number;
+  unchanged: number;
+}
+
+/** One flush of a batch (a committed fork's flush for a fork), as recorded. */
+export interface PerfUpdate {
+  /** 1-based, in the order the updates ended. */
+  id: number;
+  /** ms after the recording started (in the page). */
+  start: number;
+  duration: number;
+  /** The user input whose handler started this update in the same task, if any. */
+  event: { type: string; target: string; key?: string } | null;
+  triggers: PerfTrigger[];
+  triggersOmitted: number;
+  /** Component instances whose template (render effects) re-ran. */
+  components: number;
+  renders: number;
+  effects: number;
+  deriveds: number;
+  /** `$derived` re-runs that returned the value they already had (`Object.is`). */
+  wastedDeriveds: number;
+  unchangedDeriveds: PerfDerivedReruns[];
+  /** Heaviest first. */
+  costs: PerfCost[];
+  costsOmitted: number;
+  /** Frames lost while it ran (from animation frame gaps); `null` = not measured. */
+  droppedFrames: number | null;
+}
+
+/** One component file over a whole recording. */
+export interface PerfComponentTotal {
+  file: string;
+  name: string;
+  kind: PerfCost['kind'];
+  componentId: number | null;
+  /** Distinct instances with work. */
+  instances: number;
+  /** Updates it had work in. */
+  updates: number;
+  renders: number;
+  effects: number;
+  deriveds: number;
+  renderMs: number;
+  effectMs: number;
+  derivedMs: number;
+}
+
+export interface PerformanceRecording {
+  state: 'idle' | 'recording';
+  /** `null` before the first recording. */
+  recordingId: string | null;
+  /** Wall clock (ms) when it started / stopped. */
+  startedAt: number | null;
+  stoppedAt: number | null;
+  /** The app page load the updates come from. */
+  epoch: string | null;
+  /** Ordered by start. */
+  updates: PerfUpdate[];
+  /** Updates beyond the cap that were not kept (still counted in `components`). */
+  droppedUpdates: number;
+  /** Heaviest first. */
+  components: PerfComponentTotal[];
+  /** More component files had work than `components` lists. */
+  componentsOmitted: boolean;
+}
 export interface RenderProfile {
   componentId: number;
   file: string;
@@ -318,6 +434,7 @@ export interface DatasetVersions {
   fps: number;
   /** Moves on every file the dev server watches being added, changed or deleted. */
   apiEndpoints: number;
+  performance: number;
 }
 
 export interface LiveComponentsMeta {

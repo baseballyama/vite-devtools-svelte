@@ -485,6 +485,14 @@ describe('ReactiveGraph: component scope', () => {
     expect(signals()[0]!.textContent).toContain('0 / 2');
   });
 
+  it('selects the focused signal once loaded (Performance → Show in Reactivity graph)', async () => {
+    reactiveScope.scopeTo(1, COUNTER, 'e1', '1:count');
+    render(ReactiveGraph);
+    await settle();
+    expect(screen.getByRole('complementary', { name: 'count details' })).toBeTruthy();
+    expect(reactiveScope.current?.focus).toBeUndefined();
+  });
+
   it('inspects a signal: value, dependencies, editor, other component, history', async () => {
     await scoped();
     await userEvent.click(signals().find(r => r.textContent?.includes('count'))!);

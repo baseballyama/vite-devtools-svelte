@@ -147,6 +147,10 @@ export function createRpcFunctions(host: SvelteDevtoolsHost) {
       },
     }),
     query('get-render-profiles', () => collector.renderProfiles),
+    // The Performance panel: Record / Stop, and the recording (live while on).
+    action('start-performance-recording', () => collector.startPerformanceRecording()),
+    action('stop-performance-recording', () => collector.stopPerformanceRecording()),
+    query('get-performance-recording', () => collector.performanceRecording),
     defineRpcFunction({
       name: 'get-reactive-graph',
       type: 'query',

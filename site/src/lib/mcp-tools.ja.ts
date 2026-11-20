@@ -21,6 +21,11 @@ const GROUPS_JA: Record<string, { title: string; intro: string }> = {
     intro:
       'レンダー、リアクティビティ、load 関数、フレームレートをまたいだ問題を順位付きで返します。',
   },
+  performance: {
+    title: 'パフォーマンスの記録',
+    intro:
+      'エージェント向けの Performance パネルです。アプリを操作している間に記録し、遅い更新を、そのきっかけと時間の内訳つきで返します。',
+  },
   context: {
     title: 'プロジェクトの情報',
     intro: '静的解析と実行中のページから、アプリの構成を返します。',
@@ -54,12 +59,24 @@ const TOOLS_JA: Record<string, JaText> = {
   },
   list_performance_issues: {
     summary:
-      'すべての指標を横断して問題を順位付きで返します。各問題は次に呼ぶツールを `suggestedTool` で示します。',
+      '最後のパフォーマンス記録の更新も含め、すべての指標を横断して問題を順位付きで返します。各問題は次に呼ぶツールを `suggestedTool` で示します。',
     note: 'アプリ全体のリアクティブグラフを読みます（上限 5000 ノード / 20000 エッジ）。',
   },
   get_component_hotspots: {
     summary:
       '合計レンダー時間の多いコンポーネントを、レンダー回数と 1 回あたりの平均とともに返します。',
+  },
+  start_performance_recording: {
+    summary:
+      '開いているアプリのページで、すべての更新（Svelte の 1 回の反映）の記録を始めます。記録中のものは置き換わります。',
+    note: '止めなかった記録は 5 分で終わります。',
+  },
+  stop_performance_recording: {
+    summary:
+      '記録を止めて要約を返します。遅い更新から順に、きっかけになった state の書き込み、入力イベント、再レンダーされたコンポーネント、同じ値を返した $derived の再実行、コンポーネントごとの自己時間を含みます。',
+  },
+  get_performance_recording: {
+    summary: '記録中または最後の記録について、同じ要約を返します。',
   },
   get_render_profile: {
     summary: 'ファイル名に `file` を含むコンポーネントのレンダープロファイル。',

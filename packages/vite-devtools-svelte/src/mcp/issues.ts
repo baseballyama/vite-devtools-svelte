@@ -1,4 +1,5 @@
-import type { RenderProfile, ReactiveGraph, LoadProfile, FpsSample } from '../types.js';
+import type { RenderProfile, ReactiveGraph, LoadProfile, FpsSample, PerfUpdate } from '../types.js';
+import { describeEvent, SLOW_UPDATE_MS } from './performance.js';
 import { avgRenderTime, min, round } from './stats.js';
 
 type IssueKind =
@@ -6,7 +7,8 @@ type IssueKind =
   | 'over-rendered-component'
   | 'slow-load'
   | 'fps-drop'
-  | 'effect-overconnected';
+  | 'effect-overconnected'
+  | 'slow-update';
 
 export interface PerformanceIssue {
   id: string;
@@ -30,6 +32,8 @@ export interface IssueThresholds {
   fpsDropThreshold?: number;
   /** Dependency count (incoming edges) at or above which an effect is over-connected. */
   effectMaxDeps?: number;
+  /** Duration (ms) at or above which a recorded update is slow. */
+  slowUpdateMs?: number;
 }
 
 const DEFAULTS: Required<IssueThresholds> = {
@@ -38,7 +42,11 @@ const DEFAULTS: Required<IssueThresholds> = {
   loadDurationMs: 200,
   fpsDropThreshold: 40,
   effectMaxDeps: 8,
+  slowUpdateMs: SLOW_UPDATE_MS,
 };
+
+/** Slow updates reported, the slowest first: the rest are in get_performance_recording. */
+const MAX_SLOW_UPDATES = 10;
 
 /**
  * Not a plain spread: `{ effectMaxDeps: undefined }` (what get_reactive_graph_problems
@@ -59,6 +67,8 @@ export interface IssueInputs {
   reactiveGraph: ReactiveGraph;
   loadProfiles: LoadProfile[];
   fpsSamples: FpsSample[];
+  /** Updates of the current / last performance recording (none when omitted). */
+  updates?: PerfUpdate[];
 }
 
 function severity(
@@ -147,6 +157,34 @@ export function listPerformanceIssues(
       file: effect.file,
       metric: { depCount: effect.depCount },
       suggestedTool: 'get_reactive_graph_problems',
+    });
+  }
+
+  const slow = (inputs.updates ?? [])
+    .filter(u => u.duration >= t.slowUpdateMs)
+    .toSorted((a, b) => b.duration - a.duration)
+    .slice(0, MAX_SLOW_UPDATES);
+  for (const u of slow) {
+    const cause = u.triggers.find(tr => !tr.during) ?? u.triggers[0];
+    const parts = [
+      cause ? `after a write to ${cause.scope}.${cause.name}` : null,
+      describeEvent(u.event),
+      `${u.components} components re-rendered`,
+    ].filter(Boolean);
+    out.push({
+      id: `slow-update:${u.id}`,
+      kind: 'slow-update',
+      severity: severity(u.duration, t.slowUpdateMs, 2, 4),
+      summary: `update at +${(u.start / 1000).toFixed(2)} s took ${u.duration.toFixed(1)}ms (${parts.join(', ')})`,
+      file: cause?.loc?.file ?? cause?.file,
+      ...(cause?.loc && { line: cause.loc.line }),
+      metric: {
+        durationMs: round(u.duration),
+        components: u.components,
+        derivedRuns: u.deriveds,
+        unchangedDerivedReruns: u.wastedDeriveds,
+      },
+      suggestedTool: 'get_performance_recording',
     });
   }
 

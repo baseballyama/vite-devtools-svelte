@@ -188,7 +188,8 @@ describe('bounded per-flush state observation', () => {
     expect([...h.dt._reactiveNodes.keys()].filter(ofDoomed)).toEqual([]);
     expect([...h.dt._written].filter(ofDoomed)).toEqual([]);
     expect([...h.dt._unseeded].filter(ofDoomed)).toEqual([]);
-    poll();
+    // One observe pass has a 2 ms budget, so a slow runner needs more than one.
+    settlePolling(h, poll);
     expect(h.dt._written.size).toBe(0);
   });
 

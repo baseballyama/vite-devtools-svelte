@@ -60,6 +60,64 @@ function __clampInt(v, lo, hi, d) {
   return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d;
 }
 
+// `file:line:column` (Svelte's declaration location) -> { file, line, column }, or null.
+function __parseLoc(loc) {
+  if (typeof loc !== 'string') return null;
+  const c = loc.lastIndexOf(':');
+  const l = loc.lastIndexOf(':', c - 1);
+  if (l <= 0) return null;
+  const line = Number(loc.slice(l + 1, c));
+  const column = Number(loc.slice(c + 1));
+  if (!Number.isInteger(line) || !Number.isInteger(column)) return null;
+  return { file: loc.slice(0, l), line, column };
+}
+
+// Same rule as hooks.js: library code is not the app's.
+const __LIBRARY_PATH = /(^|\/)node_modules\//;
+
+// `file` without directories and the `.svelte` extension.
+function __baseName(file) {
+  const base = file.slice(file.lastIndexOf('/') + 1);
+  return base.endsWith('.svelte') ? base.slice(0, -'.svelte'.length) : base;
+}
+
+const __round3 = ms => Math.round(ms * 1000) / 1000;
+const __selfMs = c => c.renderMs + c.effectMs + c.derivedMs;
+
+// Performance recording (Performance panel, MCP). Caps bound what one
+// recording keeps in the page and sends to the dev server.
+const __PERF = {
+  // updates kept (later ones are counted as dropped)
+  maxUpdates: 2000,
+  // per update: written states, components in "where the time went", named deriveds
+  maxTriggers: 16,
+  maxCosts: 30,
+  maxWasted: 10,
+  // per-component totals over the recording
+  maxComponents: 500,
+  pushMs: 1000,
+  maxTargetChars: 60,
+  // a frame gap longer than this (hidden tab, debugger) is not a measurement
+  maxFrameGapMs: 1000,
+  // user input whose handler can start an update in the same task
+  events: ['pointerdown', 'click', 'input', 'change', 'keydown', 'submit'],
+};
+// Cost bucket of reactions outside any tracked component or library one.
+const __OUTSIDE = -1;
+
+// Short description of an event target: `button#save`, `input.search`, `li`.
+function __describeTarget(el) {
+  if (el === null || typeof el !== 'object' || typeof el.localName !== 'string') return '';
+  let out = el.localName;
+  if (typeof el.id === 'string' && el.id !== '') out += '#' + el.id;
+  else {
+    const cls = typeof el.className === 'string' ? el.className.split(/\s+/) : [];
+    const named = cls.find(c => c !== '' && !c.startsWith('svelte-'));
+    if (named !== undefined) out += '.' + named;
+  }
+  return out.slice(0, __PERF.maxTargetChars);
+}
+
 const __NO_VALUE = Symbol('no value');
 // State timeline ring: every read sees at most 500 entries and
 // __TIMELINE_BYTES (also the server's buffer budget). The raw array may
@@ -176,6 +234,14 @@ export function createStore(env) {
     _api: null,
     // the HMR channel (connectHot, by the first hooks.js copy that has one)
     _hot: null,
+
+    // Performance recording: null unless the DevTools asked for one (see
+    // startPerformance). `_subscribePerf` (set by hooks.js) subscribes the
+    // listener that feeds it and returns its unsubscribe, so Svelte reports
+    // effect runs only while a recording is on.
+    _perf: null,
+    _subscribePerf: null,
+    _perfUnsubscribe: null,
 
     // `parentHint`: the parent component's id (hooks.js reads it from the
     // component context), null for a root. When omitted, the component whose
@@ -364,14 +430,16 @@ export function createStore(env) {
       return id;
     },
 
-    // `owner`: the effect the signal was created in, or null (module code).
-    _registerNode(nodeId, componentId, type, name, signalRef, owner) {
+    // `owner`: the effect the signal was created in, or null (module code);
+    // `loc`: where it is declared (`file:line:column`), when known.
+    _registerNode(nodeId, componentId, type, name, signalRef, owner, loc) {
       this._trackNodeCount(nodeId, componentId, type);
       const prev = this._reactiveNodes.get(nodeId)?.owner?.deref();
       if (prev) this._nodesByOwner.get(prev)?.delete(nodeId);
       const entry = {
         signal: signalRef,
         owner: owner ? new WeakRef(owner) : null,
+        loc: loc ?? null,
         meta: { id: nodeId, type, name, componentId, componentFile: this._scopeFile(componentId) },
       };
       this._reactiveNodes.set(nodeId, entry);
@@ -629,31 +697,31 @@ export function createStore(env) {
     // `owner`: the effect active when the signal was created; the node is
     // removed when it is destroyed (an {#each} item's {@const}, a class
     // instance created in an effect run).
-    trackState(signal, name, componentId, owner) {
+    trackState(signal, name, componentId, owner, loc) {
       const nodeId = this._nodeIdFor(signal, this._idBySignal, componentId, name);
-      this._registerNode(nodeId, componentId, 'state', name, new WeakRef(signal), owner);
+      this._registerNode(nodeId, componentId, 'state', name, new WeakRef(signal), owner, loc);
       this._idBySignal.set(signal, nodeId);
       this._seedLater(nodeId);
       return nodeId;
     },
 
-    trackProxy(proxy, name, componentId, owner) {
+    trackProxy(proxy, name, componentId, owner, loc) {
       const nodeId = this._nodeIdFor(proxy, this._idByProxy, componentId, name);
       this._reactiveProxies.set(nodeId, new WeakRef(proxy));
       // The proxy itself stays weakly held (_reactiveProxies). The marker is
       // held strongly so the node is not GC-dropped while the component lives;
       // _cleanupComponent removes it on unmount.
       const marker = { v: '(proxy)', _isProxy: true };
-      this._registerNode(nodeId, componentId, 'state', name, { deref: () => marker }, owner);
+      this._registerNode(nodeId, componentId, 'state', name, { deref: () => marker }, owner, loc);
       this._idBySignal.set(marker, nodeId);
       this._idByProxy.set(proxy, nodeId);
       this._seedLater(nodeId);
       return nodeId;
     },
 
-    trackDerived(signal, name, componentId, owner) {
+    trackDerived(signal, name, componentId, owner, loc) {
       const nodeId = this._nodeIdFor(signal, this._idBySignal, componentId, name);
-      this._registerNode(nodeId, componentId, 'derived', name, new WeakRef(signal), owner);
+      this._registerNode(nodeId, componentId, 'derived', name, new WeakRef(signal), owner, loc);
       this._idBySignal.set(signal, nodeId);
       return nodeId;
     },
@@ -1348,6 +1416,451 @@ export function createStore(env) {
       this._scheduleTimelineUpdate();
     },
 
+    // --- Performance recording ---
+    // One update = one flush of a batch (for a fork: its flush once
+    // committed). Per update: the tracked states written in the batch, the
+    // runs of render effects / $effect / $derived with their self time (a
+    // nested run is subtracted from the run around it) per component, and
+    // the $derived re-runs that returned the value they already had.
+
+    startPerformance(recordingId) {
+      if (this._perf?.id === recordingId) return;
+      this.stopPerformance();
+      const p = {
+        id: recordingId,
+        t0: performance.now(),
+        seq: 0,
+        // batch -> Map<nodeId, trigger>: tracked states written in it
+        pending: new WeakMap(),
+        update: null,
+        depth: 0,
+        // running reactions: { r, cat, start, child, old }
+        stack: [],
+        // the derived that just ran: its new value is set after its run ends
+        settle: null,
+        unsent: [],
+        kept: 0,
+        dropped: 0,
+        // file -> totals over the recording
+        components: new Map(),
+        dirty: false,
+        event: null,
+        frames: { last: 0, base: Infinity, waiting: [] },
+        pushTimer: null,
+        listeners: [],
+      };
+      this._perf = p;
+      this._perfUnsubscribe = this._subscribePerf?.() ?? null;
+      this._perfListen(p);
+      const loop = t => {
+        if (this._perf !== p) return;
+        this._perfFrame(p, t);
+        requestAnimationFrame(loop);
+      };
+      requestAnimationFrame(loop);
+    },
+
+    stopPerformance() {
+      const p = this._perf;
+      if (p === null) return;
+      this._perf = null;
+      this._perfUnsubscribe?.();
+      this._perfUnsubscribe = null;
+      for (const [type, fn, capture] of p.listeners) window.removeEventListener(type, fn, capture);
+      clearTimeout(p.pushTimer);
+      this._perfPush(p, true);
+    },
+
+    // The last input event, attached to an update that starts in the same
+    // task: its handler wrote the state. Cleared once the event finished
+    // dispatching (window bubble phase), or by the next task otherwise.
+    _perfListen(p) {
+      const onCapture = e => {
+        const event = { type: e.type, target: __describeTarget(e.target) };
+        // named keys only (Enter, Escape): typed characters stay out of the recording
+        if (e.type === 'keydown' && typeof e.key === 'string' && e.key.length > 1)
+          event.key = e.key;
+        p.event = event;
+        setTimeout(() => {
+          if (p.event === event) p.event = null;
+        }, 0);
+      };
+      const onBubble = () => {
+        const event = p.event;
+        void Promise.resolve().then(() => {
+          if (p.event === event) p.event = null;
+          return null;
+        });
+      };
+      for (const type of __PERF.events) {
+        p.listeners.push([type, onCapture, true], [type, onBubble, false]);
+      }
+      for (const [type, fn, capture] of p.listeners) window.addEventListener(type, fn, capture);
+    },
+
+    // Frames: the gap between two animation frames that contains an update
+    // tells how many frames it cost; the shortest gap seen is one frame.
+    _perfFrame(p, t) {
+      const f = p.frames;
+      if (f.last > 0) {
+        const gap = t - f.last;
+        if (gap > 0) f.base = Math.min(f.base, gap);
+        for (const u of f.waiting) {
+          u.droppedFrames =
+            gap > __PERF.maxFrameGapMs || f.base === Infinity
+              ? null
+              : Math.max(0, Math.round(gap / f.base) - 1);
+        }
+      }
+      f.waiting.length = 0;
+      f.last = t;
+    },
+
+    _perfWritten(signal, batch) {
+      const p = this._perf;
+      if (p === null) return;
+      const id = this._idBySignal.get(signal) ?? this._api.sourceNode(signal);
+      if (id === undefined || id === null) return;
+      let writes = p.pending.get(batch);
+      if (writes === undefined) {
+        writes = new Map();
+        p.pending.set(batch, writes);
+      }
+      if (writes.has(id)) return;
+      const entry = this._reactiveNodes.get(id);
+      if (entry === undefined) return;
+      const { name, componentId } = entry.meta;
+      writes.set(id, {
+        nodeId: id,
+        name,
+        scopeId: componentId,
+        scope: this._perfScopeName(componentId),
+        file: this._scopeFile(componentId),
+        loc: __parseLoc(entry.loc),
+        // written while an update ran (by an $effect): a cascade, not the cause
+        during: p.update !== null,
+      });
+    },
+
+    _perfFlushStart(batch) {
+      const p = this._perf;
+      if (p === null) return;
+      if (p.update !== null) {
+        p.depth++;
+        return;
+      }
+      if (this._api.isFork(batch)) return;
+      p.depth = 1;
+      p.update = {
+        start: performance.now(),
+        event: p.event,
+        triggers: new Map(),
+        // scope key -> { renderMs, effectMs, derivedMs, renders, effects, deriveds }
+        costs: new Map(),
+        renders: 0,
+        effects: 0,
+        deriveds: 0,
+        wasted: 0,
+        // `file\0name` of a tracked derived -> { name, scope, file, runs, unchanged }
+        named: new Map(),
+      };
+    },
+
+    _perfFlushEnd(batch) {
+      const p = this._perf;
+      if (p === null || p.update === null) return;
+      if (!this._api.isFork(batch)) this._perfTake(p, batch);
+      if (--p.depth > 0) return;
+      this._perfFinish(p);
+    },
+
+    // A batch committed (also one processed inside another's flush): its
+    // writes caused the update that is running.
+    _perfCommitted(batch) {
+      const p = this._perf;
+      if (p === null) return;
+      if (p.update === null) p.pending.delete(batch);
+      else this._perfTake(p, batch);
+    },
+
+    _perfDiscarded(batch) {
+      this._perf?.pending.delete(batch);
+    },
+
+    _perfTake(p, batch) {
+      const writes = p.pending.get(batch);
+      if (writes === undefined) return;
+      p.pending.delete(batch);
+      const into = p.update.triggers;
+      for (const [id, t] of writes) if (!into.has(id)) into.set(id, t);
+    },
+
+    _perfRunStart(reaction) {
+      const p = this._perf;
+      if (p === null || p.update === null) return;
+      if (p.settle !== null) this._perfSettle(p);
+      const api = this._api;
+      const k = api.kind(reaction);
+      const cat =
+        k === 'derived' || k === 'async-derived'
+          ? 'derived'
+          : k === 'effect' || k === 'effectPre'
+            ? 'effect'
+            : 'render';
+      const old =
+        cat === 'derived' && !api.isUninitialized(reaction)
+          ? api.signalValue(reaction)
+          : __NO_VALUE;
+      p.stack.push({ r: reaction, cat, start: performance.now(), child: 0, old });
+    },
+
+    _perfRunEnd(reaction) {
+      const end = performance.now();
+      const p = this._perf;
+      if (p === null || p.update === null) return;
+      if (p.settle !== null) this._perfSettle(p);
+      const at = p.stack.findLastIndex(s => s.r === reaction);
+      if (at === -1) return;
+      const run = p.stack[at];
+      p.stack.length = at;
+      const total = end - run.start;
+      const parent = p.stack.at(-1);
+      if (parent !== undefined) parent.child += total;
+      const u = p.update;
+      const key = this._perfScopeKey(reaction, run.cat);
+      let cost = u.costs.get(key);
+      if (cost === undefined) {
+        // resolved now: the instance may be unmounted before the update ends
+        const info = this._perfScopeInfo(key);
+        cost = {
+          info,
+          renderMs: 0,
+          effectMs: 0,
+          derivedMs: 0,
+          renders: 0,
+          effects: 0,
+          deriveds: 0,
+        };
+        u.costs.set(key, cost);
+      }
+      cost[run.cat + 'Ms'] += Math.max(0, total - run.child);
+      cost[run.cat + 's']++;
+      u[run.cat + 's']++;
+      if (run.cat === 'derived') p.settle = run;
+    },
+
+    // Svelte stores a derived's new value after its run ended: compared at
+    // the next event. Only re-runs (the derived had a value) are compared.
+    _perfSettle(p) {
+      const run = p.settle;
+      p.settle = null;
+      const u = p.update;
+      const same = run.old !== __NO_VALUE && Object.is(run.old, this._api.signalValue(run.r));
+      if (same) u.wasted++;
+      const id = this._idBySignal.get(run.r);
+      const entry = id === undefined ? undefined : this._reactiveNodes.get(id);
+      if (entry === undefined) return;
+      const { name, componentId, componentFile } = entry.meta;
+      const k = componentFile + '\0' + name;
+      let n = u.named.get(k);
+      if (n === undefined) {
+        n = {
+          name,
+          scope: this._perfScopeName(componentId),
+          file: componentFile,
+          runs: 0,
+          unchanged: 0,
+        };
+        u.named.set(k, n);
+      }
+      n.runs++;
+      if (same) n.unchanged++;
+    },
+
+    // Where a reaction's time goes: its tracked component, else the library
+    // component it belongs to (by file), else the nearest tracked ancestor;
+    // a $derived declared in a module goes to the module.
+    _perfScopeKey(reaction, cat) {
+      const api = this._api;
+      const ctx = api.componentOf(reaction);
+      if (ctx !== null) {
+        const own = this._idByContext.get(ctx);
+        if (own !== undefined) return own;
+        const file = api.filename(ctx);
+        if (file !== undefined && __LIBRARY_PATH.test(file)) return 'lib:' + file;
+        return api.trackedComponent(ctx) ?? __OUTSIDE;
+      }
+      if (cat === 'derived') {
+        const id = this._idBySignal.get(reaction);
+        const entry = id === undefined ? undefined : this._reactiveNodes.get(id);
+        if (entry !== undefined) return entry.meta.componentId;
+      }
+      return __OUTSIDE;
+    },
+
+    _perfScopeName(scopeId) {
+      const instance = this._instances.get(scopeId);
+      if (instance !== undefined) return instance.name;
+      const module = this._modules.get(scopeId);
+      return module === undefined ? '' : __baseName(module.file);
+    },
+
+    // { file, name, kind, componentId } of a cost bucket (instances of one
+    // file are summed in "where the time went").
+    _perfScopeInfo(key) {
+      if (typeof key === 'string') {
+        const file = key.slice('lib:'.length);
+        return { file, name: __baseName(file), kind: 'library', componentId: null };
+      }
+      if (key === __OUTSIDE)
+        return { file: '', name: '(outside components)', kind: 'other', componentId: null };
+      if (this._modules.has(key)) {
+        const file = this._modules.get(key).file;
+        return { file, name: __baseName(file), kind: 'module', componentId: null };
+      }
+      const instance = this._instances.get(key);
+      return instance === undefined
+        ? { file: '', name: '(outside components)', kind: 'other', componentId: null }
+        : { file: instance.file, name: instance.name, kind: 'component', componentId: key };
+    },
+
+    _perfFinish(p) {
+      if (p.settle !== null) this._perfSettle(p);
+      const u = p.update;
+      const end = performance.now();
+      p.update = null;
+      p.depth = 0;
+      p.stack.length = 0;
+      if (u.triggers.size === 0 && u.renders + u.effects + u.deriveds === 0) return;
+
+      // per file, then into the recording's totals
+      const byFile = new Map();
+      let components = 0;
+      for (const [key, c] of u.costs) {
+        const info = c.info;
+        if (info.kind === 'component' && info.componentId !== null && c.renders > 0) components++;
+        const fileKey = info.kind + '\0' + info.file + '\0' + info.name;
+        let g = byFile.get(fileKey);
+        if (g === undefined) {
+          g = {
+            ...info,
+            instances: 0,
+            rendered: 0,
+            renderMs: 0,
+            effectMs: 0,
+            derivedMs: 0,
+            renders: 0,
+            effects: 0,
+            deriveds: 0,
+          };
+          byFile.set(fileKey, g);
+        }
+        g.instances++;
+        if (c.renders > 0) g.rendered++;
+        for (const f of ['renderMs', 'effectMs', 'derivedMs', 'renders', 'effects', 'deriveds'])
+          g[f] += c[f];
+        let t = p.components.get(fileKey);
+        if (t === undefined) {
+          if (p.components.size >= __PERF.maxComponents) continue;
+          t = {
+            ...info,
+            ids: new Set(),
+            updates: 0,
+            renderMs: 0,
+            effectMs: 0,
+            derivedMs: 0,
+            renders: 0,
+            effects: 0,
+            deriveds: 0,
+            lastUpdate: 0,
+          };
+          p.components.set(fileKey, t);
+        }
+        if (typeof key === 'number') t.ids.add(key);
+        if (t.lastUpdate !== p.seq + 1) {
+          t.lastUpdate = p.seq + 1;
+          t.updates++;
+        }
+        for (const f of ['renderMs', 'effectMs', 'derivedMs', 'renders', 'effects', 'deriveds'])
+          t[f] += c[f];
+      }
+      p.seq++;
+      p.dirty = true;
+      const costs = [...byFile.values()].toSorted((a, b) => __selfMs(b) - __selfMs(a));
+      for (const c of costs) {
+        c.renderMs = __round3(c.renderMs);
+        c.effectMs = __round3(c.effectMs);
+        c.derivedMs = __round3(c.derivedMs);
+      }
+      const triggers = [...u.triggers.values()];
+      const named = [...u.named.values()]
+        .filter(n => n.unchanged > 0)
+        .toSorted((a, b) => b.unchanged - a.unchanged);
+      const record = {
+        id: p.seq,
+        start: __round3(u.start - p.t0),
+        duration: __round3(end - u.start),
+        event: u.event,
+        triggers: triggers.slice(0, __PERF.maxTriggers),
+        triggersOmitted: Math.max(0, triggers.length - __PERF.maxTriggers),
+        components,
+        renders: u.renders,
+        effects: u.effects,
+        deriveds: u.deriveds,
+        wastedDeriveds: u.wasted,
+        unchangedDeriveds: named.slice(0, __PERF.maxWasted),
+        costs: costs.slice(0, __PERF.maxCosts),
+        costsOmitted: Math.max(0, costs.length - __PERF.maxCosts),
+        droppedFrames: null,
+      };
+      if (p.kept < __PERF.maxUpdates) {
+        p.kept++;
+        p.unsent.push(record);
+        p.frames.waiting.push(record);
+      } else {
+        p.dropped++;
+      }
+      if (p.pushTimer === null) {
+        p.pushTimer = setTimeout(() => {
+          p.pushTimer = null;
+          this._perfPush(p, false);
+        }, __PERF.pushMs);
+      }
+    },
+
+    // New updates since the last push and the per-component totals.
+    _perfPush(p, final) {
+      if (!final && !p.dirty) return;
+      p.dirty = false;
+      const updates = p.unsent;
+      p.unsent = [];
+      const components = [...p.components.values()]
+        .toSorted((a, b) => __selfMs(b) - __selfMs(a))
+        .map(t => ({
+          file: t.file,
+          name: t.name,
+          kind: t.kind,
+          componentId: t.componentId,
+          instances: t.ids.size,
+          updates: t.updates,
+          renders: t.renders,
+          effects: t.effects,
+          deriveds: t.deriveds,
+          renderMs: __round3(t.renderMs),
+          effectMs: __round3(t.effectMs),
+          derivedMs: __round3(t.derivedMs),
+        }));
+      this._send('svelte-devtools:performance', {
+        epoch: this._epoch,
+        recordingId: p.id,
+        updates,
+        dropped: p.dropped,
+        components,
+        componentsOmitted: p.components.size >= __PERF.maxComponents,
+        final,
+      });
+    },
+
     _send(event, data) {
       if (this._hot) this._hot.send(event, data);
     },
@@ -1477,5 +1990,14 @@ export function connectHot(dt, hot) {
   });
   hot.on('svelte-devtools:clear-state-timeline', () => {
     dt.clearStateTimeline();
+  });
+  // The Performance panel's Record / Stop (also sent on connect: a page
+  // loaded during a recording joins it; a stale one stops).
+  hot.on('svelte-devtools:performance-recording', data => {
+    if (data?.active === true && typeof data.recordingId === 'string') {
+      dt.startPerformance(data.recordingId);
+    } else {
+      dt.stopPerformance();
+    }
   });
 }

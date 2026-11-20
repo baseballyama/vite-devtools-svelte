@@ -9,7 +9,7 @@ import type {
   ComponentRelation,
   ComponentInstance,
   ElementPick,
-  RenderProfile,
+  PerformanceRecording,
   LoadProfile,
   ReactiveGraphRequest,
   ReactiveGraphResult,
@@ -287,8 +287,19 @@ export function getCaptureInfo(): Promise<CaptureInfoMap> {
   return call('get-capture-info');
 }
 
-export function getRenderProfiles(): Promise<RenderProfile[]> {
-  return call('get-render-profiles');
+/** Start a performance recording in every connected app page (replaces a running one). */
+export function startPerformanceRecording(): Promise<{ recordingId: string; startedAt: number }> {
+  return call('start-performance-recording');
+}
+
+/** Stop the recording; resolves with it once the app pages sent their last updates. */
+export function stopPerformanceRecording(): Promise<PerformanceRecording> {
+  return call('stop-performance-recording');
+}
+
+/** The running or last performance recording. */
+export function getPerformanceRecording(): Promise<PerformanceRecording> {
+  return call('get-performance-recording');
 }
 
 export function getLoadProfiles(): Promise<LoadProfile[]> {

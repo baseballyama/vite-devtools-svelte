@@ -40,6 +40,8 @@ describe('router: initial hash', () => {
     ['#/routes/extra/segments', 'routes'],
     ['#/fps?x=1', 'fps'],
     ['#/nope', 'overview'],
+    // renamed panels keep their old links
+    ['#/render', 'performance'],
     ['#/ROUTES', 'overview'],
     ['#/__proto__', 'overview'],
     // devframe's magic link is not a panel.
