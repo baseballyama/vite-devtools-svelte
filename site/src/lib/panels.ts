@@ -105,19 +105,6 @@ export const panels: Panel[] = [
     images: ['v2-panel-profiler.jpg'],
   },
   {
-    slug: 'remote',
-    title: 'Remote functions',
-    tagline: 'SvelteKit remote functions, without running them',
-    description:
-      'Every `query`, `command`, `form` and `prerender` function in remote modules (`*.remote.js`, `*.remote.ts`, …) of your app and of direct dependencies with a `@sveltejs/kit` peer dependency, with its source line. Once the app loads a module, its functions show the endpoint id their requests use.',
-    highlights: [
-      'Filter by kind or by name, file and package',
-      'Open the declaration in your editor',
-      'Lists modules no page has loaded yet, read from the source',
-    ],
-    images: [],
-  },
-  {
     slug: 'loads',
     title: 'Load functions',
     dockEntry: 'Profile',
@@ -171,6 +158,21 @@ export const panels: Panel[] = [
     ],
     availability: 'Shown in SvelteKit apps.',
     images: ['v2-panel-routes.jpg'],
+  },
+  {
+    slug: 'remote',
+    title: 'Remote functions',
+    dockEntry: 'Project',
+    tagline: 'SvelteKit remote functions, without running them',
+    description:
+      'Every `query`, `command`, `form` and `prerender` function in remote modules (`*.remote.js`, `*.remote.ts`, …) of your app and of direct dependencies with a `@sveltejs/kit` peer dependency, with its source line. Once the app loads a module, its functions show the endpoint id their requests use.',
+    highlights: [
+      'Filter by kind or by name, file and package',
+      'Open the declaration in your editor',
+      'Lists modules no page has loaded yet, read from the source',
+    ],
+    availability: 'Shown in SvelteKit apps.',
+    images: [],
   },
   {
     slug: 'api',

@@ -198,6 +198,34 @@ describe('RemoteFunctions', () => {
     expect(lastOpened()?.[0]).toBe('src/lib/broken.remote.ts');
   });
 
+  it('sorts by function, kind and endpoint', async () => {
+    const user = userEvent.setup();
+    vi.mocked(rpc.getRemoteFunctions).mockResolvedValue(result);
+    render(RemoteFunctions);
+    await settle();
+    const sortBy = (name: string) =>
+      user.click(within(screen.getByRole('columnheader', { name })).getByRole('button'));
+    await sortBy('Function');
+    expect(names()).toEqual(['addTodo', 'getBuild', 'getTodos', 'getUser', 'logout', 'odd']);
+    await sortBy('Kind');
+    expect(names()).toEqual(['logout', 'addTodo', 'odd', 'getBuild', 'getTodos', 'getUser']);
+    // loaded ones first
+    await sortBy('Endpoint');
+    expect(names().slice(0, 2).toSorted()).toEqual(['getTodos', 'logout']);
+  });
+
+  it('ignores a failed open-in-editor', async () => {
+    const user = userEvent.setup();
+    vi.mocked(rpc.getRemoteFunctions).mockResolvedValue(result);
+    vi.mocked(rpc.openInEditor).mockRejectedValue(new Error('no editor'));
+    render(RemoteFunctions);
+    await settle();
+    await user.click(screen.getByTitle('Open in editor: src/lib/todos.remote.ts:6'));
+    await settle();
+    expect(rpc.openInEditor).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
   it('hides the endpoint column in a narrow layout', async () => {
     width = 500;
     vi.mocked(rpc.getRemoteFunctions).mockResolvedValue(result);
