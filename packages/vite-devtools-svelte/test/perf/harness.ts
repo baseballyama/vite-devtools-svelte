@@ -160,7 +160,7 @@ export function mountList(h: Harness, n: number, statesPer = 2) {
   const signals: any[] = [];
   const ids: number[] = [];
   for (let i = 0; i < n; i++) {
-    const id = dt.register('/app/src/lib/Row.svelte');
+    const id = dt.register('/app/src/lib/Row.svelte', root);
     dt.startInit(id);
     for (let s = 0; s < statesPer; s++) {
       const sig = { v: i, deps: null };
@@ -172,10 +172,8 @@ export function mountList(h: Harness, n: number, statesPer = 2) {
     dt.trackDerived(derived, 'd', id);
     dt.bindEffect(dt.trackUserEffect('effect', id, null), { deps: [derived], fn() {} });
     dt.endInit(id);
-    dt.registered(id);
     ids.push(id);
   }
-  dt.registered(root);
   return { root, ids, signals };
 }
 

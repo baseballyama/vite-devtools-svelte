@@ -12,12 +12,12 @@ const profileMsgs = (h: Harness) =>
 
 describe('profiles push', () => {
   it('R1: sends exactly the collector tail (cap pinned to LIMITS.renderProfiles)', () => {
-    expect(createRuntime().dt._profileCap).toBe(LIMITS.renderProfiles);
+    expect(createRuntime().dt._profilesCap).toBe(LIMITS.renderProfiles);
     const h = createRuntime();
     mountList(h, 6000, 0);
     h.flushTimers();
     h.sent.length = 0;
-    h.dt._sendProfileUpdate();
+    h.dt._sendProfilesUpdate();
     const [msg] = profileMsgs(h);
     const all = [...h.dt._profiles.values()];
     expect(all.length).toBeGreaterThan(LIMITS.renderProfiles);
@@ -66,10 +66,10 @@ describe('profiles push', () => {
     h.flushTimers();
     h.sent.length = 0;
     h.dt.recordRender(list.ids[0]); // arms a throttled push
-    expect(h.dt._profileDebounceTimer).not.toBeNull();
+    expect(h.dt._profilesTimer).not.toBeNull();
     h.emit('svelte-devtools:subscription', { active: true, componentDeltas: true, resync: true });
     expect(profileMsgs(h)).toHaveLength(1);
-    expect(h.dt._profileDebounceTimer).toBeNull();
+    expect(h.dt._profilesTimer).toBeNull();
     h.flushTimers();
     expect(profileMsgs(h)).toHaveLength(1); // no duplicate from the cancelled timer
   });
@@ -79,7 +79,7 @@ describe('profiles push', () => {
     const list = mountList(h, 3, 0);
     h.dt.recordRender(list.ids[0]);
     h.flushTimers();
-    h.dt._sendProfileUpdate();
+    h.dt._sendProfilesUpdate();
     expect(profileMsgs(h)).toHaveLength(0);
   });
 
@@ -88,7 +88,7 @@ describe('profiles push', () => {
     const small = createRuntime({ clock });
     const s = mountList(small, 3, 0);
     small.flushTimers();
-    small.dt._sendProfileUpdate();
+    small.dt._sendProfilesUpdate();
     small.dt.recordRender(s.ids[0]);
     expect(small.pendingDelays()).toEqual([500]);
 
@@ -96,16 +96,16 @@ describe('profiles push', () => {
     const b = mountList(big, 6000, 0);
     big.flushTimers();
     big.sent.length = 0;
-    big.dt._sendProfileUpdate();
+    big.dt._sendProfilesUpdate();
     const realBytes = JSON.stringify(profileMsgs(big)[0].profiles).length;
     const est = big.dt._profilesCost.bytes;
     // the sampled estimate tracks the real payload
     expect(Math.abs(est - realBytes) / realBytes).toBeLessThan(0.3);
     expect(realBytes).toBeGreaterThan(250000);
     big.dt.recordRender(b.ids[0]);
-    const timer = big.dt._profileDebounceTimer;
-    big.dt.recordRender(b.ids[1]); // throttle, not debounce: the timer is kept
-    expect(big.dt._profileDebounceTimer).toBe(timer);
+    const timer = big.dt._profilesTimer;
+    big.dt.recordRender(b.ids[1]); // throttle: the timer is kept
+    expect(big.dt._profilesTimer).toBe(timer);
     expect(big.pendingDelays()).toEqual([intervalForBytes(est)]);
   });
 
@@ -121,13 +121,13 @@ describe('profiles push', () => {
     const list = mountList(h, 50, 0);
     h.flushTimers();
     h.sent.length = 0;
-    h.dt._sendProfileUpdate();
+    h.dt._sendProfilesUpdate();
     expect(20 * h.dt._profilesCost.ms).toBeGreaterThan(2000); // the clamp is what bounds it
     // high churn: many renders while a push is pending
     h.dt.recordRender(list.ids[0]);
-    const timer = h.dt._profileDebounceTimer;
+    const timer = h.dt._profilesTimer;
     for (let i = 0; i < 200; i++) h.dt.recordRender(list.ids[i % 50]);
-    expect(h.dt._profileDebounceTimer).toBe(timer); // not extended/re-armed
+    expect(h.dt._profilesTimer).toBe(timer); // not extended/re-armed
     expect(h.pendingDelays()).toEqual([2000]);
     h.flushTimers();
     const msgs = profileMsgs(h);

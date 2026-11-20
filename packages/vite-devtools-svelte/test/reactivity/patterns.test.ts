@@ -55,7 +55,6 @@ describe('blocks', () => {
       expect(orphansOf(t, ids)).toEqual([]);
       for (const child of t.filter(x => ['Child', 'Price'].includes(x.name)))
         expect(child.parentId).toBe(blocks.id);
-      expect(dt()._stack).toEqual([]);
     };
     check();
     const before = instances('Child').length;
@@ -68,6 +67,9 @@ describe('blocks', () => {
       check();
     }
     expect(instances('Child').length).toBe(before);
+    // Nothing may stay on the wrapper stack, or a new root would get a parent.
+    mountIt(Legacy);
+    expect(instance('Legacy').parentId).toBeNull();
   });
 });
 

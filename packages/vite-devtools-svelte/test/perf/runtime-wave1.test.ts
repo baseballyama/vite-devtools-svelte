@@ -29,7 +29,6 @@ function chainApp(h: Harness, n: number) {
     a.reactions.push(b);
     h.dt.trackState(a, 'a', id);
     h.dt.trackDerived(b, 'b', id);
-    h.dt.registered(id);
     ids.push(id);
     sigs.push(a, b);
   }
@@ -179,7 +178,6 @@ describe('time-sliced state poll', () => {
     const id = h.dt.register('/app/src/lib/O.svelte');
     const sig: any = { v: { n: 1 }, wv: 1 };
     h.dt.trackState(sig, 'o', id);
-    h.dt.registered(id);
     const poll = pollFn(h);
     poll();
     expect(h.dt._stateTimeline).toHaveLength(0); // first observation is a seed
@@ -201,7 +199,6 @@ describe('time-sliced state poll', () => {
 function setup() {
   const h = createRuntime();
   const id = h.dt.register('/app/src/lib/T.svelte');
-  h.dt.registered(id);
   const sigs: any[] = [];
   const add = (n: number) => {
     for (let i = 0; i < n; i++) {
@@ -224,11 +221,11 @@ describe('timeline throttle + disclosure', () => {
     h.sent.length = 0;
     sigs[0].v = 1000;
     poll(); // every 200 ms
-    const timer: unknown = h.dt._timelineDebounceTimer;
+    const timer: unknown = h.dt._timelineTimer;
     for (let t = 1; t < 10; t++) {
       sigs[0].v = 1000 + t;
       poll();
-      expect(h.dt._timelineDebounceTimer).toBe(timer); // armed once, never re-armed
+      expect(h.dt._timelineTimer).toBe(timer); // armed once, never re-armed
     }
     expect(timer).not.toBeNull();
     h.flushTimers();
@@ -281,7 +278,6 @@ describe('timeline throttle + disclosure', () => {
     const { h } = setup();
     h.dt._active = false;
     const id = h.dt.register('/app/src/lib/B.svelte');
-    h.dt.registered(id);
     const entry = { meta: { componentId: id, name: 'big', componentFile: 'B.svelte' } };
     for (let i = 0; i < 300; i++) h.dt._recordChange(`${id}:big${i}`, entry, null, i, 30000);
     expect(h.dt._timelineBytes).toBeLessThanOrEqual(4 * 1024 * 1024);
@@ -298,7 +294,6 @@ describe('timeline throttle + disclosure', () => {
     const id = h.dt.register('/app/src/lib/L.svelte');
     const sig: any = { v: Array.from({ length: 50_000 }, (_, i) => ({ i })), wv: 1 };
     h.dt.trackState(sig, 'big', id);
-    h.dt.registered(id);
     pollFn(h)(); // seed: not a change, not counted
     expect(h.dt._valueTooLarge).toBe(0);
     sig.v = Array.from({ length: 50_000 }, (_, i) => ({ i: -i }));
@@ -311,7 +306,6 @@ describe('timeline throttle + disclosure', () => {
   it('activation snapshot (reset) also carries pending disclosure', () => {
     const h = createRuntime({ active: false });
     const id = h.dt.register('/app/src/lib/T.svelte');
-    h.dt.registered(id);
     const entry = { meta: { componentId: id, name: 'x', componentFile: 'T.svelte' } };
     for (let i = 0; i < 520; i++) h.dt._recordChange(`${id}:x${i}`, entry, null, i, 10);
     h.emit('svelte-devtools:subscription', { active: true, componentDeltas: true });
@@ -326,7 +320,6 @@ describe('timeline throttle + disclosure', () => {
   function ring() {
     const { h } = setup();
     const id = h.dt.register('/app/src/lib/R.svelte');
-    h.dt.registered(id);
     const entry = { meta: { componentId: id, name: 'r', componentFile: 'R.svelte' } };
     const record = (newValue: unknown, approxBytes = 10) =>
       h.dt._recordChange(`${id}:r`, entry, null, newValue, approxBytes);
@@ -459,13 +452,10 @@ describe('reactive summary', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     try {
       vi.setSystemTime(1000);
-      h.dt.recordRender(list.ids[0]);
-      h.dt.recordRenderTime(list.ids[0], 1);
+      h.dt.recordRender(list.ids[0], 1);
       vi.setSystemTime(2000);
-      h.dt.recordRender(list.ids[1]);
-      h.dt.recordRenderTime(list.ids[1], 1);
-      h.dt.recordRender(list.ids[2]);
-      h.dt.recordRenderTime(list.ids[2], 5);
+      h.dt.recordRender(list.ids[1], 1);
+      h.dt.recordRender(list.ids[2], 5);
       h.dt.recordRender(list.ids[3]);
       h.dt.recordRender(list.ids[3]);
     } finally {
@@ -542,7 +532,6 @@ describe('reactive summary', () => {
   it('signals of dead owners do not pile up while inactive (no poll)', () => {
     const h = createRuntime({ active: false });
     const id = h.dt.register('/app/src/lib/Feed.svelte');
-    h.dt.registered(id);
     for (let batch = 0; batch < 100; batch++) {
       h.flushTimers(); // the deferred sweep of the previous batch
       const owner: any = { fn: () => {} };
@@ -570,7 +559,6 @@ describe('reactive summary', () => {
   it('sweeps in one later task, not during the track calls of a mount', () => {
     const h = createRuntime({ active: false });
     const id = h.dt.register('/app/src/lib/Feed.svelte');
-    h.dt.registered(id);
     const owner: any = { fn: () => {} };
     for (let i = 0; i < 10; i++) h.dt.trackState({ v: i, wv: 1 }, 's' + i, id, owner);
     owner.fn = null;
@@ -591,7 +579,6 @@ describe('reactive summary', () => {
   it('keeps the proxy of a re-tagged proxy whose old owner died (sweep on the old node)', () => {
     const h = createRuntime({ active: false });
     const id = h.dt.register('/app/src/lib/Item.svelte');
-    h.dt.registered(id);
     const proxy = { n: 1 };
     const o1: any = { fn: () => {} };
     h.dt.trackProxy(proxy, 'x', id, o1);
@@ -636,7 +623,6 @@ describe('late activation (consumer arrives after mount)', () => {
     const id = h.dt.register('/app/src/lib/Counter.svelte');
     h.dt.trackState({ v: 1, wv: 1 }, 'count', id);
     h.dt.trackState({ v: { a: 1 }, wv: 1 }, 'obj', id);
-    h.dt.registered(id);
     expect(summaryOf(h).baseline).toEqual({ complete: false, pendingNodes: 2 });
     h.emit('svelte-devtools:subscription', { active: true, componentDeltas: true });
     const reset = timelineMsgs(h).find(m => m.reset);
@@ -655,7 +641,6 @@ describe('late activation (consumer arrives after mount)', () => {
     const id = h.dt.register('/app/src/lib/Counter.svelte');
     const count: any = { v: 1, wv: 1 };
     h.dt.trackState(count, 'count', id);
-    h.dt.registered(id);
     h.emit('svelte-devtools:subscription', { active: true, componentDeltas: true });
     count.v = 2; // before the first 200 ms tick
     count.wv = 2;
@@ -677,7 +662,6 @@ describe('late activation (consumer arrives after mount)', () => {
     const id = h.dt.register('/app/src/lib/Late.svelte');
     const sig: any = { v: 'x', wv: 1 };
     h.dt.trackState(sig, 's', id);
-    h.dt.registered(id);
     poll();
     h.flushTimers();
     expect(timelineMsgs(h).flatMap(m => m.changes)).toEqual([]);
@@ -697,7 +681,6 @@ describe('late activation (consumer arrives after mount)', () => {
     const h = createRuntime({ active: false, clock: () => (now += step) });
     const id = h.dt.register('/app/src/lib/O.svelte');
     h.dt.trackState({ v: { n: 1 }, wv: 1 }, 'o', id);
-    h.dt.registered(id);
     step = 5; // the 2 ms serialization budget is spent before the first object
     h.emit('svelte-devtools:subscription', { active: true, componentDeltas: true });
     expect(summaryOf(h).baseline).toEqual({ complete: false, pendingNodes: 1 });
@@ -711,7 +694,6 @@ describe('late activation (consumer arrives after mount)', () => {
     const h = createRuntime({ active: false });
     const id = h.dt.register('/app/src/lib/Big.svelte');
     for (let i = 0; i < 5000; i++) h.dt.trackState({ v: i, wv: 1 }, 's' + i, id);
-    h.dt.registered(id);
     h.emit('svelte-devtools:subscription', { active: true, componentDeltas: true });
     expect(h.dt._pollCursor).toBe(4096); // one hint slice at activation
     expect(summaryOf(h).baseline).toEqual({ complete: false, pendingNodes: 5000 - 4096 });

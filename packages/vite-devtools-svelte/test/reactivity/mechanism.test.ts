@@ -107,7 +107,6 @@ describe('component tree', () => {
     api.break();
     flushSync();
     expect(instances('Thrower')).toHaveLength(0);
-    expect(dt()._stack).toHaveLength(0);
     api.addRow();
     flushSync();
     const tree = instance('Tree');
@@ -115,6 +114,9 @@ describe('component tree', () => {
     // only the slotted child may have a non-Tree parent
     expect(rows.length).toBeLessThanOrEqual(1);
     expect(dt().getTree().length).toBe(before + 1);
+    // An aborted init left on the wrapper stack would parent a new root to it.
+    mountIt(Effects);
+    expect(instance('Effects').parentId).toBeNull();
   });
 
   it('unmount removes the subtree and its nodes', () => {

@@ -17,6 +17,27 @@ describe('component names', () => {
   });
 });
 
+const parentOf = (h: Harness, id: number) =>
+  h.dt.getTree().find((c: { id: number }) => c.id === id).parentId;
+
+describe('component parents', () => {
+  it('the parent hint names the parent', () => {
+    const h = createRuntime();
+    const app = h.dt.register('/app/src/App.svelte');
+    const row = h.dt.register('/app/src/lib/Row.svelte', app);
+    expect(parentOf(h, app)).toBeNull();
+    expect(parentOf(h, row)).toBe(app);
+  });
+
+  it('a hint naming an unmounted component makes a root', () => {
+    const h = createRuntime();
+    const gone = h.dt.register('/app/src/Gone.svelte');
+    h.dt.unmount(gone);
+    const row = h.dt.register('/app/src/lib/Row.svelte', gone);
+    expect(parentOf(h, row)).toBeNull();
+  });
+});
+
 const errors = (h: Harness) =>
   h.sent.filter(s => s.event === 'svelte-devtools:runtime-error').map(s => s.data as any);
 

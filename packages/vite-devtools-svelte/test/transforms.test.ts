@@ -35,9 +35,9 @@ const COUNTER = compileClient(
 function fakeWindow() {
   const calls: unknown[][] = [];
   const dt = {
-    _pendingFile: undefined as unknown,
-    _enterModule: (id: string) => calls.push(['enter', id]),
-    _leaveModule: () => calls.push(['leave']),
+    pendingFile: undefined as unknown,
+    enterModule: (id: string) => calls.push(['enter', id]),
+    leaveModule: () => calls.push(['leave']),
   };
   return { window: { __SVELTE_DEVTOOLS__: dt, calls }, dt, calls };
 }
@@ -80,7 +80,7 @@ describe('injectComponentTracking', () => {
     const hint = insertedHint(COUNTER, injectComponentTracking(COUNTER, id)!);
     const { window, dt } = fakeWindow();
     asFunction(hint)(window);
-    expect(dt._pendingFile).toBe(id);
+    expect(dt.pendingFile).toBe(id);
   });
 
   it('is inert without a browser window or before the runtime installed itself', () => {
@@ -109,7 +109,7 @@ describe('injectComponentTracking', () => {
     // the markup template is untouched
     expect(out.split('\n')).toContain(templateLine);
     const pushLine = out.split('\n').find(l => /^\s*if \(typeof window/.test(l))!;
-    expect(pushLine).toMatch(/_pendingFile = "\/a\.svelte"; \} \$\.push\(\$\$props/);
+    expect(pushLine).toMatch(/\.pendingFile = "\/a\.svelte"; \} \$\.push\(\$\$props/);
   });
 
   it('ignores a markup line that starts with `$.push($$props` (multi-line template string)', () => {
@@ -121,7 +121,7 @@ describe('injectComponentTracking', () => {
     const out = injectComponentTracking(code, '/a.svelte')!;
     insertedHint(code, out);
     expect(out.split('\n')).toContain(markupLine);
-    const tagged = out.split('\n').find(l => l.includes('_pendingFile'))!;
+    const tagged = out.split('\n').find(l => l.includes('.pendingFile ='))!;
     // the component's own statement, not the markup line
     expect(tagged.trimStart().startsWith('if (typeof window')).toBe(true);
     expect(tagged).toContain('; } $.push($$props, true, ');
@@ -140,7 +140,7 @@ describe('injectComponentTracking', () => {
   it('tags only the first component context push of a module', () => {
     const twice = `${COUNTER}\nfunction Other($$anchor, $$props) {\n\t$.push($$props, true);\n\treturn $.pop();\n}`;
     const out = injectComponentTracking(twice, '/a.svelte')!;
-    expect(out.split('_pendingFile').length - 1).toBe(1);
+    expect(out.split('.pendingFile =').length - 1).toBe(1);
   });
 
   it.each([

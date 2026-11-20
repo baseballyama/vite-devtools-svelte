@@ -1,87 +1,75 @@
 import * as __svelte_original from 'svelte/internal/client';
 export * from 'svelte/internal/client';
 
+// Observer must not break the observed: every devtools side-effect is wrapped
+// in try/catch so a bug or an out-of-shape runtime cannot tear down the app.
+
 function __dt() {
   return typeof window === 'undefined' ? null : window.__SVELTE_DEVTOOLS__;
 }
 
 const __idStack = [];
 function __currentId() {
-  return __idStack.length > 0 ? __idStack.at(-1) : null;
+  return __idStack.at(-1) ?? null;
 }
 
 const __pendingSignal = { ref: null, type: null };
 
-// A component created later by a block update ({#each}/{#if} after mount)
-// runs outside its parent's push..pop, where the init stack is empty. The
-// block effect creating it belongs to the parent's template, so
-// active_effect.ctx at push time IS the parent's context (Svelte 5.56.8).
-// The map lives on the runtime so the reactive graph can name the component
-// of any effect it reaches.
-function __parentFromContext() {
+// dt.idByContext lives on the runtime (not here) so the reactive graph can
+// name the component of any effect it reaches.
+function __componentOfActiveEffect() {
   const dt = __dt();
   const effect = __svelte_original.active_effect;
   const ctx = effect ? effect.ctx : null;
-  return dt && ctx && dt._idByContext ? dt._idByContext.get(ctx) : undefined;
+  return dt && ctx ? dt.idByContext.get(ctx) : undefined;
 }
 
-// Owner of a signal/effect created right now: the component whose init (or
-// wrapped block callback) is running, else — outside init, e.g. an effect
-// created while another effect runs — the component of the active effect.
+// Owner of a signal/effect/child created right now:
+// 1. the wrapper stack: the component whose init is running, or the block
+//    owner pushed again by __wrapBlockFn for a later {#each}/{#if}/{#key}
+//    update. It wins because during a component's own init active_effect can
+//    still belong to an outer block, whose ctx names the grandparent;
+// 2. else the component of the active effect, for paths the wrapper does not
+//    wrap (snippet, svelte:element, an effect created while another effect
+//    runs).
 function __owner() {
   const cid = __currentId();
   if (cid !== null) return cid;
-  const fromContext = __parentFromContext();
-  return fromContext === undefined ? null : fromContext;
+  return __componentOfActiveEffect() ?? null;
 }
 
-// Observer must not break the observed: every devtools side-effect is wrapped
-// in try/catch so a bug or an out-of-shape runtime cannot tear down the app.
-
 export function push() {
-  // Parent hint, read before this component's own id exists:
-  // 1. the wrapper stack: the component whose init is running (children
-  //    rendered directly by a template, where active_effect still belongs to
-  //    an outer block), or the block owner re-pushed by __wrapBlockFn for a
-  //    later {#each}/{#if}/{#key} update (see Block Attribution below);
-  // 2. else the context-derived owner, for re-creation paths the wrapper
-  //    does not wrap (snippet, svelte:element, ...).
+  // The parent, read before this component's own id exists (see __owner). On
+  // an unwrapped re-creation path the effect creating the child belongs to the
+  // parent's template, so active_effect.ctx is the parent's context (Svelte 5.56.8).
   let parentHint = null;
   try {
-    parentHint = __currentId();
+    parentHint = __owner();
   } catch {}
-  if (parentHint === null) {
-    try {
-      parentHint = __parentFromContext();
-    } catch {}
-  }
   const result = __svelte_original.push.apply(null, arguments);
   try {
     const dt = __dt();
     if (dt) {
-      dt._FILENAME ??= __svelte_original.FILENAME;
-      const file = dt._pendingFile ?? 'Unknown';
-      dt._pendingFile = null;
-      dt._pendingParent = parentHint;
-      const id = dt.register(file);
+      dt.filenameSymbol ??= __svelte_original.FILENAME;
+      const file = dt.pendingFile ?? 'Unknown';
+      dt.pendingFile = null;
+      const id = dt.register(file, parentHint);
       __idStack.push(id);
       dt.startInit(id);
-      try {
-        __svelte_original.user_effect(() => {
+      __svelte_original.user_effect(() => {
+        try {
+          // Inside its own deferred effect, active_effect.ctx is this component's
+          // context; at push time it is still the parent's.
+          const own = __svelte_original.active_effect;
+          if (own?.ctx) dt.idByContext.set(own.ctx, id);
+          if (own) dt.setComponentEffect(id, own);
+        } catch {}
+        return () => {
           try {
-            // Inside its own deferred effect, active_effect.ctx is this component's
-            // context; at push time it is still the parent's.
-            const own = __svelte_original.active_effect;
-            if (own?.ctx) dt._idByContext.set(own.ctx, id);
-            if (own) dt.setComponentEffect(id, own);
+            dt.unmount(id);
           } catch {}
-          return () => {
-            try {
-              dt.unmount(id);
-            } catch {}
-          };
-        });
-      } catch {}
+        };
+      });
     }
   } catch {}
   return result;
@@ -96,9 +84,6 @@ export function pop() {
       const id = __idStack.pop();
       try {
         dt.endInit(id);
-      } catch {}
-      try {
-        dt.registered(id);
       } catch {}
     }
   } catch {}
@@ -133,7 +118,7 @@ export function tag(signal, name) {
       } else {
         dt.trackState(signal, name, cid, owner);
       }
-    } else if (dt?._moduleFile) {
+    } else if (dt?.moduleFile) {
       dt.trackModuleSignal(type === 'derived' ? 'derived' : 'state', signal, name);
     }
     __pendingSignal.ref = null;
@@ -149,7 +134,7 @@ export function tag_proxy(value, name) {
     const cid = __owner();
     if (dt && cid !== null) {
       dt.trackProxy(value, name, cid, __svelte_original.active_effect);
-    } else if (dt?._moduleFile) {
+    } else if (dt?.moduleFile) {
       dt.trackModuleSignal('proxy', value, name);
     }
     __pendingSignal.ref = null;
@@ -217,10 +202,7 @@ function __flushRenderDurations() {
   if (dt) {
     for (const [cid, duration] of __pendingRenderDurations) {
       try {
-        dt.recordRender(cid);
-      } catch {}
-      try {
-        dt.recordRenderTime(cid, duration);
+        dt.recordRender(cid, duration);
       } catch {}
     }
   }
@@ -276,44 +258,33 @@ export const deferred_template_effect = __withArgs(
   __wrapTemplateEffect,
 );
 
-// Effects for {#each} items added later or re-created {#if} branches are
-// created during a batch flush, when __idStack is empty. Block helpers are
-// always called during their owner's init or inside an outer block's callback,
-// so the owner id is on the stack then; it is captured and re-pushed around every callback the block invokes later.
-
 // A component whose init throws (caught by <svelte:boundary>, or by the
-// block's caller) never reaches pop(): its id would stay on both stacks and
+// block's caller) never reaches pop(): its id would stay on the init stack and
 // every later signal/child would be attributed to it. On the way out — normal
 // or thrown — the stack is cut back to its depth on entry, and ids left
 // above it are dropped as aborted inits (registered, never mounted).
 function __wrapBlockFn(fn, cid) {
   return function () {
-    let depth = -1;
-    try {
-      depth = __idStack.length;
-      __idStack.push(cid);
-    } catch {}
+    const depth = __idStack.length;
+    __idStack.push(cid);
     try {
       return fn.apply(this, arguments);
     } finally {
-      if (depth !== -1) {
+      while (__idStack.length > depth + 1) {
+        const id = __idStack.pop();
         try {
-          if (__idStack.length > depth + 1) {
-            const dt = __dt();
-            const aborted = __idStack.slice(depth + 1);
-            for (let i = aborted.length - 1; i >= 0; i--) {
-              try {
-                if (dt) dt.abortInit(aborted[i]);
-              } catch {}
-            }
-          }
-          __idStack.length = depth;
+          __dt()?.abortInit(id);
         } catch {}
       }
+      __idStack.length = depth;
     }
   };
 }
 
+// Effects for {#each} items added later or re-created {#if} branches are
+// created during a batch flush, when __idStack is empty. Block helpers run
+// during their owner's init (or an outer block's callback), so the owner id is
+// captured here and pushed again around every callback the block calls later.
 function __wrapBlock(args) {
   const cid = __owner();
   if (cid === null) return args;

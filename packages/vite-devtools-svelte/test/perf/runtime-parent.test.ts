@@ -114,7 +114,7 @@ function setup() {
   // what compiled components call: wrapped push/pop/each, the rest original
   const $ = { ...svelte.ns, ...wrapped };
   const component = (file: string, template: () => void) => () => {
-    h.window.__SVELTE_DEVTOOLS__._pendingFile = file;
+    h.window.__SVELTE_DEVTOOLS__.pendingFile = file;
     $.push();
     template();
     $.pop();
@@ -162,7 +162,7 @@ describe('B1b: parent of a component created by a later block update', () => {
 
     // full form agrees with the delta
     h.sent.length = 0;
-    h.dt._sendUpdate(true);
+    h.dt._sendComponentsUpdate(true);
     const full = componentsSent(h)[0].components as any[];
     const parentOf = new Map(full.map(c => [c.id, c.parentId]));
     expect(parentOf.get(newRow.id)).toBe(app.id);

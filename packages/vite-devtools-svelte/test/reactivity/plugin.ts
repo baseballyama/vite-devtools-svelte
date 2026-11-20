@@ -14,7 +14,7 @@ import {
   isSvelteModule,
 } from '../../src/runtime/transform.js';
 
-const runtimeCode = minifyRuntimeSource('client.js');
+const runtimeCode = minifyRuntimeSource('page-runtime.js');
 const wrapperCode = minifyRuntimeSource('wrapper.js');
 
 export function reactivityHarnessPlugin(): Plugin[] {

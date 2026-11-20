@@ -129,8 +129,7 @@ describe('runtime scaling (huge app)', () => {
     expect(first[0]!.bytes).toBeGreaterThan(1_000_000);
     // churn: 1 000 mounts/unmounts must not reset or multiply the timer
     for (let i = 0; i < 1000; i++) {
-      const id = h.dt.register('/app/src/lib/X.svelte');
-      h.dt.registered(id);
+      h.dt.register('/app/src/lib/X.svelte');
       h.dt.unmount(list.ids[i]);
     }
     // churn keeps at most one components + one profiles timer, both ≥ 1 s
@@ -155,8 +154,7 @@ describe('runtime scaling (huge app)', () => {
     mountList(h, 5000, 1);
     h.flushTimers();
     h.sent.length = 0;
-    const id = h.dt.register('/app/src/lib/Extra.svelte');
-    h.dt.registered(id);
+    h.dt.register('/app/src/lib/Extra.svelte');
     h.flushTimers();
     const bytes = h.sent.reduce((s, m) => s + m.bytes, 0);
     expect(bytes).toBeLessThan(50_000);
@@ -171,12 +169,10 @@ describe('runtime scaling (huge app)', () => {
     const h = createRuntime({ clock: sim.now });
     const root = h.dt.register('/app/src/routes/+page.svelte');
     for (let c = 0; c < 20; c++) {
-      const id = h.dt.register('/app/src/lib/Big.svelte');
+      const id = h.dt.register('/app/src/lib/Big.svelte', root);
       const big = Array.from({ length: 10_000 }, (_, i) => ({ i, label: 'item ' + i }));
       h.dt.trackState({ v: big, wv: 1 }, 'items', id);
-      h.dt.registered(id);
     }
-    h.dt.registered(root);
     const poll = pollFn(h);
     const ticks = sim.run(poll, 50); // includes the initial snapshots
     const steady = sim.run(poll, 100); // 20 s of steady state
@@ -201,14 +197,12 @@ describe('runtime scaling (huge app)', () => {
     const h = createRuntime({ clock: sim.now });
     const root = h.dt.register('/app/src/routes/+page.svelte');
     for (let c = 0; c < 2500; c++) {
-      const id = h.dt.register('/app/src/lib/Row.svelte');
+      const id = h.dt.register('/app/src/lib/Row.svelte', root);
       h.dt.trackState({ v: c, wv: 1 }, 'n', id);
       h.dt.trackState({ v: 'label ' + c, wv: 1 }, 's', id);
       h.dt.trackState({ v: { c }, wv: 1 }, 'o', id);
       h.dt.trackProxy({ c }, 'p', id);
-      h.dt.registered(id);
     }
-    h.dt.registered(root);
     const poll = pollFn(h);
     sim.run(poll, 20); // initial snapshots
     // this tick's slice, read before it runs (no serialization here)
@@ -244,7 +238,6 @@ function single(value: unknown, opts: { proxy?: boolean } = {}) {
   const signal: any = { v: value, wv: 1 };
   if (opts.proxy) h.dt.trackProxy(value, 'x', id);
   else h.dt.trackState(signal, 'x', id);
-  h.dt.registered(id);
   return {
     h,
     signal,
@@ -262,7 +255,6 @@ function bigState(sim: ReturnType<typeof simulatedClock>, value: unknown) {
   const id = h.dt.register('/app/src/lib/S.svelte');
   const signal: any = { v: value, wv: 1 };
   h.dt.trackState(signal, 'x', id);
-  h.dt.registered(id);
   return { h, signal, poll: pollFn(h), nodeId: id + ':x' };
 }
 
@@ -448,7 +440,6 @@ describe('state polling correctness under budgets', () => {
     const id = h.dt.register('/app/src/lib/Obj.svelte');
     const obj = { items: [1, 2, 3] };
     h.dt.trackState({ v: obj, wv: 1 }, 'obj', id);
-    h.dt.registered(id);
     const poll = pollFn(h);
     // seed every node first (5 001 nodes = 2 slices): a write before a node's
     // first sample is not observable by design (seed only)
@@ -571,7 +562,6 @@ describe('activity subscription', () => {
 function setup() {
   const h = createRuntime();
   const id = h.dt.register('/app/src/lib/T.svelte');
-  h.dt.registered(id);
   const add = (n: number, big = 0) => {
     const sigs = Array.from({ length: n }, (_, i) => {
       const sig: any = { v: big ? Array.from({ length: big }, (_unused, k) => k + i) : i, wv: 1 };
@@ -658,17 +648,14 @@ describe('scoped reactive graph', () => {
     const a = h.dt.register('/app/src/lib/A.svelte');
     const sa: any = { v: 1, deps: null, reactions: [] };
     h.dt.trackState(sa, 'count', a);
-    h.dt.registered(a);
     const b = h.dt.register('/app/src/lib/B.svelte');
     const mid: any = { v: 2, deps: [sa], reactions: [] }; // untracked intermediate
     const db: any = { v: 2, deps: [mid], reactions: [] };
     mid.reactions.push(db);
     sa.reactions.push(mid);
     h.dt.trackDerived(db, 'double', b);
-    h.dt.registered(b);
     const c = h.dt.register('/app/src/lib/C.svelte');
     h.dt.trackState({ v: 3, deps: null }, 'other', c);
-    h.dt.registered(c);
 
     h.emit('svelte-devtools:request-reactive-graph', { componentId: a });
     const g = h.sent.at(-1)!.data as any;
@@ -691,8 +678,7 @@ describe('component deltas', () => {
     const h = createRuntime({ deltas: false });
     mountList(h, 10);
     h.flushTimers();
-    const id = h.dt.register('/app/src/lib/X.svelte');
-    h.dt.registered(id);
+    h.dt.register('/app/src/lib/X.svelte');
     h.flushTimers();
     for (const m of compMsgs(h)) {
       expect(Array.isArray(m.components)).toBe(true);
@@ -709,7 +695,6 @@ describe('component deltas', () => {
     expect(typeof first.epoch).toBe('string');
     expect(first.components.length).toBe(4);
     const id = h.dt.register('/app/src/lib/New.svelte');
-    h.dt.registered(id);
     h.flushTimers();
     const last = compMsgs(h).at(-1);
     expect(last.epoch).toBe(first.epoch);
@@ -723,7 +708,6 @@ describe('component deltas', () => {
     h.flushTimers();
     h.sent.length = 0;
     const tmp = h.dt.register('/app/src/lib/Tmp.svelte');
-    h.dt.registered(tmp);
     h.dt.unmount(tmp);
     h.dt.unmount(list.ids[0]);
     h.flushTimers();
@@ -758,8 +742,7 @@ describe('component deltas', () => {
     mountList(h, 3);
     h.flushTimers();
     now += 31_000;
-    const id = h.dt.register('/app/src/lib/Late.svelte');
-    h.dt.registered(id);
+    h.dt.register('/app/src/lib/Late.svelte');
     h.flushTimers();
     const last = compMsgs(h).at(-1);
     expect(last.reset).toBe(true);
@@ -803,7 +786,6 @@ describe('resync', () => {
     // then deltas continue
     h.sent.length = 0;
     const id = h.dt.register('/app/src/lib/After.svelte');
-    h.dt.registered(id);
     h.flushTimers();
     const comp = h.sent.find(m => m.event === 'svelte-devtools:components')!.data as any;
     expect(comp.added.map((c: any) => c.id)).toEqual([id]);
@@ -814,7 +796,6 @@ describe('resync', () => {
     mountList(h, 2);
     h.flushTimers();
     const id = h.dt.register('/app/src/lib/Pending.svelte');
-    h.dt.registered(id);
     h.sent.length = 0;
     h.emit('svelte-devtools:subscription', { active: true, componentDeltas: true, resync: true });
     h.flushTimers();

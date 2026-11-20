@@ -1,7 +1,7 @@
 // Kept as plain .js files so they are linted and formatted like any other source;
 // the package build minifies them (build/minify-runtime.ts).
 // oxlint-disable-next-line import/default -- `?raw` modules are resolved by Vite
-import runtimeSource from './client.js?raw';
+import runtimeSource from './page-runtime.js?raw';
 // oxlint-disable-next-line import/default -- `?raw` modules are resolved by Vite
 import wrapperSource from './wrapper.js?raw';
 

@@ -17,7 +17,7 @@ export default defineConfig({
         'src/env.d.ts',
         // Evaluated as text (`?raw` / `new Function`), so V8 cannot attribute
         // coverage to them; covered by test/perf and test/reactivity instead.
-        'src/runtime/client.js',
+        'src/runtime/page-runtime.js',
         'src/runtime/wrapper.js',
       ],
       reporter: ['text', 'json-summary'],

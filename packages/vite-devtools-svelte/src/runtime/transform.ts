@@ -60,7 +60,7 @@ export function injectComponentTracking(code: string, id: string): string | null
   if (at === -1) return null;
   // Spliced by index, not via `String#replace`: a replacement string would
   // expand `$&`, `$'`, `$1`… sequences that are legal in file paths.
-  const hint = `if (typeof window !== 'undefined' && window.__SVELTE_DEVTOOLS__) { window.__SVELTE_DEVTOOLS__._pendingFile = ${JSON.stringify(id)}; } `;
+  const hint = `if (typeof window !== 'undefined' && window.__SVELTE_DEVTOOLS__) { window.__SVELTE_DEVTOOLS__.pendingFile = ${JSON.stringify(id)}; } `;
   return `import '${RUNTIME_MODULE_ID}';` + code.slice(0, at) + hint + code.slice(at);
 }
 
@@ -81,9 +81,9 @@ export function injectModuleTracking(code: string, id: string): string | null {
   const safeId = JSON.stringify(id);
   const dt = `(typeof window !== 'undefined' && window.__SVELTE_DEVTOOLS__)`;
   return (
-    `import '${RUNTIME_MODULE_ID}';if (${dt}) { window.__SVELTE_DEVTOOLS__._enterModule(${safeId}); }` +
+    `import '${RUNTIME_MODULE_ID}';if (${dt}) { window.__SVELTE_DEVTOOLS__.enterModule(${safeId}); }` +
     code +
-    `\n;if (${dt}) { window.__SVELTE_DEVTOOLS__._leaveModule(); }\n`
+    `\n;if (${dt}) { window.__SVELTE_DEVTOOLS__.leaveModule(); }\n`
   );
 }
 

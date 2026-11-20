@@ -40,7 +40,7 @@ const exportedNames = (code: string) =>
 
 describe('served sources', () => {
   it.each([
-    ['runtime', runtimeCode, 'client.js'],
+    ['runtime', runtimeCode, 'page-runtime.js'],
     ['wrapper', wrapperCode, 'wrapper.js'],
   ])('the %s text is served minified', (_, code, file) => {
     const source = fs.readFileSync(new URL(`../src/runtime/${file}`, import.meta.url), 'utf8');
