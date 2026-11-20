@@ -5,6 +5,8 @@ import { defineConfig, normalizePath } from 'vite';
 import type { Plugin } from 'vite';
 import dts from 'vite-plugin-dts';
 
+import { minifyRuntime } from './build/minify-runtime.js';
+
 // the bundled inspector serves its runtime from disk at runtime next to its own chunk
 const INSPECTOR_SRC = normalizePath(fileURLToPath(new URL('../inspector/src/', import.meta.url)));
 const INSPECTOR_RUNTIME = fileURLToPath(new URL('../inspector/src/runtime/', import.meta.url));
@@ -30,14 +32,23 @@ export default defineConfig({
     dts({
       tsconfigPath: './tsconfig.build.json',
       entryRoot: 'src',
-      include: ['src/**/*.ts'],
+      // the public entry's type graph; env.d.ts types the `?raw` imports
+      include: [
+        'src/index.ts',
+        'src/plugin.ts',
+        'src/inspector.ts',
+        'src/types.ts',
+        'src/env.d.ts',
+      ],
     }),
+    minifyRuntime(),
     copyInspectorRuntime(),
   ],
   build: {
     outDir: 'dist',
     emptyOutDir: true,
-    sourcemap: true,
+    // A Node-side plugin: readable stack traces in the user's dev server beat a smaller file.
+    minify: false,
     target: 'node22',
     lib: {
       entry: { index: 'src/index.ts', cli: 'src/cli/index.ts' },
@@ -45,22 +56,7 @@ export default defineConfig({
       fileName: (_format, name) => `${name}.mjs`,
     },
     rolldownOptions: {
-      external: [
-        'vite',
-        /^@vitejs\/devtools-kit/,
-        /^devframe(\/|$)/,
-        /^node:/,
-        'fs',
-        'fs/promises',
-        'path',
-        'url',
-        'crypto',
-        'http',
-        'https',
-        'os',
-        'stream',
-        'util',
-      ],
+      external: ['vite', /^@vitejs\/devtools-kit/, /^devframe(\/|$)/, /^node:/],
       output: {
         chunkFileNames: chunk =>
           chunk.name === INSPECTOR_CHUNK ? '[name].mjs' : '[name]-[hash].mjs',

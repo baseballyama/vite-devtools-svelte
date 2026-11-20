@@ -1,9 +1,8 @@
 // Loaded by vitest.config.ts, whose bundler has no `?raw` support: the
-// browser sources are read from disk here (the same text `?raw` inlines).
-import fs from 'node:fs';
-
+// browser sources are minified from disk here (the same text the build inlines).
 import type { Plugin } from 'vite';
 
+import { minifyRuntimeSource } from '../../build/minify-runtime.js';
 import {
   RUNTIME_MODULE_ID,
   RESOLVED_RUNTIME_ID,
@@ -15,14 +14,8 @@ import {
   isSvelteModule,
 } from '../../src/runtime/transform.js';
 
-const runtimeCode = fs.readFileSync(
-  new URL('../../src/runtime/client.js', import.meta.url),
-  'utf8',
-);
-const wrapperCode = fs.readFileSync(
-  new URL('../../src/runtime/wrapper.js', import.meta.url),
-  'utf8',
-);
+const runtimeCode = minifyRuntimeSource('client.js');
+const wrapperCode = minifyRuntimeSource('wrapper.js');
 
 export function reactivityHarnessPlugin(): Plugin[] {
   return [

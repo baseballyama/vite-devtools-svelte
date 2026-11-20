@@ -4,6 +4,6 @@
     "types": ["node"],
     "lib": ["ES2024"]
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "*.config.ts"],
+  "include": ["src/**/*.ts", "test/**/*.ts", "build/**/*.ts", "*.config.ts"],
   "exclude": ["test/**/fixtures/**"]
 }

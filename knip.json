@@ -14,7 +14,7 @@
     },
     "packages/vite-devtools-svelte": {
       "entry": ["src/types.ts", "src/runtime/client.js", "src/runtime/wrapper.js", "test/**/*.ts"],
-      "project": ["src/**/*.{ts,js}", "test/**/*.{ts,svelte}"],
+      "project": ["src/**/*.{ts,js}", "test/**/*.{ts,svelte}", "build/**/*.ts"],
       "ignore": ["test/fixtures/**"]
     },
     "packages/inspector": {

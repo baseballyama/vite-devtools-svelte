@@ -3,8 +3,10 @@ import vm from 'node:vm';
 
 // @ts-expect-error -- Svelte ships no types for its internal entry
 import * as original from 'svelte/internal/client';
+import { parseSync } from 'vite';
 import { describe, it, expect } from 'vitest';
 
+import { minifyRuntimeSource } from '../build/minify-runtime.js';
 import {
   RUNTIME_MODULE_ID,
   RESOLVED_RUNTIME_ID,
@@ -26,13 +28,35 @@ describe('virtual module ids', () => {
   });
 });
 
+const exportedNames = (code: string) =>
+  parseSync('code.js', code).program.body.flatMap(node => {
+    if (node.type !== 'ExportNamedDeclaration') return [];
+    if (node.declaration?.type === 'FunctionDeclaration') return [node.declaration.id!.name];
+    if (node.declaration?.type === 'VariableDeclaration') {
+      return node.declaration.declarations.map(d => (d.id.type === 'Identifier' ? d.id.name : ''));
+    }
+    return node.specifiers.map(s => (s.exported.type === 'Identifier' ? s.exported.name : ''));
+  });
+
 describe('served sources', () => {
   it.each([
     ['runtime', runtimeCode, 'client.js'],
     ['wrapper', wrapperCode, 'wrapper.js'],
-  ])('the %s text is its source file, verbatim', (_, code, file) => {
+  ])('the %s text is served minified', (_, code, file) => {
     const source = fs.readFileSync(new URL(`../src/runtime/${file}`, import.meta.url), 'utf8');
-    expect(code).toBe(source);
+    expect(code).toBe(minifyRuntimeSource(file));
+    expect(code).not.toContain('\n');
+    expect(code.length).toBeLessThan(source.length * 0.6);
+  });
+
+  it('the minified wrapper keeps every export name of its source', () => {
+    const source = fs.readFileSync(new URL('../src/runtime/wrapper.js', import.meta.url), 'utf8');
+    expect(exportedNames(source).length).toBeGreaterThan(10);
+    expect(exportedNames(wrapperCode)).toEqual(exportedNames(source));
+    const reExports = parseSync('wrapper.js', wrapperCode).program.body.filter(
+      n => n.type === 'ExportAllDeclaration',
+    );
+    expect(reExports.map(n => n.source.value)).toEqual(['svelte/internal/client']);
   });
 
   it('the runtime is a self-contained script (no imports) that parses', () => {
