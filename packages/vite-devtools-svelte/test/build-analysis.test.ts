@@ -56,8 +56,8 @@ describe('analyzeBuild', () => {
       'build/chunk.js': 'x'.repeat(5),
     });
     expect(summary(r)).toEqual([
-      ['.svelte-kit/output/server/index.js', 40, true],
-      ['.svelte-kit/output/client/_app/immutable/entry/start.abc.js', 30, true],
+      ['.svelte-kit/output/server/index.js', 40, false],
+      ['.svelte-kit/output/client/_app/immutable/entry/start.abc.js', 30, false],
       ['.svelte-kit/output/client/_app/immutable/assets/app.css', 20, false],
       ['.svelte-kit/output/prerendered/pages/about.HTML', 10, false],
       ['build/chunk.js', 5, false],
@@ -65,13 +65,73 @@ describe('analyzeBuild', () => {
     expect(analyzeBuild(r).totalSize).toBe(105);
   });
 
-  it('counts a file under build/client once (build is scanned too)', () => {
+  it('lists a file under build/client once, from the scan of build', () => {
     const r = root({ 'build/client/app.js': '123456', 'build/index.js': '12' });
-    expect(summary(r)).toEqual([
-      ['build/client/app.js', 6, false],
-      ['build/index.js', 2, true],
-    ]);
+    const readdir = vi.spyOn(fs, 'readdirSync');
+    try {
+      expect(summary(r)).toEqual([
+        ['build/client/app.js', 6, false],
+        ['build/index.js', 2, false],
+      ]);
+      const read = readdir.mock.calls.map(([dir]) => String(dir));
+      expect(read.filter(d => d === path.join(r, 'build/client'))).toHaveLength(1);
+    } finally {
+      readdir.mockRestore();
+    }
     expect(analyzeBuild(r).totalSize).toBe(8);
+  });
+
+  it("marks the entries of Vite's build manifests, adapter copies included", () => {
+    const r = root({
+      '.svelte-kit/output/client/.vite/manifest.json': JSON.stringify({
+        start: { file: '_app/immutable/entry/start.X.js', isEntry: true },
+        app: { file: '_app/immutable/entry/app.X.js', isEntry: true },
+        shared: { file: '_app/immutable/chunks/index-ab.js' },
+      }),
+      '.svelte-kit/output/server/.vite/manifest.json': JSON.stringify({
+        index: { file: 'index.js', isEntry: true },
+        shared: { file: 'chunks/index-server.js' },
+      }),
+      '.svelte-kit/output/client/_app/immutable/entry/start.X.js': '1',
+      '.svelte-kit/output/client/_app/immutable/entry/app.X.js': '12',
+      '.svelte-kit/output/client/_app/immutable/chunks/index-ab.js': '123',
+      '.svelte-kit/output/server/index.js': '1234',
+      '.svelte-kit/output/server/chunks/index-server.js': '12345',
+      '.svelte-kit/output/prerendered/pages/index.html': '123456',
+      '.svelte-kit/output/prerendered/pages/getting-started.html': '1234567',
+      'build/_app/immutable/entry/start.X.js': '12345678',
+      'build/client/_app/immutable/entry/app.X.js': '123456789',
+      // adapter-node with `paths.base: '/docs'`
+      'build/client/docs/_app/immutable/entry/start.X.js': '1234567890',
+      'build/client/docs/_app/immutable/chunks/index-ab.js': '12345678901',
+    });
+    expect(
+      summary(r)
+        .filter(([, , entry]) => entry)
+        .map(([file]) => file),
+    ).toEqual([
+      'build/client/docs/_app/immutable/entry/start.X.js',
+      'build/client/_app/immutable/entry/app.X.js',
+      'build/_app/immutable/entry/start.X.js',
+      '.svelte-kit/output/server/index.js',
+      '.svelte-kit/output/client/_app/immutable/entry/app.X.js',
+      '.svelte-kit/output/client/_app/immutable/entry/start.X.js',
+    ]);
+  });
+
+  it.each([
+    ['malformed', '{'],
+    ['not an object', 'null'],
+    [
+      'odd records',
+      '{"a": null, "b": {"file": 1, "isEntry": true}, "c": {"file": "a.js", "isEntry": "yes"}}',
+    ],
+  ])('a %s manifest marks nothing', (_label, json) => {
+    const r = root({
+      '.svelte-kit/output/client/.vite/manifest.json': json,
+      '.svelte-kit/output/client/a.js': '1',
+    });
+    expect(summary(r)).toEqual([['.svelte-kit/output/client/a.js', 1, false]]);
   });
 
   it('chunk entries carry name, relative file, size and entry flag', () => {

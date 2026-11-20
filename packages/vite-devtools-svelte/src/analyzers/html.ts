@@ -168,12 +168,15 @@ export function decodeEntities(s: string): string {
   while (amp !== -1) {
     const semi = s.indexOf(';', amp + 1);
     if (semi === -1) break;
-    const char = decodeReference(s.slice(amp + 1, semi));
+    // Only the last `&` before the `;` can start a reference; jumping past the
+    // `;` keeps a long run of `&` linear.
+    const start = s.lastIndexOf('&', semi);
+    const char = decodeReference(s.slice(start + 1, semi));
     if (char !== undefined) {
-      out += s.slice(i, amp) + char;
+      out += s.slice(i, start) + char;
       i = semi + 1;
     }
-    amp = s.indexOf('&', char === undefined ? amp + 1 : i);
+    amp = s.indexOf('&', semi + 1);
   }
   return out + s.slice(i);
 }

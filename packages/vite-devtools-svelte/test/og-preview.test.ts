@@ -124,8 +124,22 @@ describe('decodeEntities', () => {
     ['&constructor; &toString;', '&constructor; &toString;'], // not Object.prototype members
     ['&x &#65;', '&x A'],
     ['&#x;&#;&#1a;', '&#x;&#;&#1a;'],
+    ['&#0000000000000065;', 'A'],
+    ['a&&amp;b', 'a&&b'],
+    ['&amp&lt;', '&amp<'],
+    ['a&b;c&lt;', 'a&b;c<'],
   ])('%j → %j', (input, output) => {
     expect(decodeEntities(input)).toBe(output);
+  });
+
+  // A quadratic decoder would time out on this input.
+  it('stays linear on a page-sized run of unterminated references', () => {
+    const ampersands = '&'.repeat(MAX_PAGE_BYTES) + ';';
+    expect(decodeEntities(ampersands)).toBe(ampersands);
+    const hashes = '&#'.repeat(MAX_PAGE_BYTES / 2) + ';';
+    expect(decodeEntities(hashes)).toBe(hashes);
+    const amps = '&amp'.repeat(MAX_PAGE_BYTES / 4);
+    expect(decodeEntities(amps + ';')).toBe(amps.slice(0, -'&amp'.length) + '&');
   });
 });
 
