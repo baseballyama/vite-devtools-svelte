@@ -539,6 +539,74 @@ describe('reactive summary', () => {
     expect(h.dt._nodeCounts.has(list.ids[0])).toBe(false);
   });
 
+  it('signals of dead owners do not pile up while inactive (no poll)', () => {
+    const h = createRuntime({ active: false });
+    const id = h.dt.register('/app/src/lib/Feed.svelte');
+    h.dt.registered(id);
+    for (let batch = 0; batch < 100; batch++) {
+      h.flushTimers(); // the deferred sweep of the previous batch
+      const owner: any = { fn: () => {} };
+      for (let i = 0; i < 10; i++) h.dt.trackState({ v: i, wv: 1 }, 'row', id, owner);
+      owner.fn = null;
+    }
+    expect(h.dt._nodeTotals.state).toBeLessThan(50);
+    expect(h.dt._pollIds.length).toBeLessThan(50);
+    expect(h.dt._sweepIds.length).toBeLessThan(50);
+    for (const [ids, index] of [
+      [h.dt._pollIds, h.dt._pollIndex],
+      [h.dt._sweepIds, h.dt._sweepIndex],
+    ]) {
+      expect(index.size).toBe(ids.length);
+      ids.forEach((nodeId: string, i: number) => {
+        expect(h.dt._reactiveNodes.has(nodeId)).toBe(true);
+        expect(index.get(nodeId)).toBe(i);
+      });
+    }
+    for (const nodeId of h.dt._proxyNames.get('row').get(id)) {
+      expect(h.dt._reactiveNodes.has(nodeId)).toBe(true);
+    }
+  });
+
+  it('sweeps in one later task, not during the track calls of a mount', () => {
+    const h = createRuntime({ active: false });
+    const id = h.dt.register('/app/src/lib/Feed.svelte');
+    h.dt.registered(id);
+    const owner: any = { fn: () => {} };
+    for (let i = 0; i < 10; i++) h.dt.trackState({ v: i, wv: 1 }, 's' + i, id, owner);
+    owner.fn = null;
+    for (let i = 0; i < 10; i++) h.dt.trackState({ v: i, wv: 1 }, 't' + i, id);
+    expect(h.dt._nodeTotals.state).toBe(20);
+    expect(h.pendingDelays()).toEqual([0]);
+    h.flushTimers();
+    expect(h.dt._nodeTotals.state).toBe(10);
+    expect(h.pendingDelays()).toEqual([]);
+  });
+
+  it('schedules no sweep for the tracks of a component init', () => {
+    const h = createRuntime({ active: false });
+    mountList(h, 50);
+    expect(h.pendingDelays()).toEqual([]);
+  });
+
+  it('keeps the proxy of a re-tagged proxy whose old owner died (sweep on the old node)', () => {
+    const h = createRuntime({ active: false });
+    const id = h.dt.register('/app/src/lib/Item.svelte');
+    h.dt.registered(id);
+    const proxy = { n: 1 };
+    const o1: any = { fn: () => {} };
+    h.dt.trackProxy(proxy, 'x', id, o1);
+    const nodeId = id + ':x';
+    o1.fn = null;
+    h.flushTimers();
+    expect(h.dt._reactiveNodes.has(nodeId)).toBe(false);
+    h.dt.trackProxy(proxy, 'x', id, { fn: () => {} });
+    const newId = h.dt._idByProxy.get(proxy);
+    expect(h.dt._reactiveNodes.has(newId)).toBe(true);
+    expect(h.dt._reactiveProxies.get(newId)?.deref()).toBe(proxy);
+    const entry = h.dt._reactiveNodes.get(newId);
+    expect(h.dt._readStateValue(newId, entry.signal.deref())).toBe(proxy);
+  });
+
   it('answers request-reactive-summary with requestId + epoch, ignores other epochs', () => {
     const h = createRuntime();
     mountList(h, 2);

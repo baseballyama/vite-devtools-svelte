@@ -150,8 +150,10 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     _sweepIds: [],
     _sweepIndex: new Map(),
     _sweepCursor: 0,
+    _sweepDebt: 0,
+    _sweepScheduled: false,
     // _pollDirty: found changed but not yet serialized. _pollMeta: per-node
-    // change hints ({ ref, wv, nextCheckAt }).
+    // change hints ({ ref, wv, nextCheckAt, nextSampleAt }).
     _pollIds: [],
     _pollIndex: new Map(),
     _pollCursor: 0,
@@ -411,6 +413,38 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       return id;
     },
 
+    // The poll's sweep only runs while DevTools is open, so churn pays for its
+    // own cleanup: 2 visits per track, in a later task to keep mounts fast.
+    // Tracks during a component's init are skipped: its nodes leave with it,
+    // and churn ({#each} items, effect re-runs) tracks after init.
+    // A dead node whose id is reused before the sweep is forgotten by _nodeIdFor.
+    _sweepOnTrack(componentId) {
+      if (this._sampling || this._initStartTimes.has(componentId)) return;
+      this._sweepDebt += 2;
+      this._scheduleSweep();
+    },
+
+    _scheduleSweep() {
+      if (this._sweepScheduled) return;
+      this._sweepScheduled = true;
+      setTimeout(() => this._sweepDeferred(), 0);
+    },
+
+    _sweepDeferred() {
+      const BUDGET_MS = 2;
+      const CHUNK = 64;
+      this._sweepScheduled = false;
+      // more than 2 visits per node finds nothing new
+      this._sweepDebt = this._sampling ? 0 : Math.min(this._sweepDebt, 2 * this._sweepIds.length);
+      const start = performance.now();
+      while (this._sweepDebt > 0 && performance.now() - start < BUDGET_MS) {
+        const n = Math.min(CHUNK, this._sweepDebt);
+        this._sweepNodes(n);
+        this._sweepDebt -= n;
+      }
+      if (this._sweepDebt > 0) this._scheduleSweep();
+    },
+
     _registerNode(nodeId, componentId, type, name, signalRef, owner, extra) {
       this._trackNodeCount(nodeId, componentId, type);
       const entry = {
@@ -651,6 +685,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     // `owner`: the effect active when the signal was created; the node dies
     // with it (an {#each} item's {@const}, a class instance created in an effect run).
     trackState(signal, name, componentId, owner) {
+      this._sweepOnTrack(componentId);
       const nodeId = this._nodeIdFor(signal, this._idBySignal, componentId, name);
       this._registerNode(nodeId, componentId, 'state', name, new WeakRef(signal), owner);
       this._idBySignal.set(signal, nodeId);
@@ -659,6 +694,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     },
 
     trackProxy(proxy, name, componentId, owner) {
+      this._sweepOnTrack(componentId);
       const nodeId = this._nodeIdFor(proxy, this._idByProxy, componentId, name);
       this._reactiveProxies.set(nodeId, new WeakRef(proxy));
       // The proxy itself stays weakly held (_reactiveProxies). The marker is
@@ -673,6 +709,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     },
 
     trackDerived(signal, name, componentId, owner) {
+      this._sweepOnTrack(componentId);
       const nodeId = this._nodeIdFor(signal, this._idBySignal, componentId, name);
       this._registerNode(nodeId, componentId, 'derived', name, new WeakRef(signal), owner);
       this._idBySignal.set(signal, nodeId);
@@ -681,6 +718,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     // The effect object may not exist yet (deferred to mount): the node holds a
     // placeholder until bindEffect() is called on the effect's first run.
     trackUserEffect(kind, componentId, owner) {
+      this._sweepOnTrack(componentId);
       let seq = this._effectSeq.get(componentId);
       if (!seq) {
         seq = { effect: 0, effect_pre: 0 };
@@ -1210,6 +1248,10 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     //     cursor). Objects whose reference or Svelte write version (wv) changed
     //     go to _pollDirty, which persists across ticks until serialized.
     //  2. Serialization is limited to BUDGET_MS per tick; dirty nodes carry over.
+    //     After a recorded change (or a new ref/wv with equal content, e.g. a
+    //     polled `data = await res.json()`), an object is serialized again no
+    //     sooner than SAMPLE_FACTOR x that cost, however often it changes; a
+    //     change after a longer quiet spell goes out on the next tick.
     //  3. In-place deep mutations (proxies don't bump an outer wv) are found by
     //     re-checks no earlier than max(RECHECK_MS, 50 x serialization cost),
     //     paid from a DEEP_MS-per-tick credit, so the amortized cost is bounded.
@@ -1278,15 +1320,19 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
         }
         let meta = this._pollMeta.get(nodeId);
         if (!meta) {
-          meta = { ref: undefined, wv: undefined, nextCheckAt: 0 };
+          meta = { ref: undefined, wv: undefined, nextCheckAt: 0, nextSampleAt: 0 };
           this._pollMeta.set(nodeId, meta);
         }
-        if (meta.ref !== value || meta.wv !== signal.wv) this._pollDirty.add(nodeId);
-        else if (now >= meta.nextCheckAt) due.push(nodeId);
+        if (meta.ref !== value || meta.wv !== signal.wv) {
+          this._pollDirty.add(nodeId);
+        } else if (now >= meta.nextCheckAt) {
+          due.push(nodeId);
+        }
       }
       const start = performance.now();
       for (const nodeId of this._pollDirty) {
         if (performance.now() - start > BUDGET_MS) return;
+        if (now < this._pollMeta.get(nodeId).nextSampleAt) continue;
         this._pollDirty.delete(nodeId);
         this._serializeNode(nodeId, false);
       }
@@ -1313,6 +1359,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
     _serializeNode(nodeId, deep) {
       const MAX_SNAPSHOT_CHARS = 32768;
       const RECHECK_MS = 1000;
+      const SAMPLE_FACTOR = 20;
       const entry = this._reactiveNodes.get(nodeId);
       const meta = this._pollMeta.get(nodeId);
       if (!entry || !meta) return;
@@ -1323,17 +1370,21 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
       try {
         const t0 = performance.now();
         const str = JSON.stringify(value);
-        const cost = performance.now() - t0;
-        if (deep) this._deepCredit -= cost;
-        meta.ref = value;
-        meta.wv = signal.wv;
-        meta.nextCheckAt = t0 + Math.max(RECHECK_MS, 50 * cost);
         // Small values keep the string (exact compare); large ones only a
         // length+hash so a 5 MB array doesn't pin 5 MB per node.
         // (toJSON may return undefined: no JSON at all)
         const tooLarge = str !== undefined && str.length > MAX_SNAPSHOT_CHARS;
         const key = str === undefined ? '' : tooLarge ? str.length + ':' + __hash(str) : str;
-        if (this._stateSnapshotStrs.get(nodeId) === key) return;
+        // the hash of a large value is part of the per-sample work
+        const cost = performance.now() - t0;
+        if (deep) this._deepCredit -= cost;
+        meta.ref = value;
+        meta.wv = signal.wv;
+        meta.nextCheckAt = t0 + Math.max(RECHECK_MS, 50 * cost);
+        if (this._stateSnapshotStrs.get(nodeId) === key) {
+          if (!deep) meta.nextSampleAt = t0 + SAMPLE_FACTOR * cost;
+          return;
+        }
         this._stateSnapshotStrs.set(nodeId, key);
         let snapshot = null;
         let size = 64;
@@ -1344,7 +1395,8 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
           size = str.length;
         }
         if (!this._stateSnapshots.has(nodeId)) {
-          // first observation: seed only (no entry, no counters)
+          // first observation: seed only (no entry, no counters). No throttle:
+          // the first change after the seed must land on the next tick.
           this._stateSnapshots.set(nodeId, snapshot);
           this._lastSnapshotSize.set(nodeId, size);
           this._unseeded.delete(nodeId);
@@ -1360,6 +1412,7 @@ if (typeof window !== 'undefined' && !window.__SVELTE_DEVTOOLS__) {
           size + (this._lastSnapshotSize.get(nodeId) ?? 0),
         );
         this._lastSnapshotSize.set(nodeId, size);
+        if (!deep) meta.nextSampleAt = t0 + SAMPLE_FACTOR * cost;
       } catch {
         // non-serializable (cycles, BigInt): never observable, so not pending
         this._unseeded.delete(nodeId);

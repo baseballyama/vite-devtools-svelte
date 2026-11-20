@@ -257,6 +257,114 @@ function single(value: unknown, opts: { proxy?: boolean } = {}) {
 const changesFor = (h: Harness, nodeId: string) =>
   h.dt._stateTimeline.filter((c: any) => c.id === nodeId);
 
+function bigState(sim: ReturnType<typeof simulatedClock>, value: unknown) {
+  const h = createRuntime({ clock: sim.now });
+  const id = h.dt.register('/app/src/lib/S.svelte');
+  const signal: any = { v: value, wv: 1 };
+  h.dt.trackState(signal, 'x', id);
+  h.dt.registered(id);
+  return { h, signal, poll: pollFn(h), nodeId: id + ':x' };
+}
+
+const rows = (label: string, length = 10_000) =>
+  Array.from({ length }, (_, i) => ({ i, label: label + i }));
+
+// ≈ a live $state proxy: stringify goes through the get trap per property
+const PROXY_NS_PER_CHAR = 80;
+
+describe('a large state that keeps changing', () => {
+  const a = rows('a ');
+  const maxOp = JSON.stringify(a).length * PROXY_NS_PER_CHAR * 1e-6;
+
+  it('is sampled at no more than 1/20 of the main thread, and its last value is recorded', () => {
+    const sim = simulatedClock(PROXY_NS_PER_CHAR);
+    const { h, signal, poll, nodeId } = bigState(sim, a);
+    sim.run(poll, 1); // seed
+    // fresh content every tick, like `rows = [...rows, row]`
+    const next = Array.from({ length: 100 }, (_, t) => rows(t + ' '));
+    let t = 0;
+    const churn = sim.run(() => {
+      signal.v = next[t++];
+      poll();
+    }, 100);
+    expect(changesFor(h, nodeId).length).toBeLessThan(50);
+    expect(churn.mean).toBeLessThan(200 / 20);
+    expect(churn.max).toBeLessThanOrEqual(2 + maxOp + 0.01);
+    const last = signal.v;
+    sim.run(poll, Math.ceil((20 * maxOp) / 200) + 1);
+    expect(h.dt._pollMeta.get(nodeId).ref).toBe(last);
+    expect(h.dt._pollDirty.has(nodeId)).toBe(false);
+  });
+
+  it('samples a reassignment to equal content (polled JSON) at the same bound', () => {
+    const sim = simulatedClock(PROXY_NS_PER_CHAR);
+    const { h, signal, poll, nodeId } = bigState(sim, a);
+    sim.run(poll, 1);
+    const copies = Array.from({ length: 50 }, () => rows('a '));
+    let t = 0;
+    const churn = sim.run(() => {
+      signal.v = copies[t++];
+      poll();
+    }, 50);
+    expect(churn.calls).toBeLessThan(25);
+    expect(churn.mean).toBeLessThan(200 / 20);
+    expect(changesFor(h, nodeId)).toHaveLength(0);
+  });
+
+  // 20 x its cost is longer than the gap between changes, so a reset on a
+  // quiet tick would serialize every change
+  it.each([2, 5])('keeps the 1/20 bound when reassigned every %i ticks', every => {
+    const sim = simulatedClock(PROXY_NS_PER_CHAR);
+    const { signal, poll } = bigState(sim, rows('a ', 25_000));
+    sim.run(poll, 1);
+    const next = Array.from({ length: 100 }, (_, t) => rows(t + ' ', 25_000));
+    const cost = JSON.stringify(next[0]).length * PROXY_NS_PER_CHAR * 1e-6;
+    // the same ref between changes is no change
+    const schedule = next.map((_, t) => next[t - (t % every)]);
+    let t = 0;
+    const churn = sim.run(() => {
+      signal.v = schedule[t++];
+      poll();
+    }, 100);
+    // + one sample: the window starts right at a sample
+    expect(churn.calls).toBeLessThanOrEqual(1 + Math.floor((100 * 200) / (20 * cost)));
+    expect(churn.mean).toBeLessThan(200 / 20 + cost / 100);
+  });
+
+  it('delays a change after one quiet tick until 20x the last cost has passed', () => {
+    const sim = simulatedClock(PROXY_NS_PER_CHAR);
+    const { h, signal, poll, nodeId } = bigState(sim, rows('a ', 25_000));
+    sim.run(poll, 1);
+    signal.v = rows('b ', 25_000);
+    sim.run(poll, 1);
+    const cost = JSON.stringify(signal.v).length * PROXY_NS_PER_CHAR * 1e-6;
+    expect(changesFor(h, nodeId)).toHaveLength(1);
+    sim.run(poll, 1); // quiet
+    signal.v = [1, 2, 3];
+    sim.run(poll, 1);
+    expect(changesFor(h, nodeId)).toHaveLength(1);
+    sim.run(poll, Math.ceil((20 * cost) / 200));
+    expect(changesFor(h, nodeId)).toHaveLength(2);
+    expect(changesFor(h, nodeId).at(-1)?.newValue).toEqual([1, 2, 3]);
+  });
+
+  it('records a change after a quiet spell of 20x its cost on the next tick', () => {
+    const sim = simulatedClock(PROXY_NS_PER_CHAR);
+    const { h, signal, poll, nodeId } = bigState(sim, a);
+    sim.run(poll, 1);
+    for (let t = 0; t < 10; t++) {
+      signal.v = rows(t + ' ');
+      sim.run(poll, 1);
+    }
+    sim.run(poll, Math.ceil((20 * maxOp) / 200) + 1); // quiet
+    const before = changesFor(h, nodeId).length;
+    signal.v = [1, 2, 3];
+    sim.run(poll, 1);
+    expect(changesFor(h, nodeId).length).toBe(before + 1);
+    expect(changesFor(h, nodeId).at(-1)?.newValue).toEqual([1, 2, 3]);
+  });
+});
+
 describe('state polling correctness under budgets', () => {
   it('records primitive changes on the next tick', () => {
     const { h, signal, poll, nodeId } = single(1);
@@ -281,12 +389,15 @@ describe('state polling correctness under budgets', () => {
     expect(changes[1].oldValue).toBeUndefined();
   });
 
+  // The simulated clock gives the seed a real cost, so this fails if the seed
+  // arms the throttle (a frozen clock would make that cost 0).
   it('records an object reassignment on the next tick even for expensive objects', () => {
+    const sim = simulatedClock();
     const big = Array.from({ length: 50_000 }, (_, i) => ({ i }));
-    const { h, signal, poll, nodeId } = single(big);
-    poll();
+    const { h, signal, poll, nodeId } = bigState(sim, big);
+    sim.run(poll, 1);
     signal.v = [1, 2, 3];
-    poll();
+    sim.run(poll, 1);
     expect(changesFor(h, nodeId).at(-1)?.newValue).toEqual([1, 2, 3]);
   });
 
