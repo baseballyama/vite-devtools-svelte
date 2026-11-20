@@ -1,29 +1,28 @@
-# kit-ssg — 全ページ prerender（adapter-static）
+# kit-ssg: every page prerendered (adapter-static)
 
-ルートで `prerender = true` / `trailingSlash = 'always'` を指定した静的サイト。
-dev ではサーバー load が毎リクエスト走り、`vite build` で全ページと `+server.ts` が `build/` に書き出されます。
+A static site with `prerender = true` / `trailingSlash = 'always'` at the root. In dev the server loads run on every request; `vite build` writes every page and `+server.ts` to `build/`.
 
 ```bash
 pnpm examples kit-ssg               # http://localhost:5210/
-pnpm -C examples/kit-ssg build      # build/ に全ページ・feed.json・sitemap.xml
+pnpm -C examples/kit-ssg build      # every page, feed.json and sitemap.xml in build/
 ```
 
-| ルート                       | 使っている機能                                                                                 |
+| Route                        | Features used                                                                                  |
 | ---------------------------- | ---------------------------------------------------------------------------------------------- |
-| `/`                          | ルート `+layout.server.ts`（server load）+ `+page.ts`（universal load、`parent()`）            |
+| `/`                          | Root `+layout.server.ts` (server load) + `+page.ts` (universal load, `parent()`)               |
 | `/blog/`                     | `+page.server.ts`                                                                              |
-| `/blog/[slug]/`              | `entries()` で列挙される動的ルート、server load + universal load の両方、`{#key}` で再マウント |
-| `/no-js/`                    | `csr = false`（JS なし → devtools ランタイムも動かない）                                       |
-| `/client-only/`              | `ssr = false`（prerender では空のシェル、描画はブラウザのみ）                                  |
-| `/feed.json`, `/sitemap.xml` | prerender される `+server.ts`（`trailingSlash = 'never'`）                                     |
+| `/blog/[slug]/`              | Dynamic route listed by `entries()`, both a server and a universal load, remount with `{#key}` |
+| `/no-js/`                    | `csr = false` (no JS → the devtools runtime does not run either)                               |
+| `/client-only/`              | `ssr = false` (an empty shell when prerendered, rendered only in the browser)                  |
+| `/feed.json`, `/sitemap.xml` | Prerendered `+server.ts` (`trailingSlash = 'never'`)                                           |
 
-## 確認項目
+## Checklist
 
-- [ ] **Routes**: 7 ルート（うち 2 つが endpoint、`blog/[slug]` は動的）
-- [ ] **Load functions**: `/` で server + universal、`/blog/[slug]/` で server + universal の両方が記録される。`/client-only/` の universal load はブラウザで走るので、#147 以降でだけ記録される（main では出ない）
-- [ ] **Components**: `/blog/[slug]/` で `Likes` が出て、記事下の「Next」リンクで別記事に移ると、ページは残ったまま `Likes` だけが `{#key}` で別インスタンスになる
-- [ ] `/no-js/` を開いてもアプリ・DevTools がエラーにならない（ランタイムがないので Components は空 / 直前のページのまま）
-- [ ] **Social preview**: `/` が og:title / og:image 付きで出る。trailingSlash = 'always' のルート（`/blog` など）はリダイレクトになる
-- [ ] **API**: `GET /feed.json`, `GET /sitemap.xml` が呼べる
+- [ ] **Routes**: 7 routes (2 of them endpoints, `blog/[slug]` dynamic)
+- [ ] **Load functions**: both server and universal loads are recorded on `/` and on `/blog/[slug]/`. The universal load of `/client-only/` runs in the browser and is recorded too
+- [ ] **Components**: `/blog/[slug]/` shows `Likes`. Following the "Next" link below a post keeps the page and makes `Likes` a new instance through `{#key}`
+- [ ] Opening `/no-js/` breaks neither the app nor the DevTools (no runtime, so Components is empty or keeps the previous page)
+- [ ] **Social preview**: `/` shows with og:title / og:image. Routes with trailingSlash = 'always' (`/blog` and so on) redirect
+- [ ] **API**: `GET /feed.json` and `GET /sitemap.xml` can be called
 - [ ] **Assets**: `static/og.svg`
-- [ ] `vite build` が通り、`build/` に devtools 由来のコード（`svelte-devtools` / `__devtools`）が含まれない
+- [ ] `vite build` passes, and `build/` has no devtools code (`svelte-devtools` / `__devtools`)

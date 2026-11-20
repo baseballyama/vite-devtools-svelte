@@ -101,9 +101,9 @@ jobs:
 
       # The example exists to enforce a nonce-based CSP; check that the built
       # app actually sends it. Only the preview server started here is stopped.
-      - name: strict-csp-app sends its nonce-based CSP header
+      - name: kit-strict-csp sends its nonce-based CSP header
         if: ${{ !cancelled() }}
-        working-directory: examples/strict-csp-app
+        working-directory: examples/kit-strict-csp
         timeout-minutes: 3
         run: |
           pnpm exec vite build
@@ -116,7 +116,7 @@ jobs:
           done
           headers=$(curl -sf -D - -o /dev/null --max-time 10 http://localhost:4319/ || true)
           if ! grep -qi "^content-security-policy:.*script-src 'self' 'nonce-" <<< "$headers"; then
-            echo "::error::strict-csp-app did not send its nonce-based CSP header"
+            echo "::error::kit-strict-csp did not send its nonce-based CSP header"
             echo "$headers"
             cat preview.log
             exit 1
@@ -124,14 +124,14 @@ jobs:
           grep -i '^content-security-policy:' <<< "$headers"
 
       # The apps have no svelte-check of their own: use the workspace's
-      # (installed in the sample-app example) against each app's tsconfig.
-      - name: Playground & strict-csp-app typecheck (svelte-check)
+      # (installed in the kit-shop example) against each app's tsconfig.
+      - name: Playground & kit-strict-csp typecheck (svelte-check)
         if: ${{ !cancelled() }}
         run: |
           pnpm -C playground exec svelte-kit sync
-          pnpm -C examples/sample-app exec svelte-check --workspace ../../playground --tsconfig ./tsconfig.json
-          pnpm -C examples/strict-csp-app exec svelte-kit sync
-          pnpm -C examples/sample-app exec svelte-check --workspace ../strict-csp-app --tsconfig ./tsconfig.json
+          pnpm -C examples/kit-shop exec svelte-check --workspace ../../playground --tsconfig ./tsconfig.json
+          pnpm -C examples/kit-strict-csp exec svelte-kit sync
+          pnpm -C examples/kit-shop exec svelte-check --workspace ../kit-strict-csp --tsconfig ./tsconfig.json
 
   # The live site ('before') and vite.dev ('reference') are captured best
   # effort, for comparison only.
@@ -156,7 +156,7 @@ jobs:
       - name: Site typecheck (svelte-check)
         run: |
           pnpm -C site exec svelte-kit sync
-          pnpm -C examples/sample-app exec svelte-check --workspace ../../site --tsconfig ./tsconfig.json
+          pnpm -C examples/kit-shop exec svelte-check --workspace ../../site --tsconfig ./tsconfig.json
 
       - name: Site screenshots + QA
         run: node site/scripts/capture.mjs --out=site-shots --build=site/build

@@ -1,42 +1,42 @@
 # examples
 
-`vite-devtools-svelte` の動作確認用アプリ群です。DevTools の挙動を変えうるアプリの形（Svelte 単体 / SvelteKit の SSR・SPA・SSG・remote functions・非デフォルト設定、Vite の middleware mode、ライブラリコンポーネント、strict CSP など）を 1 アプリ 1 テーマで揃えています。
+Apps for checking `vite-devtools-svelte` by hand. Each app covers one app shape that can change how the DevTools behave: plain Svelte, SvelteKit with SSR, SPA, SSG, remote functions or non-default config, Vite middleware mode, library components, a strict CSP, and so on.
 
-## 全部まとめて起動
+## Start them all
 
-リポジトリのルートで:
+From the repository root:
 
 ```bash
 pnpm install
-pnpm build              # plugin + DevTools UI（アプリは dist を読む）
-pnpm examples           # 全アプリをスタンドアロン（/.svelte-devtools/）で起動
-pnpm examples --dock    # 全アプリを Vite DevTools のドック内で起動
+pnpm build              # plugin + DevTools UI (the apps read dist)
+pnpm examples           # every app, standalone (/.svelte-devtools/)
+pnpm examples --dock    # every app, inside the Vite DevTools dock
 ```
 
-- 各アプリは固定ポートで起動し（下表）、ログは行頭にアプリ名を付けて 1 つのターミナルにまとまります。Ctrl+C で全部止まります。
-- `pnpm examples kit-spa kit-ssg` のようにアプリ名を並べるとそれだけ起動します。`pnpm examples --list` で一覧。
-- 確認を速くするため、このスクリプト経由ではワンタイムコード認証をオフにします（`SVELTE_DEVTOOLS_CLIENT_AUTH=0`、localhost のみで待ち受け）。認証フローも確認したいときは `--auth`。
-- `--dock` は `SVELTE_DEVTOOLS_DOCK=1` を渡します。`sample-app` と `strict-csp-app` は常にドック構成です。
+- Each app runs on a fixed port (see the table). Logs go to one terminal, each line prefixed with the app name. Ctrl+C stops them all.
+- List app names to start only those, e.g. `pnpm examples kit-spa kit-ssg`. `pnpm examples --list` lists them.
+- To make checks faster, this script turns the one-time code off (`SVELTE_DEVTOOLS_CLIENT_AUTH=0`, listening on localhost only). Pass `--auth` to check the auth flow too.
+- `--dock` passes `SVELTE_DEVTOOLS_DOCK=1`. `kit-shop` and `kit-strict-csp` always use the dock.
 
-## アプリ一覧
+## Apps
 
-| アプリ                                   | ポート | 形                                                       | 主に確かめること                                                                                                                                                                                        |
-| ---------------------------------------- | ------ | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [plain-svelte](./plain-svelte)           | 5201   | Svelte + Vite（最小）                                    | 最小構成で全パネルが空状態も含めて正しく出る（compat スモークのプロファイル）                                                                                                                           |
-| [sample-app](./sample-app)               | 5202   | SvelteKit SSR（デモ EC）                                 | 一通りのパネル。スクリーンショットと MCP 例の収録元                                                                                                                                                     |
-| [strict-csp-app](./strict-csp-app)       | 5203   | SvelteKit + nonce の strict CSP                          | `script-src 'self'` 下でドック注入と RPC が動く                                                                                                                                                         |
-| [svelte-features](./svelte-features)     | 5204   | Svelte + Vite（機能網羅）                                | 複数マウントルート、snippet / 動的コンポーネント / boundary / context / クラス state / module state、legacy コンポーネント、custom element、`node_modules` のライブラリコンポーネント、大量行のレンダー |
-| [svelte-middleware](./svelte-middleware) | 5205   | 自前 Node サーバー + Vite middleware mode、SSR + hydrate | httpServer の無い Vite（SSE トランスポート）、hydrate されたツリー                                                                                                                                      |
-| [kit-routing](./kit-routing)             | 5206   | SvelteKit SSR（ルーティング / データ網羅）               | グループ・レイアウトリセット・各種パラメータ・matcher・エスケープ、全 load 種別と waterfall、streaming、actions、全メソッドの endpoint、hooks、エラー                                                   |
-| [kit-remote](./kit-remote)               | 5207   | SvelteKit remote functions + Svelte async                | query / query.batch / form / command / prerender、テンプレート内 `await`、pending な boundary                                                                                                           |
-| [kit-spa](./kit-spa)                     | 5208   | SvelteKit SPA（`ssr = false`）                           | load がブラウザでだけ走る（HMR チャネル経由の load 計測）                                                                                                                                               |
-| [kit-hash](./kit-hash)                   | 5209   | SvelteKit SPA + hash router                              | `#/…` の URL でのルート・load・コンポーネント                                                                                                                                                           |
-| [kit-ssg](./kit-ssg)                     | 5210   | SvelteKit SSG（adapter-static, `prerender = true`）      | prerender ページと endpoint、`entries()`、JS の無い `csr = false` ページ                                                                                                                                |
-| [kit-config](./kit-config)               | 5211   | SvelteKit 非デフォルト設定                               | `paths.base`・`appDir`・`files.routes`・`embedded`・`trailingSlash` 下での各パネル（アプリは `/base/`）                                                                                                 |
-| [ui-lib](./ui-lib)（アプリではない）     | —      | Svelte コンポーネントライブラリ                          | `dependenciesMeta.injected` で入れるので `node_modules` 配下に解決され、公開ライブラリと同じ扱いになる                                                                                                  |
+| App                                      | Port | Shape                                                 | Main things to check                                                                                                                                                                    |
+| ---------------------------------------- | ---- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [plain-svelte](./plain-svelte)           | 5201 | Svelte + Vite (minimal)                               | Every panel renders correctly in a minimal app, empty states included (the compat smoke profile)                                                                                        |
+| [kit-shop](./kit-shop)                   | 5202 | SvelteKit SSR (demo shop)                             | All the usual panels. Source of the screenshots and MCP examples                                                                                                                        |
+| [kit-strict-csp](./kit-strict-csp)       | 5203 | SvelteKit with a nonce-based strict CSP               | Dock injection and RPC work under `script-src 'self'`                                                                                                                                   |
+| [svelte-features](./svelte-features)     | 5204 | Svelte + Vite (feature coverage)                      | Several mount roots, snippets, dynamic components, boundaries, context, class state, module state, legacy components, a custom element, library components in `node_modules`, many rows |
+| [svelte-middleware](./svelte-middleware) | 5205 | Own Node server + Vite middleware mode, SSR + hydrate | Vite without an httpServer (SSE transport), a hydrated tree                                                                                                                             |
+| [kit-routing](./kit-routing)             | 5206 | SvelteKit SSR (routing and data coverage)             | Groups, layout resets, every param kind, matchers, escapes, every load kind and waterfalls, streaming, actions, endpoints for every method, hooks, errors                               |
+| [kit-remote](./kit-remote)               | 5207 | SvelteKit remote functions + Svelte async             | query / query.batch / form / command / prerender, `await` in templates, pending boundaries                                                                                              |
+| [kit-spa](./kit-spa)                     | 5208 | SvelteKit SPA (`ssr = false`)                         | Loads run only in the browser (load tracking over the HMR channel)                                                                                                                      |
+| [kit-hash](./kit-hash)                   | 5209 | SvelteKit SPA + hash router                           | Routes, loads and components with `#/…` URLs                                                                                                                                            |
+| [kit-ssg](./kit-ssg)                     | 5210 | SvelteKit SSG (adapter-static, `prerender = true`)    | Prerendered pages and endpoints, `entries()`, a `csr = false` page without JS                                                                                                           |
+| [kit-config](./kit-config)               | 5211 | SvelteKit with non-default config                     | Each panel under `paths.base`, `appDir`, `files.routes`, `embedded` and `trailingSlash` (the app is at `/base/`)                                                                        |
+| [ui-lib](./ui-lib) (not an app)          | —    | Svelte component library                              | Installed with `dependenciesMeta.injected`, so it resolves under `node_modules` and is treated like a published library                                                                 |
 
-各アプリの README に、ページごとの内容とパネルごとの確認項目があります。
+Each app's README lists its pages and what to check in each panel.
 
-## アプリを足すとき
+## Adding an app
 
-`examples/<name>/package.json` に `"devtoolsExample": { "port": <未使用のポート> }` を書くと `pnpm examples` の対象になります（アプリの URL が `/` 以外なら `"base": "/base/"`、`vite dev` ではなく自前サーバーなら `"server": "server.js"`。サーバーは `PORT` を読み、localhost でだけ待ち受けること。常に `@vitejs/devtools` を読み込むアプリは `"dock": true`）。`vite.config.ts` では `SVELTE_DEVTOOLS_DOCK` と `SVELTE_DEVTOOLS_CLIENT_AUTH` を読んでください（既存アプリと同じ書き方）。SvelteKit のアプリは `kit-` で始まる名前にすると `pnpm sync:kit` の対象に入ります。
+Add `"devtoolsExample": { "port": <unused port> }` to `examples/<name>/package.json` and `pnpm examples` picks it up. Also set `"base": "/base/"` if the app is not served at `/`, `"server": "server.js"` if it runs its own server instead of `vite dev` (the server must read `PORT` and listen on localhost only), and `"dock": true` if it always loads `@vitejs/devtools`. In `vite.config.ts`, read `SVELTE_DEVTOOLS_DOCK` and `SVELTE_DEVTOOLS_CLIENT_AUTH` the same way the existing apps do. Name SvelteKit apps with a `kit-` prefix so `pnpm sync:kit` includes them.

@@ -1,5 +1,5 @@
 {
-  "name": "strict-csp-app",
+  "name": "kit-strict-csp",
   "version": "0.0.1",
   "private": true,
   "description": "SvelteKit with a strict nonce-based CSP (dock injection under script-src self)",

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Real-runtime screenshots of the Reactivity UI for the site, taken in
-// CI (Linux, headless) on the synthetic example app `examples/sample-app`
+// CI (Linux, headless) on the synthetic example app `examples/kit-shop`
 // (SvelteKit 3, `vite.standalone.config.ts`, the workspace plugin build).
 //
 //   node scripts/screenshots/reactivity.mjs --out=<dir>
@@ -39,7 +39,7 @@ if (!outArg) {
   process.exit(64);
 }
 const outDir = path.resolve(outArg.slice('--out='.length));
-const appDir = path.join(repoRoot, 'examples/sample-app');
+const appDir = path.join(repoRoot, 'examples/kit-shop');
 const CAP_MS = 180_000;
 const sleep = ms =>
   new Promise(r => {
@@ -186,7 +186,7 @@ const SENSITIVE = [
   ...homes.map(h => new RegExp(h)),
 ];
 const manifest = {
-  app: 'examples/sample-app (SvelteKit 3, vite.standalone.config.ts) — synthetic demo app, real runtime',
+  app: 'examples/kit-shop (SvelteKit 3, vite.standalone.config.ts) — synthetic demo app, real runtime',
   commit: git('rev-parse', 'HEAD'),
   // Tree hash of the client UI sources the images show.
   clientTree: git('rev-parse', 'HEAD:packages/client/src'),

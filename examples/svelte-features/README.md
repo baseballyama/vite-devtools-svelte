@@ -1,58 +1,58 @@
-# svelte-features — Svelte 機能網羅アプリ（SvelteKit なし）
+# svelte-features: Svelte feature coverage (no SvelteKit)
 
-コンポーネントツリーとリアクティビティの形に影響する Svelte の機能を、プレーンな Svelte + Vite で一通り揃えたアプリです。ポートは 5204。
+Plain Svelte + Vite with the Svelte features that change the shape of the component tree and reactivity. Port 5204.
 
 ```bash
-pnpm build                            # リポジトリのルートで plugin + UI をビルド
-pnpm examples svelte-features         # 単体で起動（--dock で Vite DevTools のドック内）
+pnpm build                            # build the plugin + UI at the repository root
+pnpm examples svelte-features         # start it alone (--dock for the Vite DevTools dock)
 ```
 
-`examples-ui-lib`（`examples/ui-lib`）は `dependenciesMeta.injected` でインストールしているので、npm の公開ライブラリと同じく `node_modules` 配下に置かれます。ui-lib を編集したら `pnpm install` し直してください。
+`examples-ui-lib` (`examples/ui-lib`) is installed with `dependenciesMeta.injected`, so like a published npm library it sits under `node_modules`. Run `pnpm install` again after editing ui-lib.
 
-## セクション
+## Sections
 
-| セクション   | 内容                                                                                                                                                                                                                                      |
+| Section      | Contents                                                                                                                                                                                                                                  |
 | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| (ヘッダー)   | マウントルート 3 つ: `#app` の `App`、`#widget` の `Widget`、ボタンで `mount()` / `unmount()` する `Floating`（`document.body`）。カスタム要素 `<x-badge>`                                                                                |
-| blocks       | `{#if}` の mount/unmount、keyed `{#each}`（追加・削除・並べ替え、`animate:flip`、`transition:`）、`{#key}` の再マウント、`{#await}`（resolve / reject）、再帰 `Tree`                                                                      |
-| elements     | `{#snippet}` / `{@render}`、`children`、子に渡す snippet（引数つき）、`<svelte:element>`、`<svelte:window>` / `<svelte:document>` / `<svelte:head>`、変数に入れた動的コンポーネント（`App` のセクション切り替え）                         |
-| boundaries   | `<svelte:boundary>`：描画中に throw する子、`failed` snippet、`reset`                                                                                                                                                                     |
-| bindings     | `setContext` / `getContext`（入れ子）、`$bindable` + `bind:`、`bind:this`（要素とコンポーネントの export 関数）、コールバック props                                                                                                       |
-| shared-state | `.svelte.ts` のモジュール `$state` オブジェクト、`$state` / `$derived` フィールドを持つクラス（コンポーネント外と内で生成）、`$state.raw`、`$derived.by`、`$effect.pre`、コンポーネント外の `$effect.root`、`$state.snapshot`、`$inspect` |
-| directives   | アクション（`use:clickOutside`）とアタッチメント（`{@attach}`、引数が変わると再実行）                                                                                                                                                     |
-| legacy       | runes を使わないレガシーモードのコンポーネント（`export let`、`$:`、`createEventDispatcher`、`<slot>` / 名前つき slot）を runes の親から使う                                                                                              |
-| library      | ライブラリの `Card` / `LibButton` / `Tabs` に、アプリのコンポーネントを children / snippet として渡す                                                                                                                                     |
-| problems     | わざと出しているコンパイラ警告（a11y 3 件）と、boundary の外で投げる実行時エラー                                                                                                                                                          |
-| stress       | 約 1000 行の描画と全行の一斉更新（Render プロファイラ用）                                                                                                                                                                                 |
+| (header)     | 3 mount roots: `App` in `#app`, `Widget` in `#widget`, and `Floating` (`document.body`), which a button `mount()`s and `unmount()`s. The custom element `<x-badge>`                                                                       |
+| blocks       | `{#if}` mount/unmount, keyed `{#each}` (add, remove, reorder, `animate:flip`, `transition:`), remount with `{#key}`, `{#await}` (resolve / reject), recursive `Tree`                                                                      |
+| elements     | `{#snippet}` / `{@render}`, `children`, snippets passed to children (with args), `<svelte:element>`, `<svelte:window>` / `<svelte:document>` / `<svelte:head>`, a dynamic component held in a variable (`App` switches sections)          |
+| boundaries   | `<svelte:boundary>`: a child that throws while rendering, a `failed` snippet, `reset`                                                                                                                                                     |
+| bindings     | `setContext` / `getContext` (nested), `$bindable` + `bind:`, `bind:this` (an element and a component's exported function), callback props                                                                                                 |
+| shared-state | A module `$state` object in `.svelte.ts`, a class with `$state` / `$derived` fields (created inside and outside components), `$state.raw`, `$derived.by`, `$effect.pre`, `$effect.root` outside components, `$state.snapshot`, `$inspect` |
+| directives   | Actions (`use:clickOutside`) and attachments (`{@attach}`, rerun when the argument changes)                                                                                                                                               |
+| legacy       | Legacy-mode components without runes (`export let`, `$:`, `createEventDispatcher`, `<slot>` / named slots) used from a runes parent                                                                                                       |
+| library      | App components passed as children / snippets to the library's `Card` / `LibButton` / `Tabs`                                                                                                                                               |
+| problems     | Deliberate compiler warnings (3 a11y) and a runtime error thrown outside a boundary                                                                                                                                                       |
+| stress       | About 1000 rows rendered and all rows updated at once (for the Render profiler)                                                                                                                                                           |
 
-`svelte-check` は `Badge.ce.svelte` に `options_missing_custom_element` も出します。`vite.config.ts` の `dynamicCompileOptions` で `customElement: true` を付けているのが svelte-check からは見えないためで、アプリの問題ではありません。
+`svelte-check` also reports `options_missing_custom_element` on `Badge.ce.svelte`. `dynamicCompileOptions` in `vite.config.ts` adds `customElement: true`, which svelte-check cannot see, so this is not an app problem.
 
-## 確認項目
+## Checklist
 
 - **Components**
-  - [ ] ルートが `App`・`Widget`・`Badge.ce`（カスタム要素）の 3 つ並び、「mount floating root」で `Floating` が増え、もう一度押すと消える
-  - [ ] library セクションで `Card` / `LibButton` / `Tabs` がツリーに出ず、中の `Ticker` / `Tree` が `Library` の直下に来る
-  - [ ] blocks の再帰 `Tree` が入れ子で出る。`{#key}` の再マウントや `{#if}` の切り替えでノードが入れ替わる
-  - [ ] 選択した `Slider` / `Consumer` の props・state が操作に追従する。レガシーの `LegacyCounter` も props と値が見える
-- **Svelte Inspector**（Alt+X / Option+X で要素を右クリック → Inspect）
-  - [ ] 2 つ目・3 つ目のルート（右下の Widget、左下の Floating）の要素から、そのインスタンスを選べる
-  - [ ] ライブラリの `Card` の中身を Inspect すると、最も近いアプリのコンポーネントが選ばれる。右クリックのメニューにライブラリの行は「Open」だけ
-  - [ ] 動的コンポーネント（セクション）と `<svelte:element>` の要素でも選択できる
-  - [ ] ラベルに要素のタグではなくインスタンス名（例 `<Slider>`）が出る
-  - [ ] 右クリックのメニューで外側のコンポーネントの行の Inspect を押すと、そのインスタンスが選ばれ、エディタは開かない。Open ではエディタが開く
+  - [ ] 3 roots: `App`, `Widget` and `Badge.ce` (custom element). "mount floating root" adds `Floating`, and pressing it again removes it
+  - [ ] In the library section, `Card` / `LibButton` / `Tabs` are not in the tree, and `Ticker` / `Tree` inside them sit directly under `Library`
+  - [ ] The recursive `Tree` in blocks nests. Remounting with `{#key}` and toggling `{#if}` swap nodes
+  - [ ] The props and state of the selected `Slider` / `Consumer` follow interaction. The legacy `LegacyCounter` shows props and values too
+- **Svelte Inspector** (Alt+X / Option+X, right-click an element → Inspect)
+  - [ ] Elements of the second and third roots (Widget at the bottom right, Floating at the bottom left) select that instance
+  - [ ] Inspecting inside the library `Card` selects the nearest app component. In the right-click menu, library rows only have "Open"
+  - [ ] Elements of dynamic components (sections) and `<svelte:element>` can be selected
+  - [ ] The label shows the instance name (e.g. `<Slider>`), not the element tag
+  - [ ] Pressing Inspect on an outer component's row in the right-click menu selects that instance without opening the editor. Open opens the editor
 - **Reactivity**
-  - [ ] 概要に `src/lib/state.svelte.ts`（モジュール状態）が出て、shared-state の操作で数が増える
-  - [ ] `SharedState` を選ぶと `Counter` クラスの `count` / `doubled` / `parity`、`$effect.pre` がつながって見える
-  - [ ] `$effect.root` を start すると、コンポーネント外の effect が `state.svelte.ts` 側に現れる
+  - [ ] The overview shows `src/lib/state.svelte.ts` (module state), and its count grows with the shared-state actions
+  - [ ] Selecting `SharedState` shows `count` / `doubled` / `parity` of the `Counter` class connected to `$effect.pre`
+  - [ ] Starting `$effect.root` adds the effect outside components under `state.svelte.ts`
 - **Render**
-  - [ ] stress で 1000 行を出し「update every row」を押すと `Row` の描画回数と時間が増える
-  - [ ] blocks の `Ticker`（毎秒）と `Floating`（毎秒）が継続して描画される
+  - [ ] Rendering 1000 rows in stress and pressing "update every row" raises the render count and time of `Row`
+  - [ ] `Ticker` in blocks (every second) and `Floating` (every second) keep rendering
 - **State timeline**
-  - [ ] ヘッダーの `shared.clicks`、`Counter.count`、`$state.raw` の差し替え、レガシーの `count` の変化が記録される
+  - [ ] Changes to `shared.clicks` in the header, `Counter.count`, the `$state.raw` replacement and the legacy `count` are recorded
 - **Problems**
-  - [ ] `src/sections/Problems.svelte` の a11y 警告 3 件が出る
-  - [ ] problems の「throw a runtime error」と boundaries の「throw」（boundary が捕捉）が実行時エラーとしてどう扱われるか
+  - [ ] The 3 a11y warnings of `src/sections/Problems.svelte` show
+  - [ ] How "throw a runtime error" in problems and "throw" in boundaries (caught by the boundary) are treated as runtime errors
 - **Modules**
-  - [ ] `src/main.ts` → `App.svelte` → 各セクション、`src/lib/roots.ts` → `Floating.svelte`、`examples-ui-lib` の依存が見える
+  - [ ] `src/main.ts` → `App.svelte` → each section, `src/lib/roots.ts` → `Floating.svelte`, and the `examples-ui-lib` dependency show
 
-ドックモード（`pnpm examples svelte-features --dock`）でも同じ項目を確認します。
+Check the same items in dock mode (`pnpm examples svelte-features --dock`).

@@ -1,53 +1,53 @@
-# kit-routing — ルーティングとデータ読み込みの全パターン
+# kit-routing: every routing and data loading pattern
 
-SvelteKit 3（SSR）のルーティング・`load`・フォームアクション・エンドポイント・hooks を一通り踏むアプリです。**Routes / Load functions / API / Components / Problems** パネルの確認に使います。
+A SvelteKit 3 (SSR) app that walks through routing, `load`, form actions, endpoints and hooks. Use it to check the **Routes / Load functions / API / Components / Problems** panels.
 
 ```bash
-pnpm examples kit-routing        # http://localhost:5206/ （リポジトリのルートから）
-pnpm examples kit-routing --dock # Vite DevTools のドック内で
+pnpm examples kit-routing        # http://localhost:5206/ (from the repository root)
+pnpm examples kit-routing --dock # inside the Vite DevTools dock
 ```
 
-## ルート一覧
+## Routes
 
-| URL                              | ルート ID / ファイル                                                      | 確認ポイント                                                                                                                       |
-| -------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `/`                              | `+layout.server.ts`（ルート）                                             | すべてのページで最初に走るサーバー load                                                                                            |
-| `/about`, `/contact`, `/pricing` | `(marketing)/…` + `(marketing)/+layout.svelte`                            | グループは URL に出ない。`/contact` は default action のみ。`/pricing` は `prerender = true`                                       |
-| `/landing`                       | `(marketing)/landing/+page@.svelte`                                       | レイアウトリセット（marketing レイアウトを飛ばす）                                                                                 |
-| `/legacy-about`                  | `src/hooks.ts` の `reroute`                                               | URL はそのまま `/about` が描画される                                                                                               |
-| `/dashboard`                     | `(app)/+layout.server.ts` → `+layout.ts` → `+page.server.ts` → `+page.ts` | 4 種類の load が 1 本のチェーンに。`await parent()` による順次実行、サーバー load 同士は並列                                       |
-| `/dashboard`                     | 同上                                                                      | ストリーミング（未 await の Promise）、`depends('app:clock')` + `invalidate` / `refreshAll()`、`transport` で `Money` クラスを転送 |
-| `/dashboard/fail`                | `(app)/dashboard/+error.svelte`                                           | `error(503)` → ネストした `+error.svelte`（(app) レイアウトは残る）                                                                |
-| `/settings`                      | `(app)/settings/+page.server.ts`                                          | 名前付きアクション `?/profile`・`?/newsletter`、`fail()`、`use:enhance`、`snapshot()`                                              |
-| `/admin/reports`                 | `(app)/admin/reports/+layout@(app).svelte`                                | レイアウトリセット（admin レイアウトを飛ばし (app) へ）                                                                            |
-| `/blog`                          | `blog/+page.js`                                                           | `.js` の load ファイル                                                                                                             |
-| `/blog/[slug]`                   | `blog/[slug]/+page.server.ts`                                             | 通常の param、存在しない slug は 404                                                                                               |
-| `/lang`, `/lang/ja`              | `lang/[[lang]]`                                                           | 省略可能な param                                                                                                                   |
-| `/docs/a/b/c`                    | `docs/[...path]`                                                          | rest param。load は `export { load }` 形式 → **Load functions に出ないのが正しい**                                                 |
-| `/items/2`                       | `items/[id=integer]` + `src/params.ts`                                    | マッチャー（SvelteKit 3 の `defineParams`）。`/items/abc` はどのルートにも一致せず 404                                             |
-| `/items/2`                       | 同上                                                                      | `export const ssr = true, load = …`（他の export と同じ文の load）も計測される                                                     |
-| `/files/report.pdf`              | `files/[name].[ext]`                                                      | 1 セグメントに 2 つの param                                                                                                        |
-| `/.well-known`                   | `[x+2e]well-known/+server.ts`                                             | エスケープされたセグメント（`.`）                                                                                                  |
-| `/photos` → 写真クリック         | `photos/+page.svelte`, `photos/[id=integer]`                              | shallow routing（`preloadData` + `goto(…, { shallow: true })`）でモーダル表示                                                      |
-| `/static-only`                   | `static-only/+page.ts`                                                    | `csr = false`：JS なし。Svelte コンポーネントはランタイムに現れない                                                                |
-| `/slash`                         | `slash/+page.ts`                                                          | `trailingSlash = 'always'`（`/slash/` へ 308）                                                                                     |
-| `/old-redirect`                  | `old-redirect/+page.server.ts`                                            | load 内の `redirect(307)` → 計測されない                                                                                           |
-| `/broken`, `/crash`              | `broken/+page.server.ts`, `crash/+page.ts`                                | `error(418)`（想定内エラー）と予期しない throw（`handleError` 経由、サーバー／クライアント両方）                                   |
-| `/api-console`                   | `api/items`, `api/text`, `api/stream`                                     | GET/POST/PUT/PATCH/DELETE/OPTIONS + `fallback`（PROPFIND）、JSON・テキスト・ストリーミング応答                                     |
+| URL                              | Route ID / file                                                           | What to check                                                                                                                       |
+| -------------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                              | `+layout.server.ts` (root)                                                | The server load that runs first on every page                                                                                       |
+| `/about`, `/contact`, `/pricing` | `(marketing)/…` + `(marketing)/+layout.svelte`                            | The group is not in the URL. `/contact` has only a default action. `/pricing` is `prerender = true`                                 |
+| `/landing`                       | `(marketing)/landing/+page@.svelte`                                       | Layout reset (skips the marketing layout)                                                                                           |
+| `/legacy-about`                  | `reroute` in `src/hooks.ts`                                               | The URL stays, and `/about` renders                                                                                                 |
+| `/dashboard`                     | `(app)/+layout.server.ts` → `+layout.ts` → `+page.server.ts` → `+page.ts` | Four kinds of load in one chain. `await parent()` runs them in order; server loads run in parallel                                  |
+| `/dashboard`                     | Same                                                                      | Streaming (an un-awaited Promise), `depends('app:clock')` + `invalidate` / `refreshAll()`, a `Money` class sent through `transport` |
+| `/dashboard/fail`                | `(app)/dashboard/+error.svelte`                                           | `error(503)` → nested `+error.svelte` (the (app) layout stays)                                                                      |
+| `/settings`                      | `(app)/settings/+page.server.ts`                                          | Named actions `?/profile` and `?/newsletter`, `fail()`, `use:enhance`, `snapshot()`                                                 |
+| `/admin/reports`                 | `(app)/admin/reports/+layout@(app).svelte`                                | Layout reset (skips the admin layout, back to (app))                                                                                |
+| `/blog`                          | `blog/+page.js`                                                           | A `.js` load file                                                                                                                   |
+| `/blog/[slug]`                   | `blog/[slug]/+page.server.ts`                                             | A normal param; an unknown slug is a 404                                                                                            |
+| `/lang`, `/lang/ja`              | `lang/[[lang]]`                                                           | Optional param                                                                                                                      |
+| `/docs/a/b/c`                    | `docs/[...path]`                                                          | Rest param. The load uses `export { load }` → **not showing in Load functions is correct**                                          |
+| `/items/2`                       | `items/[id=integer]` + `src/params.ts`                                    | Matcher (SvelteKit 3 `defineParams`). `/items/abc` matches no route and is a 404                                                    |
+| `/items/2`                       | Same                                                                      | `export const ssr = true, load = …` (load in the same statement as other exports) is measured too                                   |
+| `/files/report.pdf`              | `files/[name].[ext]`                                                      | Two params in one segment                                                                                                           |
+| `/.well-known`                   | `[x+2e]well-known/+server.ts`                                             | Escaped segment (`.`)                                                                                                               |
+| `/photos` → click a photo        | `photos/+page.svelte`, `photos/[id=integer]`                              | A modal through shallow routing (`preloadData` + `goto(…, { shallow: true })`)                                                      |
+| `/static-only`                   | `static-only/+page.ts`                                                    | `csr = false`: no JS, so no Svelte components show up in the runtime                                                                |
+| `/slash`                         | `slash/+page.ts`                                                          | `trailingSlash = 'always'` (308 to `/slash/`)                                                                                       |
+| `/old-redirect`                  | `old-redirect/+page.server.ts`                                            | `redirect(307)` inside load → not measured                                                                                          |
+| `/broken`, `/crash`              | `broken/+page.server.ts`, `crash/+page.ts`                                | `error(418)` (expected error) and an unexpected throw (through `handleError`, on server and client)                                 |
+| `/api-console`                   | `api/items`, `api/text`, `api/stream`                                     | GET/POST/PUT/PATCH/DELETE/OPTIONS + `fallback` (PROPFIND), JSON, text and streaming responses                                       |
 
-hooks: `hooks.server.ts`（`sequence` した `handle`、`handleFetch` で `/api/*` にヘッダ付与、`handleError`）、`hooks.client.ts`（`handleError`）、`hooks.ts`（`reroute`、`transport`）。
+Hooks: `hooks.server.ts` (`handle` built with `sequence`, `handleFetch` adding a header to `/api/*`, `handleError`), `hooks.client.ts` (`handleError`), `hooks.ts` (`reroute`, `transport`).
 
-## 確認項目
+## Checklist
 
-- [ ] **Routes**: 上表のルートがすべて出る。`(app)` / `(marketing)` が URL に含まれない、`/lang/:lang?`・`/docs/*path`・`/items/:id`（matcher `integer`）・`/files/:name.:ext`・`/.well-known` が正しい。`+page@.svelte` / `+layout@(app).svelte` のルートが消えていない
-- [ ] **Load functions**: `/dashboard` をフルリロードすると 5 つの load（ルートの `+layout.server.ts`、`(app)` と `dashboard` の server ×2 が並列、universal ×2 が親待ちで順次）が並ぶ
-- [ ] **Load functions**: 別ページから `/dashboard` へクライアント遷移すると、server load だけが記録される（ブラウザで走る universal load の計測は main 時点のプラグインには無い。#147 で入れば universal も記録されるはず）
-- [ ] **Load functions**: `/docs/…`（`export { load }`）・`/old-redirect`・`/broken`・`/crash` の load は記録されない。`/blog`（`.js`）と `/items/2` は記録される
-- [ ] **Load functions**: 「invalidate('app:clock')」で `+page.server.ts` が再実行されて記録が増える
-- [ ] **API**: `api/items` の全メソッド、`api/text`、`api/stream`、`/.well-known` が一覧に出て実行できる
-- [ ] **Components**: `/admin/reports` で admin レイアウトが木に含まれない。`/photos` のモーダルで `photos/[id=integer]/+page.svelte` が `photos/+page.svelte` の子として出る
-- [ ] **Components**: `/static-only` をフルロードすると木が空（JS なし）。他ページへ戻ると復帰する
-- [ ] **State timeline / Reactivity**: `/settings` の入力、ナビゲーションログ（ルートレイアウトの `log`）、`/pricing` の yearly 切替
-- [ ] **Problems**: `/crash` の load のエラーは SvelteKit が捕捉して `+error.svelte` を出すため、Problems には出ない（`window` の `error` にならないので、出ないのが正しい）
-- [ ] **Social preview**: `/blog/hello-world` の `og:title` が反映される
-- [ ] `--dock` 時、SSR HTML に `/__devtools/embedded.js` が注入され、ドックの Svelte タブが開く
+- [ ] **Routes**: every route in the table shows. `(app)` / `(marketing)` are not in the URL, and `/lang/:lang?`, `/docs/*path`, `/items/:id` (matcher `integer`), `/files/:name.:ext` and `/.well-known` are right. The `+page@.svelte` / `+layout@(app).svelte` routes are not missing
+- [ ] **Load functions**: a full reload of `/dashboard` lists 5 loads from the server (the root `+layout.server.ts`, the two server loads of `(app)` and `dashboard` in parallel, and the two universal loads in order, each waiting for its parent), then the 2 universal loads again from the browser during hydration
+- [ ] **Load functions**: client navigation to `/dashboard` from another page records the server loads and the universal loads that run in the browser
+- [ ] **Load functions**: the loads of `/docs/…` (`export { load }`), `/old-redirect`, `/broken` and `/crash` are not recorded. `/blog` (`.js`) and `/items/2` are
+- [ ] **Load functions**: "invalidate('app:clock')" reruns `+page.server.ts` and adds an entry
+- [ ] **API**: every method of `api/items`, plus `api/text`, `api/stream` and `/.well-known`, is listed and can be called
+- [ ] **Components**: on `/admin/reports` the admin layout is not in the tree. In the `/photos` modal, `photos/[id=integer]/+page.svelte` shows as a child of `photos/+page.svelte`
+- [ ] **Components**: a full load of `/static-only` gives an empty tree (no JS). Going back to another page restores it
+- [ ] **State timeline / Reactivity**: the inputs on `/settings`, the navigation log (`log` in the root layout), the yearly toggle on `/pricing`
+- [ ] **Problems**: SvelteKit catches the load error on `/crash` and shows `+error.svelte`, so it is not in Problems (it never becomes a `window` `error`, so this is correct)
+- [ ] **Social preview**: the `og:title` of `/blog/hello-world` is picked up
+- [ ] With `--dock`, `/__devtools/embedded.js` is injected into the SSR HTML and the dock's Svelte tab opens

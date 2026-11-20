@@ -1,18 +1,18 @@
-# kit-hash — ハッシュルーター (`router.type: 'hash'`)
+# kit-hash: hash router (`router.type: 'hash'`)
 
-`router: { type: 'hash' }` の SvelteKit アプリです。URL は `/#/notes/hash-router` の形になり、サーバーは常に `/` しか受け取りません。ハッシュルーターではページオプション（`ssr` など）を書くとエラー (`router_hash_page_options`) になるため、ルートには何も指定していません。アプリは構造上クライアント専用で、load はすべてブラウザで動く universal load です。ビルドは `adapter-static`（fallback なし。`build/index.html` がシェル）。
+A SvelteKit app with `router: { type: 'hash' }`. URLs look like `/#/notes/hash-router`, and the server only ever receives `/`. With the hash router, page options (`ssr` and so on) are an error (`router_hash_page_options`), so the routes set none. By design the app is client only, and every load is a universal load that runs in the browser. It builds with `adapter-static` (no fallback; `build/index.html` is the shell).
 
-| ルート (`#/…`)   | ポイント                                                                        |
-| ---------------- | ------------------------------------------------------------------------------- |
-| `#/`             | `+page.ts`、クリックで増える `$state`                                           |
-| `#/notes`        | ネストしたレイアウト（`notes/+layout.ts` で一覧を load、絞り込みの `$derived`） |
-| `#/notes/[slug]` | 動的パラメータ、`await parent()`、存在しない slug は `error(404)`               |
-| `#/about`        | `goto('#/notes/…')` によるプログラム遷移                                        |
+| Route (`#/…`)    | What it shows                                                          |
+| ---------------- | ---------------------------------------------------------------------- |
+| `#/`             | `+page.ts`, a `$state` that grows on click                             |
+| `#/notes`        | Nested layout (`notes/+layout.ts` loads the list, a `$derived` filter) |
+| `#/notes/[slug]` | Dynamic param, `await parent()`, an unknown slug is `error(404)`       |
+| `#/about`        | Programmatic navigation with `goto('#/notes/…')`                       |
 
-## 確認項目
+## Checklist
 
-- [ ] Routes: ファイルベースのルート (`/`, `/about`, `/notes`, `/notes/:slug`) がハッシュ URL とは無関係に一覧される
-- [ ] Load functions（#147 以降。main では空）: すべて `universal`。ルート id (`/notes/[slug]` など) で記録され、`#/notes/a` → `#/notes/b` の遷移で件数が増える
-- [ ] Components: `#/notes/…` では `+layout` > `+layout`(notes) > `+page` の 3 段。ノート間の遷移で notes レイアウトは再マウントされない
-- [ ] Svelte Inspector で要素を右クリックして Inspect を押すとコンポーネントが選ばれる（URL がハッシュでも問題ない）
-- [ ] ドックモード (`SVELTE_DEVTOOLS_DOCK=1`) でもドックが表示される
+- [ ] Routes: the file-based routes (`/`, `/about`, `/notes`, `/notes/:slug`) are listed, independent of the hash URLs
+- [ ] Load functions: every load is `universal`, recorded under its route ID (`/notes/[slug]` and so on). Navigating `#/notes/a` → `#/notes/b` adds entries
+- [ ] Components: `#/notes/…` shows three levels, `+layout` > `+layout` (notes) > `+page`. Moving between notes does not remount the notes layout
+- [ ] Svelte Inspector: right-click an element and press Inspect to select its component (hash URLs are fine)
+- [ ] Dock mode (`SVELTE_DEVTOOLS_DOCK=1`) shows the dock too

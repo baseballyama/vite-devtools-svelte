@@ -12,7 +12,7 @@ export interface McpExample {
 }
 
 export const MCP_EXAMPLES_SOURCE =
-  'Recorded by scripts/screenshots/mcp-examples.mjs in CI run 37204003993 (linux x64, Node v22.23.3) at commit 533928b (the PR #85 merge ref), with the 0.4.0 code before the version bump (package version 0.3.0 at capture), on examples/sample-app, a synthetic demo app. Absolute paths are shown as <project> / <repo>, and arrays longer than 4 are cut where marked; no value was changed, except that the get_reactive_summary answer was converted by hand to the current response shape (the time window replaced by computedAt and lastActiveAt, which are illustrative).';
+  'Recorded by scripts/screenshots/mcp-examples.mjs in CI run 37204003993 (linux x64, Node v22.23.3) at commit 533928b (the PR #85 merge ref), with the 0.4.0 code before the version bump (package version 0.3.0 at capture), on examples/sample-app (now examples/kit-shop), a synthetic demo app. Absolute paths are shown as <project> / <repo>, and arrays longer than 4 are cut where marked; no value was changed, except that the get_reactive_summary answer was converted by hand to the current response shape (the time window replaced by computedAt and lastActiveAt, which are illustrative).';
 
 export const MCP_EXAMPLES: McpExample[] = [
   {

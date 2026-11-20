@@ -368,8 +368,9 @@ and what changed when I edited the tax rate.`;
           <h2>Walkthrough: why did it update?</h2>
         </header>
         <p>
-          Real calls against the example app (<code>examples/sample-app</code>, a synthetic shop)
-          with one item in the cart. Absolute paths are replaced by
+          Real calls against the example app (<code>examples/sample-app</code>, now
+          <code>examples/kit-shop</code>, a synthetic shop) with one item in the cart. Absolute
+          paths are replaced by
           <code>&lt;project&gt;</code>; long answers are shortened where marked.
         </p>
         <p class="provenance">{MCP_EXAMPLES_SOURCE}</p>
@@ -487,7 +488,8 @@ and what changed when I edited the tax rate.`;
         <p class="provenance">
           Captured by <code>scripts/screenshots/reactivity.mjs</code> in CI run 37193781813 (Linux,
           headless Chromium, 1440×900) on the PR merge commit 623e27a, whose client sources are
-          those of a42a9e4, on <code>examples/sample-app</code> (a synthetic demo app) with the real runtime.
+          those of a42a9e4, on <code>examples/sample-app</code> (now <code>examples/kit-shop</code>,
+          a synthetic demo app) with the real runtime.
         </p>
       </section>
 
