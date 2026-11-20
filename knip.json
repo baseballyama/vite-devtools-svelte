@@ -25,8 +25,7 @@
       "project": ["src/**/*.{ts,svelte}", "dev/**/*.ts", "test/**/*.ts"]
     },
     "site": {
-      "entry": ["scripts/*.mjs"],
-      "ignoreDependencies": ["@vitejs/devtools"]
+      "entry": ["scripts/*.mjs"]
     },
     "examples/sample-app": {
       "entry": ["vite.standalone.config.ts"]

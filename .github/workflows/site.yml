@@ -5,7 +5,8 @@ on:
     branches: [main]
     paths:
       - 'site/**'
-      - 'docs/images/**'
+      # the site shows the package version (site/vite.config.ts)
+      - 'packages/vite-devtools-svelte/package.json'
       - 'pnpm-workspace.yaml'
       - '.github/actions/setup/**'
       - '.github/workflows/site.yml'
