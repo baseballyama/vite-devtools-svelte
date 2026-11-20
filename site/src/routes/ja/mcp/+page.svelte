@@ -268,7 +268,8 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
             大きなアプリでも回答を小さく保つ順序です。各ステップの実際の回答は<a
               href={resolve('/mcp#walkthrough')}
               lang="en">英語版の Walkthrough</a
-            >にあります（合成データのサンプルアプリ <code>examples/sample-app</code> で CI が記録したもの）。
+            >にあります（合成データのサンプルアプリ <code>examples/sample-app</code>（現
+            <code>examples/kit-shop</code>）で CI が記録したもの）。
           </p>
           <ol class="limits">
             {#each flow as step (step.tool)}

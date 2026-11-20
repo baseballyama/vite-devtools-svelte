@@ -1,29 +1,29 @@
-# kit-config — 既定値でない SvelteKit 設定
+# kit-config: non-default SvelteKit config
 
-DevTools が「既定の SvelteKit」を前提にしていないかを確かめるためのアプリ。`vite.config.ts` で次を変えています。
+Checks that the DevTools do not assume a default SvelteKit setup. `vite.config.ts` changes:
 
-| 設定                             | 値               | 影響しうる DevTools 機能                          |
-| -------------------------------- | ---------------- | ------------------------------------------------- |
-| `paths.base`                     | `/base`          | Assets の公開 URL、Social preview、API、dock 注入 |
-| `appDir`                         | `_custom_app`    | クライアントのアセット URL                        |
-| `files.routes`（非推奨だが有効） | `src/app-routes` | Routes 解析、Load functions のルート ID           |
-| `embedded`                       | `true`           | イベントがアプリの親要素で処理される              |
-| `trailingSlash`（ルート layout） | `'always'`       | ルートの URL・Social preview                      |
+| Setting                               | Value            | DevTools features it can affect                            |
+| ------------------------------------- | ---------------- | ---------------------------------------------------------- |
+| `paths.base`                          | `/base`          | Public URLs in Assets, Social preview, API, dock injection |
+| `appDir`                              | `_custom_app`    | Client asset URLs                                          |
+| `files.routes` (deprecated but works) | `src/app-routes` | Routes analysis, route IDs in Load functions               |
+| `embedded`                            | `true`           | Events are handled on the app's parent element             |
+| `trailingSlash` (root layout)         | `'always'`       | Route URLs, Social preview                                 |
 
 ```bash
-pnpm examples kit-config            # http://localhost:5211/base/  （DevTools は http://localhost:5211/.svelte-devtools/）
+pnpm examples kit-config            # http://localhost:5211/base/  (DevTools at http://localhost:5211/.svelte-devtools/)
 ```
 
-ルート: `/base/`（server load + `POST` で endpoint 呼び出し）、`/base/about/`（universal load）、`/base/items/[id]/`（server load、404 あり）、`/base/api/echo`（GET / POST の `+server.ts`）。
+Routes: `/base/` (server load, plus a `POST` to an endpoint), `/base/about/` (universal load), `/base/items/[id]/` (server load, with a 404), `/base/api/echo` (GET / POST `+server.ts`).
 
-## 確認項目（2026-11-17 時点の結果）
+## Checklist (results as of 2026-11-17)
 
-- [x] アプリが `/base/` で動き、クライアント遷移・endpoint 呼び出し・404 が正しい
-- [x] DevTools は base に関係なく `/.svelte-devtools/` で開く（`/base/.svelte-devtools/` は 404）
-- [x] dock モードでも `/__devtools/embedded.js` が注入されドックが出る
-- [x] **Assets**: `static/logo.svg` の公開 URL が `/base/logo.svg` と表示され、プレビューも出る
-- [x] **API**: `http://localhost:5211/base/api/echo` を直接入力すれば呼べる
-- [x] **Routes**: `files.routes` の `src/app-routes` 配下のルートが出る
-- [ ] **Load functions**: 記録はされるが、すべてのルート ID が `/` になる（`app-routes` 配下のディレクトリをルートとして扱えていない）→ **既知のギャップ**
-- [ ] **API**: エンドポイント一覧が空（Routes に依存）
-- [ ] **Social preview**: ルート一覧が空。`http://localhost:5211/` は `/base` へのリダイレクトで失敗、`http://localhost:5211/base/` を直接入力すれば取れる。`og:image` が相対 URL（`./logo.svg`、`paths.relative` の既定）でも警告されない
+- [x] The app runs at `/base/`, and client navigation, the endpoint call and the 404 work
+- [x] The DevTools open at `/.svelte-devtools/` whatever the base (`/base/.svelte-devtools/` is a 404)
+- [x] In dock mode, `/__devtools/embedded.js` is injected and the dock shows
+- [x] **Assets**: the public URL of `static/logo.svg` shows as `/base/logo.svg`, and the preview shows
+- [x] **API**: `http://localhost:5211/base/api/echo` can be called when typed in directly
+- [x] **Routes**: the routes under `src/app-routes` (from `files.routes`) show
+- [ ] **Load functions**: loads are recorded, but every route ID is `/` (directories under `app-routes` are not treated as routes). **Known gap**
+- [ ] **API**: the endpoint list is empty (it depends on Routes)
+- [ ] **Social preview**: the route list is empty. `http://localhost:5211/` fails on the redirect to `/base`; typing `http://localhost:5211/base/` works. A relative `og:image` URL (`./logo.svg`, the `paths.relative` default) gives no warning

@@ -1,24 +1,24 @@
-# kit-spa — `ssr = false` の SvelteKit SPA
+# kit-spa: SvelteKit SPA with `ssr = false`
 
-ルート `+layout.ts` で `export const ssr = false` を指定した SPA です（`adapter-static` の `fallback: '200.html'`）。サーバーで何もレンダリングしないため、**すべての load は universal load としてブラウザで実行**されます。ブラウザで走る load を DevTools が計測できるかを確かめるためのアプリです（main 時点のプラグインはサーバーで走った load しか計測しない（ブラウザ側の計測経路は #147 で入る）ため、main ではこのアプリの Load functions は空になる）。データは `static/data/*.json` を load の `fetch` で取得します。
+An SPA with `export const ssr = false` in the root `+layout.ts` (`adapter-static` with `fallback: '200.html'`). Nothing renders on the server, so **every load runs in the browser as a universal load**. It checks that the DevTools can measure loads that run in the browser. Data comes from `static/data/*.json` through the load's `fetch`.
 
-| ルート        | ポイント                                                                                  |
-| ------------- | ----------------------------------------------------------------------------------------- |
-| `/`           | `+layout.ts`（`depends('app:site')`）→ `+page.ts` が `await parent()` してから fetch      |
-| `/users`      | `?role=` の search param で load が再実行、`goto()` で絞り込み、お気に入り（★）           |
-| `/users/[id]` | 動的パラメータ。存在しない id (`/users/999`) は `error(404)` → `+error.svelte`            |
-| `/live`       | `depends('app:clock')` + `invalidate()` / `refreshAll()`、1 秒ごとの自動 invalidate       |
-| `/settings`   | localStorage に永続化する `.svelte.ts` モジュールの `$state`（`src/lib/prefs.svelte.ts`） |
+| Route         | What it shows                                                                                  |
+| ------------- | ---------------------------------------------------------------------------------------------- |
+| `/`           | `+layout.ts` (`depends('app:site')`) → `+page.ts` fetches after `await parent()`               |
+| `/users`      | The load reruns on the `?role=` search param, filtering with `goto()`, favorites (★)           |
+| `/users/[id]` | Dynamic param. An unknown id (`/users/999`) is `error(404)` → `+error.svelte`                  |
+| `/live`       | `depends('app:clock')` + `invalidate()` / `refreshAll()`, an automatic invalidate every second |
+| `/settings`   | `$state` in a `.svelte.ts` module persisted to localStorage (`src/lib/prefs.svelte.ts`)        |
 
-レイアウトは `$app/state` の `page` / `navigating`、`beforeNavigate` / `afterNavigate` のログを表示します。
+The layout shows `page` / `navigating` from `$app/state` and a log of `beforeNavigate` / `afterNavigate`.
 
-## 確認項目
+## Checklist
 
-- [ ] Load functions（#147 以降）: どの load も `universal` として記録される（`server` は 0 件）。main では空。`/` では layout → page の順の waterfall
-- [ ] `/live` で invalidate するたびに `/live` の load 件数が増える。`refreshAll()` では layout の load も増える
-- [ ] `/users/999` の 404（load が throw）は記録されず、エラーページが表示される
-- [ ] Routes: `/`, `/live`, `/settings`, `/users`, `/users/:id` が universal load 付きで並ぶ
-- [ ] Components: クライアント遷移のたびに `+page` が差し替わり、`+layout` は残る
-- [ ] Reactivity / State timeline: `prefs`（モジュールの state）が、コンポーネントではなくモジュール配下に出る。設定変更・★で変化が記録される
-- [ ] ページをリロードしても DevTools が新しいページロードとして追従する
-- [ ] ドックモード (`SVELTE_DEVTOOLS_DOCK=1`) でもドックが表示される
+- [ ] Load functions: every load is recorded as `universal` (0 `server`). `/` shows the layout → page waterfall
+- [ ] On `/live`, each invalidate adds an entry for the `/live` load. `refreshAll()` adds one for the layout load too
+- [ ] The 404 on `/users/999` (the load throws) is not recorded, and the error page shows
+- [ ] Routes: `/`, `/live`, `/settings`, `/users`, `/users/:id` are listed with universal loads
+- [ ] Components: each client navigation swaps `+page` and keeps `+layout`
+- [ ] Reactivity / State timeline: `prefs` (module state) shows under the module, not under a component. Changing settings and ★ record changes
+- [ ] After a page reload, the DevTools follow it as a new page load
+- [ ] Dock mode (`SVELTE_DEVTOOLS_DOCK=1`) shows the dock too

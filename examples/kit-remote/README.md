@@ -1,33 +1,31 @@
-# kit-remote — リモート関数 + Svelte async
+# kit-remote: remote functions + Svelte async
 
-SvelteKit の **remote functions**（`experimental.remoteFunctions`）と Svelte の **async**（`compilerOptions.experimental.async`）を使うアプリ。
-`await` をマークアップ / `$derived` に直接書くコンポーネント、`<svelte:boundary>` の `pending` / `failed`、楽観的更新など、
-コンポーネントツリーとリアクティビティの見え方が通常のアプリと変わる箇所を集めています。
+An app using SvelteKit **remote functions** (`experimental.remoteFunctions`) and Svelte **async** (`compilerOptions.experimental.async`). It collects the places where the component tree and reactivity look different from a usual app: components with `await` directly in markup or `$derived`, `pending` / `failed` in `<svelte:boundary>`, optimistic updates.
 
 ```bash
 pnpm examples kit-remote            # http://localhost:5207/
 ```
 
-| ルート         | 使っている機能                                                                                                                               |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/`            | `query`（引数なし）、`form`（`invalid()` によるサーバー検証・`.enhance`・`pending`）、`command` + `withOverride`（楽観的更新）、`.refresh()` |
-| `/todo/[id]`   | `$derived(await Promise.all([...]))`、パラメータ変更での再取得、`query.batch` との併用                                                       |
-| `/batch`       | `query.batch`（行ごとの `getUser(id)` が 1 リクエストにまとまる）、行ごとの `<svelte:boundary>`                                              |
-| `/errors`      | 例外を投げる query → `failed` スニペット、`error(404)` → `reset()`、`.error` / `.loading` の直接参照                                         |
-| `/live`        | `query.live`（ストリーム購読、`reconnect()`）、`getRequestEvent()`                                                                           |
-| `/classic`     | 従来の `+page.server.ts` の `load` とリモート `query` の並置                                                                                 |
-| `/prerendered` | `prerender()` 関数                                                                                                                           |
+| Route          | Features used                                                                                                                                       |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`            | `query` (no args), `form` (server validation with `invalid()`, `.enhance`, `pending`), `command` + `withOverride` (optimistic update), `.refresh()` |
+| `/todo/[id]`   | `$derived(await Promise.all([...]))`, refetch on param change, together with `query.batch`                                                          |
+| `/batch`       | `query.batch` (each row's `getUser(id)` is merged into one request), a `<svelte:boundary>` per row                                                  |
+| `/errors`      | A query that throws → `failed` snippet, `error(404)` → `reset()`, reading `.error` / `.loading` directly                                            |
+| `/live`        | `query.live` (stream subscription, `reconnect()`), `getRequestEvent()`                                                                              |
+| `/classic`     | A classic `+page.server.ts` `load` next to a remote `query`                                                                                         |
+| `/prerendered` | The `prerender()` function                                                                                                                          |
 
-リモート関数は `src/lib/todos.remote.ts`、データは `src/lib/server/db.ts`（インメモリ）。
+Remote functions live in `src/lib/todos.remote.ts`, data in `src/lib/server/db.ts` (in memory).
 
-## 確認項目
+## Checklist
 
-- [ ] **Components**: `+layout` › `+page` › `TodoItem` ×N が出る。追加・削除でツリーが増減する。`/batch` のスライダーで `UserRow` が増減する
-- [ ] **Components / Reactivity**: `TodoItem` の `flips`、`/` の `all`・`doneCount`（async derived）が値付きで見える。チェックボックス操作で更新される
-- [ ] **State timeline**: トグル・追加・`/batch` のスライダーで `$state` の変化が記録される
-- [ ] **Render**: 楽観的更新（`withOverride`）とサーバー確定時の 2 回の再描画が計測される
-- [ ] **Load functions**: `/classic` の `+page.server.ts` が記録される（リモート関数の呼び出しは load ではないので**出ない**のが現状の仕様）
-- [ ] **Routes**: 7 ルートが出る（`*.remote.ts` が生やす内部エンドポイントは出ない）
-- [ ] **Problems**: `/errors` の失敗が `failed` スニペットに収まり、未処理エラーとして溢れない
-- [ ] **Svelte Inspector**（Alt+X で要素を右クリック → Inspect）: `await` で遅れて描画された要素からも正しいコンポーネントが選択される
-- [ ] dock モード（`pnpm examples --dock kit-remote`）でも同じ
+- [ ] **Components**: `+layout` › `+page` › `TodoItem` ×N shows. Adding and removing changes the tree. The slider on `/batch` adds and removes `UserRow`
+- [ ] **Components / Reactivity**: `flips` in `TodoItem`, and `all` and `doneCount` (async derived) on `/`, show with values and update when a checkbox changes
+- [ ] **State timeline**: toggles, additions and the `/batch` slider record `$state` changes
+- [ ] **Render**: the optimistic update (`withOverride`) and the server confirmation are measured as two re-renders
+- [ ] **Load functions**: the `+page.server.ts` on `/classic` is recorded (remote function calls are not loads, so for now they do **not** show)
+- [ ] **Routes**: 7 routes show (the internal endpoints that `*.remote.ts` adds do not)
+- [ ] **Problems**: the failures on `/errors` stay inside the `failed` snippet and do not spill out as unhandled errors
+- [ ] **Svelte Inspector** (Alt+X, right-click an element → Inspect): elements rendered late because of `await` still select the right component
+- [ ] The same in dock mode (`pnpm examples --dock kit-remote`)

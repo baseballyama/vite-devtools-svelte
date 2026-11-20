@@ -32,7 +32,7 @@
     "site": {
       "entry": ["scripts/*.mjs"]
     },
-    "examples/sample-app": {
+    "examples/kit-shop": {
       "entry": ["vite.standalone.config.ts"]
     },
     "examples/svelte-middleware": {

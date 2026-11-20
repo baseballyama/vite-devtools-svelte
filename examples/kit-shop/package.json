@@ -1,5 +1,5 @@
 {
-  "name": "sample-app",
+  "name": "kit-shop",
   "version": "0.0.1",
   "private": true,
   "description": "SvelteKit SSR demo shop: server loads, endpoints, heavy lists, FPS canvas (screenshots, MCP examples)",

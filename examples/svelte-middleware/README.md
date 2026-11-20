@@ -1,31 +1,31 @@
-# svelte-middleware — Vite middleware mode + SSR + hydrate
+# svelte-middleware: Vite middleware mode + SSR + hydrate
 
-SvelteKit を使わない素の Svelte を、自前の Node サーバー (`server.js`、`node:http` のみ) から配信するアプリです。Vite は `server.middlewareMode: true` で起動するため Vite 自身の `httpServer` が無く、DevTools は **SSE トランスポート**で通信します（HMR の WebSocket は `hmr.server` で自前サーバーに相乗り）。ページはリクエストごとに `svelte/server` の `render()` でサーバーレンダリングし、ブラウザで `hydrate()` します。
+Plain Svelte without SvelteKit, served by its own Node server (`server.js`, only `node:http`). Vite starts with `server.middlewareMode: true`, so it has no `httpServer` of its own and the DevTools talk over the **SSE transport** (the HMR WebSocket rides on the app's server through `hmr.server`). Each request is server rendered with `render()` from `svelte/server` and hydrated in the browser with `hydrate()`.
 
 ```bash
 pnpm -C examples/svelte-middleware dev          # http://localhost:5205/
-SVELTE_DEVTOOLS_DOCK=1 pnpm -C examples/svelte-middleware dev   # Vite DevTools のドック
+SVELTE_DEVTOOLS_DOCK=1 pnpm -C examples/svelte-middleware dev   # Vite DevTools dock
 ```
 
-middleware mode では plugin が `listening` を受け取れず MCP の登録コマンドを出さないため、`server.js` が plugin の API (`getDevtoolsToken`) から代わりに出力します。
+In middleware mode the plugin never receives `listening` and so does not print the MCP registration command. `server.js` prints it instead, using the plugin API (`getDevtoolsToken`).
 
-| ファイル                   | 内容                                                                   |
-| -------------------------- | ---------------------------------------------------------------------- |
-| `server.js`                | middleware mode の Vite、`ssrLoadModule` + `transformIndexHtml` で SSR |
-| `src/entry-server.ts`      | `render()` とサーバーから渡す初期 props                                |
-| `src/entry-client.ts`      | `window.__INITIAL_PROPS__` で `hydrate()`                              |
-| `src/lib/Counter.svelte`   | サーバー由来の prop を初期値にした `$state` / `$derived` / `$effect`   |
-| `src/lib/Checklist.svelte` | keyed `#each` + `bind:checked` + `$derived`                            |
-| `src/lib/Clock.svelte`     | ハイドレーション後にだけ動く `$effect`（タイマー）                     |
+| File                       | Contents                                                                 |
+| -------------------------- | ------------------------------------------------------------------------ |
+| `server.js`                | Vite in middleware mode, SSR with `ssrLoadModule` + `transformIndexHtml` |
+| `src/entry-server.ts`      | `render()` and the initial props passed from the server                  |
+| `src/entry-client.ts`      | `hydrate()` with `window.__INITIAL_PROPS__`                              |
+| `src/lib/Counter.svelte`   | `$state` / `$derived` / `$effect` seeded from a server prop              |
+| `src/lib/Checklist.svelte` | keyed `#each` + `bind:checked` + `$derived`                              |
+| `src/lib/Clock.svelte`     | An `$effect` (timer) that only runs after hydration                      |
 
-## 確認項目
+## Checklist
 
-- [ ] `/.svelte-devtools/` が開き、ヘッダーが **Connected** になる（SSE 経由。WebSocket `/.svelte-devtools/__ws` は張られない）
-- [ ] Components: `App` > `Counter` / `Checklist` / `Clock` の 4 つ。ハイドレーション後もツリーが重複しない
-- [ ] ページの「hydrated」表示と、ハイドレーションミスマッチ警告がコンソールに出ないこと
-- [ ] Counter をクリックすると State timeline / Reactivity に `count` の変化が出る。Clock の `now` が毎秒更新される
-- [ ] Render: Clock が毎秒再レンダーとして記録される
-- [ ] Routes / Load functions: SvelteKit ではないので空の状態表示
-- [ ] Svelte Inspector (Alt+X) でページ上の要素を右クリックして Inspect を押すと `Counter` などが選ばれる
-- [ ] ドックモード (`SVELTE_DEVTOOLS_DOCK=1`): ドックが出て Svelte タブが開ける
-- [ ] `server.js` が出力する MCP コマンドで `get_live_components` が 4 件返る
+- [ ] `/.svelte-devtools/` opens and the header shows **Connected** (over SSE; no WebSocket to `/.svelte-devtools/__ws`)
+- [ ] Components: 4 of them, `App` > `Counter` / `Checklist` / `Clock`. The tree is not duplicated after hydration
+- [ ] The page shows "hydrated", and the console has no hydration mismatch warning
+- [ ] Clicking Counter shows `count` changes in State timeline / Reactivity. Clock's `now` updates every second
+- [ ] Render: Clock is recorded as a re-render every second
+- [ ] Routes / Load functions: empty states, since this is not SvelteKit
+- [ ] Svelte Inspector (Alt+X): right-click an element on the page and press Inspect to select `Counter` and so on
+- [ ] Dock mode (`SVELTE_DEVTOOLS_DOCK=1`): the dock shows and the Svelte tab opens
+- [ ] The MCP command printed by `server.js` returns 4 entries from `get_live_components`
