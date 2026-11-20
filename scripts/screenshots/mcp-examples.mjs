@@ -6,8 +6,8 @@
 //
 //   node scripts/screenshots/mcp-examples.mjs --out=<dir>
 //
-// Prerequisites (same as the compat job): `pnpm install --frozen-lockfile`,
-// `pnpm build`, `pnpm exec playwright-core install --with-deps chromium`.
+// Prerequisites (as in the CI `e2e` job): `pnpm install --frozen-lockfile`,
+// `pnpm build`, `pnpm exec playwright-core install chromium`.
 //
 // The runtime lives in the app page, so the DevTools UI is never opened and no
 // browser sign-in happens.
@@ -22,12 +22,21 @@
 // Output: <dir>/NN-*.json + <dir>/manifest.json (no machine paths).
 // Exit 0 only when every step wrote a clean file.
 import { spawn, execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+
+import {
+  freePort,
+  isolatedEnv,
+  mcpPost,
+  registeredToken,
+  registryDir,
+  stopProcessGroup,
+  viteBin,
+} from '../lib/dev-server.mjs';
 
 const repoRoot = path.resolve(import.meta.dirname, '../..');
 const outArg = process.argv.find(a => a.startsWith('--out='));
@@ -47,7 +56,7 @@ const ANSI = new RegExp(`${String.fromCodePoint(27)}\\[[0-9;]*m`, 'g');
 const secrets = new Set();
 const home = mkdtempSync(path.join(os.tmpdir(), 'sdt-mcp-home-'));
 // The dev server announces its MCP endpoint and token here.
-const registry = path.join(home, 'registry');
+const registry = registryDir(home);
 /** Replace the roots by placeholders, longest first, in any string. */
 function redact(text) {
   return String(text).split(appDir).join('<project>').split(repoRoot).join('<repo>');
@@ -81,27 +90,11 @@ process.on('unhandledRejection', e => {
   void finish(1);
 });
 
-function freePort() {
-  return new Promise((resolve, reject) => {
-    const s = net.createServer();
-    s.unref();
-    s.on('error', reject);
-    s.listen(0, '127.0.0.1', () => {
-      const { port } = s.address();
-      s.close(() => resolve(port));
-    });
-  });
-}
-
 const port = await freePort();
-const viteBin = path.join(
-  path.dirname(createRequire(path.join(appDir, 'package.json')).resolve('vite/package.json')),
-  'bin/vite.js',
-);
 const child = spawn(
   process.execPath,
   [
-    viteBin,
+    viteBin(appDir),
     'dev',
     '--config',
     'vite.standalone.config.ts',
@@ -113,15 +106,7 @@ const child = spawn(
   ],
   {
     cwd: appDir,
-    env: {
-      ...process.env,
-      HOME: home,
-      USERPROFILE: home,
-      XDG_CONFIG_HOME: path.join(home, '.config'),
-      XDG_CACHE_HOME: path.join(home, '.cache'),
-      VITE_DEVTOOLS_SVELTE_REGISTRY: registry,
-      BROWSER: 'none',
-    },
+    env: isolatedEnv(home),
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: process.platform !== 'win32',
   },
@@ -133,37 +118,13 @@ child.stdout.on('data', d => {
 child.stderr.on('data', d => {
   log += d;
 });
-cleanup.push(async () => {
-  if (child.exitCode !== null || child.signalCode !== null) return;
-  const kill = sig => {
-    try {
-      if (child.pid && process.platform !== 'win32') process.kill(-child.pid, sig);
-      else child.kill(sig);
-    } catch {
-      /* already gone */
-    }
-  };
-  kill('SIGTERM');
-  for (let i = 0; i < 50 && child.exitCode === null && child.signalCode === null; i++)
-    await sleep(100);
-  if (child.exitCode === null && child.signalCode === null) kill('SIGKILL');
-});
-/** The MCP token the dev server wrote to its registry file, once there. */
-function registeredToken() {
-  try {
-    const name = readdirSync(registry).find(n => n.endsWith(`-${port}.json`));
-    return name ? JSON.parse(readFileSync(path.join(registry, name), 'utf8')).token : null;
-  } catch {
-    return null;
-  }
-}
-
+cleanup.push(() => stopProcessGroup(child));
 const base = `http://127.0.0.1:${port}`;
 let token = null;
 for (let i = 0; ; i++) {
   if (child.exitCode !== null) throw new Error(`dev server exited: ${mask(log).slice(-600)}`);
   if (i > 300) throw new Error('dev server not ready in 60 s');
-  token ??= registeredToken();
+  token ??= registeredToken(registry, port);
   if (token) secrets.add(token);
   try {
     const r = await fetch(base + '/', { signal: AbortSignal.timeout(5000) });
@@ -174,29 +135,9 @@ for (let i = 0; ; i++) {
   await sleep(200);
 }
 
-let rpcId = 0;
 async function rpc(method, params, { auth = true } = {}) {
-  const headers = {
-    'content-type': 'application/json',
-    accept: 'application/json, text/event-stream',
-    'mcp-protocol-version': '2025-06-18',
-  };
-  if (auth) headers['x-svelte-devtools-token'] = token;
-  const r = await fetch(`${base}/__svelte-devtools/mcp`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ jsonrpc: '2.0', id: ++rpcId, method, params: params ?? {} }),
-    signal: AbortSignal.timeout(15_000),
-  });
-  const text = await r.text();
-  if (r.status !== 200) return { status: r.status };
-  const raw = text.trim().startsWith('{')
-    ? text
-    : text
-        .split('\n')
-        .find(l => l.startsWith('data:'))
-        ?.slice(5);
-  const msg = JSON.parse(raw);
+  const { status, msg } = await mcpPost(base, method, params, { token: auth ? token : undefined });
+  if (status !== 200) return { status };
   if (msg.error) throw new Error(`${method}: ${msg.error.message}`);
   return { status: 200, result: msg.result };
 }

@@ -192,7 +192,7 @@ jobs:
             run: |
               node scripts/screenshots/reactivity.mjs --out=e2e-out/reactivity-shots
               node scripts/screenshots/mcp-examples.mjs --out=e2e-out/mcp-examples
-            artifact: reactivity-shots
+            artifact: screenshots-and-mcp-examples
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup

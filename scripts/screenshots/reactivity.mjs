@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// Real-runtime screenshots of the Reactivity UI for the README / PR, taken in
+// Real-runtime screenshots of the Reactivity UI for the site, taken in
 // CI (Linux, headless) on the synthetic example app `examples/sample-app`
 // (SvelteKit 3, `vite.standalone.config.ts`, the workspace plugin build).
 //
 //   node scripts/screenshots/reactivity.mjs --out=<dir>
 //
-// Prerequisites (same as the compat job): `pnpm install --frozen-lockfile`,
-// `pnpm build`, `pnpm exec playwright-core install --with-deps chromium`.
+// Prerequisites (as in the CI `e2e` job): `pnpm install --frozen-lockfile`,
+// `pnpm build`, `pnpm exec playwright-core install chromium`.
 //
 // Cases:
 //   1 Overview → Components   21-reactivity-overview.png
@@ -26,10 +26,11 @@
 import { spawn, execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+
+import { freePort, isolatedEnv, stopProcessGroup, viteBin } from '../lib/dev-server.mjs';
 
 const repoRoot = path.resolve(import.meta.dirname, '../..');
 const outArg = process.argv.find(a => a.startsWith('--out='));
@@ -80,29 +81,13 @@ process.on('unhandledRejection', e => {
   void finish(1);
 });
 
-function freePort() {
-  return new Promise((resolve, reject) => {
-    const s = net.createServer();
-    s.unref();
-    s.on('error', reject);
-    s.listen(0, '127.0.0.1', () => {
-      const { port } = s.address();
-      s.close(() => resolve(port));
-    });
-  });
-}
-
 const home = mkdtempSync(path.join(os.tmpdir(), 'sdt-shots-home-'));
 cleanup.push(() => rmSync(home, { recursive: true, force: true }));
 const port = await freePort();
-const viteBin = path.join(
-  path.dirname(createRequire(path.join(appDir, 'package.json')).resolve('vite/package.json')),
-  'bin/vite.js',
-);
 const child = spawn(
   process.execPath,
   [
-    viteBin,
+    viteBin(appDir),
     'dev',
     '--config',
     'vite.standalone.config.ts',
@@ -114,14 +99,7 @@ const child = spawn(
   ],
   {
     cwd: appDir,
-    env: {
-      ...process.env,
-      HOME: home,
-      USERPROFILE: home,
-      XDG_CONFIG_HOME: path.join(home, '.config'),
-      XDG_CACHE_HOME: path.join(home, '.cache'),
-      BROWSER: 'none',
-    },
+    env: isolatedEnv(home),
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: process.platform !== 'win32',
   },
@@ -133,21 +111,7 @@ child.stdout.on('data', d => {
 child.stderr.on('data', d => {
   log += d;
 });
-cleanup.push(async () => {
-  if (child.exitCode !== null || child.signalCode !== null) return;
-  const kill = sig => {
-    try {
-      if (child.pid && process.platform !== 'win32') process.kill(-child.pid, sig);
-      else child.kill(sig);
-    } catch {
-      /* already gone */
-    }
-  };
-  kill('SIGTERM');
-  for (let i = 0; i < 50 && child.exitCode === null && child.signalCode === null; i++)
-    await sleep(100);
-  if (child.exitCode === null && child.signalCode === null) kill('SIGKILL');
-});
+cleanup.push(() => stopProcessGroup(child));
 const base = `http://127.0.0.1:${port}`;
 for (let i = 0; ; i++) {
   if (child.exitCode !== null) throw new Error(`dev server exited: ${mask(log).slice(-600)}`);

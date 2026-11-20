@@ -12,24 +12,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { ensurePlaygroundSync, generate } from './generate-large-app.mjs';
+import { findProdMarkers, PROD_MARKERS } from './lib/prod-markers.mjs';
 
 const repoRoot = path.resolve(import.meta.dirname, '..');
 const repoArg = process.argv.find(a => a.startsWith('--repo='));
 const repo = repoArg ? path.resolve(repoArg.slice(7)) : repoRoot;
 const appDir = path.join(repo, 'playground/.temp/noop-app');
 const viteBin = path.join(repo, 'playground/node_modules/vite/bin/vite.js');
-
-// Strings that only exist in code emitted by vite-devtools-svelte.
-const MARKERS = [
-  '__SVELTE_DEVTOOLS__',
-  'svelte-devtools:',
-  'virtual:svelte-devtools',
-  '__svelte_devtools_record_load',
-  '@vitejs/devtools/client/inject',
-  // hub inject used by the SvelteKit template injector
-  '/__devtools/embedded.js',
-  '__devtools',
-];
 
 function run(args, env = {}) {
   return new Promise((resolve, reject) => {
@@ -49,23 +38,6 @@ function run(args, env = {}) {
       code === 0 ? resolve(log) : reject(new Error(`vite ${args[0]} exited ${code}\n${log}`)),
     );
   });
-}
-
-function scan(dir) {
-  const hits = [];
-  const walk = d => {
-    for (const ent of fs.readdirSync(d, { withFileTypes: true })) {
-      const p = path.join(d, ent.name);
-      if (ent.isDirectory()) walk(p);
-      else if (/\.(m?js|html|css|json)$/.test(ent.name)) {
-        const text = fs.readFileSync(p, 'utf8');
-        for (const m of MARKERS)
-          if (text.includes(m)) hits.push({ file: path.relative(appDir, p), marker: m });
-      }
-    }
-  };
-  walk(dir);
-  return hits;
 }
 
 async function devMarkers() {
@@ -89,7 +61,7 @@ async function devMarkers() {
     }
     // The wrapper/runtime are pulled in by compiled components on the client.
     const comp = await fetch(`${base}/src/lib/components/gen/C0000.svelte`).then(r => r.text());
-    const found = MARKERS.filter(m => html.includes(m) || comp.includes(m));
+    const found = PROD_MARKERS.filter(m => html.includes(m) || comp.includes(m));
     return found;
   } finally {
     child.kill('SIGTERM');
@@ -108,7 +80,7 @@ function fixtureHits() {
       if (ent.isDirectory()) walk(p);
       else if (/\.(svelte|[cm]?[jt]s|html)$/.test(ent.name)) {
         const text = fs.readFileSync(p, 'utf8');
-        for (const m of MARKERS)
+        for (const m of PROD_MARKERS)
           if (text.includes(m)) hits.push({ file: path.relative(appDir, p), marker: m });
         if (/['"`]__SVELTE_['"`]\s*\+/.test(text))
           hits.push({ file: path.relative(appDir, p), marker: 'foldable concat' });
@@ -137,7 +109,7 @@ async function main() {
     .map(d => path.join(appDir, d))
     .filter(d => fs.existsSync(d));
   if (outDirs.length === 0) throw new Error('no build output found');
-  const hits = outDirs.flatMap(scan);
+  const hits = outDirs.flatMap(d => findProdMarkers(d, appDir));
   const control = await devMarkers();
   const result = {
     buildMs,

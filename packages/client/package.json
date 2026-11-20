@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite dev",
+    "dev": "vite --config dev/vite.mock.config.ts",
     "build": "vite build",
-    "check": "svelte-check --tsconfig ./tsconfig.app.json",
+    "check": "tsc -p tsconfig.node.json && svelte-check --tsconfig ./tsconfig.app.json",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
   },

@@ -46,6 +46,7 @@
   },
   "scripts": {
     "build": "vite build",
+    "check": "tsc -p tsconfig.json",
     "dev": "vite build --watch",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",

@@ -13,6 +13,8 @@ import path from 'node:path';
 
 import { chromium } from 'playwright-core';
 
+import { mcpPost, nudgeDock, registeredToken } from '../scripts/lib/dev-server.mjs';
+
 const repoRoot = path.resolve(import.meta.dirname, '..');
 const appDir = path.join(repoRoot, 'playground');
 const argv = process.argv.slice(2);
@@ -23,16 +25,6 @@ const sleep = ms =>
   new Promise(r => {
     setTimeout(r, ms);
   });
-
-/** The MCP token the dev server wrote to its registry file, once there. */
-function registeredToken() {
-  try {
-    const name = fs.readdirSync(registry).find(n => n.endsWith(`-${port}.json`));
-    return name ? JSON.parse(fs.readFileSync(path.join(registry, name), 'utf8')).token : null;
-  } catch {
-    return null;
-  }
-}
 
 // The dev server announces its MCP endpoint and token here.
 const registry = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-reactivity-registry-'));
@@ -97,32 +89,9 @@ process.on('exit', () => {
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => process.exit(130));
 
 let token;
-let rpcId = 0;
 async function tool(name, args = {}) {
-  const r = await fetch(`${base}/__svelte-devtools/mcp`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      accept: 'application/json, text/event-stream',
-      'mcp-protocol-version': '2025-06-18',
-      'x-svelte-devtools-token': token,
-    },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: ++rpcId,
-      method: 'tools/call',
-      params: { name, arguments: args },
-    }),
-    signal: AbortSignal.timeout(15_000),
-  });
-  const text = await r.text();
-  const raw = text.trim().startsWith('{')
-    ? text
-    : text
-        .split('\n')
-        .find(l => l.startsWith('data:'))
-        ?.slice(5);
-  const msg = JSON.parse(raw);
+  const { status, msg } = await mcpPost(base, 'tools/call', { name, arguments: args }, { token });
+  if (status !== 200) throw new Error(`${name}: HTTP ${status}`);
   if (msg.error) throw new Error(`${name}: ${msg.error.message}`);
   const out = msg.result.content?.find(c => c.type === 'text')?.text ?? 'null';
   // oxlint-disable-next-line unicorn/prefer-type-error -- `isError` is the MCP tool-error flag, not a type check
@@ -155,18 +124,6 @@ async function snapshot() {
   const live = await tool('get_live_components', { includeMeta: true });
   const graph = await tool('get_reactive_scope', {});
   return { live, graph, comps: live.components };
-}
-
-// The dock auto-minimizes (buttons get pointer-events: none) unless a
-// mousemove reached it within 3 s. A move to the same point fires no event, so
-// move across it in steps.
-async function nudgeDock(page) {
-  const box = await page.locator('#devframes-dock').boundingBox();
-  if (!box) return;
-  const cx = box.x + box.width / 2;
-  const cy = box.y + box.height / 2;
-  await page.mouse.move(cx - 3, cy, { steps: 5 });
-  await page.mouse.move(cx + 3, cy, { steps: 5 });
 }
 
 // The dock's logo wrapper takes pointer events over the centre of its buttons
@@ -273,7 +230,7 @@ function checkTree(label, comps) {
 let browser;
 try {
   for (let i = 0; i < 200 && !token; i++) {
-    token = registeredToken();
+    token = registeredToken(registry, port);
     if (!token) await sleep(150);
   }
   if (!token) throw new Error(`dev server did not start:\n${log.slice(-2000)}`);

@@ -8,7 +8,7 @@
 // Part B (~14 min): plugin-off reference (B, F) and the DevTools UI itself at
 // the largest scale (B, F).
 //
-// Usage (only inside a granted slot):
+// Usage (long run; needs an otherwise idle machine):
 //   node perf/run-paired.mjs --baseline=<pristine checkout> [--final=<worktree>]
 //     [--label=paired] [--parts=A] [--order=BFFB]
 //     [--scales=5000:none,6094:5x5] [--scenarios=closed,open]
@@ -24,6 +24,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { ensurePlaygroundSync, generate, DEFAULTS as FIXTURE } from './generate-large-app.mjs';
+import { parseOptions } from './lib/cli.mjs';
 import {
   INIT_SCRIPT,
   checkoutMeta,
@@ -50,7 +51,7 @@ import {
 import { summarize } from './lib/summary.mjs';
 
 function parseArgs(argv) {
-  const opts = {
+  const opts = parseOptions(argv, {
     baseline: '',
     final: repoRoot,
     label: 'paired',
@@ -72,14 +73,7 @@ function parseArgs(argv) {
     dryRun: 0,
     maxMin: 25,
     headed: 0,
-  };
-  for (const arg of argv) {
-    const m = /^--([^=]+)=(.*)$/.exec(arg);
-    if (!m) throw new Error(`Unexpected argument ${arg}`);
-    const key = m[1].replaceAll(/-([a-z])/g, (_, c) => c.toUpperCase());
-    if (!(key in opts)) throw new Error(`Unknown option --${m[1]}`);
-    opts[key] = typeof opts[key] === 'number' ? Number(m[2]) : m[2];
-  }
+  });
   if (!opts.baseline && !opts.smoke) throw new Error('--baseline=<pristine checkout> is required');
   opts.final = path.resolve(opts.final);
   if (opts.baseline) opts.baseline = path.resolve(opts.baseline);

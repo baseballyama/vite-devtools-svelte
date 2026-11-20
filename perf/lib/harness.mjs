@@ -1,5 +1,5 @@
-// Shared helpers for the paired baseline/final browser measurement
-// (perf/run-paired.mjs). Pure helpers: nothing here starts work on import.
+// Shared helpers for the browser measurements (perf/run-paired.mjs,
+// perf/bench-browser.mjs). Pure helpers: nothing here starts work on import.
 //
 // Ground rules encoded here:
 // - only this process's own children are ever stopped (by the handle we
@@ -244,6 +244,7 @@ export async function startServer({ appDir, port, withDevtools, home }) {
     log += d;
   });
   const base = `http://localhost:${port}`;
+  // The first SSR of /bench includes the cold compile of the route + plugin transforms.
   for (let i = 0; i < 1800; i++) {
     if (child.exitCode !== null) throw new Error(`vite exited early:\n${log.replaceAll(ANSI, '')}`);
     try {
@@ -293,7 +294,7 @@ export const INIT_SCRIPT = `
 })();
 `;
 
-async function cdpMetrics(cdp) {
+export async function cdpMetrics(cdp) {
   const { metrics } = await cdp.send('Performance.getMetrics');
   return Object.fromEntries(metrics.map(m => [m.name, m.value]));
 }
@@ -382,6 +383,7 @@ export async function idleWindow(page, cdp, ms, ws) {
     windowMs: ms,
     taskMs: r1((after.TaskDuration - before.TaskDuration) * 1000),
     scriptMs: r1((after.ScriptDuration - before.ScriptDuration) * 1000),
+    layoutMs: r1((after.LayoutDuration - before.LayoutDuration) * 1000),
     busyPct: r1(((after.TaskDuration - before.TaskDuration) * 1000 * 100) / ms),
     longTasks: longTasks.length,
     longTaskMs: r1(longTasks.reduce((s, t) => s + t.dur, 0)),
@@ -391,6 +393,7 @@ export async function idleWindow(page, cdp, ms, ws) {
 }
 
 export function frameStats(durations) {
+  // First sample includes the setup frame; drop it.
   const d = durations.slice(1);
   return {
     frames: d.length,

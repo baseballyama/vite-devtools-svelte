@@ -19,10 +19,21 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
 import { createRequire } from 'node:module';
-import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+
+import { findProdMarkers } from '../../perf/lib/prod-markers.mjs';
+import {
+  freePort,
+  isolatedEnv,
+  mcpPost,
+  nudgeDock,
+  registeredToken,
+  registryDir,
+  stopProcessGroup,
+  viteBin,
+} from '../../scripts/lib/dev-server.mjs';
 
 const repoRoot = path.resolve(import.meta.dirname, '../..');
 
@@ -63,16 +74,6 @@ const REQUIRED_TOOLS = [
   'get_state_timeline',
   'get_capture_info',
 ];
-// Same markers as perf/check-prod-noop.mjs (kept in sync by hand).
-const PROD_MARKERS = [
-  '__SVELTE_DEVTOOLS__',
-  'svelte-devtools:',
-  'virtual:svelte-devtools',
-  '__svelte_devtools_record_load',
-  '@vitejs/devtools/client/inject',
-  '/__devtools/embedded.js',
-  '__devtools',
-];
 function loadProfile(id) {
   const matrix = JSON.parse(fs.readFileSync(path.join(repoRoot, 'e2e/compat/matrix.json'), 'utf8'));
   const entry = matrix.profiles.find(p => p.id === id);
@@ -91,7 +92,7 @@ const PLAN = [
   'T1 mode is the requested one',
   'T1 MCP 403: no token / wrong token / duplicated header',
   'T1 MCP initialize + required tools present',
-  'T1 MCP session id traversal rejected (C-7)',
+  'T1 MCP session id traversal rejected',
   'T1 get_project_info versions = matrix',
   'T1 get_routes',
   'T1 get_capture_info',
@@ -253,68 +254,18 @@ async function runCleanup() {
   }
 }
 
-function freePort() {
-  return new Promise((resolve, reject) => {
-    const srv = net.createServer();
-    srv.unref();
-    srv.on('error', reject);
-    srv.listen(0, '127.0.0.1', () => {
-      const { port } = srv.address();
-      srv.close(() => resolve(port));
-    });
-  });
-}
-
-function viteBin(appDir) {
-  const req = createRequire(path.join(appDir, 'package.json'));
-  return path.join(path.dirname(req.resolve('vite/package.json')), 'bin/vite.js');
-}
-
-/** The MCP token the dev server on `port` wrote to its registry file, once there. */
-function registeredToken(home, port) {
-  const registry = path.join(home, 'registry');
-  try {
-    const name = fs.readdirSync(registry).find(n => n.endsWith(`-${port}.json`));
-    return name ? JSON.parse(fs.readFileSync(path.join(registry, name), 'utf8')).token : null;
-  } catch {
-    return null;
-  }
-}
-
 function childEnv(home) {
-  return {
-    ...process.env,
-    HOME: home,
-    USERPROFILE: home,
-    XDG_CONFIG_HOME: path.join(home, '.config'),
-    XDG_CACHE_HOME: path.join(home, '.cache'),
-    VITE_DEVTOOLS_SVELTE_REGISTRY: path.join(home, 'registry'),
+  return isolatedEnv(home, {
     SVELTE_DEVTOOLS_DOCK: dock ? '1' : '0',
-    BROWSER: 'none',
     FORCE_COLOR: '0',
     NO_COLOR: '1',
-  };
-}
-
-function configArgs(p) {
-  const file = p.configs?.[mode];
-  if (!file) throw new Error(`matrix.json: ${p.id} has no configs.${mode}`);
-  return ['--config', file];
+  });
 }
 
 function startDev(p, { port, home }) {
   const child = spawn(
     process.execPath,
-    [
-      viteBin(p.appDir),
-      'dev',
-      ...configArgs(p),
-      '--host',
-      '127.0.0.1',
-      '--port',
-      String(port),
-      '--strictPort',
-    ],
+    [viteBin(p.appDir), 'dev', '--host', '127.0.0.1', '--port', String(port), '--strictPort'],
     {
       cwd: p.appDir,
       env: childEnv(home),
@@ -329,25 +280,8 @@ function startDev(p, { port, home }) {
   child.stderr.on('data', d => {
     srv.log += d;
   });
-  cleanup.push(() => stopDev(srv));
+  cleanup.push(() => stopProcessGroup(srv.child));
   return srv;
-}
-
-async function stopDev(srv) {
-  const { child } = srv;
-  if (child.exitCode !== null || child.signalCode !== null) return;
-  const kill = sig => {
-    try {
-      if (child.pid && process.platform !== 'win32') process.kill(-child.pid, sig);
-      else child.kill(sig);
-    } catch {
-      /* already gone */
-    }
-  };
-  kill('SIGTERM');
-  for (let i = 0; i < 50 && child.exitCode === null && child.signalCode === null; i++)
-    await sleep(100);
-  if (child.exitCode === null && child.signalCode === null) kill('SIGKILL');
 }
 
 async function waitReady(srv, ms = 60_000) {
@@ -355,7 +289,7 @@ async function waitReady(srv, ms = 60_000) {
   while (Date.now() < end) {
     if (srv.child.exitCode !== null)
       throw new Error(`dev server exited (${srv.child.exitCode}): ${mask(srv.log).slice(-600)}`);
-    const token = registeredToken(srv.home, srv.port);
+    const token = registeredToken(registryDir(srv.home), srv.port);
     // Vite's "Local:" banner and the MCP registration happen independently:
     // wait for both, or the resolved host reads as null.
     const local = srv.log.match(/Local:\s+(https?:\/\/\S+)/)?.[1];
@@ -385,34 +319,14 @@ function lastAuthCode(log) {
   return code;
 }
 
-let rpcId = 0;
 async function mcp(
   srv,
   method,
   params,
   { token = srv.token, ms = 15_000, rawErrors = false } = {},
 ) {
-  const headers = {
-    'content-type': 'application/json',
-    accept: 'application/json, text/event-stream',
-    'mcp-protocol-version': '2025-06-18',
-  };
-  if (token) headers['x-svelte-devtools-token'] = token;
-  const r = await fetch(srv.base + '/__svelte-devtools/mcp', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ jsonrpc: '2.0', id: ++rpcId, method, params: params ?? {} }),
-    signal: AbortSignal.timeout(ms),
-  });
-  const text = await r.text();
-  if (r.status !== 200) return { status: r.status };
-  const raw = text.trim().startsWith('{')
-    ? text
-    : text
-        .split('\n')
-        .find(l => l.startsWith('data:'))
-        ?.slice(5);
-  const msg = JSON.parse(raw);
+  const { status, msg } = await mcpPost(srv.base, method, params, { token, ms });
+  if (status !== 200) return { status };
   if (msg.error && rawErrors) return { status: 200, error: msg.error };
   if (msg.error) throw new Error(`${method}: ${msg.error.message}`);
   return { status: 200, result: msg.result };
@@ -442,23 +356,10 @@ async function poll(fn, ok, ms) {
   throw new Error(`not reached; last ${JSON.stringify(last)?.slice(0, 200)}`);
 }
 
-function scanDir(dir, hits, root = dir) {
-  if (!fs.existsSync(dir)) return;
-  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-    const p = path.join(dir, e.name);
-    if (e.isDirectory()) scanDir(p, hits, root);
-    else if (/\.(m?js|html|css|json)$/.test(e.name)) {
-      const text = fs.readFileSync(p, 'utf8');
-      for (const m of PROD_MARKERS)
-        if (text.includes(m)) hits.push({ file: path.relative(root, p), marker: m });
-    }
-  }
-}
-
 function prodBuild(p, home) {
   const outDir = fs.mkdtempSync(path.join(os.tmpdir(), `compat-${p.id}-dist-`));
   cleanup.push(() => fs.rmSync(outDir, { recursive: true, force: true }));
-  const args = [viteBin(p.appDir), 'build', ...configArgs(p), '--logLevel', 'warn'];
+  const args = [viteBin(p.appDir), 'build', '--logLevel', 'warn'];
   // Kit writes to .svelte-kit/output (gitignored); plain Vite gets a temp outDir.
   if (!p.kit) args.push('--outDir', outDir, '--emptyOutDir');
   const res = spawnSync(process.execPath, args, {
@@ -471,9 +372,7 @@ function prodBuild(p, home) {
     throw new Error(
       `vite build exit ${res.status}: ${mask((res.stderr?.length ?? 0) > 0 ? res.stderr : res.stdout).slice(-400)}`,
     );
-  const hits = [];
-  scanDir(p.kit ? path.join(p.appDir, '.svelte-kit/output') : outDir, hits);
-  return hits;
+  return findProdMarkers(p.kit ? path.join(p.appDir, '.svelte-kit/output') : outDir);
 }
 
 function backupPath(p) {
@@ -546,19 +445,6 @@ async function fixtureComponentsListed(p, srv, ms) {
 
 const ANSI = new RegExp(`${String.fromCodePoint(27)}\\[[0-9;]*m`, 'g');
 const DOCK_FRAME = 'iframe[data-iframe-pane="svelte-devtools:inspect"]';
-
-// The dock auto-minimizes (buttons get pointer-events: none) unless a
-// mousemove reached it within inactiveTimeout (3 s) or a panel is open. A move
-// to the same coordinates fires no event, so move across it in steps.
-async function nudgeDock(page) {
-  const box = await page.locator('#devframes-dock').boundingBox();
-  if (!box) return false;
-  const cx = box.x + box.width / 2;
-  const cy = box.y + box.height / 2;
-  await page.mouse.move(cx - 3, cy, { steps: 5 });
-  await page.mouse.move(cx + 3, cy, { steps: 5 });
-  return true;
-}
 
 const isMinimized = page =>
   page.locator('#devframes-anchor').evaluate(el => el.classList.contains('devframes-minimized'));
@@ -918,7 +804,7 @@ async function main() {
   const ready = await step('T1 dev server starts on loopback', 90_000, async () => {
     await waitReady(srv);
     if (srv.local !== '127.0.0.1') throw new Error(`resolved host ${srv.local}`);
-    return { mode, config: configArgs(p)[1], host: srv.local };
+    return { mode, host: srv.local };
   });
   if (ready) {
     await step('T1 mode is the requested one', 15_000, async () => {
@@ -963,7 +849,7 @@ async function main() {
       if (missing.length > 0) throw new Error(`missing tools: ${missing.join(', ')}`);
       return { required: REQUIRED_TOOLS.length, listed: names.length };
     });
-    await step('T1 MCP session id traversal rejected (C-7)', 20_000, async () => {
+    await step('T1 MCP session id traversal rejected', 20_000, async () => {
       // Judged by protocol, not message text: an input validation error is an
       // isError: true result; a JSON-RPC -32602 error is accepted too. Without
       // isError the handler ran = FAIL. Read-only probes (never delete_session).
@@ -1025,14 +911,14 @@ async function main() {
         p,
         getSrv,
         async () => {
-          await stopDev(srv);
+          await stopProcessGroup(srv.child);
           srv = startDev(p, { port, home });
           await waitReady(srv);
         },
         app,
       );
     }
-    await stopDev(srv);
+    await stopProcessGroup(srv.child);
   }
 
   await step('T1 production build has no DevTools code', 200_000, () => {

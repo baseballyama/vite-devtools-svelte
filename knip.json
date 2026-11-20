@@ -2,7 +2,13 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
     ".": {
-      "entry": ["e2e/**/*.mjs", "perf/*.mjs", "scripts/**/*.mjs", ".claude/skills/**/*.mjs"],
+      "entry": [
+        "e2e/**/*.mjs",
+        "perf/*.mjs",
+        "scripts/*.mjs",
+        "scripts/screenshots/*.mjs",
+        ".claude/skills/**/*.mjs"
+      ],
       "project": ["e2e/**/*.mjs", "perf/**/*.mjs", "scripts/**/*.mjs"],
       "ignoreDependencies": ["axe-core"]
     },
@@ -21,7 +27,6 @@
       "project": ["src/**/*.{ts,svelte}", "test/**/*.ts"]
     },
     "packages/client": {
-      "entry": ["dev/vite.mock.config.ts"],
       "project": ["src/**/*.{ts,svelte}", "dev/**/*.ts", "test/**/*.ts"]
     },
     "site": {
