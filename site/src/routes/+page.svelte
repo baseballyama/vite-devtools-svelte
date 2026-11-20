@@ -38,7 +38,7 @@
 
   const showcase = [
     {
-      img: 'home-timeline.jpg',
+      img: 'v2-panel-timeline.jpg',
       alt: 'State timeline panel listing state changes with an inspector showing before and after values',
       title: 'Know what changed, and when.',
       body: 'Recent $state writes, newest first, with the value before and after. The log keeps the latest entries, not the whole session.',
