@@ -1,7 +1,6 @@
-import { z } from 'zod';
-
 import pkg from '../../package.json' with { type: 'json' };
 import { GRAPH_LIMITS, MAX_EPOCH_LENGTH, SUMMARY_TOP_K } from '../limits.js';
+import * as v from '../schema.js';
 import type {
   RenderProfile,
   ReactiveGraph,
@@ -66,7 +65,7 @@ function capValue(value: unknown, maxChars: number): unknown {
 }
 
 /** Anything but an issued session id is rejected before the store. */
-const sessionId = z.string().max(64).refine(isSessionId, 'not a session id');
+const sessionId = v.string({ max: 64, test: isSessionId, message: 'not a session id' });
 
 function renderStats(p: RenderProfile) {
   return {
@@ -93,11 +92,11 @@ export function devServerTools(deps: McpDeps): ToolRegistry {
         'Cross-cuts render/reactive/load/fps metrics and returns ranked issues. The entry point for AI-driven performance audits. Each issue carries `suggestedTool` naming the detail tool to call next.',
       // 0 or a negative threshold would flag every component / load, including never-rendered ones.
       inputSchema: {
-        avgRenderTimeMs: z.number().positive().optional(),
-        renderCount: z.number().int().min(1).optional(),
-        loadDurationMs: z.number().positive().optional(),
-        fpsDropThreshold: z.number().min(1).max(120).optional(),
-        effectMaxDeps: z.number().int().min(1).optional(),
+        avgRenderTimeMs: v.optional(v.number({ positive: true })),
+        renderCount: v.optional(v.integer({ min: 1 })),
+        loadDurationMs: v.optional(v.number({ positive: true })),
+        fpsDropThreshold: v.optional(v.number({ min: 1, max: 120 })),
+        effectMaxDeps: v.optional(v.integer({ min: 1 })),
       },
     },
     async thresholds => {
@@ -119,7 +118,7 @@ export function devServerTools(deps: McpDeps): ToolRegistry {
     {
       title: 'Component render hotspots',
       description: 'Top components by total render time, with render count and per-render average.',
-      inputSchema: { topN: z.number().int().min(1).max(200).optional() },
+      inputSchema: { topN: v.optional(v.integer({ min: 1, max: 200 })) },
     },
     ({ topN = 20 }) => {
       const list = deps
@@ -137,7 +136,7 @@ export function devServerTools(deps: McpDeps): ToolRegistry {
       title: 'Reactive graph problems',
       description:
         'Classified reactive graph issues: over-connected effects, orphan deriveds (declared but never evaluated so far — may still be read later, e.g. in a branch not shown yet), isolated nodes (no tracked dependency or reader; reads from the markup count as readers). Returns categories instead of the full graph.',
-      inputSchema: { effectMaxDeps: z.number().int().min(1).optional() },
+      inputSchema: { effectMaxDeps: v.optional(v.integer({ min: 1 })) },
     },
     async ({ effectMaxDeps }) =>
       text(summarizeReactiveProblems(await deps.getReactiveGraph(), { effectMaxDeps })),
@@ -149,7 +148,7 @@ export function devServerTools(deps: McpDeps): ToolRegistry {
       title: 'SvelteKit load waterfall',
       description:
         'Load profiles grouped by route, with timing and data size. Optionally filtered by route.',
-      inputSchema: { route: z.string().optional() },
+      inputSchema: { route: v.optional(v.string()) },
     },
     ({ route }) => {
       const profiles = deps.getLoadProfiles().filter(p => !route || p.route === route);
@@ -181,8 +180,8 @@ export function devServerTools(deps: McpDeps): ToolRegistry {
       title: 'FPS drops',
       description: `Samples whose FPS fell below \`threshold\` (default ${DEFAULT_FPS_DROP_THRESHOLD}). Returns timestamp + fps for each.`,
       inputSchema: {
-        threshold: z.number().min(1).max(120).optional(),
-        sinceMs: z.number().nonnegative().optional(),
+        threshold: v.optional(v.number({ min: 1, max: 120 })),
+        sinceMs: v.optional(v.number({ min: 0 })),
       },
     },
     ({ threshold = DEFAULT_FPS_DROP_THRESHOLD, sinceMs }) => {
@@ -208,7 +207,7 @@ export function devServerTools(deps: McpDeps): ToolRegistry {
       title: 'Render profile for a specific file',
       description:
         'Returns render profile entries matching the given component file (substring match).',
-      inputSchema: { file: z.string() },
+      inputSchema: { file: v.string() },
     },
     ({ file }) => {
       const matches = deps
@@ -246,8 +245,8 @@ export function devServerTools(deps: McpDeps): ToolRegistry {
       description:
         'Component instances with file, parent, mounted status as currently mounted in the browser (an array, parents first). With `includeMeta: true` the answer is `{ epoch, total, captured, truncated, components }` instead, limited to `limit` (default 1000): component ids are only valid within that `epoch` (one page load), so pass both to get_reactive_scope.',
       inputSchema: {
-        includeMeta: z.boolean().optional(),
-        limit: z.number().int().min(1).max(50000).optional(),
+        includeMeta: v.optional(v.boolean()),
+        limit: v.optional(v.integer({ min: 1, max: 50000 })),
       },
     },
     ({ includeMeta, limit }) => {
@@ -282,7 +281,7 @@ export function devServerTools(deps: McpDeps): ToolRegistry {
       description:
         'Busiest live component instances from runtime counters over all instances, without capturing the graph. Counts are totals since each instance was registered: sampled state changes (at most one per state per 200 ms, observed only while a DevTools client or MCP lease is active) and renders, not rates; `lastActiveAt` is when the instance last changed or rendered. A destroyed instance leaves with its counters. Rows rank by changes, then renders, then render time, then most recently active. Tracked: state created during component init and shared state of .svelte.js/.ts modules (rows with kind "module"; their componentId is a module scope id, usable with get_reactive_scope). `rows` + `other` add up to the totals; null means unknown. Use get_reactive_scope with a componentId to look at one instance. The same request is answered from a cache for up to 1 s; `computedAt` says when the answer was computed.',
       inputSchema: {
-        topK: z.number().int().min(1).max(SUMMARY_TOP_K.max).optional(),
+        topK: v.optional(v.integer({ min: 1, max: SUMMARY_TOP_K.max })),
       },
     },
     async ({ topK }) => text(await deps.getReactiveSummary({ topK })),
@@ -295,10 +294,10 @@ export function devServerTools(deps: McpDeps): ToolRegistry {
       description:
         "$state/$derived/$effect nodes of one component instance and their direct neighbours, built in the app within the caps. Edges mean 'can affect' (current dependencies), not a recorded cause. `componentId` requires the `epoch` it came from (get_live_components with includeMeta): after a reload the answer is empty with staleReason 'epoch-changed' instead of another instance. Omit componentId only for the whole-app graph (capped; see total/truncated). The same request may be answered from a cache for up to 1 s; `computedAt` says when the app built the graph (null when unknown or for an empty fallback). `stale: true` only marks a fallback after the app did not answer (an earlier answer with its own computedAt, or empty).",
       inputSchema: {
-        componentId: z.number().int().nonnegative().optional(),
-        epoch: z.string().max(MAX_EPOCH_LENGTH).optional(),
-        maxNodes: z.number().int().min(1).max(GRAPH_LIMITS.nodes).optional(),
-        maxEdges: z.number().int().min(1).max(GRAPH_LIMITS.edges).optional(),
+        componentId: v.optional(v.integer({ min: 0 })),
+        epoch: v.optional(v.string({ max: MAX_EPOCH_LENGTH })),
+        maxNodes: v.optional(v.integer({ min: 1, max: GRAPH_LIMITS.nodes })),
+        maxEdges: v.optional(v.integer({ min: 1, max: GRAPH_LIMITS.edges })),
       },
     },
     async ({ componentId, epoch, maxNodes, maxEdges }) => {
@@ -318,9 +317,9 @@ export function devServerTools(deps: McpDeps): ToolRegistry {
       description:
         'Sampled $state changes (200 ms) after `since` (the cursor from the previous call). Contains values of state in the running app. `reset: true` means the cursor was stale and this is the whole buffer. At most `limit` newest entries are returned; `omitted` counts older ones in the range that were left out. Values larger than `maxValueChars` (JSON) are replaced by a size summary. Timestamps are detection times, so order within about a second is not causal.',
       inputSchema: {
-        since: z.number().int().nonnegative().optional(),
-        limit: z.number().int().min(1).max(MCP_TIMELINE_LIMIT).optional(),
-        maxValueChars: z.number().int().min(16).max(MCP_VALUE_CHARS.max).optional(),
+        since: v.optional(v.integer({ min: 0 })),
+        limit: v.optional(v.integer({ min: 1, max: MCP_TIMELINE_LIMIT })),
+        maxValueChars: v.optional(v.integer({ min: 16, max: MCP_VALUE_CHARS.max })),
       },
     },
     ({ since, limit = 100, maxValueChars = MCP_VALUE_CHARS.default }) => {
@@ -355,8 +354,8 @@ export function devServerTools(deps: McpDeps): ToolRegistry {
       description:
         'Begin capturing metrics under a labelled session. Required before compare_sessions. Set `persist:true` to write to disk on end; otherwise the session lives in memory only.',
       inputSchema: {
-        label: z.string().max(256),
-        persist: z.boolean().optional(),
+        label: v.string({ max: 256 }),
+        persist: v.optional(v.boolean()),
       },
     },
     ({ label, persist = false }) => {
@@ -371,7 +370,7 @@ export function devServerTools(deps: McpDeps): ToolRegistry {
       title: 'End current measurement session',
       description: `Closes the active session and returns its delta. \`keep\` decides disposal: "memory" keeps it for this dev-server lifetime, "disk" writes to node_modules/.vite-devtools-svelte/sessions/, "discard" deletes it. \`delta.fps.drops\` counts samples below ${PANEL_FPS_DROP_LINE} fps, the line the FPS panel draws; list_performance_issues and get_fps_drops default to ${DEFAULT_FPS_DROP_THRESHOLD}.`,
       inputSchema: {
-        keep: z.enum(['memory', 'disk', 'discard']).optional(),
+        keep: v.optional(v.oneOf(['memory', 'disk', 'discard'])),
       },
     },
     ({ keep = 'memory' }) => {

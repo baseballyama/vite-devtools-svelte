@@ -1,10 +1,16 @@
 import { PassThrough } from 'node:stream';
 
 import { describe, expect, it, vi } from 'vitest';
-import { z } from 'zod';
 
-import { createMcpServer, ToolRegistry, type McpServer } from '../src/mcp/protocol.js';
+import {
+  createMcpServer,
+  isInitializeRequest,
+  isJsonRpcMessage,
+  ToolRegistry,
+  type McpServer,
+} from '../src/mcp/protocol.js';
 import { serveStdio } from '../src/mcp/stdio.js';
+import * as v from '../src/schema.js';
 
 const INFO = { name: 'n', version: '1', instructions: 'i' };
 const call = (id: number, name: string) => ({
@@ -12,6 +18,46 @@ const call = (id: number, name: string) => ({
   id,
   method: 'tools/call',
   params: { name },
+});
+
+describe('isJsonRpcMessage', () => {
+  it.each<[string, unknown, boolean]>([
+    ['a request', { jsonrpc: '2.0', id: 1, method: 'm', params: {} }, true],
+    ['a notification', { jsonrpc: '2.0', method: 'm' }, true],
+    ['a result', { jsonrpc: '2.0', id: 'a', result: {} }, true],
+    ['an error without id', { jsonrpc: '2.0', error: { code: 1, message: 'x', data: 1 } }, true],
+    ['another version', { jsonrpc: '1.0', id: 1, method: 'm' }, false],
+    ['a fractional id', { jsonrpc: '2.0', id: 1.5, method: 'm' }, false],
+    ['an unsafe integer id', { jsonrpc: '2.0', id: 2 ** 60, method: 'm' }, false],
+    ['array params', { jsonrpc: '2.0', id: 1, method: 'm', params: [] }, false],
+    ['an unknown key', { jsonrpc: '2.0', id: 1, method: 'm', extra: 1 }, false],
+    ['a result that is not an object', { jsonrpc: '2.0', id: 1, result: 1 }, false],
+    ['a result without id', { jsonrpc: '2.0', result: {} }, false],
+    [
+      'an error code that is not an integer',
+      { jsonrpc: '2.0', error: { code: 1.5, message: 'x' } },
+      false,
+    ],
+    ['null', null, false],
+  ])('%s → %s', (_, message, expected) => {
+    expect(isJsonRpcMessage(message)).toBe(expected);
+  });
+});
+
+describe('isInitializeRequest', () => {
+  it('tells an initialize request with complete params', () => {
+    const params = {
+      protocolVersion: 'v',
+      capabilities: {},
+      clientInfo: { name: 'n', version: '1' },
+    };
+    const request = { jsonrpc: '2.0' as const, id: 1, method: 'initialize', params };
+    expect(isInitializeRequest(request)).toBe(true);
+    expect(isInitializeRequest({ ...request, params: { ...params, capabilities: [] } })).toBe(
+      false,
+    );
+    expect(isInitializeRequest({ ...request, method: 'ping' })).toBe(false);
+  });
 });
 
 describe('createMcpServer', () => {
@@ -82,7 +128,7 @@ describe('ToolRegistry', () => {
     const tools = new ToolRegistry();
     tools.registerTool(
       't',
-      { title: 't', description: 'd', inputSchema: { a: z.string() } },
+      { title: 't', description: 'd', inputSchema: { a: v.string() } },
       // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- a non-Error rejection is the case under test
       () => Promise.reject('plain'),
     );
@@ -96,7 +142,7 @@ describe('ToolRegistry', () => {
     const tools = new ToolRegistry();
     tools.registerTool(
       't',
-      { title: 't', description: 'd', inputSchema: { a: z.string().optional() } },
+      { title: 't', description: 'd', inputSchema: { a: v.optional(v.string()) } },
       () => ({ content: [] }),
     );
     const result = await tools.callTool('t', 'x' as never);
