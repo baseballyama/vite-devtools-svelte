@@ -1,6 +1,5 @@
 packages:
   - 'packages/*'
-  - 'packages/client'
   - 'playground'
   - 'examples/*'
   - 'site'

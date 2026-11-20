@@ -14,8 +14,8 @@ Smoke tests that run the plugin in two kinds of apps, each **standalone**
 plugin from a packed tarball, the way users get it, with its own exact
 versions. SvelteKit 2 is not supported.
 
-This is a compatibility check, not a benchmark. The 50k-instance performance
-runs live under `perf/` and are opt-in.
+This is a compatibility check, not a benchmark. The performance runs live
+under `perf/` and are opt-in.
 
 ## Run locally
 
@@ -28,9 +28,8 @@ node e2e/compat/smoke.mjs kit3 --dock --tier=2    # inside the Vite DevTools doc
 ```
 
 `prepare.mjs` fails if an installed version differs from `matrix.json`.
-`--tier=1` skips the browser checks. Each mode runs with the Vite config named
-in the profile's `configs` (passed as `--config`); a config that serves both
-modes switches with `SVELTE_DEVTOOLS_DOCK=1`.
+`--tier=1` skips the browser checks. Both modes use the app's `vite.config.ts`;
+`--dock` sets `SVELTE_DEVTOOLS_DOCK=1`.
 
 `smoke.mjs` does the following:
 
@@ -41,7 +40,7 @@ modes switches with `SVELTE_DEVTOOLS_DOCK=1`.
 
 ## What is checked
 
-`smoke.mjs` is owned by svelte-perf; this section is the contract.
+This section is the contract for `smoke.mjs`.
 
 - **Without a browser:**
   - the dev server starts and `/.svelte-devtools/` responds;

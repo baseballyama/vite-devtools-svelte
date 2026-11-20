@@ -23,6 +23,8 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { parseOptions } from './lib/cli.mjs';
+
 const repoRoot = path.resolve(import.meta.dirname, '..');
 
 export const DEFAULTS = {
@@ -31,18 +33,6 @@ export const DEFAULTS = {
   assets: 1500,
   out: path.join(repoRoot, 'playground/.temp/large-app'),
 };
-
-function parseArgs(argv) {
-  const opts = { ...DEFAULTS };
-  for (const arg of argv) {
-    const m = /^--([^=]+)=(.*)$/.exec(arg);
-    if (!m) continue;
-    const [, key, value] = m;
-    if (!(key in opts)) throw new Error(`Unknown option --${key}`);
-    opts[key] = key === 'out' ? path.resolve(value) : Number(value);
-  }
-  return opts;
-}
 
 // Small deterministic PRNG so every run produces byte-identical output.
 function mulberry32(seed) {
@@ -520,7 +510,8 @@ export async function POST({ request }) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
-  const opts = parseArgs(process.argv.slice(2));
+  const opts = parseOptions(process.argv.slice(2), DEFAULTS);
+  opts.out = path.resolve(opts.out);
   const t0 = performance.now();
   const res = generate(opts);
   console.log(

@@ -1,7 +1,7 @@
 # UI first-view checklist (compat samples)
 
 What a person checks when opening `/.svelte-devtools/` for the first time on `plain-svelte` (plain Svelte + Vite, `examples/plain-svelte`) and
-`kit3` (SvelteKit 3, `e2e/compat/kit3`). Run it only in a granted slot. Record each item as PASS, FAIL or NOT RUN, together with the
+`kit3` (SvelteKit 3, `e2e/compat/kit3`). Record each item as PASS, FAIL or NOT RUN, together with the
 profile and the plugin tarball version. "Not applicable" items must show an honest empty state, not an error.
 
 Both apps run a bounded ticker (1 s, at most 120 ticks), so there is activity without input. Start checking within

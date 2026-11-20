@@ -8,7 +8,6 @@
   },
   "scripts": {
     "dev": "vite dev",
-    "dev:ui": "vite dev",
     "build": "vite build",
     "preview": "vite preview"
   },

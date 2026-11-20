@@ -8,14 +8,11 @@
 //     [--devtools-path=/.svelte-devtools/] [--port=5390] [--headed=1]
 //
 // `--repo` measures another checkout (e.g. a pristine baseline copy).
-// Playwright/axe resolve from the workspace, or from PERF_NODE_MODULES.
+// Playwright/axe resolve from this workspace's root.
 
-import { spawn } from 'node:child_process';
 import fs from 'node:fs';
-import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 
 import {
   generate,
@@ -24,12 +21,41 @@ import {
   fixtureShape,
   kitShape,
 } from './generate-large-app.mjs';
+import { parseOptions } from './lib/cli.mjs';
+import {
+  INIT_SCRIPT,
+  cdpMetrics,
+  frameStats,
+  heapAfterGc,
+  idleWindow,
+  importRootDep,
+  median,
+  r1,
+  repoRoot,
+  rootDepFile,
+  sleep,
+  startServer,
+  stopServer,
+} from './lib/harness.mjs';
 
 const perfDir = import.meta.dirname;
-const repoRoot = path.resolve(perfDir, '..');
+const ratio = (a, b) => r1(((a - b) / b) * 100);
+
+// Bench-only, so run-paired pages do not pay for an observer they never read.
+// Own global: the order of several init scripts is not defined.
+const CLS_SCRIPT = `
+(() => {
+  window.__perfCls = 0;
+  try {
+    new PerformanceObserver((l) => {
+      for (const e of l.getEntries()) if (!e.hadRecentInput) window.__perfCls += e.value;
+    }).observe({ type: 'layout-shift', buffered: true });
+  } catch {}
+})();
+`;
 
 function parseArgs(argv) {
-  const opts = {
+  const opts = parseOptions(argv, {
     label: 'local',
     repo: repoRoot,
     rows: 5000,
@@ -43,167 +69,15 @@ function parseArgs(argv) {
     headed: 0,
     regen: 0,
     idleMs: 5000,
-  };
-  for (const arg of argv) {
-    const m = /^--([^=]+)=(.*)$/.exec(arg);
-    if (!m) continue;
-    const key = m[1].replaceAll(/-([a-z])/g, (_, c) => c.toUpperCase());
-    if (!(key in opts)) throw new Error(`Unknown option --${m[1]}`);
-    opts[key] = typeof opts[key] === 'number' ? Number(m[2]) : m[2];
-  }
+  });
   opts.repo = path.resolve(opts.repo);
   return opts;
-}
-
-async function importDep(name) {
-  const bases = [process.env.PERF_NODE_MODULES, repoRoot].filter(Boolean);
-  for (const base of bases) {
-    try {
-      const req = createRequire(path.join(base, 'noop.js'));
-      return await import(pathToFileURL(req.resolve(name)).href);
-    } catch {
-      /* try next */
-    }
-  }
-  throw new Error(
-    `Cannot resolve "${name}". Add it as a devDependency or set PERF_NODE_MODULES=<dir containing node_modules>.`,
-  );
-}
-
-function resolveDepFile(name, file) {
-  const bases = [process.env.PERF_NODE_MODULES, repoRoot].filter(Boolean);
-  for (const base of bases) {
-    try {
-      const req = createRequire(path.join(base, 'noop.js'));
-      return path.join(path.dirname(req.resolve(`${name}/package.json`)), file);
-    } catch {
-      /* try next */
-    }
-  }
-  return null;
-}
-
-const sleep = ms =>
-  new Promise(r => {
-    setTimeout(r, ms);
-  });
-const median = xs => {
-  const s = xs.toSorted((a, b) => a - b);
-  return s.length > 0 ? s[Math.floor((s.length - 1) / 2)] : NaN;
-};
-const pct = (xs, p) => {
-  const s = xs.toSorted((a, b) => a - b);
-  return s.length > 0 ? s[Math.min(s.length - 1, Math.floor((p / 100) * s.length))] : NaN;
-};
-const r1 = n => Math.round(n * 10) / 10;
-
-async function startServer(appDir, port, withDevtools) {
-  const viteBin = path.join(appDir, '../../node_modules/vite/bin/vite.js');
-  const t0 = performance.now();
-  const child = spawn(process.execPath, [viteBin, 'dev', '--port', String(port), '--strictPort'], {
-    cwd: appDir,
-    env: { ...process.env, PERF_DEVTOOLS: withDevtools ? '1' : '0', PERF_LOG_LEVEL: 'info' },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  let log = '';
-  const getLog = () => log;
-  child.stdout.on('data', d => {
-    log += d;
-  });
-  child.stderr.on('data', d => {
-    log += d;
-  });
-  const base = `http://localhost:${port}`;
-  // The first SSR of /bench includes the cold compile of the route + plugin transforms.
-  for (let i = 0; i < 600; i++) {
-    if (child.exitCode !== null) throw new Error(`vite exited early:\n${log}`);
-    try {
-      const res = await fetch(`${base}/bench`);
-      if (res.ok) {
-        await res.text();
-        return { child, base, coldMs: performance.now() - t0, log: getLog };
-      }
-    } catch {
-      /* not listening yet */
-    }
-    await sleep(100);
-  }
-  child.kill('SIGKILL');
-  throw new Error(`vite did not become ready:\n${log}`);
-}
-
-async function stopServer(srv) {
-  if (srv?.child.exitCode !== null) return;
-  srv.child.kill('SIGTERM');
-  for (let i = 0; i < 50 && srv.child.exitCode === null; i++) await sleep(100);
-  if (srv.child.exitCode === null) srv.child.kill('SIGKILL');
-}
-
-// Installed before any page script: long-task + layout-shift collectors.
-const INIT_SCRIPT = `
-(() => {
-  window.__perf = { longTasks: [], cls: 0 };
-  try {
-    new PerformanceObserver((l) => {
-      for (const e of l.getEntries()) window.__perf.longTasks.push({ start: e.startTime, dur: e.duration });
-    }).observe({ type: 'longtask', buffered: true });
-  } catch {}
-  try {
-    new PerformanceObserver((l) => {
-      for (const e of l.getEntries()) if (!e.hadRecentInput) window.__perf.cls += e.value;
-    }).observe({ type: 'layout-shift', buffered: true });
-  } catch {}
-})();
-`;
-
-async function cdpMetrics(cdp) {
-  const { metrics } = await cdp.send('Performance.getMetrics');
-  return Object.fromEntries(metrics.map(m => [m.name, m.value]));
-}
-
-async function heapAfterGc(cdp) {
-  await cdp.send('HeapProfiler.collectGarbage');
-  await cdp.send('HeapProfiler.collectGarbage');
-  const { usedSize } = await cdp.send('Runtime.getHeapUsage');
-  return usedSize;
-}
-
-// What the user's app pays for background polling.
-async function idleWindow(page, cdp, ms) {
-  const before = await cdpMetrics(cdp);
-  const ltStart = await page.evaluate(() => performance.now());
-  await sleep(ms);
-  const after = await cdpMetrics(cdp);
-  const longTasks = await page.evaluate(
-    s => window.__perf.longTasks.filter(t => t.start >= s),
-    ltStart,
-  );
-  return {
-    windowMs: ms,
-    taskMs: r1((after.TaskDuration - before.TaskDuration) * 1000),
-    scriptMs: r1((after.ScriptDuration - before.ScriptDuration) * 1000),
-    layoutMs: r1((after.LayoutDuration - before.LayoutDuration) * 1000),
-    busyPct: r1(((after.TaskDuration - before.TaskDuration) * 1000 * 100) / ms),
-    longTasks: longTasks.length,
-    longTaskMs: r1(longTasks.reduce((s, t) => s + t.dur, 0)),
-  };
-}
-
-function frameStats(durations) {
-  // First sample includes the setup frame; drop it.
-  const d = durations.slice(1);
-  return {
-    frames: d.length,
-    p50: r1(pct(d, 50)),
-    p95: r1(pct(d, 95)),
-    max: r1(Math.max(...d)),
-    over50ms: d.filter(x => x > 50).length,
-  };
 }
 
 async function benchApp(browser, srv, opts, withDevtools) {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   await ctx.addInitScript(INIT_SCRIPT);
+  await ctx.addInitScript(CLS_SCRIPT);
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
@@ -393,6 +267,7 @@ async function benchUi(browser, srv, opts, outDir) {
 
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   await ctx.addInitScript(INIT_SCRIPT);
+  await ctx.addInitScript(CLS_SCRIPT);
   const page = await ctx.newPage();
   const errors = [];
   const consoleErrors = [];
@@ -516,7 +391,7 @@ async function benchUi(browser, srv, opts, outDir) {
   res.heapMB = r1((await heapAfterGc(cdp)) / 1048576);
   res.httpRequestsTotal = rpcCalls.length;
 
-  const axePath = resolveDepFile('axe-core', 'axe.min.js');
+  const axePath = rootDepFile('axe-core', 'axe.min.js');
   if (axePath) {
     res.a11y = {};
     for (const label of ['Overview', 'Components', 'Routes']) {
@@ -531,7 +406,7 @@ async function benchUi(browser, srv, opts, outDir) {
       });
     }
   }
-  res.cls = await page.evaluate(() => Math.round(window.__perf.cls * 1000) / 1000);
+  res.cls = await page.evaluate(() => Math.round(window.__perfCls * 1000) / 1000);
 
   res.keyboard = await page.evaluate(() => {
     const focusables = [
@@ -592,11 +467,13 @@ async function main() {
     generate({ ...FIXTURE_DEFAULTS, out: appDir });
   }
   const outDir = path.join(perfDir, 'results', opts.label);
+  // Keeps devframe's trusted tokens out of the real ~/.svelte-devtools.
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'sdt-bench-home-'));
   fs.mkdirSync(outDir, { recursive: true });
 
   // Workspace-root `playwright-core` (same Chromium for every checkout).
-  const pw = await importDep('playwright-core').catch(() => importDep('playwright'));
-  const chromium = pw.chromium ?? pw.default.chromium;
+  const { mod: pw } = await importRootDep('playwright-core', 'playwright');
+  const chromium = pw.chromium;
   const browser = await chromium.launch({ headless: !opts.headed });
   const result = {
     label: opts.label,
@@ -617,7 +494,7 @@ async function main() {
   try {
     for (const mode of opts.modes.split(',')) {
       const withDevtools = mode === 'on';
-      const srv = await startServer(appDir, opts.port, withDevtools);
+      const srv = await startServer({ appDir, port: opts.port, withDevtools, home });
       try {
         const m = {
           coldSsrMs: r1(srv.coldMs),
@@ -631,12 +508,12 @@ async function main() {
     }
   } finally {
     await browser.close();
+    fs.rmSync(home, { recursive: true, force: true });
   }
 
   if (result.modes.on && result.modes.off) {
     const on = result.modes.on.app;
     const off = result.modes.off.app;
-    const ratio = (a, b) => r1(((a - b) / b) * 100);
     result.overheadPct = {
       rowsMount: ratio(on.rows.mountMs, off.rows.mountMs),
       rowsUnmount: ratio(on.rows.unmountMs, off.rows.unmountMs),
