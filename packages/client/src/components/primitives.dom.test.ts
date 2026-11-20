@@ -7,10 +7,10 @@ import { fakeResource } from '../test/fake-resource.svelte.js';
 import Badge from './Badge.svelte';
 import Button from './Button.svelte';
 import CaptureNotice from './CaptureNotice.svelte';
+import DetailsPane from './DetailsPane.svelte';
 import EmptyState from './EmptyState.svelte';
 import Highlight from './Highlight.svelte';
 import Icon from './Icon.svelte';
-import Inspector from './Inspector.svelte';
 import Panel from './Panel.svelte';
 import RefreshButton from './RefreshButton.svelte';
 
@@ -140,10 +140,10 @@ describe('Panel', () => {
   });
 });
 
-describe('Inspector', () => {
+describe('DetailsPane', () => {
   it('is a labelled complementary region; Escape and the close button close it', async () => {
     const onclose = vi.fn();
-    render(Inspector, {
+    render(DetailsPane, {
       title: 'Counter',
       subtitle: 'src/Counter.svelte',
       badges: html('<span>live</span>'),
@@ -164,7 +164,7 @@ describe('Inspector', () => {
   });
 
   it('has no close button or bar without handlers and snippets', () => {
-    const { container } = render(Inspector, { title: 'Plain', children: html('<p>x</p>') });
+    const { container } = render(DetailsPane, { title: 'Plain', children: html('<p>x</p>') });
     expect(screen.queryByRole('button')).toBeNull();
     expect(container.querySelector('.bar')).toBeNull();
     expect(container.querySelector('.subtitle')).toBeNull();
@@ -178,7 +178,7 @@ describe('Inspector', () => {
   });
 
   it('shows only the badges or only the actions', () => {
-    const { container, unmount } = render(Inspector, {
+    const { container, unmount } = render(DetailsPane, {
       title: 'A',
       badges: html('<span>b</span>'),
       children: html('<p>x</p>'),
@@ -186,7 +186,7 @@ describe('Inspector', () => {
     expect(container.querySelector('.badges')).not.toBeNull();
     expect(container.querySelector('.acts')).toBeNull();
     unmount();
-    render(Inspector, {
+    render(DetailsPane, {
       title: 'B',
       actions: html('<span>a</span>'),
       children: html('<p>x</p>'),

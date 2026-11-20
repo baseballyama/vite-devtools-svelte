@@ -2,9 +2,9 @@
   import Badge from '../components/Badge.svelte';
   import Button from '../components/Button.svelte';
   import DataTable from '../components/DataTable.svelte';
+  import DetailsPane from '../components/DetailsPane.svelte';
   import Highlight from '../components/Highlight.svelte';
   import Icon from '../components/Icon.svelte';
-  import Inspector from '../components/Inspector.svelte';
   import Panel from '../components/Panel.svelte';
   import RefreshButton from '../components/RefreshButton.svelte';
   import ResourceEmpty from '../components/ResourceEmpty.svelte';
@@ -101,7 +101,7 @@
   ];
 
   // Tells `.svelte.js/ts` modules from components, which share the svelte type.
-  function badge(m: ModuleNode): string {
+  function typeLabel(m: ModuleNode): string {
     if (m.type !== 'svelte') return m.type;
     const ext = m.id.slice(m.id.lastIndexOf('.') + 1).toLowerCase();
     return ext === 'svelte' ? 'svelte' : `svelte.${ext}`;
@@ -154,7 +154,7 @@
     >
       {#snippet row(m: ModuleNode, { visible }: TableRowState)}
         <span class="mod">
-          <Badge tone={tones[m.type]}>{badge(m)}</Badge>
+          <Badge tone={tones[m.type]}>{typeLabel(m)}</Badge>
           <span class="truncate mono id"><Highlight text={m.id} {query} /></span>
           {#if m.isCyclic}<span class="cyc" title="Part of a circular import"
               ><Icon name="cycle" size={12} /></span
@@ -184,13 +184,13 @@
     </DataTable>
     {#snippet aside()}
       {#if current}
-        <Inspector
+        <DetailsPane
           title={basename(current.id)}
           subtitle={current.id}
           onclose={() => (selected = null)}
         >
           {#snippet badges()}
-            <Badge tone={tones[current.type]}>{badge(current)}</Badge>
+            <Badge tone={tones[current.type]}>{typeLabel(current)}</Badge>
             {#if current.size}<Badge>{formatBytes(current.size)}</Badge>{/if}
             {#if current.isCyclic}<Badge tone="yellow">circular</Badge>{/if}
           {/snippet}
@@ -211,7 +211,7 @@
           {/each}
           {@render deps('Imports', current.imports)}
           {@render deps('Imported by', current.importedBy)}
-        </Inspector>
+        </DetailsPane>
       {/if}
     {/snippet}
   </SplitView>
@@ -225,7 +225,7 @@
         {@const m = byId.get(id)}
         <li>
           <button type="button" onclick={() => select(id)} disabled={!m} title={id}>
-            {#if m}<Badge tone={tones[m.type]}>{badge(m)}</Badge>{/if}
+            {#if m}<Badge tone={tones[m.type]}>{typeLabel(m)}</Badge>{/if}
             <span class="truncate">{basename(id)}</span>
             <span class="sub truncate mono">{id}</span>
           </button>

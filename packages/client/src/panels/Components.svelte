@@ -5,9 +5,9 @@
   import Button from '../components/Button.svelte';
   import CaptureNotice from '../components/CaptureNotice.svelte';
   import DataTable from '../components/DataTable.svelte';
+  import DetailsPane from '../components/DetailsPane.svelte';
   import EmptyState from '../components/EmptyState.svelte';
   import Highlight from '../components/Highlight.svelte';
-  import Inspector from '../components/Inspector.svelte';
   import Panel from '../components/Panel.svelte';
   import RefreshButton from '../components/RefreshButton.svelte';
   import SearchField from '../components/SearchField.svelte';
@@ -46,10 +46,9 @@
   let query = $state('');
 
   // Polled in both modes: Files mode shows per-file mounted counts too.
-  // Instance ids restart per app page load, so a snapshot carries the epoch
-  // (page load) it came from. The meta is read before and after the list:
-  // if the served epoch flipped in between (two app tabs), the epoch is
-  // `null` = unknown, and ids of that snapshot are never compared.
+  // Instance ids restart per app page load, so ids are compared only within
+  // one `epoch`. The meta is read before and after the list: `null` = it
+  // flipped in between (two app tabs), `''` = the server reported none.
   interface LiveSnapshot {
     list: ComponentInstance[];
     meta: LiveComponentsMeta | null;
@@ -70,11 +69,6 @@
   );
   const liveList = $derived(live.data.list);
 
-  // Tree state is *anchored* by instance id: on every snapshot the
-  // selection and expanded set are carried over with `remapKeys` — a live id
-  // wins (so removing an earlier same-name sibling, which shifts ordinals,
-  // never moves the selection to a neighbour) and the path is used only for
-  // fresh ids, i.e. HMR remounts.
   const tree = $derived(buildLiveTree(liveList, live.data.epoch));
 
   const capture = $derived.by<CaptureInfo | null>(() => {
@@ -98,13 +92,15 @@
   const instancesPerFile = $derived(countBy(liveList, c => relationKey(c.file)));
 
   let expanded = $state(new Set<string>());
-  let treeSelected = $state<string | null>(null);
+  let selectedNodeKey = $state<string | null>(null);
   let treeView = $state<TreeViewApi | null>(null);
   /** Page load the default expansion was applied to (`undefined` = not yet). */
   let seededEpoch: string | undefined = undefined;
 
-  // Carry selection / expansion across snapshots (see `tree` above);
-  // across an epoch change only paths are used (`remapAcross`).
+  // Carry selection / expansion by instance id, so removing an earlier
+  // same-name sibling (shifting ordinals) never moves them to a neighbour. A
+  // path is used only for fresh ids (HMR remounts), or for every key across
+  // an epoch change (`remapAcross`).
   let prevTree: typeof tree | null = null;
   const idOf = (n: LiveNode) => n.c.id;
   const keyOf = (n: LiveNode) => n.key;
@@ -121,8 +117,8 @@
         if (keys.length !== expanded.size || keys.some(k => !expanded.has(k)))
           expanded = new Set(keys);
       }
-      if (treeSelected != null)
-        treeSelected = remapAcross([treeSelected], prev, next, idOf, keyOf)[0] ?? null;
+      if (selectedNodeKey != null)
+        selectedNodeKey = remapAcross([selectedNodeKey], prev, next, idOf, keyOf)[0] ?? null;
     });
   });
 
@@ -143,7 +139,7 @@
   const treeMatches = $derived(match && liveList.filter(c => match(c.name, c.file)).length);
 
   const selectedNode = $derived(
-    treeSelected != null ? (tree.byKey.get(treeSelected) ?? null) : null,
+    selectedNodeKey != null ? (tree.byKey.get(selectedNodeKey) ?? null) : null,
   );
 
   function ancestorsOf(id: number): LiveNode[] {
@@ -204,8 +200,8 @@
   }
 
   // A $derived, so moving the selection between rows does not re-run the analysis;
-  // the tree inspector shows Re-analyze instead.
-  const hasTreeSelection = $derived(treeSelected != null);
+  // the tree details pane shows Re-analyze instead.
+  const hasTreeSelection = $derived(selectedNodeKey != null);
   const relations = resource<ComponentRelation[]>(getComponentRelations, {
     initial: [],
     when: () => mode.value === 'files' || hasTreeSelection,
@@ -227,8 +223,10 @@
   );
 
   let fileSort = $state<SortState | null>({ id: 'name', desc: false });
-  let fileSelected = $state<string | null>(null);
-  const selectedFile = $derived(fileSelected ? (relationByFile.get(fileSelected) ?? null) : null);
+  let selectedFileKey = $state<string | null>(null);
+  const selectedFile = $derived(
+    selectedFileKey ? (relationByFile.get(selectedFileKey) ?? null) : null,
+  );
 
   const columns: Column<ComponentRelation>[] = [
     {
@@ -264,11 +262,7 @@
     },
   ];
 
-  /**
-   * The page load this snapshot's ids belong to: set only when the meta read
-   * before and after the list agree (`live.data.epoch`). `null` means the
-   * served page load changed in between; the snapshot is refetched.
-   */
+  /** `''` (no epoch) and `null` (flipped) both mean the ids cannot be scoped to a page load. */
   const liveEpoch = $derived(live.data.epoch || null);
   $effect(() => {
     if (live.data.epoch === null) untrack(() => void live.refresh());
@@ -288,14 +282,14 @@
   function showFile(file: string) {
     mode.value = 'files';
     query = '';
-    fileSelected = file;
+    selectedFileKey = file;
   }
 
   function showInstancesOf(file: string) {
     const first = liveList.find(c => relationKey(c.file) === file);
     mode.value = 'tree';
     query = '';
-    if (first) queueMicrotask(() => revealInstance(first.id));
+    if (first) void tick().then(() => revealInstance(first.id));
   }
 </script>
 
@@ -353,7 +347,7 @@
         <TreeView
           bind:this={treeView}
           bind:expanded
-          bind:selected={treeSelected}
+          bind:selected={selectedNodeKey}
           roots={tree.roots}
           getKey={(n: LiveNode) => n.key}
           getChildren={(n: LiveNode) => n.children}
@@ -400,7 +394,11 @@
           {@const rel = relationByFile.get(fileKey)}
           {@const ancestors = ancestorsOf(c.id)}
           {@const sameFile = instancesPerFile.get(fileKey) ?? 1}
-          <Inspector title="<{c.name}>" subtitle={c.file} onclose={() => (treeSelected = null)}>
+          <DetailsPane
+            title="<{c.name}>"
+            subtitle={c.file}
+            onclose={() => (selectedNodeKey = null)}
+          >
             {#snippet badges()}
               <Badge tone={c.mounted ? 'green' : 'neutral'}
                 >{c.mounted ? 'mounted' : 'unmounted'}</Badge
@@ -463,7 +461,7 @@
               <h3 class="section-title">Imports <span class="num">{rel.imports.length}</span></h3>
               {@render importList(rel.imports, open)}
             {/if}
-          </Inspector>
+          </DetailsPane>
         {/if}
       {/snippet}
     </SplitView>
@@ -474,7 +472,7 @@
         {columns}
         getKey={(r: ComponentRelation) => r.file}
         bind:sort={fileSort}
-        bind:selected={fileSelected}
+        bind:selected={selectedFileKey}
         label="Component files"
         onactivate={(r: ComponentRelation) => open(r.file)}
       >
@@ -505,10 +503,10 @@
       {#snippet aside()}
         {#if selectedFile}
           {@const users = importers.get(selectedFile.file) ?? []}
-          <Inspector
+          <DetailsPane
             title={selectedFile.name}
             subtitle={selectedFile.file}
-            onclose={() => (fileSelected = null)}
+            onclose={() => (selectedFileKey = null)}
           >
             {#snippet actions()}
               {#if instancesPerFile.get(selectedFile.file)}
@@ -523,7 +521,7 @@
             </h3>
             {#if selectedFile.imports.length}
               {@render importList(selectedFile.imports, imp =>
-                relationByFile.has(imp) ? (fileSelected = imp) : open(imp),
+                relationByFile.has(imp) ? (selectedFileKey = imp) : open(imp),
               )}
             {:else}<p class="section-note">Imports no other components.</p>{/if}
             <h3 class="section-title">Used by <span class="num">{users.length}</span></h3>
@@ -531,7 +529,7 @@
               <ul class="link-list">
                 {#each users as u (u.file)}
                   <li>
-                    <button type="button" onclick={() => (fileSelected = u.file)}
+                    <button type="button" onclick={() => (selectedFileKey = u.file)}
                       ><span class="truncate">{u.name}</span><span class="sub truncate"
                         >{shortPath(u.file)}</span
                       ></button
@@ -540,7 +538,7 @@
                 {/each}
               </ul>
             {:else}<p class="section-note">Not imported by any component (route or entry).</p>{/if}
-          </Inspector>
+          </DetailsPane>
         {/if}
       {/snippet}
     </SplitView>

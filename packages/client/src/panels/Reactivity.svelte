@@ -5,7 +5,6 @@
   import CaptureNotice from '../components/CaptureNotice.svelte';
   import DataTable from '../components/DataTable.svelte';
   import EmptyState from '../components/EmptyState.svelte';
-  import GraphView from '../components/GraphView.svelte';
   import Highlight from '../components/Highlight.svelte';
   import Panel from '../components/Panel.svelte';
   import SearchField from '../components/SearchField.svelte';
@@ -24,7 +23,6 @@
     baselineNotice,
     fetchGraph,
     fileNeighbourhood,
-    hotStates,
     isEpochChanged,
     nodeValueText,
     sameGraph,
@@ -43,7 +41,8 @@
   import ComponentsOverview from './reactive/ComponentsOverview.svelte';
   import HotStates from './reactive/HotStates.svelte';
   import KindBadge from './reactive/KindBadge.svelte';
-  import SignalInspector from './reactive/SignalInspector.svelte';
+  import SignalDetails from './reactive/SignalDetails.svelte';
+  import SignalGraph from './reactive/SignalGraph.svelte';
 
   // Edges are a snapshot of current dependencies ("can affect"), never a
   // recorded cause; what is not captured is labelled "not recorded".
@@ -52,24 +51,24 @@
   const GRAPH_LIMIT = 400;
   /** Every graph poll makes the app walk the requested scope: slow, visible-only. */
   const POLL_MS = 5000;
-  const SUMMARY = { topK: 50 } as const;
   const SUMMARY_POLL_MS = 2000;
 
   type Tab = 'overview' | 'local' | 'full';
   let tab = $state<Tab>(reactiveScope.current ? 'local' : 'overview');
   const scope = $derived(reactiveScope.current);
 
-  // A scope set from the Components inspector (or the overview) opens the component view.
+  // A scope set from the Components details pane (or the overview) opens the component view.
   $effect(() => {
-    if (reactiveScope.current) untrack(() => (tab = 'local'));
+    if (scope) untrack(() => (tab = 'local'));
   });
 
   /** Components come from the runtime summary, states from the timeline buffer; each works without the other. */
   let overviewOf = $state<'file' | 'instance' | 'states'>('file');
-  // A $derived, so switching Components / Instances does not re-run the poll.
+  // $deriveds, so switching Components / Instances does not re-run the polls.
   const summaryOn = $derived(tab === 'overview' && overviewOf !== 'states');
+  const statesOn = $derived(tab === 'overview' && overviewOf === 'states');
 
-  const summary = resource<ReactiveSummary | null>(() => getReactiveSummary(SUMMARY), {
+  const summary = resource<ReactiveSummary | null>(() => getReactiveSummary({ topK: 50 }), {
     initial: null,
     interval: SUMMARY_POLL_MS,
     when: () => summaryOn,
@@ -82,16 +81,11 @@
       initial: [],
       interval: SUMMARY_POLL_MS,
       version: datasetVersion('stateTimeline'),
-      when: () => tab === 'overview' && overviewOf === 'states',
+      when: () => statesOn,
     },
   );
 
-  const states = $derived(hotStates(timeline.data));
-  // Baseline disclosure for the States view (capture info of the timeline).
-  const statesCapture = captureInfo(
-    SUMMARY_POLL_MS,
-    () => tab === 'overview' && overviewOf === 'states',
-  );
+  const statesCapture = captureInfo(SUMMARY_POLL_MS, () => statesOn);
   const statesBaseline = $derived(baselineNotice(statesCapture.data.stateTimeline?.baseline));
 
   let changed = $state.raw(new Set<string>());
@@ -163,7 +157,7 @@
       : graph.data,
   );
 
-  const view = persisted<'auto' | 'graph' | 'list'>('reactive:view', 'auto');
+  const layout = persisted<'auto' | 'graph' | 'list'>('reactive:view', 'auto');
   let query = $state('');
   let type = $state<'all' | ReactiveNode['type']>('all');
   let sort = $state<SortState | null>({ id: 'component', desc: false });
@@ -215,8 +209,8 @@
 
   const nodeIds = $derived(new Set(nodes.map(n => n.id)));
   const edges = $derived(data.edges.filter(e => nodeIds.has(e.from) && nodeIds.has(e.to)));
-  const mode = $derived(
-    view.value === 'auto' ? (nodes.length <= 150 ? 'graph' : 'list') : view.value,
+  const shownLayout = $derived(
+    layout.value === 'auto' ? (nodes.length <= 150 ? 'graph' : 'list') : layout.value,
   );
   const current = $derived(selected ? (byId.get(selected) ?? null) : null);
 
@@ -257,15 +251,6 @@
         (links.dependents.get(b.id)?.length ?? 0),
     },
   ];
-
-  /** Capabilities come with the summary; without one nothing beyond the graph is available. */
-  const capabilities = $derived(
-    summary.data?.capabilities ?? {
-      valueInspection: false,
-      signalHistory: false,
-      writeCause: false,
-    },
-  );
 
   function open(n: ReactiveNode) {
     openReactiveInEditor(n.componentFile, n.name, n.type).catch(() => {});
@@ -321,7 +306,7 @@
       />
       {#if tab === 'full'}
         <select
-          class="select scope"
+          class="select file-filter"
           bind:value={fileFilter}
           aria-label="Filter loaded signals by component file"
         >
@@ -341,7 +326,7 @@
       />
       <Segmented
         label="Layout"
-        bind:value={view.value}
+        bind:value={layout.value}
         options={[
           { value: 'auto', label: 'Auto' },
           { value: 'graph', label: 'Graph' },
@@ -353,7 +338,7 @@
 
   {#if tab === 'overview'}
     {#if overviewOf === 'states'}
-      <HotStates {timeline} {states} baseline={statesBaseline} />
+      <HotStates {timeline} baseline={statesBaseline} />
     {:else}
       <ComponentsOverview {summary} group={overviewOf} onfullgraph={() => (tab = 'full')} />
     {/if}
@@ -366,7 +351,8 @@
         or use <strong>Show reactivity</strong> in the
         <button type="button" class="link" onclick={() => router.go('components')}
           >Components</button
-        > inspector. Only that component's signals and the signals they are directly linked to are loaded.
+        > details pane. Only that component's signals and the signals they are directly linked to are
+        loaded.
       </p>
     </EmptyState>
   {:else if epochMismatch}
@@ -378,13 +364,13 @@
       <Button icon="close" onclick={clearScope}>Clear selection</Button>
     </EmptyState>
   {:else}
-    {@render local()}
+    {@render signalView()}
   {/if}
 </Panel>
 
-{#snippet local()}
+{#snippet signalView()}
   <SplitView id="reactive" open={!!current}>
-    <div class="local">
+    <div class="signal-view">
       {#if tab === 'local' && scope}
         <div class="scope-bar">
           <span>
@@ -411,7 +397,7 @@
               <p>Signals created during component init appear here with their dependencies.</p>
             </EmptyState>
           {/if}
-        {:else if mode === 'graph'}
+        {:else if shownLayout === 'graph'}
           {#if nodes.length === 0}
             <EmptyState icon="search" title="No loaded signals match" />
           {:else if nodes.length > GRAPH_LIMIT}
@@ -422,11 +408,16 @@
               <p>
                 Pick a single component or filter to under {GRAPH_LIMIT} signals, or use the list view.
               </p>
-              <Button icon="list" onclick={() => (view.value = 'list')}>Switch to list</Button>
+              <Button icon="list" onclick={() => (layout.value = 'list')}>Switch to list</Button>
             </EmptyState>
           {:else}
             <div class="graph">
-              <GraphView {nodes} {edges} changedNodeIds={changed} bind:selectedNodeId={selected} />
+              <SignalGraph
+                {nodes}
+                {edges}
+                changedNodeIds={changed}
+                bind:selectedNodeId={selected}
+              />
             </div>
           {/if}
         {:else}
@@ -462,13 +453,12 @@
     </div>
     {#snippet aside()}
       {#if current}
-        <SignalInspector
+        <SignalDetails
           node={current}
           {byId}
           deps={links.deps.get(current.id) ?? []}
           dependents={links.dependents.get(current.id) ?? []}
           flash={changed.has(current.id)}
-          {capabilities}
           scopedTo={tab === 'local' && scope ? scope.componentId : null}
           canScope={!!data.epoch}
           onselect={(id: string) => (selected = id)}
@@ -482,10 +472,10 @@
 {/snippet}
 
 <style>
-  .scope {
+  .file-filter {
     max-width: 200px;
   }
-  .local {
+  .signal-view {
     display: flex;
     flex-direction: column;
     height: 100%;

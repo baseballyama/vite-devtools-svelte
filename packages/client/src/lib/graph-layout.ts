@@ -1,4 +1,3 @@
-import { componentName } from './format.js';
 import type { ReactiveEdge, ReactiveNode } from './types.js';
 
 export const NODE_W = 160;
@@ -22,8 +21,6 @@ interface Point {
 }
 
 interface ComponentBox {
-  /** Display name (`shortFile`). */
-  file: string;
   /** Full path: the identity of the group. */
   componentFile: string;
   x: number;
@@ -48,8 +45,6 @@ export interface Propagation {
   depths: Map<string, number>;
 }
 
-export const shortFile = (file: string) => componentName(file, '');
-
 export function layoutGraph(
   nodes: readonly ReactiveNode[],
   edges: readonly ReactiveEdge[],
@@ -57,6 +52,9 @@ export function layoutGraph(
   if (nodes.length === 0) return { positions: new Map(), width: 0, height: 0, componentBoxes: [] };
 
   const nodeById = new Map(nodes.map(n => [n.id, n]));
+  const byFileThen = (score: (id: string) => number) => (a: string, b: string) =>
+    nodeById.get(a)!.componentFile.localeCompare(nodeById.get(b)!.componentFile) ||
+    score(a) - score(b);
   const inDegree = new Map<string, number>();
   const adj = new Map<string, string[]>();
   const radj = new Map<string, string[]>();
@@ -94,13 +92,7 @@ export function layoutGraph(
   if (remaining.length > 0) layers.push(remaining);
 
   for (const layer of layers) {
-    layer.sort((a, b) => {
-      const na = nodeById.get(a)!,
-        nb = nodeById.get(b)!;
-      const cmp = na.componentFile.localeCompare(nb.componentFile);
-      if (cmp !== 0) return cmp;
-      return (TYPE_ORDER[na.type] ?? 3) - (TYPE_ORDER[nb.type] ?? 3);
-    });
+    layer.sort(byFileThen(id => TYPE_ORDER[nodeById.get(id)!.type] ?? 4));
   }
 
   // Barycenter heuristic: reorder to reduce edge crossings.
@@ -118,13 +110,7 @@ export function layoutGraph(
         const preds = radj.get(id)!;
         bary.set(id, preds.reduce((s, p) => s + posInLayer.get(p)!, 0) / preds.length);
       }
-      layer.sort((a, b) => {
-        const na = nodeById.get(a)!,
-          nb = nodeById.get(b)!;
-        const cmp = na.componentFile.localeCompare(nb.componentFile);
-        if (cmp !== 0) return cmp;
-        return bary.get(a)! - bary.get(b)!;
-      });
+      layer.sort(byFileThen(id => bary.get(id)!));
       for (const [j, id] of layer.entries()) posInLayer.set(id, j);
     }
 
@@ -140,47 +126,34 @@ export function layoutGraph(
           bary.set(id, posInLayer.get(id)!);
         }
       }
-      layer.sort((a, b) => {
-        const na = nodeById.get(a)!,
-          nb = nodeById.get(b)!;
-        const cmp = na.componentFile.localeCompare(nb.componentFile);
-        if (cmp !== 0) return cmp;
-        return bary.get(a)! - bary.get(b)!;
-      });
+      layer.sort(byFileThen(id => bary.get(id)!));
       for (const [j, id] of layer.entries()) posInLayer.set(id, j);
     }
   }
 
-  const layerSlots: { id: string; comp: string }[][] = [];
+  // Slot offsets from the layer top; each layer is then centred vertically.
+  const layerOffsets: number[][] = [];
   const layerHeights: number[] = [];
   for (const layer of layers) {
-    const slots: { id: string; comp: string }[] = [];
-    let h = PADDING;
-    let prevComp = '';
+    const offsets: number[] = [];
+    let h = 0;
     for (const [j, id] of layer.entries()) {
-      const n = nodeById.get(id)!;
-      const comp = n.componentFile;
-      if (j > 0 && comp !== prevComp) h += COMP_GROUP_GAP;
-      slots.push({ id, comp });
+      if (j > 0 && nodeById.get(id)!.componentFile !== nodeById.get(layer[j - 1]!)!.componentFile)
+        h += COMP_GROUP_GAP;
+      offsets.push(h);
       h += NODE_GAP_Y;
-      prevComp = comp;
     }
-    layerSlots.push(slots);
-    layerHeights.push(h);
+    layerOffsets.push(offsets);
+    layerHeights.push(PADDING + h);
   }
 
   const totalHeight = Math.max(...layerHeights, PADDING * 2);
 
   const positions = new Map<string, Point>();
-  for (const [i, slots] of layerSlots.entries()) {
-    const offset = (totalHeight - layerHeights[i]!) / 2;
-    let y = PADDING + offset;
-    let prevComp = '';
-    for (const [j, { id, comp }] of slots.entries()) {
-      if (j > 0 && comp !== prevComp) y += COMP_GROUP_GAP;
-      positions.set(id, { x: PADDING + i * LAYER_GAP_X, y });
-      y += NODE_GAP_Y;
-      prevComp = comp;
+  for (const [i, layer] of layers.entries()) {
+    const top = PADDING + (totalHeight - layerHeights[i]!) / 2;
+    for (const [j, id] of layer.entries()) {
+      positions.set(id, { x: PADDING + i * LAYER_GAP_X, y: top + layerOffsets[i]![j]! });
     }
   }
 
@@ -206,16 +179,14 @@ export function layoutGraph(
         const cur = positions.get(id)!;
         const prevId = j > 0 ? sorted[j - 1]! : null;
         const nextId = j < sorted.length - 1 ? sorted[j + 1]! : null;
-        const prevNode = prevId ? nodeById.get(prevId) : null;
         const curNode = nodeById.get(id)!;
         const gapAbove =
-          prevId && prevNode && prevNode.componentFile !== curNode.componentFile
+          prevId && nodeById.get(prevId)!.componentFile !== curNode.componentFile
             ? COMP_GROUP_GAP
             : 0;
         const minY = prevId ? positions.get(prevId)!.y + NODE_GAP_Y + gapAbove : PADDING;
-        const nextNode = nextId ? nodeById.get(nextId) : null;
         const gapBelow =
-          nextId && nextNode && nextNode.componentFile !== curNode.componentFile
+          nextId && nodeById.get(nextId)!.componentFile !== curNode.componentFile
             ? COMP_GROUP_GAP
             : 0;
         const maxY = nextId ? positions.get(nextId)!.y - NODE_GAP_Y - gapBelow : totalHeight;
@@ -245,7 +216,6 @@ export function layoutGraph(
       else groups.set(n.componentFile, [pos]);
     }
     for (const [componentFile, poses] of groups) {
-      const file = shortFile(componentFile);
       let minY_ = Infinity;
       let maxY_ = -Infinity;
       for (const p of poses) {
@@ -254,7 +224,6 @@ export function layoutGraph(
       }
       const x = PADDING + i * LAYER_GAP_X;
       componentBoxes.push({
-        file,
         componentFile,
         x: x - BOX_PAD,
         y: minY_ - BOX_PAD,

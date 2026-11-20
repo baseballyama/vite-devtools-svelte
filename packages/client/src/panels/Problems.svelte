@@ -2,9 +2,9 @@
   import Badge from '../components/Badge.svelte';
   import Button from '../components/Button.svelte';
   import CaptureNotice from '../components/CaptureNotice.svelte';
+  import DetailsPane from '../components/DetailsPane.svelte';
   import Highlight from '../components/Highlight.svelte';
   import Icon from '../components/Icon.svelte';
-  import Inspector from '../components/Inspector.svelte';
   import Panel from '../components/Panel.svelte';
   import ResourceEmpty from '../components/ResourceEmpty.svelte';
   import SearchField from '../components/SearchField.svelte';
@@ -180,7 +180,7 @@
     </VirtualList>
     {#snippet aside()}
       {#if current}
-        <Inspector
+        <DetailsPane
           title={current.kind === 'error' ? 'Runtime error' : (current.code ?? 'Warning')}
           subtitle={loc(current)}
           onclose={() => (selected = null)}
@@ -210,7 +210,7 @@
               >
             </p>
           {/if}
-        </Inspector>
+        </DetailsPane>
       {/if}
     {/snippet}
   </SplitView>

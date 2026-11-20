@@ -370,7 +370,7 @@ try {
     await shot(
       '22-reactivity-component.png',
       2,
-      'Reactivity → one component (ReactivePriceChart, /cart with one item added) and the $state / $derived / $effect signals it is directly linked to (taxRate selected). Edges mean "can affect" (current dependencies, not a recorded cause); the inspector shows the current value and "Cause: Not recorded".',
+      'Reactivity → one component (ReactivePriceChart, /cart with one item added) and the $state / $derived / $effect signals it is directly linked to (taxRate selected). Edges mean "can affect" (current dependencies, not a recorded cause); the details pane shows the current value and "Cause: Not recorded".',
     );
   });
 

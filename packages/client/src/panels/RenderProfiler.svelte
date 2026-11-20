@@ -3,8 +3,8 @@
   import Button from '../components/Button.svelte';
   import CaptureNotice from '../components/CaptureNotice.svelte';
   import DataTable from '../components/DataTable.svelte';
+  import DetailsPane from '../components/DetailsPane.svelte';
   import Highlight from '../components/Highlight.svelte';
-  import Inspector from '../components/Inspector.svelte';
   import Panel from '../components/Panel.svelte';
   import ResourceEmpty from '../components/ResourceEmpty.svelte';
   import SearchField from '../components/SearchField.svelte';
@@ -46,7 +46,6 @@
     totalRenderTime: number;
     lastRenderTime: number;
     lastRenderAt: number;
-    ids: number[];
   }
 
   function toRow(p: RenderProfile, key: string): Row {
@@ -60,7 +59,6 @@
       totalRenderTime: p.totalRenderTime,
       lastRenderTime: p.lastRenderTime,
       lastRenderAt: p.lastRenderAt,
-      ids: [p.componentId],
     };
   }
 
@@ -70,7 +68,6 @@
     r.initTime += p.initTime;
     r.renderCount += p.renderCount;
     r.totalRenderTime += p.totalRenderTime;
-    r.ids.push(p.componentId);
     if (p.lastRenderAt > r.lastRenderAt) {
       r.lastRenderAt = p.lastRenderAt;
       r.lastRenderTime = p.lastRenderTime;
@@ -220,7 +217,7 @@
     </DataTable>
     {#snippet aside()}
       {#if current}
-        <Inspector title={current.name} subtitle={current.file} onclose={() => (selected = null)}>
+        <DetailsPane title={current.name} subtitle={current.file} onclose={() => (selected = null)}>
           {#snippet badges()}
             {#if group === 'component'}<Badge
                 >{current.instances} instance{current.instances === 1 ? '' : 's'}</Badge
@@ -261,7 +258,7 @@
               )}%</strong
             >
           </p>
-        </Inspector>
+        </DetailsPane>
       {/if}
     {/snippet}
   </SplitView>

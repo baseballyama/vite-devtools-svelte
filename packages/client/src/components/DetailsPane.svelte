@@ -23,7 +23,7 @@
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<aside class="inspector" aria-label="{title} details" {onkeydown}>
+<aside class="details-pane" aria-label="{title} details" {onkeydown}>
   <header class="head">
     <div class="titles">
       <h2 class="title truncate" {title}>{title}</h2>
@@ -43,7 +43,7 @@
 </aside>
 
 <style>
-  .inspector {
+  .details-pane {
     display: flex;
     flex-direction: column;
     height: 100%;

@@ -55,6 +55,9 @@ export function sameValue(a: unknown, b: unknown): boolean {
   }
 }
 
+/** Mirrors STATE_TIMELINE_LIMIT in the dev server's state timeline (server/state-timeline.ts). */
+export const STATE_TIMELINE_LIMIT = 500;
+
 export const isEpochChanged = (g: { staleReason?: string }) => g.staleReason === 'epoch-changed';
 
 /** Shown when the baseline is not reported (older runtime): unknown is not the same as complete. */

@@ -129,11 +129,16 @@
   function abandon() {
     generation++;
     inflight?.abort();
-    inflight = null;
+    release();
+  }
+
+  /** Ends the request's hold on the view. A frame still pending would paint older progress over the result. */
+  function release() {
     cancelAnimationFrame(frame);
     frame = 0;
     progress = null;
     sending = false;
+    inflight = null;
   }
 
   function pick(e: ApiEndpoint) {
@@ -187,15 +192,8 @@
       response = null;
       requestError = errorMessage(e);
     } finally {
-      // An abandoned request no longer owns the view (`abandon` reset it).
-      if (id === generation) {
-        // A frame still pending would paint older progress over the result.
-        cancelAnimationFrame(frame);
-        frame = 0;
-        progress = null;
-        sending = false;
-        inflight = null;
-      }
+      // An abandoned request no longer owns the view (`abandon` released it).
+      if (id === generation) release();
     }
   }
 

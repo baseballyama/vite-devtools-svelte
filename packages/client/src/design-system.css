@@ -233,7 +233,7 @@ textarea.input {
   resize: vertical;
 }
 
-/* Inspector (detail pane) typography shared across panels. */
+/* Details pane typography shared across panels. */
 .section-title {
   margin: 0;
   padding: 12px 14px 6px;

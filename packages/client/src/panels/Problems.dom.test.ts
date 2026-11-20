@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as rpc from '../lib/rpc.js';
 import type { CompilerWarning, RuntimeError } from '../lib/types.js';
 import { fakePollClock, layout, nextPoll, settle } from '../test/dom.js';
-import ErrorDashboard from './ErrorDashboard.svelte';
+import Problems from './Problems.svelte';
 
 const XSS = '<img src=x onerror="alert(1)"><script>alert(2)</script>';
 
@@ -44,7 +44,7 @@ const warnings: CompilerWarning[] = [
 
 async function setup() {
   const user = userEvent.setup();
-  render(ErrorDashboard);
+  render(Problems);
   await settle();
   return { user, list: screen.getByRole('listbox', { name: 'Problems' }) };
 }
@@ -60,7 +60,7 @@ beforeEach(() => {
   vi.mocked(rpc.getCompilerWarnings).mockResolvedValue(warnings);
 });
 
-describe('ErrorDashboard', () => {
+describe('Problems', () => {
   it('lists runtime errors (newest first) before compiler warnings', async () => {
     const { list } = await setup();
     expect(messages(list)).toEqual([
@@ -130,7 +130,7 @@ describe('ErrorDashboard', () => {
     expect(within(list).getByText('No problems match')).toBeTruthy();
   });
 
-  it('shows a runtime error in the inspector, with its stack as text', async () => {
+  it('shows a runtime error in the details pane, with its stack as text', async () => {
     const { user, list } = await setup();
     await user.click(within(list).getAllByRole('option')[0]!);
     const details = screen.getByRole('complementary', { name: 'Runtime error details' });

@@ -2,8 +2,8 @@
   import Badge from '../components/Badge.svelte';
   import Button from '../components/Button.svelte';
   import CaptureNotice from '../components/CaptureNotice.svelte';
+  import DetailsPane from '../components/DetailsPane.svelte';
   import Highlight from '../components/Highlight.svelte';
-  import Inspector from '../components/Inspector.svelte';
   import Panel from '../components/Panel.svelte';
   import ResourceEmpty from '../components/ResourceEmpty.svelte';
   import SearchField from '../components/SearchField.svelte';
@@ -13,13 +13,10 @@
   import { datasetVersion } from '../lib/dataset-versions.js';
   import { componentName, formatClock, formatValue, prettyValue } from '../lib/format.js';
   import { haystack, haystackMatcher } from '../lib/match.js';
-  import { baselineNotice } from '../lib/reactive.js';
+  import { baselineNotice, STATE_TIMELINE_LIMIT } from '../lib/reactive.js';
   import { resource } from '../lib/resource.svelte.js';
   import { getStateTimelineDelta, clearStateTimeline, openReactiveInEditor } from '../lib/rpc.js';
   import type { StateChange, StateTimelineEntry } from '../lib/types.js';
-
-  /** Mirrors the server buffer. */
-  const MAX_ENTRIES = 500;
 
   // The server answers from its own buffer (never pulls the app); for a cursor
   // it cannot continue (clear, evicted page load, restart) it sends the whole
@@ -31,8 +28,8 @@
   async function pull(): Promise<StateTimelineEntry[]> {
     const d = await getStateTimelineDelta(cursor);
     cursor = d.cursor;
-    if (d.reset) buffer = d.changes.slice(-MAX_ENTRIES);
-    else if (d.changes.length) buffer = buffer.concat(d.changes).slice(-MAX_ENTRIES);
+    if (d.reset) buffer = d.changes.slice(-STATE_TIMELINE_LIMIT);
+    else if (d.changes.length) buffer = buffer.concat(d.changes).slice(-STATE_TIMELINE_LIMIT);
     return buffer;
   }
 
@@ -79,7 +76,7 @@
   // trims and resets of the buffer.
   const keyOf = (c: StateTimelineEntry) => String(c.seq);
   const current = $derived(selected ? (entries.find(c => keyOf(c) === selected) ?? null) : null);
-  const signals = $derived(new Set(timeline.data.map(c => c.id)).size);
+  const signalCount = $derived(new Set(timeline.data.map(c => c.id)).size);
 
   async function clear() {
     await clearStateTimeline().catch(() => {});
@@ -103,12 +100,12 @@
     />
     <CaptureNotice info={capture.data.stateTimeline} noun="changes" />
     {#if baseline}<span class="baseline" role="status">{baseline}</span>{/if}
-    <span class="summary">{signals} signal{signals === 1 ? '' : 's'}</span>
+    <span class="summary">{signalCount} signal{signalCount === 1 ? '' : 's'}</span>
     <span
       class="summary"
-      title="The app checks $state every 200 ms: several writes within one check are one entry, and times are when a change was detected. The dev server keeps the latest {MAX_ENTRIES} changes across all signals."
+      title="The app checks $state every 200 ms: several writes within one check are one entry, and times are when a change was detected. The dev server keeps the latest {STATE_TIMELINE_LIMIT} changes across all signals."
     >
-      sampled every 200 ms · latest {MAX_ENTRIES}
+      sampled every 200 ms · latest {STATE_TIMELINE_LIMIT}
     </span>
   {/snippet}
   {#snippet actions()}
@@ -165,7 +162,7 @@
     </div>
     {#snippet aside()}
       {#if current}
-        <Inspector
+        <DetailsPane
           title={current.name}
           subtitle={current.componentFile}
           onclose={() => (selected = null)}
@@ -183,7 +180,7 @@
           <pre class="code-block old-block">{prettyValue(current.oldValue)}</pre>
           <h3 class="section-title">After</h3>
           <pre class="code-block new-block">{prettyValue(current.newValue)}</pre>
-        </Inspector>
+        </DetailsPane>
       {/if}
     {/snippet}
   </SplitView>

@@ -115,7 +115,7 @@ describe('Components: live tree', () => {
     await userEvent.click(row('Page'));
     await settle();
     expect(relationCalls()).toBe(1);
-    // HMR edits do not re-run the analysis, so the tree inspector offers Re-analyze.
+    // HMR edits do not re-run the analysis, so the tree details pane offers Re-analyze.
     await userEvent.click(screen.getByRole('button', { name: 'Re-analyze' }));
     await settle();
     expect(relationCalls()).toBe(2);
@@ -164,7 +164,7 @@ describe('Components: live tree', () => {
     expect(screen.getByRole('complementary', { name: '<Layout> details' })).toBeTruthy();
   });
 
-  it('reveals a child from the inspector', async () => {
+  it('reveals a child from the details pane', async () => {
     render(Components);
     await settle();
     await userEvent.click(row('Page'));

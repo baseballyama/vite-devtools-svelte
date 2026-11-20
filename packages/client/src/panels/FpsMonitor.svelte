@@ -61,7 +61,7 @@
     const min = sorted[0]!;
     const p1 = sorted[Math.floor(sorted.length * 0.01)]!;
     const avg = Math.round(sorted.reduce((sum, f) => sum + f, 0) / sorted.length);
-    const drops = sorted.filter(f => f < DROP).length;
+    const dropCount = sorted.filter(f => f < DROP).length;
     return {
       count: sorted.length,
       items: [
@@ -69,7 +69,7 @@
         { label: '1% low', value: p1, tone: tone(p1) },
         { label: 'Avg', value: avg, tone: tone(avg) },
         { label: 'Max', value: sorted.at(-1)! },
-        { label: `Drops <${DROP}`, value: drops, tone: drops > 0 ? 'red' : null },
+        { label: `Drops <${DROP}`, value: dropCount, tone: dropCount > 0 ? 'red' : null },
       ],
     };
   }

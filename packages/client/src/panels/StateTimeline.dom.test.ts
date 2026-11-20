@@ -81,7 +81,7 @@ describe('StateTimeline', () => {
     expect(screen.getByText('No changes match')).toBeTruthy();
   });
 
-  it('opens the inspector on select, goes to definition, and closes', async () => {
+  it('opens the details pane on select, goes to definition, and closes', async () => {
     vi.mocked(rpc.getStateTimelineDelta).mockResolvedValue(
       delta([entry(1, { name: 'items', oldValue: [1], newValue: [1, 2] })]),
     );
