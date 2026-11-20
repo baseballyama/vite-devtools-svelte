@@ -1,9 +1,9 @@
 <script lang="ts">
   const managers = [
-    { id: 'npm', cmd: 'npm install -D @sveltejs/vite-devtools-svelte' },
-    { id: 'pnpm', cmd: 'pnpm add -D @sveltejs/vite-devtools-svelte' },
-    { id: 'yarn', cmd: 'yarn add -D @sveltejs/vite-devtools-svelte' },
-    { id: 'bun', cmd: 'bun add -d @sveltejs/vite-devtools-svelte' },
+    { id: 'npm', cmd: 'npm install -D @sveltejs/vite-devtools-svelte @vitejs/devtools' },
+    { id: 'pnpm', cmd: 'pnpm add -D @sveltejs/vite-devtools-svelte @vitejs/devtools' },
+    { id: 'yarn', cmd: 'yarn add -D @sveltejs/vite-devtools-svelte @vitejs/devtools' },
+    { id: 'bun', cmd: 'bun add -d @sveltejs/vite-devtools-svelte @vitejs/devtools' },
   ];
   let active = $state(0);
   let copied = $state(false);
@@ -15,7 +15,7 @@
       copied = true;
       setTimeout(() => (copied = false), 1600);
     } catch {
-      /* clipboard unavailable — the command stays selectable */
+      /* clipboard unavailable: the command stays selectable */
     }
   }
 

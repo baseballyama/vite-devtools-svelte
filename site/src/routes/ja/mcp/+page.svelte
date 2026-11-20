@@ -4,8 +4,8 @@
   import { resolve } from '$app/paths';
 
   import CodeBlock from '#lib/CodeBlock.svelte';
-  import { mcpToolsJa } from '#lib/mcp-tools.ja.ts';
-  import { MCP_TOOL_COUNT } from '#lib/mcp-tools.ts';
+  import { MCP_STDIO_TOOL_JA, mcpToolsJa } from '#lib/mcp-tools.ja.ts';
+  import { MCP_SERVER_INPUT, MCP_TOOL_COUNT } from '#lib/mcp-tools.ts';
 
   const groups = mcpToolsJa();
 
@@ -22,6 +22,15 @@
   }
 }`;
 
+  const remoteCode = `claude mcp add svelte-devtools \\
+  -e VITE_DEVTOOLS_SVELTE_URL=http://localhost:5173 \\
+  -e VITE_DEVTOOLS_SVELTE_TOKEN=<token> \\
+  -- npx @sveltejs/vite-devtools-svelte mcp`;
+
+  const middlewareCode = `const vite = await createServer({ server: { middlewareMode: true } });
+const devtools = vite.config.plugins.find(p => p.name === 'vite-devtools-svelte');
+const token = devtools?.api?.getDevtoolsToken?.();`;
+
   const curlCode = `curl -s http://localhost:5173/__svelte-devtools/mcp \\
   -H 'content-type: application/json' \\
   -H 'accept: application/json, text/event-stream' \\
@@ -29,7 +38,7 @@
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'`;
 
   const promptCode = `/cart で税率を変えるとカートの合計がおかしい。
-svelte MCP サーバーを使って、活発なコンポーネントを探し、
+svelte-devtools MCP サーバーを使って、活発なコンポーネントを探し、
 ReactivePriceChart のインスタンスを見て、grandTotal に影響しうる state と、
 税率を編集したときに何が変わったかを教えて。`;
 
@@ -73,7 +82,7 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
   <title>MCP クイックスタート（日本語） — vite-devtools-svelte</title>
   <meta
     name="description"
-    content="Claude Code などの MCP クライアントを Svelte の開発サーバーに接続する日本語クイックスタート: 接続と認証、基本の流れ、20 のツール、制約、トラブルシューティング。"
+    content="Claude Code などの MCP クライアントを Svelte の開発サーバーに接続する日本語クイックスタート: 接続と認証、基本の流れ、{MCP_TOOL_COUNT} のツール、制約、トラブルシューティング。"
   />
   <link rel="alternate" hreflang="en" href={resolve('/mcp')} />
 </svelte:head>
@@ -91,7 +100,7 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
         などのコーディングエージェントが、パネルと同じレンダー・リアクティビティ・load・フレームレートのデータを読めます。どの回答も、自分が何をカバーしているかを明示します。
       </p>
       <p class="release-note">
-        このページは <strong>vite-devtools-svelte ≥ 0.4.0</strong> を対象にした、<a
+        このページは <strong>vite-devtools-svelte ≥ 0.10.0</strong> を対象にした、<a
           href={resolve('/mcp')}
           lang="en">英語の MCP ガイド</a
         >の要約です。内容が食い違う場合は英語版が正です。実際の回答例（JSON）とスクリーンショットは英語版にあります。先に
@@ -124,7 +133,9 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
           </header>
           <p>
             <code>vite dev</code> の実行中、プラグインは
-            <code>/__svelte-devtools/mcp</code> に MCP エンドポイント（Streamable HTTP）を提供します。エージェントはそこでツールを呼び、パネルに表示される内容を読みます:
+            <code>/__svelte-devtools/mcp</code> に MCP エンドポイント（Streamable
+            HTTP）を提供します。エージェントは通常、各呼び出しを中継する小さな stdio サーバー
+            <code>vite-devtools-svelte mcp</code> を通してツールを呼び、パネルに表示される内容を読みます:
             活発なコンポーネント、1 つのインスタンスのリアクティブグラフ、サンプリングされた state の変化、レンダープロファイル、load
             関数、フレームレート。変更の前後を比べる計測セッションも実行できます。
           </p>
@@ -150,6 +161,11 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
           <p>
             <code>vite-devtools-svelte mcp</code> は stdio で動き、カレントディレクトリのプロジェクトで動いている開発サーバーに各呼び出しを中継します。開発サーバーとそのポート、トークンは自分で見つけるので、再起動やポートの変更があっても登録し直す必要はありません。開発サーバーが動いていないときは、ツールが起動のしかたを返します。
           </p>
+          <p>
+            動いている開発サーバーは <code>~/.cache/vite-devtools-svelte/servers/</code>
+            に 1 つずつファイルを書いて自分の存在を知らせます（<code>$XDG_CACHE_HOME</code>
+            があればその下、Windows では <code>%LOCALAPPDATA%</code> の下）。使われるのは同じマシンの開発サーバーだけです。
+          </p>
 
           <h3 class="content-h2">Svelte のドキュメントとコードチェック</h3>
           <p>
@@ -170,11 +186,10 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
 
           <h3 class="content-h2">開発サーバーが複数あるとき</h3>
           <p>
-            モノレポのルートから使う場合や、同じアプリを 2
-            つ起動している場合は、複数の開発サーバーが該当します。そのとき AI は <code
-              >list_dev_servers</code
-            >
-            を呼び、使うサーバーを <code>server</code> で指定します。
+            stdio
+            のサーバーは、カレントディレクトリを含むルートの開発サーバー（いちばん内側のもの）を使い、なければカレントディレクトリの中にある唯一の開発サーバーを使います。モノレポのルートから使う場合や、同じアプリを
+            2 つ起動している場合は、複数が該当します。そのとき AI は <code>list_dev_servers</code>
+            を呼び、使うサーバーを <code>server</code> で指定します（id、ルート、パッケージ名のどれか）。
           </p>
 
           <h3 class="content-h2">他の MCP クライアント</h3>
@@ -185,14 +200,55 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
             にしか対応していないクライアントは、開発サーバーに直接接続します。必要なのは URL（<code
               >http://localhost:&lt;port&gt;/__svelte-devtools/mcp</code
             >）とヘッダー（<code>x-svelte-devtools-token: &lt;token&gt;</code>）の 2
-            つです。トークンは <code>~/.cache/vite-devtools-svelte/servers/</code>
-            にある開発サーバーのファイルの <code>token</code>
-            で、起動のたびに変わります。開発サーバーがコンテナや別のマシンで動いている場合は、この 2 つを
-            <code>VITE_DEVTOOLS_SVELTE_URL</code>
-            と <code>VITE_DEVTOOLS_SVELTE_TOKEN</code> で stdio のサーバーに渡します（README を参照）。HTTP
-            のエンドポイントはステートレスで JSON で応答します。手動で確認するには:
+            つです。トークンは開発サーバーを起動するたびに変わります（<a href="#token"
+              >トークンの取得方法</a
+            >）。HTTP のエンドポイントはステートレスで JSON で応答します。手動で確認するには:
           </p>
           <CodeBlock code={curlCode} lang="bash" />
+
+          <h3 class="content-h2" id="remote">コンテナ、別のマシン、ミドルウェアモード</h3>
+          <p>
+            stdio
+            のサーバーが見つけられるのは、同じマシンで自分の存在を知らせた開発サーバーだけです。コンテナや別のマシンで動いている開発サーバーは見つからず、Vite
+            のミドルウェアモードでは、プラグインが存在を知らせるのに使う自前のサーバーがありません。その場合は接続先を自分で
+            stdio のサーバーに渡します:
+          </p>
+          <ul>
+            <li>
+              <code>VITE_DEVTOOLS_SVELTE_URL</code>: MCP クライアントから届く開発サーバーの URL（例:
+              <code>http://localhost:5173</code>）。パスがなければ
+              <code>/__svelte-devtools/mcp</code> を補います。
+            </li>
+            <li>
+              <code>VITE_DEVTOOLS_SVELTE_TOKEN</code>: その開発サーバーのトークン。URL
+              を設定したら必須です。
+            </li>
+          </ul>
+          <p>
+            これらを設定すると、すべての呼び出しがその接続先に送られ、<code>server</code>
+            は無視されます。Claude Code の場合:
+          </p>
+          <CodeBlock code={remoteCode} lang="bash" />
+          <p>
+            トークンは起動のたびに変わるので、開発サーバーを再起動したら登録を更新してください。
+          </p>
+
+          <h3 class="content-h2" id="token">トークンの取得方法</h3>
+          <ul>
+            <li>
+              開発サーバーが動いているマシン（またはコンテナ）の
+              <code>~/.cache/vite-devtools-svelte/servers/</code>
+              にあるファイルから読みます。ファイル名は
+              <code>&lt;pid&gt;-&lt;port&gt;.json</code> で、<code>token</code> と
+              <code>url</code> が入っています。
+            </li>
+            <li>
+              ミドルウェアモードではファイルは書かれません。<code>vite-devtools-svelte</code>
+              という名前のプラグインの API から読みます（リポジトリの
+              <code>examples/svelte-middleware/server.js</code> と同じ方法）:
+            </li>
+          </ul>
+          <CodeBlock code={middlewareCode} lang="js" filename="server.js" />
 
           <h3 class="content-h2">聞いてみる</h3>
           <p>たとえばアプリのカートページを開いた状態で:</p>
@@ -233,9 +289,11 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
           </header>
           <p>入力は <code>?</code> が付いていないもの以外すべて省略できます。</p>
           <p>
-            <code>vite-devtools-svelte mcp</code> を通すと、どのツールも
-            <code>server?</code>（問い合わせる開発サーバー）を受け取ります。また
-            <code>list_dev_servers</code> で、動いている開発サーバーと既定のサーバーを確認できます。
+            開発サーバーのエンドポイントにあるのは以下の {MCP_TOOL_COUNT} のツールです。<code
+              >vite-devtools-svelte mcp</code
+            >
+            は <code>list_dev_servers</code> を追加し、各ツールに <code>server?</code>
+            の入力を加えます（<a href="#tools-stdio">最後のグループ</a>を参照）。
           </p>
           {#each groups as group (group.id)}
             <h3 class="group-title" id="tools-{group.id}">{group.title}</h3>
@@ -253,6 +311,22 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
               {/each}
             </dl>
           {/each}
+          <h3 class="group-title" id="tools-stdio">開発サーバー（stdio のみ）</h3>
+          <p class="group-intro">
+            <code>vite-devtools-svelte mcp</code> が追加します。上のすべてのツールが
+            <code class="mono" lang="en">{MCP_SERVER_INPUT}</code>
+            も受け取ります。必要なのは複数の開発サーバーが該当するときだけです。
+          </p>
+          <dl class="tools">
+            <div class="tool">
+              <dt><code>{MCP_STDIO_TOOL_JA.name}</code></dt>
+              <dd>
+                <p class="tool-input mono" lang="en">{MCP_STDIO_TOOL_JA.input}</p>
+                <p>{MCP_STDIO_TOOL_JA.summary}</p>
+                {#if MCP_STDIO_TOOL_JA.note}<p class="tool-note">{MCP_STDIO_TOOL_JA.note}</p>{/if}
+              </dd>
+            </div>
+          </dl>
         </section>
 
         <section id="sessions" class="step">
@@ -283,14 +357,20 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
               1 回と数えます。回数は総数や発生率ではありません。
             </li>
             <li>
-              <strong>コンポーネントの state のみ。</strong> コンポーネントの初期化中に作られた
-              state を追跡します。<code>.svelte.ts</code> ファイルのモジュールレベルの state は対象外です。
+              <strong>コンポーネントとモジュールの state。</strong>
+              コンポーネントの初期化中に作られた state と、<code>.svelte.js</code> /
+              <code>.svelte.ts</code>
+              モジュールの共有 state を追跡します。それ以外の場所（イベントハンドラーの中など）で作られた
+              state は対象外です。
             </li>
             <li>
               <strong>「影響しうる」であって「原因」ではない。</strong> エッジは現在の依存関係です。どの書き込みが値を変えたかは記録しません。
             </li>
             <li>
-              <strong>一部の依存関係は欠けます。</strong> <code>$effect</code> は state を読んでいても入ってくるエッジが表示されないことがあります。
+              <strong>表示されない依存関係があります。</strong> DevTools が追跡していない
+              state（SvelteKit のページの state など、<code>node_modules</code>
+              で作られたもの）の読み取りにはエッジがなく、そのノードの <code>untrackedDeps</code>
+              に数えられます。
             </li>
             <li>
               <strong>グラフ内の値は要約。</strong> オブジェクトや配列は
@@ -338,8 +418,25 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
               <dd>
                 Claude Code
                 を動かしているプロジェクトの開発サーバーを起動するか、回答に並んだ開発サーバーのどれかを
-                <code>server</code> で指定してください。
+                <code>server</code>
+                で指定してください。回答に、インストールされているバージョンは開発サーバーの存在を知らせないとあれば、0.10.0
+                以降に上げてください。コンテナ、別のマシン、ミドルウェアモードでは<a href="#remote"
+                  >環境変数</a
+                >を設定してください。
               </dd>
+            </div>
+            <div>
+              <dt><code>The dev server at … did not answer</code></dt>
+              <dd>
+                開発サーバーが止まっているか、<code>VITE_DEVTOOLS_SVELTE_URL</code>
+                を使っている場合は URL かトークンが間違っています。トークンは起動のたびに変わります。
+              </dd>
+            </div>
+            <div>
+              <dt>
+                <code>VITE_DEVTOOLS_SVELTE_URL is set without VITE_DEVTOOLS_SVELTE_TOKEN</code>
+              </dt>
+              <dd>両方を設定するか、どちらも設定しないでください。</dd>
             </div>
             <div>
               <dt><code>staleReason: "no-runtime"</code> の空の回答</dt>
@@ -423,15 +520,20 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
           <dl class="faq">
             <div>
               <dt>vite-devtools-svelte</dt>
-              <dd>≥ 0.4.0（このガイドと 4 つのリアクティビティツール）</dd>
+              <dd>
+                <code>vite-devtools-svelte mcp</code> とこのガイドは ≥ 0.10.0。4 つのリアクティビティツールは
+                0.4.0 で追加されました
+              </dd>
             </div>
             <div>
               <dt>Vite</dt>
-              <dd>≥ 8.3.2</dd>
+              <dd>≥ 8.3.5</dd>
             </div>
             <div>
               <dt>Svelte</dt>
-              <dd>5（runes モード）。plain Svelte と SvelteKit 3 を CI でテストしています</dd>
+              <dd>
+                ≥ 5.46.4（runes モード）。plain Svelte と SvelteKit 3 を CI でテストしています
+              </dd>
             </div>
             <div>
               <dt>MCP</dt>
@@ -621,6 +723,7 @@ ReactivePriceChart のインスタンスを見て、grandTotal に影響しう�
   }
 
   .content-h2 {
+    scroll-margin-top: 88px;
     font-family: var(--font-mono);
     font-size: 0.72rem;
     font-weight: 500;

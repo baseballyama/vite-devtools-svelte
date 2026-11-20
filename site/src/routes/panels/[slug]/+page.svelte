@@ -31,7 +31,7 @@
           <span class="eyebrow-num"
             >{String(panelIndex + 1).padStart(2, '0')} / {panels.length}</span
           >
-          · panel
+          · Svelte tools › {panel.dockEntry}
         </span>
         <span class="mono dim">{panel.slug}</span>
       </div>
@@ -45,7 +45,7 @@
 
     <hr class="divider" />
 
-    <div class="layout">
+    <div class="layout" class:single={!panel.images.length}>
       <section class="content">
         <p class="description">{panel.description}</p>
 
@@ -63,35 +63,38 @@
         <p>
           Add the plugin to your project (<a class="inline-link" href={resolve('/getting-started')}
             >Getting Started</a
-          >) to use this panel in your own dev server.
+          >) to use this panel in your own dev server.{#if panel.availability}
+            {panel.availability}{/if}
         </p>
       </section>
 
-      <aside class="screenshots">
-        {#each panel.images as src, i (src)}
-          <figure class="shot">
-            <div class="shot-chrome mono">
-              <span class="shot-title"
-                >{panel.slug}{panel.images.length > 1 ? ` · ${i + 1}` : ''}</span
-              >
-            </div>
-            <img
-              src={image(src)}
-              alt={`${panel.title} screenshot ${i + 1}`}
-              width="1200"
-              height="750"
-              loading={i === 0 ? 'eager' : 'lazy'}
-            />
-          </figure>
-        {/each}
-        {#if panel.caption}
-          <p class="shot-caption">{panel.caption}</p>
-        {:else if panel.images.length}
+      {#if panel.images.length}
+        <aside class="screenshots">
+          {#each panel.images as src, i (src)}
+            <figure class="shot">
+              <div class="shot-chrome mono">
+                <span class="shot-title"
+                  >{panel.slug}{panel.images.length > 1 ? ` · ${i + 1}` : ''}</span
+                >
+              </div>
+              <img
+                src={image(src)}
+                alt={`${panel.title} screenshot ${i + 1}`}
+                width="1200"
+                height="750"
+                loading={i === 0 ? 'eager' : 'lazy'}
+              />
+            </figure>
+          {/each}
+          {#if panel.caption}
+            <p class="shot-caption">{panel.caption}</p>
+          {/if}
           <p class="shot-caption">
-            Captured from the UI in dev-mock mode with synthetic data, before the reactivity update.
+            Captured from an earlier version of the UI. The sidebar and some controls look different
+            now.
           </p>
-        {/if}
-      </aside>
+        </aside>
+      {/if}
     </div>
 
     <nav class="pager" aria-label="Panel navigation">
@@ -182,6 +185,11 @@
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
     gap: 3rem;
     align-items: start;
+  }
+
+  .layout.single {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 760px;
   }
 
   @media (max-width: 920px) {

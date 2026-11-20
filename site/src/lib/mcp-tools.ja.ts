@@ -3,7 +3,7 @@
 // throws when a tool is missing or extra, so the prerender fails instead of
 // shipping a page that is out of step with the English list.
 
-import { MCP_TOOL_GROUPS, type McpTool } from './mcp-tools';
+import { MCP_STDIO_TOOL, MCP_TOOL_GROUPS, type McpTool } from './mcp-tools';
 
 interface JaText {
   summary: string;
@@ -35,7 +35,7 @@ const TOOLS_JA: Record<string, JaText> = {
   get_reactive_summary: {
     summary:
       '全インスタンスの実行時カウンタから、最も活発な表示中のコンポーネントインスタンスを返します（グラフは取得しません）。各インスタンスがマウントされてからサンプリングされた state の変化とレンダーの回数、最後に動いた時刻を返し、`rows` と `other` の合計が総数になります。',
-    note: '回数は累計のサンプリング値（1 つの state につき 200 ms ごとに最大 1 回）で、発生率ではありません。破棄されたインスタンスは回数ごと消えます。state の変化はパネルかエージェントが見ている間だけサンプリングします。追跡するのはコンポーネント初期化中に作られた state だけです。最大 1 秒間はキャッシュから回答します。',
+    note: '回数は累計のサンプリング値（1 つの state につき 200 ms ごとに最大 1 回）で、発生率ではありません。破棄されたインスタンスは回数ごと消えます。state の変化はパネルかエージェントが見ている間だけサンプリングします。追跡するのは、コンポーネントの初期化中に作られた state と、.svelte.js/.ts モジュールの共有 state です。モジュールは kind "module" の行になり、その componentId は get_reactive_scope にも使えます。最大 1 秒間はキャッシュから回答します。',
   },
   get_reactive_scope: {
     summary:
@@ -66,7 +66,7 @@ const TOOLS_JA: Record<string, JaText> = {
   },
   get_reactive_graph_problems: {
     summary:
-      '依存の多すぎる effect、使われていない derived、孤立したノードを、グラフ全体ではなく分類として返します。',
+      '依存の多すぎる effect、まだ一度も評価されていない derived、孤立したノード（追跡している依存も読み手もないもの。マークアップからの読み取りは読み手に数えます）を、グラフ全体ではなく分類として返します。',
     note: 'アプリ全体のリアクティブグラフを読みます（上限 5000 ノード / 20000 エッジ）。',
   },
   get_load_waterfall: {
@@ -137,3 +137,11 @@ export function mcpToolsJa(): McpToolGroupJa[] {
     };
   });
 }
+
+export const MCP_STDIO_TOOL_JA: Pick<McpTool, 'name' | 'input'> & JaText = {
+  name: MCP_STDIO_TOOL.name,
+  input: MCP_STDIO_TOOL.input,
+  summary:
+    'このマシンでプラグイン付きで動いている開発サーバー（id、パッケージ名、ルート、URL、起動時刻）と、`server` を省略したときに他のツールが使うサーバーを返します。',
+  note: 'VITE_DEVTOOLS_SVELTE_URL を設定しているときは `override` にその接続先が入り、一覧のどのサーバーも既定になりません。',
+};

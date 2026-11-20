@@ -4,24 +4,9 @@
   import CodeBlock from '#lib/CodeBlock.svelte';
   import { panels } from '#lib/panels.ts';
 
-  const installCode = `npm install -D @sveltejs/vite-devtools-svelte`;
+  const installCode = `npm install -D @sveltejs/vite-devtools-svelte @vitejs/devtools`;
 
   const configCode = `import { svelteDevtools } from '@sveltejs/vite-devtools-svelte'
-import { sveltekit } from '@sveltejs/kit/vite'
-import { defineConfig } from 'vite'
-
-export default defineConfig({
-  plugins: [
-    svelteDevtools(),
-    sveltekit(),
-  ],
-})`;
-
-  const runCode = `npm run dev`;
-
-  const dockInstallCode = `npm install -D @vitejs/devtools`;
-
-  const dockConfigCode = `import { svelteDevtools } from '@sveltejs/vite-devtools-svelte'
 import { sveltekit } from '@sveltejs/kit/vite'
 import { defineConfig } from 'vite'
 
@@ -30,22 +15,30 @@ export default defineConfig({
   plugins: [svelteDevtools(), sveltekit()],
 })`;
 
+  const runCode = `npm run dev`;
+
+  const standaloneCode = `npm install -D @sveltejs/vite-devtools-svelte`;
+
   const optionsCode = `svelteDevtools({
-  // Enable component lifecycle tracking (default: true)
+  // Track component instances and their state (default: true)
   componentTracking: true,
+  // Ask for the one-time code on /.svelte-devtools/ (default: true)
+  clientAuth: true,
+  // Svelte Inspector options (dock only)
+  inspector: { toggleKeyCombo: 'alt-x', holdMode: true },
 })`;
 
   const steps = [
     { num: '01', title: 'Install', anchor: 'install' },
     { num: '02', title: 'Configure Vite', anchor: 'configure' },
-    { num: '03', title: 'Run the dev server', anchor: 'run' },
-    { num: '04', title: 'Vite DevTools dock (optional)', anchor: 'dock' },
+    { num: '03', title: 'Open the dock', anchor: 'run' },
+    { num: '04', title: 'Without Vite DevTools', anchor: 'standalone' },
     { num: '05', title: 'Options', anchor: 'options' },
   ];
 </script>
 
 <svelte:head>
-  <title>Getting Started — vite-devtools-svelte</title>
+  <title>Getting started · vite-devtools-svelte</title>
 </svelte:head>
 
 <section class="band no-border hero">
@@ -56,37 +49,32 @@ export default defineConfig({
     </div>
     <h1>Getting Started.</h1>
     <p class="lead">
-      Add the plugin to a Svelte 5 + SvelteKit project running on Vite 8.3.2 or later. It runs only
-      in the dev server; production builds are unaffected.
-    </p>
-    <p class="release-note">
-      These steps need <strong>vite-devtools-svelte ≥ 0.4.0</strong> (built on Devframe). Versions
-      up to 0.3.x are documented to run inside
-      <code>@vitejs/devtools</code>.
+      Add the plugin and Vite DevTools to a Svelte 5 project on Vite 8.3.5 or later. It runs only in
+      the dev server; production builds are unaffected.
     </p>
 
     <div class="requirements">
       <h2 class="req-title">Requirements</h2>
       <dl>
         <div class="req">
-          <dt>vite-devtools-svelte</dt>
-          <dd>≥ 0.4.0</dd>
-        </div>
-        <div class="req">
           <dt>Vite</dt>
-          <dd>≥ 8.3.2</dd>
+          <dd>8.3.5 or later</dd>
         </div>
         <div class="req">
           <dt>Svelte</dt>
-          <dd>5 (runes mode)</dd>
+          <dd>5.46.4 or later</dd>
         </div>
         <div class="req">
           <dt>SvelteKit</dt>
-          <dd>3.3.0 or later — recommended for full feature set</dd>
+          <dd>3.3.0 or later, optional: Routes, Load functions, API and Build need it</dd>
         </div>
         <div class="req">
           <dt>@vitejs/devtools</dt>
-          <dd>≥ 0.8.0 — optional, only for the in-page dock</dd>
+          <dd>0.8.3 or later, for the Vite DevTools dock</dd>
+        </div>
+        <div class="req">
+          <dt>Node.js</dt>
+          <dd>22 or later</dd>
         </div>
       </dl>
     </div>
@@ -115,6 +103,7 @@ export default defineConfig({
           <span class="step-num mono">01</span>
           <h2>Install</h2>
         </header>
+        <p>Install the plugin and Vite DevTools.</p>
         <CodeBlock code={installCode} lang="bash" />
       </section>
 
@@ -124,7 +113,9 @@ export default defineConfig({
           <h2>Configure Vite</h2>
         </header>
         <p>
-          Add the plugin to your <code>vite.config.ts</code>. It must come
+          Turn on Vite DevTools with Vite's <code>devtools</code> option and add the plugin to your
+          <code>vite.config.ts</code>. <code>apply: 'serve'</code> keeps Vite DevTools out of
+          <code>vite build</code>. <code>svelteDevtools()</code> must come
           <strong>before</strong>
           <code>sveltekit()</code> so its transforms run before the Svelte compiler.
         </p>
@@ -134,49 +125,50 @@ export default defineConfig({
       <section id="run" class="step">
         <header class="step-head">
           <span class="step-num mono">03</span>
-          <h2>Run the dev server</h2>
+          <h2>Open the dock</h2>
         </header>
         <CodeBlock code={runCode} lang="bash" />
         <p>
-          Open <code>/.svelte-devtools/</code> on your dev server, for example
-          <code>http://localhost:5173/.svelte-devtools/</code>. The first time, the page asks for a
-          one-time code: the dev server prints a 6-digit code and a link in the terminal. Type the
-          code, or open the link.
+          Open your app, click the floating Vite DevTools handle and open the
+          <strong>Svelte tools</strong> group. It has Overview, Problems, Inspect, Profile and
+          Project, the Svelte Inspector (Pick element and Inspector settings), and Add, which
+          installs
+          <code>sv</code> add-ons.
         </p>
         <p>
-          That browser is then trusted: reloads and dev-server restarts don't ask again. Trusted
-          tokens are stored by the dev server in
-          <code>~/.svelte-devtools/devframe/auth.json</code>, shared by all projects on this
-          machine. The browser keeps its token per origin, so a dev server on another port or host
-          asks for a code again.
+          Vite DevTools signs in the browser once for the whole dock (to skip it on a single-user
+          machine, see <a href="#standalone">below</a>). The Svelte Inspector loads after that: hold
+          <code>alt-x</code> in your app and click an element to open its source in your editor.
         </p>
         <p>
-          On a single-user machine where the dev server only listens on <code>localhost</code>, you
-          can skip the code with <code>svelteDevtools(&#123; clientAuth: false &#125;)</code>
-          (or <code>devtools: &#123; apply: 'serve', clientAuth: false &#125;</code> in the Vite config
-          for the Vite DevTools dock). Without it, any page or device that can reach the dev server can
-          read your project files through the DevTools, so keep it on if you are unsure.
+          If you use vite-plugin-svelte's own inspector (<code>vitePlugin.inspector</code>), turn it
+          off: the dev server does not start with both.
         </p>
       </section>
 
-      <section id="dock" class="step">
+      <section id="standalone" class="step">
         <header class="step-head">
           <span class="step-num mono">04</span>
-          <h2>Inside the Vite DevTools dock</h2>
+          <h2>Without Vite DevTools</h2>
         </header>
         <p>
-          Optional. With <code>@vitejs/devtools</code> installed, the same panels open as a
-          <strong>Svelte</strong> entry in the Vite DevTools dock instead of standalone.
+          Without <code>@vitejs/devtools</code>, install only the plugin and leave out the
+          <code>devtools</code> option. The panels then open on their own page at
+          <code>/.svelte-devtools/</code>, and the dev server prints its URL. The Svelte Inspector
+          and the Add panel need the dock.
         </p>
-        <CodeBlock code={dockInstallCode} lang="bash" />
+        <CodeBlock code={standaloneCode} lang="bash" />
         <p>
-          Turn it on with Vite's <code>devtools</code> option. <code>apply: 'serve'</code> keeps it
-          out of <code>vite build</code>:
+          The first time, the page asks for a one-time code: the dev server prints a 6-digit code
+          and a link in the terminal. Type the code, or open the link. That browser is then trusted,
+          also after reloads and dev-server restarts.
         </p>
-        <CodeBlock code={dockConfigCode} lang="ts" filename="vite.config.ts" />
         <p>
-          Sign-in is handled once by Vite DevTools' own authentication. The panels also stay
-          reachable at <code>/.svelte-devtools/</code>.
+          On a single-user machine where the dev server only listens on <code>localhost</code>, you
+          can skip the code with <code>svelteDevtools(&#123; clientAuth: false &#125;)</code>, or
+          <code>devtools: &#123; apply: 'serve', clientAuth: false &#125;</code> for the dock. Without
+          it, any page or device that can reach the dev server can read your project files through the
+          DevTools, so keep it on if you are unsure.
         </p>
       </section>
 
@@ -186,6 +178,10 @@ export default defineConfig({
           <h2>Options</h2>
         </header>
         <CodeBlock code={optionsCode} lang="ts" />
+        <p>
+          <code>inspector</code> also takes <code>navKeys</code>, <code>openKey</code>,
+          <code>openMenuKey</code>, <code>escapeKeys</code> and <code>customStyles</code>.
+        </p>
       </section>
 
       <section class="next">
@@ -195,13 +191,7 @@ export default defineConfig({
             <a href={resolve('/#panels')}>Browse the {panels.length} panels</a>
           </li>
           <li>
-            <a
-              href="https://github.com/sveltejs/vite-devtools-svelte"
-              target="_blank"
-              rel="noreferrer noopener"
-            >
-              Read the README on GitHub
-            </a>
+            <a href={resolve('/mcp')}>Let your AI agent read the DevTools over MCP</a>
           </li>
         </ul>
       </section>
@@ -446,13 +436,5 @@ export default defineConfig({
   .next a:hover {
     text-decoration: none;
     color: var(--brand);
-  }
-  .release-note {
-    margin-top: 1rem;
-    padding: 0.75rem 1rem;
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    color: var(--text-2);
-    font-size: 0.92rem;
   }
 </style>
